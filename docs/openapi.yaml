@@ -1,0 +1,958 @@
+openapi: 3.0.3
+info:
+  title: RuMampu API
+  version: 1.0.0
+  description: Versioned API for RuMampu's irregular-income housing readiness tool.
+    RuMampu is not a lender, credit score or loan approval predictor.
+paths:
+  /api/v1/commitments/:
+    get:
+      operationId: commitment_items_list
+      summary: List active monthly financial commitments
+      tags:
+      - Commitments
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CommitmentItem'
+          description: ''
+  /api/v1/commitments/{item_id}/:
+    patch:
+      operationId: commitment_items_update
+      summary: Update a monthly financial commitment amount
+      parameters:
+      - in: path
+        name: item_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Commitments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCommitmentItemUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCommitmentItemUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCommitmentItemUpdateRequest'
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommitmentItem'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/expense-categories/:
+    get:
+      operationId: expense_categories_list
+      summary: List active expense categories
+      tags:
+      - Expenses
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExpenseCategory'
+          description: ''
+    post:
+      operationId: expense_categories_create
+      summary: Create a custom expense category
+      tags:
+      - Expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExpenseCategoryCreateRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/expenses/:
+    get:
+      operationId: expense_entries_list
+      summary: List recorded daily expenses
+      tags:
+      - Expenses
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExpenseEntry'
+          description: ''
+    post:
+      operationId: expense_entries_create
+      summary: Record a daily expense manually
+      tags:
+      - Expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseEntryCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExpenseEntryCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExpenseEntryCreateRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseEntry'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/health/:
+    get:
+      operationId: system_health
+      summary: Check API availability
+      tags:
+      - System
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+          description: ''
+  /api/v1/income-imports/{batch_id}/:
+    get:
+      operationId: income_imports_retrieve
+      summary: Retrieve an income import preview
+      parameters:
+      - in: path
+        name: batch_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Income imports
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncomeImportBatch'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/income-imports/{batch_id}/confirm/:
+    post:
+      operationId: income_imports_confirm
+      summary: Confirm recognised rows and add them to income history
+      parameters:
+      - in: path
+        name: batch_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Income imports
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncomeImportBatch'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/income-imports/preview/:
+    post:
+      operationId: income_imports_preview
+      summary: Parse a CSV file into an unconfirmed income import preview
+      tags:
+      - Income imports
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncomeImportUploadRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IncomeImportUploadRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IncomeImportUploadRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncomeImportBatch'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/income/entries/:
+    get:
+      operationId: income_entries_list
+      summary: List income entries
+      tags:
+      - Income
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IncomeEntry'
+          description: ''
+    post:
+      operationId: income_entries_create
+      description: Amounts are decimal strings. A manual amount that is unusually
+        high after at least three comparable entries returns 409 until confirm_outlier
+        is true.
+      summary: Create an income entry
+      tags:
+      - Income
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncomeEntryCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IncomeEntryCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IncomeEntryCreateRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncomeEntry'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Explicit confirmation is required for an unusual amount.
+  /api/v1/income/record/:
+    get:
+      operationId: income_record_retrieve
+      summary: Get the current guest's income record
+      tags:
+      - Income
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncomeRecord'
+          description: ''
+  /api/v1/income/sources/:
+    get:
+      operationId: income_sources_list
+      summary: List active income sources
+      tags:
+      - Income
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IncomeSource'
+          description: ''
+    post:
+      operationId: income_sources_create
+      summary: Create a custom income source
+      tags:
+      - Income
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncomeSourceCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IncomeSourceCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IncomeSourceCreateRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncomeSource'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/work-costs/:
+    get:
+      operationId: work_cost_items_list
+      summary: List active monthly work-cost items
+      tags:
+      - Work costs
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkCostItem'
+          description: ''
+    post:
+      operationId: work_cost_items_create
+      summary: Create a custom monthly work-cost item
+      tags:
+      - Work costs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkCostItemCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WorkCostItemCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WorkCostItemCreateRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkCostItem'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/work-costs/{item_id}/:
+    patch:
+      operationId: work_cost_items_update
+      summary: Update a monthly work-cost amount
+      parameters:
+      - in: path
+        name: item_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Work costs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedWorkCostItemUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedWorkCostItemUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedWorkCostItemUpdateRequest'
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkCostItem'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+components:
+  schemas:
+    ApiError:
+      type: object
+      properties:
+        error:
+          $ref: '#/components/schemas/ApiErrorBody'
+      required:
+      - error
+    ApiErrorBody:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        fields: {}
+        context: {}
+      required:
+      - code
+      - message
+    CommitmentItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        commitment_type:
+          $ref: '#/components/schemas/CommitmentTypeEnum'
+        slug:
+          type: string
+          maxLength: 40
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          maxLength: 120
+        monthly_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        is_daily_variable:
+          type: boolean
+        is_active:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - commitment_type
+      - id
+      - monthly_amount
+      - name
+      - slug
+      - updated_at
+    CommitmentTypeEnum:
+      enum:
+      - living
+      - debt
+      - savings
+      type: string
+      description: |-
+        * `living` - Living cost
+        * `debt` - Debt payment
+        * `savings` - Savings
+    ExpenseCategory:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        slug:
+          oneOf:
+          - type: string
+            maxLength: 40
+            pattern: ^[-a-zA-Z0-9_]+$
+          - type: string
+            maxLength: 0
+        name:
+          type: string
+          maxLength: 120
+        is_custom:
+          type: boolean
+        is_active:
+          type: boolean
+      required:
+      - id
+      - name
+    ExpenseCategoryCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+      required:
+      - name
+    ExpenseEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        date:
+          type: string
+          format: date
+        category_id:
+          type: integer
+        entry_method:
+          type: string
+          readOnly: true
+        merchant:
+          type: string
+          maxLength: 160
+        user_confirmed:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - category_id
+      - created_at
+      - date
+      - entry_method
+      - id
+    ExpenseEntryCreateRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        date:
+          type: string
+          format: date
+        category_id:
+          type: integer
+          minimum: 1
+        entry_method:
+          allOf:
+          - $ref: '#/components/schemas/ExpenseEntryMethodEnum'
+          default: manual
+        merchant:
+          type: string
+          default: ''
+          maxLength: 160
+        confirm_receipt:
+          type: boolean
+          writeOnly: true
+          default: false
+      required:
+      - amount
+      - category_id
+      - date
+    ExpenseEntryMethodEnum:
+      enum:
+      - manual
+      - receipt
+      type: string
+      description: |-
+        * `manual` - Manual entry
+        * `receipt` - Receipt confirmed by user
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+        service:
+          type: string
+        api_version:
+          type: string
+      required:
+      - api_version
+      - service
+      - status
+    IncomeEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        date:
+          type: string
+          format: date
+        source_id:
+          type: integer
+          nullable: true
+        entry_method:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - created_at
+      - date
+      - entry_method
+      - id
+      - source_id
+    IncomeEntryCreateEntryMethodEnum:
+      enum:
+      - manual
+      - historical_total
+      type: string
+      description: |-
+        * `manual` - manual
+        * `historical_total` - historical_total
+    IncomeEntryCreateRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        date:
+          type: string
+          format: date
+        source_id:
+          type: integer
+          minimum: 1
+          nullable: true
+        entry_method:
+          allOf:
+          - $ref: '#/components/schemas/IncomeEntryCreateEntryMethodEnum'
+          default: manual
+        confirm_outlier:
+          type: boolean
+          default: false
+      required:
+      - amount
+      - date
+    IncomeImportBatch:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        file_name:
+          type: string
+          maxLength: 255
+        status:
+          $ref: '#/components/schemas/StatusEnum'
+        total_rows:
+          type: integer
+          readOnly: true
+        ready_count:
+          type: integer
+          readOnly: true
+        error_count:
+          type: integer
+          readOnly: true
+        imported_count:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        confirmed_at:
+          type: string
+          format: date-time
+          nullable: true
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/IncomeImportRow'
+          readOnly: true
+      required:
+      - created_at
+      - error_count
+      - file_name
+      - id
+      - imported_count
+      - ready_count
+      - rows
+      - total_rows
+    IncomeImportRow:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        row_number:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        raw_amount:
+          type: string
+          maxLength: 64
+        raw_date:
+          type: string
+          maxLength: 32
+        raw_source:
+          type: string
+          maxLength: 160
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        date:
+          type: string
+          format: date
+          nullable: true
+        source_name:
+          type: string
+          maxLength: 120
+        is_valid:
+          type: boolean
+          readOnly: true
+        error_code:
+          type: string
+          maxLength: 160
+        error_message:
+          type: string
+          maxLength: 500
+        imported_entry_id:
+          type: integer
+          readOnly: true
+          nullable: true
+      required:
+      - amount
+      - date
+      - id
+      - imported_entry_id
+      - is_valid
+      - row_number
+    IncomeImportUploadRequest:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+      required:
+      - file
+    IncomeRecord:
+      type: object
+      properties:
+        profile_id:
+          type: string
+          format: uuid
+        recorded_month_count:
+          type: integer
+          minimum: 0
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/IncomeSource'
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/IncomeEntry'
+      required:
+      - entries
+      - profile_id
+      - recorded_month_count
+      - sources
+    IncomeSource:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        slug:
+          oneOf:
+          - type: string
+            maxLength: 40
+            pattern: ^[-a-zA-Z0-9_]+$
+          - type: string
+            maxLength: 0
+        name:
+          type: string
+          maxLength: 120
+        is_custom:
+          type: boolean
+        is_active:
+          type: boolean
+      required:
+      - id
+      - name
+    IncomeSourceCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+      required:
+      - name
+    PatchedCommitmentItemUpdateRequest:
+      type: object
+      properties:
+        monthly_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+    PatchedWorkCostItemUpdateRequest:
+      type: object
+      properties:
+        monthly_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+    StatusEnum:
+      enum:
+      - preview
+      - confirmed
+      type: string
+      description: |-
+        * `preview` - Awaiting confirmation
+        * `confirmed` - Confirmed
+    WorkCostItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        slug:
+          oneOf:
+          - type: string
+            maxLength: 40
+            pattern: ^[-a-zA-Z0-9_]+$
+          - type: string
+            maxLength: 0
+        name:
+          type: string
+          maxLength: 120
+        monthly_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        is_custom:
+          type: boolean
+        is_active:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - id
+      - monthly_amount
+      - name
+      - updated_at
+    WorkCostItemCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        monthly_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          default: '0.00'
+      required:
+      - name

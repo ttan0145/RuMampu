@@ -7,11 +7,12 @@ import {
 } from '../calc';
 import {
   Badge, BodyS, Btn, BtnLine, BtnQuiet, Card, Chip, Chips, Display, Fig, FromR,
-  IcLab, KV, NumInput, P, Prov, StackS, TextField,
+  IcLab, KV, NoteC, NumInput, P, Prov, StackS, TextField,
 } from '../ui';
 import { C, DISP_FONT } from '../theme';
 import { HBar, Shimmer } from '../charts';
 import { ScreenShell } from './shell';
+import { isValidIsoDate } from '../validation';
 
 function useCatLabel() {
   const { S, t } = useApp();
@@ -27,7 +28,10 @@ export function ExpensesScreen() {
   const ex = [...S.data.expenses].sort((a, b) => (a.d < b.d ? 1 : -1));
   const curKey = ex.length ? (+ex[0].d.slice(0, 4)) * 12 + (+ex[0].d.slice(5, 7) - 1) : 0;
   const cur = expByMonth(S.data).get(curKey) || { total: 0, days: new Set<string>() };
-  const curName = monthName(curKey % 12);
+  const curName = ex.length ? monthName(curKey % 12) : '';
+  const currentEntries = ex.filter(entry => (
+    (+entry.d.slice(0, 4)) * 12 + (+entry.d.slice(5, 7) - 1)
+  ) === curKey);
 
   let bycat: React.ReactNode = null;
   if (S.exCatOpen) {
@@ -43,9 +47,13 @@ export function ExpensesScreen() {
 
   return (
     <ScreenShell back title={t('money_expenses')}>
+      {S.expenseSync === 'loading' ? <NoteC><BodyS>{t('ex_sync_loading')}</BodyS></NoteC> : null}
+      {S.expenseSync === 'error' ? <NoteC><BodyS>{t('ex_sync_error')}</BodyS></NoteC> : null}
       <View>
         <Fig value={rm(cur.total)} p="user" cls="h-xl" />
-        <BodyS muted>{t('ex_sofar', { m: curName })} · {t('ex_days', { d: cur.days.size })}</BodyS>
+        <BodyS muted>{ex.length
+          ? `${t('ex_sofar', { m: curName })} · ${t(cur.days.size === 1 ? 'ex_days_one' : 'ex_days', { d: cur.days.size })}`
+          : t('ex_empty')}</BodyS>
       </View>
       <Btn label={t('ex_add')} onPress={() => go('expadd')} />
       <BtnQuiet onPress={() => go('expscan')}>
@@ -57,7 +65,7 @@ export function ExpensesScreen() {
         </IcLab>
       </BtnQuiet>
       <StackS>
-        {ex.slice(0, 6).map((e, i) => {
+        {currentEntries.map((e, i) => {
           const dd = (+e.d.slice(8, 10)) + ' ' + monthName(+e.d.slice(5, 7) - 1);
           return (
             <KV key={i} k={`${dd} · ${cats(e.c)}`}>
@@ -129,13 +137,14 @@ export function ExpMonthsScreen() {
           <Display cls="h-m">{monthName(m) + ' ' + y}</Display>
           <Text style={{ fontSize: 16, color: C.ink }}>{open ? '−' : '+'}</Text>
         </Pressable>
-        <KV k={full ? (
-          <BodyS muted>{t('ex_full') + (incomeKeys.has(k) ? ' · ' + t('ex_used') : '')}</BodyS>
-        ) : (
-          <FromR label={t('ex_partial', { d: v.days.size })} />
-        )}>
+        <View style={{ gap: 6, alignItems: 'flex-start' }}>
+          {full ? (
+            <BodyS muted>{t('ex_full') + (incomeKeys.has(k) ? ' · ' + t('ex_used') : '')}</BodyS>
+          ) : (
+            <FromR label={t(v.days.size === 1 ? 'ex_partial_one' : 'ex_partial', { d: v.days.size })} />
+          )}
           <Fig value={rm(v.total)} p="user" />
-        </KV>
+        </View>
         {detail}
       </Card>
     );
@@ -200,32 +209,45 @@ export function ExLimitsScreen() {
 }
 
 export function ExpAddScreen() {
-  const { S, t, monthName, up, toast, backNav } = useApp();
+  const { S, t, monthName, up, toast, backNav, saveExpenseEntry } = useApp();
   const d = S.expDraft;
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<'amount' | 'date' | 'save' | null>(null);
 
-  const save = () => {
+  const save = async () => {
     const a = parseFloat(d.a) || 0;
-    if (a <= 0) return;
+    if (a <= 0) { setError('amount'); return; }
+    if (!isValidIsoDate(d.d)) { setError('date'); return; }
+    if (!d.c || saving || S.expenseSync === 'loading') return;
     const dd = d.d;
-    let total = 0;
-    up(s => {
-      s.data.expenses.push({ a, d: dd, c: s.expDraft.c });
-      s.expDraft = { a: '', c: s.expDraft.c, d: dd };
-      const key = (+dd.slice(0, 4)) * 12 + (+dd.slice(5, 7) - 1);
-      total = expByMonth(s.data).get(key)?.total || 0;
-    });
     const key = (+dd.slice(0, 4)) * 12 + (+dd.slice(5, 7) - 1);
-    toast(t('ex_saved', { m: monthName(key % 12), x: nf(total) }));
-    backNav();
+    const total = (expByMonth(S.data).get(key)?.total || 0) + a;
+    setSaving(true);
+    setError(null);
+    try {
+      await saveExpenseEntry({ amount: a, date: dd, categoryId: d.c });
+      up(s => {
+        s.expDraft = { a: '', c: s.expDraft.c, d: dd };
+      });
+      toast(t('ex_saved', { m: monthName(key % 12), x: nf(total) }));
+      backNav();
+    } catch {
+      setError('save');
+      toast(t('ex_save_failed'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <ScreenShell back title={t('ex_add')}>
+      {S.expenseSync === 'loading' ? <NoteC><BodyS>{t('ex_sync_loading')}</BodyS></NoteC> : null}
+      {S.expenseSync === 'error' ? <NoteC><BodyS>{t('ex_sync_error')}</BodyS></NoteC> : null}
       <Card gap={8}>
         <View style={{ gap: 6 }}>
           <BodyS muted>{t('inc_amount')}</BodyS>
           <TextField value={d.a} keyboardType="numbers-and-punctuation"
-            onChangeText={v => up(s => { s.expDraft.a = v; })} />
+            onChangeText={v => { setError(null); up(s => { s.expDraft.a = v; }); }} />
         </View>
         <View style={{ gap: 6 }}>
           <BodyS muted>{t('ex_cat')}</BodyS>
@@ -240,17 +262,20 @@ export function ExpAddScreen() {
         <View style={{ gap: 6 }}>
           <BodyS muted>{t('inc_date')}</BodyS>
           <TextField value={d.d} keyboardType="numbers-and-punctuation" placeholder="YYYY-MM-DD"
-            onChangeText={v => up(s => { s.expDraft.d = v; })} />
+            onChangeText={v => { setError(null); up(s => { s.expDraft.d = v; }); }} />
         </View>
-        <Btn label={t('ex_add')} onPress={save} />
+        {error ? <BodyS>{t(`ex_${error === 'amount' ? 'amount_positive' : error === 'date' ? 'date_invalid' : 'save_failed'}`)}</BodyS> : null}
+        <Btn label={saving ? t('ex_saving') : t('ex_add')} onPress={() => { void save(); }} />
       </Card>
     </ScreenShell>
   );
 }
 
 export function ExpScanScreen() {
-  const { S, t, up, toast, monthName } = useApp();
+  const { S, t, up, toast, monthName, saveExpenseEntry } = useApp();
   const st = S.scan.stage;
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<'amount' | 'date' | 'save' | 'image' | null>(null);
 
   /* The mock read step: after 1.4s the "OCR" resolves to a sample receipt. */
   React.useEffect(() => {
@@ -258,20 +283,35 @@ export function ExpScanScreen() {
     const timer = setTimeout(() => {
       up(s => {
         if (s.route !== 'expscan' || s.scan.stage !== 'read') return;
+        const groceries = s.data.expenseCats.find(category => category.k === 'xc_groc')
+          || s.data.expenseCats[0];
         s.scan = {
           stage: 'confirm', thumb: s.scan.thumb,
-          vals: { m: 'Kedai Runcit Maju', d: s.expDraft.d, a: 34.70, c: 'groc' },
+          vals: {
+            m: 'Kedai Runcit Maju',
+            d: s.expDraft.d,
+            a: 34.70,
+            c: groceries?.id || s.expDraft.c,
+          },
         };
       });
     }, 1400);
     return () => clearTimeout(timer);
   }, [S.route, st, up]);
 
-  const pickPhoto = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.6 });
-    if (!res.canceled && res.assets.length) {
-      const uri = res.assets[0].uri;
-      up(s => { s.scan = { stage: 'read', thumb: uri }; });
+  const pickPhoto = async (source: 'camera' | 'library') => {
+    setError(null);
+    try {
+      const res = source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ quality: 0.6 })
+        : await ImagePicker.launchImageLibraryAsync({ quality: 0.6 });
+      if (!res.canceled && res.assets.length) {
+        const uri = res.assets[0].uri;
+        up(s => { s.scan = { stage: 'read', thumb: uri }; });
+      }
+    } catch {
+      setError('image');
+      toast(t('ex_image_failed'));
     }
   };
 
@@ -280,10 +320,14 @@ export function ExpScanScreen() {
     body = (
       <>
         <P>{t('ex_scan_pick')}</P>
-        <Btn label={t('ex_scan')} onPress={pickPhoto} />
-        <BtnQuiet onPress={() => up(s => { s.scan = { stage: 'read', thumb: null }; })}>
+        <Btn label={t('ex_take_photo')} onPress={() => { void pickPhoto('camera'); }} />
+        <BtnQuiet onPress={() => { void pickPhoto('library'); }}>
+          <P>{t('ex_choose_photo')}</P>
+        </BtnQuiet>
+        <BtnQuiet onPress={() => { setError(null); up(s => { s.scan = { stage: 'read', thumb: null }; }); }}>
           <P>{t('ex_scan_sample')}</P>
         </BtnQuiet>
+        {error === 'image' ? <BodyS>{t('ex_image_failed')}</BodyS> : null}
       </>
     );
   } else if (st === 'read') {
@@ -330,22 +374,39 @@ export function ExpScanScreen() {
               ))}
             </Chips>
           </View>
-          <Btn label={t('add')} onPress={() => {
+          {error && error !== 'image' ? <BodyS>{t(`ex_${error === 'amount' ? 'amount_positive' : error === 'date' ? 'date_invalid' : 'save_failed'}`)}</BodyS> : null}
+          <Btn label={saving ? t('ex_saving') : t('add')} onPress={() => { void (async () => {
             const a = +v.a || 0;
-            if (a <= 0) return;
+            if (a <= 0) { setError('amount'); return; }
+            if (!isValidIsoDate(v.d)) { setError('date'); return; }
+            if (!v.c || saving) return;
             const dd = v.d;
-            let total = 0;
-            up(s => {
-              s.data.expenses.push({ a, d: dd, c: s.scan.vals!.c });
+            const key = (+dd.slice(0, 4)) * 12 + (+dd.slice(5, 7) - 1);
+            const total = (expByMonth(S.data).get(key)?.total || 0) + a;
+            setSaving(true);
+            setError(null);
+            try {
+              await saveExpenseEntry({
+                amount: a,
+                date: dd,
+                categoryId: v.c,
+                entryMethod: 'receipt',
+                merchant: v.m.trim(),
+                confirmReceipt: true,
+              });
+              up(s => {
               s.scan = { stage: 'pick' };
               s.route = 'expenses';
-              const key = (+dd.slice(0, 4)) * 12 + (+dd.slice(5, 7) - 1);
-              total = expByMonth(s.data).get(key)?.total || 0;
-            });
-            const key = (+dd.slice(0, 4)) * 12 + (+dd.slice(5, 7) - 1);
-            toast(t('ex_saved', { m: monthName(key % 12), x: nf(total) }));
-          }} />
-          <BtnLine label={t('ex_retake')} onPress={() => up(s => { s.scan = { stage: 'pick' }; })} />
+              });
+              toast(t('ex_saved', { m: monthName(key % 12), x: nf(total) }));
+            } catch {
+              setError('save');
+              toast(t('ex_save_failed'));
+            } finally {
+              setSaving(false);
+            }
+          })(); }} />
+          <BtnLine label={t('ex_retake')} onPress={() => { setError(null); up(s => { s.scan = { stage: 'pick' }; }); }} />
         </Card>
       </>
     );

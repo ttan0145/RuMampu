@@ -1,38 +1,46 @@
-# RuMampu — frontend
+# RuMampu 前端
 
-Expo (React Native + TypeScript) port of the `rumampu18.html` design prototype. The UI, copy
-(EN / BM / 中文), charts, and affordability math are a 1:1 translation of the prototype.
+Expo + React Native + TypeScript 客户端，支持 English、Bahasa Melayu 和中文。页面来自早期设计原型，但项目已经开始逐领域接入正式 Django API。
 
-## Run
+## 启动
 
-```bash
-npm install
-npx expo start        # then press i (iOS simulator), a (Android), or w (web)
+```powershell
+npm ci
+Copy-Item .env.example .env
+npm start
 ```
 
-## Structure
+`EXPO_PUBLIC_API_URL` 应指向版本化 API，例如：
 
+```text
+http://localhost:8000/api/v1
 ```
-app/                     expo-router entry (loads fonts, mounts the app)
+
+Expo Web 与 Django 应使用相同主机名，以便 `credentials: include` 能正确保存访客 session Cookie。若未设置 API URL，客户端进入仅用于演示的内存原型模式。
+
+## 结构
+
+```text
+app/                         Expo Router 入口
 src/rumampu/
-  theme.ts               design tokens (colors, type scale) — mirrors the prototype's CSS variables
-  strings.ts             all user-facing copy in 3 languages (verbatim from the prototype)
-  mock.ts                seed data + data types — REPLACE THIS with API data when the backend lands
-  calc.ts                pure derived calculations (months aggregation, instalment, test rows, …)
-  state.tsx              central app state, navigation (route + stack + tabs), i18n helper, toast
-  ui.tsx                 primitives (buttons, chips, cards, fields, provenance chips, …)
-  charts.tsx             waterline chart, coverage strip, donut, limit bars, range band
-  svgs.tsx               logo, onboarding hero illustrations, row icons
-  overlays.tsx           bottom sheets, onboarding, splash, toast, tab bar
-  screens/               one file per tab group (home, money, expenses, test, prepare)
+  api.ts                     版本化 API 客户端和统一错误解析
+  state.tsx                  应用状态、导航及 API 同步边界
+  mock.ts                    尚未接通领域的原型数据
+  calc.ts                    纯计算函数
+  strings.ts                 三语文案
+  theme.ts / ui.tsx          设计令牌和 UI 原语
+  charts.tsx / svgs.tsx      图表和图形
+  overlays.tsx               弹层、引导和全局反馈
+  screens/                   各业务页面
 ```
 
-## Backend integration notes
+## 开发规则
 
-- All data lives in the state provider (`state.tsx`), seeded from `mock.ts`. Swapping
-  `initialState()`'s `data: MOCK` for fetched data (and persisting mutations) is the
-  integration seam — screens and calculations only read from `S.data`.
-- Amount/date fields are plain text inputs (`YYYY-MM-DD`); swap in a native date picker
-  (`@react-native-community/datetimepicker`) if wanted.
-- The receipt scan is a preview: it fakes OCR with a 1.4s delay and a sample result,
-  matching the prototype.
+- 已接通领域以 API 数据为事实来源，不得同时由 mock 覆盖。
+- 页面组件不直接拼接 URL；所有请求通过 `api.ts`。
+- 流程判断使用 API 错误 `code`，不要依赖英文 `message`。
+- 金额响应为小数字符串，进入计算前显式转换为 `Number`。
+- 保存请求进行中必须禁用重复提交；API 幂等协议尚未实现。
+- 提交前运行 `npm run typecheck`。
+
+历史收入导入通过 `expo-document-picker` 选择 UTF-8 CSV，并严格经过预览与确认两阶段。完整接口规则见 [`../docs/API_CONTRACT.md`](../docs/API_CONTRACT.md)。收据 OCR、部分计算和 Epic 5 页面目前仍是原型行为。

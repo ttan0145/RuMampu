@@ -1,0 +1,6 @@
+amount,date,source
+1200.00,2025-05-10,E-hailing
+450.00,2025-05-20,Freelance
+900.00,2025-06-15,Weekend market
+bad,2025-06-20,E-hailing
+300.00,not-a-date,Other
