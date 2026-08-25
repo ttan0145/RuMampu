@@ -3,17 +3,25 @@ import { monthsAgg } from '../src/rumampu/calc';
 import { HousingCalculationResult, HousingScenarioPayload, HousingScenarioResponse, HousingTestResult, PreHousingResult } from '../types/housing';
 import { apiRequest } from './api';
 
+function roundMoney(value: number): number {
+  return Number((Number(value) || 0).toFixed(2));
+}
+
+function roundRate(value: number): number {
+  return Number((Number(value) || 0).toFixed(3));
+}
+
 function scenarioPayload(data: AppData, includeCosts: boolean): HousingScenarioPayload {
   return {
-    property_price: data.house.price,
-    deposit: data.house.deposit,
-    financing_rate: data.house.rate,
+    property_price: roundMoney(data.house.price),
+    deposit: roundMoney(data.house.deposit),
+    financing_rate: roundRate(data.house.rate),
     tenure_years: data.house.years,
-    known_monthly_payment: data.house.knownPayment,
+    known_monthly_payment: data.house.knownPayment == null ? null : roundMoney(data.house.knownPayment),
     ...(includeCosts ? {
       additional_costs: data.homeCosts.map(item => ({
         category: item.id,
-        amount: Number(item.a) || 0,
+        amount: roundMoney(Number(item.a) || 0),
       })),
     } : {}),
   };
@@ -67,12 +75,12 @@ export async function runStatelessHousingTest(
       financial_months: monthsAgg(data).map(row => ({
         year: row.y,
         month: row.m + 1,
-        gross_income: row.gross,
-        usable_income: row.net,
-        existing_costs: row.net - row.surplus,
+        gross_income: roundMoney(row.gross),
+        usable_income: roundMoney(row.net),
+        existing_costs: roundMoney(Math.max(0, row.net - row.surplus)),
       })),
-      ...(testedMonthlyHomeCost == null ? {} : { tested_monthly_home_cost: testedMonthlyHomeCost }),
-      income_shock_percent: incomeShockPercent,
+      ...(testedMonthlyHomeCost == null ? {} : { tested_monthly_home_cost: roundMoney(testedMonthlyHomeCost) }),
+      income_shock_percent: roundMoney(incomeShockPercent),
     }),
   });
 }

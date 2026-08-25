@@ -3,16 +3,20 @@ import { defineConfig } from '@playwright/test';
 const npm = process.platform === 'win32'
   ? '"C:\\Program Files\\nodejs\\npm.cmd"'
   : 'npm';
+
+// GitHub Actions creates backend/.venv. Your Mac project uses RuMampu/venv.
+// Because the backend webServer runs with cwd='../backend':
+//   CI    -> ./.venv/bin/python
+//   local -> ../venv/bin/python
 const python = process.platform === 'win32'
-  ? '.\\.venv\\Scripts\\python.exe'
-  : './.venv/bin/python';
+  ? (process.env.CI ? '.\\.venv\\Scripts\\python.exe' : '..\\venv\\Scripts\\python.exe')
+  : (process.env.CI ? './.venv/bin/python' : '../venv/bin/python');
+
 const browserChannel = process.env.PLAYWRIGHT_CHANNEL?.trim();
 
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
-  // The local acceptance server uses SQLite; serial workers prevent independent
-  // scenario loaders from contending for the single database writer lock.
   workers: 1,
   timeout: 45_000,
   expect: { timeout: 8_000 },
@@ -32,9 +36,22 @@ export default defineConfig({
     {
       command: `${python} manage.py migrate --noinput && ${python} manage.py runserver localhost:8000 --noreload`,
       cwd: '../backend',
-      env: { ...process.env, ENABLE_TEST_SCENARIOS: 'True' },
+      env: {
+        ...process.env,
+        ENABLE_TEST_SCENARIOS: 'True',
+        // Acceptance tests must use the local SQLite database, not Neon.
+        // settings.py loads backend/.env, but python-dotenv does not override
+        // environment variables already supplied here.
+        PGHOST: '',
+        PGDATABASE: '',
+        PGUSER: '',
+        PGPASSWORD: '',
+        PGPORT: '',
+        PGSSLMODE: '',
+      },
       url: 'http://localhost:8000/api/v1/health/',
-      reuseExistingServer: true,
+      // Do not accidentally reuse a manually-running Django server connected to Neon.
+      reuseExistingServer: false,
       timeout: 120_000,
     },
     {
@@ -47,7 +64,7 @@ export default defineConfig({
         EXPO_PUBLIC_API_URL: 'http://localhost:8000/api/v1',
       },
       url: 'http://localhost:8081',
-      reuseExistingServer: true,
+      reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
   ],
