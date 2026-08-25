@@ -5,7 +5,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TAB_OF, Tab, useApp } from './state';
 import { STRINGS, Lang } from './strings';
-import { monthsAgg } from './calc';
+import { monthsAgg, recSpan } from './calc';
 import { C, DISP_FONT } from './theme';
 import { Btn, BodyS, PROV_G } from './ui';
 import { Hero, Logo } from './svgs';
@@ -58,39 +58,8 @@ function SheetInput(props: React.ComponentProps<typeof TextInput>) {
   );
 }
 
-function monthValue(key: number): string {
-  const year = Math.floor(key / 12);
-  const month = key % 12;
-  return `${year}-${String(month + 1).padStart(2, '0')}`;
-}
-
-function suggestedPastMonth(dates: string[]): string {
-  const now = new Date();
-  const currentKey = now.getFullYear() * 12 + now.getMonth();
-  const earliest = dates.reduce((result, value) => {
-    const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(value);
-    if (!match) return result;
-    const key = Number(match[1]) * 12 + Number(match[2]) - 1;
-    return Math.min(result, key);
-  }, currentKey);
-  return monthValue(Math.min(currentKey, earliest) - 1);
-}
-
-function isValidPastMonth(value: string): boolean {
-  const match = /^(\d{4})-(\d{2})$/.exec(value);
-  if (!match) return false;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  if (month < 1 || month > 12) return false;
-  const now = new Date();
-  return year * 12 + month - 1 < now.getFullYear() * 12 + now.getMonth();
-}
-
 export function SheetHost() {
-  const {
-    S, t, up, saveIncomeEntry, saveIncomeSource, saveCustomWorkCost,
-    saveExpenseCategory, toast,
-  } = useApp();
+  const { S, t, up, toast, monthName } = useApp();
   const sheet = S.sheet;
   const close = () => up(s => { s.sheet = null; });
 
@@ -98,15 +67,7 @@ export function SheetHost() {
   const [ownAmt, setOwnAmt] = React.useState('0');
   const [pastM, setPastM] = React.useState<string | null>(null);
   const [pastA, setPastA] = React.useState('');
-  const [pastError, setPastError] = React.useState<'invalid' | 'exists' | 'amount' | null>(null);
-  const [saving, setSaving] = React.useState(false);
-  React.useEffect(() => {
-    setOwnName('');
-    setOwnAmt('0');
-    setPastM(null);
-    setPastA('');
-    setPastError(null);
-  }, [sheet]);
+  React.useEffect(() => { setOwnName(''); setOwnAmt('0'); setPastM(null); setPastA(''); }, [sheet]);
 
   if (!sheet || sheet === 'shockcustom') return null;
 
@@ -136,31 +97,25 @@ export function SheetHost() {
   }
 
   if (sheet === 'pastmonth') {
-    const sel = pastM ?? suggestedPastMonth(S.data.income.map(entry => entry.d));
-    const save = async () => {
+    const sp = recSpan(S.data);
+    const firstKey = sp ? sp.from.y * 12 + sp.from.m : 2026 * 12 + 7;
+    const opts: { v: string; label: string }[] = [];
+    for (let k = firstKey - 1; k >= firstKey - 6; k--) {
+      const y = Math.floor(k / 12), m = k % 12;
+      opts.push({ v: `${y}-${String(m + 1).padStart(2, '0')}`, label: `${monthName(m)} ${y}` });
+    }
+    const sel = pastM ?? opts[0].v;
+    const save = () => {
       const a = parseFloat(pastA) || 0;
-      if (saving) return;
-      if (!isValidPastMonth(sel)) { setPastError('invalid'); return; }
-      if (a <= 0) { setPastError('amount'); return; }
-      if (S.data.income.some(entry => entry.d.slice(0, 7) === sel)) {
-        setPastError('exists');
-        return;
-      }
-      setSaving(true);
-      try {
-        await saveIncomeEntry({
-          amount: a,
-          date: sel + '-15',
-          entryMethod: 'historical_total',
-          confirmOutlier: true,
-        });
+      if (a > 0 && /^\d{4}-\d{2}$/.test(sel)) {
         let months = 0;
-        up(s => { s.sheet = null; months = monthsAgg(s.data).length; });
+        up(s => {
+          s.data.income.push({ a, d: sel + '-15', s: s.incomeDraft.s });
+          s.data.income.sort((x, y) => (x.d < y.d ? -1 : 1));
+          s.sheet = null;
+          months = monthsAgg(s.data).length;
+        });
         toast(t('entry_saved_n', { n: months }));
-      } catch {
-        toast(t('inc_save_failed'));
-      } finally {
-        setSaving(false);
       }
     };
     return (
@@ -168,15 +123,13 @@ export function SheetHost() {
         <SheetH3>{t('inc_past')}</SheetH3>
         <View style={{ gap: 8 }}>
           <BodyS muted>{t('inc_past_hint')}</BodyS>
-          <BodyS muted>{t('inc_past_no_min')}</BodyS>
-          <BodyS muted>{t('inc_past_month')}</BodyS>
-          <SheetInput keyboardType="numbers-and-punctuation" placeholder="YYYY-MM" value={sel}
-            onChangeText={value => { setPastM(value); setPastError(null); }} />
+          <BodyS muted>{t('inc_date')}</BodyS>
+          {opts.map(o => (
+            <Opt key={o.v} label={o.label} on={sel === o.v} onPress={() => setPastM(o.v)} />
+          ))}
           <BodyS muted>{t('inc_amount')}</BodyS>
-          <SheetInput keyboardType="numbers-and-punctuation" value={pastA}
-            onChangeText={value => { setPastA(value); setPastError(null); }} />
-          {pastError ? <BodyS>{t(`inc_past_${pastError}`)}</BodyS> : null}
-          <Btn label={saving ? t('inc_saving') : t('add')} onPress={() => { void save(); }} />
+          <SheetInput keyboardType="number-pad" value={pastA} onChangeText={setPastA} />
+          <Btn label={t('add')} onPress={save} />
         </View>
       </SheetFrame>
     );
@@ -184,33 +137,29 @@ export function SheetHost() {
 
   if (sheet === 'xcown' || sheet === 'srcown' || sheet === 'wcown') {
     const title = sheet === 'xcown' ? t('xc_own') : sheet === 'srcown' ? t('src_own') : t('wc_own');
-    const save = async () => {
+    const save = () => {
       const name = ownName.trim();
-      if (!name || saving) return;
-      setSaving(true);
-      try {
+      if (!name) return;
+      up(s => {
+        const id = 'own' + Date.now();
         if (sheet === 'srcown') {
-          await saveIncomeSource(name);
-          up(s => { s.sheet = null; });
+          s.data.sources.push({ id, custom: true, name });
+          s.incomeDraft.s = id;
         } else if (sheet === 'xcown') {
-          await saveExpenseCategory(name);
-          up(s => { s.sheet = null; });
+          s.data.expenseCats.push({ id, custom: true, name });
+          s.expDraft.c = id;
         } else {
-          await saveCustomWorkCost(name, Math.max(0, parseFloat(ownAmt) || 0));
-          up(s => { s.sheet = null; });
+          s.data.workCosts.push({ id, custom: true, name, a: parseFloat(ownAmt) || 0 });
         }
-        toast(t('saved'));
-      } catch {
-        toast(t('inc_save_failed'));
-      } finally {
-        setSaving(false);
-      }
+        s.sheet = null;
+      });
+      toast(t('saved'));
     };
     return (
       <SheetFrame onClose={close}>
         <SheetH3>{title}</SheetH3>
         <View style={{ gap: 8 }}>
-          <BodyS muted>{t(sheet === 'wcown' ? 'wc_name' : sheet === 'xcown' ? 'xc_name' : 'src_name')}</BodyS>
+          <BodyS muted>{t('src_name')}</BodyS>
           <SheetInput value={ownName} onChangeText={setOwnName} />
           {sheet === 'wcown' ? (
             <>
@@ -218,7 +167,7 @@ export function SheetHost() {
               <SheetInput keyboardType="number-pad" value={ownAmt} onChangeText={setOwnAmt} />
             </>
           ) : null}
-          <Btn label={saving ? t('inc_saving') : t('add')} onPress={() => { void save(); }} />
+          <Btn label={t('add')} onPress={save} />
         </View>
       </SheetFrame>
     );

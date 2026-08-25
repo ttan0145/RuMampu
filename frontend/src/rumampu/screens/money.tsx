@@ -2,7 +2,6 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import { useApp } from '../state';
 import { MOCK } from '../mock';
-import { INCOME_API_ENABLED } from '../api';
 import {
   actualMonths, commitTotal, expByMonth, expCatTotals, latestExpMonth,
   monthsAgg, nf, recSpan, rm, slowUnseen,
@@ -14,7 +13,6 @@ import {
 import { C, DISP_FONT } from '../theme';
 import { Donut, DonutLegend, Waterline } from '../charts';
 import { ScreenShell } from './shell';
-import { isValidIsoDate } from '../validation';
 
 export function MoneyScreen() {
   const { S, t, monthName, go } = useApp();
@@ -31,11 +29,9 @@ export function MoneyScreen() {
     for (const e of S.data.income) {
       const k = (+e.d.slice(0, 4)) * 12 + (+e.d.slice(5, 7) - 1);
       if (!lastInc || k !== lastInc.y * 12 + lastInc.m) continue;
-      const sourceKey = e.method === 'historical_total' ? '__monthly_total__' : e.s;
-      srcTot.set(sourceKey, (srcTot.get(sourceKey) || 0) + (+e.a || 0));
+      srcTot.set(e.s, (srcTot.get(e.s) || 0) + (+e.a || 0));
     }
     const srcLabel = (id: string) => {
-      if (id === '__monthly_total__') return t('inc_month_total');
       const x = S.data.sources.find(z => z.id === id);
       return x ? (x.custom ? x.name || '' : t(x.k || '')) : id;
     };
@@ -101,7 +97,7 @@ export function RecordScreen() {
   const lastLbl = last ? (+last.slice(8, 10)) + ' ' + monthName(+last.slice(5, 7) - 1) : '';
   return (
     <ScreenShell back title={t('money_record')}>
-      <Fig value={t(n === 1 ? 'rc_months_one' : 'rc_months', { n })} p="user" cls="h-l" />
+      <Fig value={t('rc_months', { n })} p="user" cls="h-l" />
       <BodyS muted>{t('rc_entries', { e, d: lastLbl })}</BodyS>
       <Card gap={8}>
         <BodyS muted>{t('rc_tests')}</BodyS>
@@ -121,72 +117,49 @@ export function RecordScreen() {
 }
 
 export function IncomeScreen() {
-  const { S, t, monthName, up, go, saveIncomeEntry, toast } = useApp();
+  const { S, t, monthName, up, toast } = useApp();
   const d = S.incomeDraft;
-  const [saving, setSaving] = React.useState(false);
 
-  const save = async (keep: boolean) => {
-    if (saving || S.incomeSync === 'loading') return;
+  const save = (keep: boolean) => {
     const a = +d.a || 0;
     if (a < 0) { up(s => { s.incomeDraft.flag = 'neg'; }); return; }
     if (!a) return;
-    if (!isValidIsoDate(d.d)) {
-      toast(t('inc_invalid_date'));
-      return;
-    }
     const amts = S.data.income.map(e => e.a).sort((x, y) => x - y);
     const med = amts.length ? amts[Math.floor(amts.length / 2)] : a;
-    if (!INCOME_API_ENABLED && !keep && amts.length >= 3 && a > med * 3) {
+    if (!keep && amts.length && a > med * 3) {
       up(s => { s.incomeDraft.flag = 'outlier'; });
       return;
     }
-    setSaving(true);
-    try {
-      const result = await saveIncomeEntry({
-        amount: a,
-        date: d.d,
-        sourceId: d.s,
-        confirmOutlier: keep,
-      });
-      if (result === 'outlier') {
-        up(s => { s.incomeDraft.flag = 'outlier'; });
-        return;
-      }
-      let months = 0;
-      up(s => {
-        s.incomeDraft = { a: '', d: d.d, s: d.s, flag: null };
-        months = monthsAgg(s.data).length;
-      });
-      toast(t('entry_saved_n', { n: months }));
-    } catch {
-      toast(t('inc_save_failed'));
-    } finally {
-      setSaving(false);
-    }
+    let months = 0;
+    up(s => {
+      s.data.income.push({ a, d: d.d, s: d.s });
+      s.data.income.sort((x, y) => (x.d < y.d ? -1 : 1));
+      s.incomeDraft = { a: '', d: d.d, s: d.s, flag: null };
+      months = monthsAgg(s.data).length;
+    });
+    toast(t('entry_saved_n', { n: months }));
   };
 
   return (
     <ScreenShell back title={t('money_income')}>
-      {S.incomeSync === 'loading' ? <NoteC><BodyS>{t('inc_sync_loading')}</BodyS></NoteC> : null}
-      {S.incomeSync === 'error' ? <NoteC><BodyS>{t('inc_sync_error')}</BodyS></NoteC> : null}
       {S.data.income.length ? null : <Display cls="h-m">{t('inc_empty')}</Display>}
       <Card gap={8}>
         <View style={{ gap: 6 }}>
           <BodyS muted>{t('inc_amount')}</BodyS>
           <TextField value={d.a} keyboardType="numbers-and-punctuation"
-            onChangeText={v => up(s => { s.incomeDraft.a = v; s.incomeDraft.flag = null; })} />
+            onChangeText={v => up(s => { s.incomeDraft.a = v; })} />
         </View>
         <View style={{ gap: 6 }}>
           <BodyS muted>{t('inc_date')}</BodyS>
           <TextField value={d.d} keyboardType="numbers-and-punctuation" placeholder="YYYY-MM-DD"
-            onChangeText={v => up(s => { s.incomeDraft.d = v; s.incomeDraft.flag = null; })} />
+            onChangeText={v => up(s => { s.incomeDraft.d = v; })} />
         </View>
         <View style={{ gap: 6 }}>
           <BodyS muted>{t('inc_source')}</BodyS>
           <Chips>
             {S.data.sources.map(x => (
               <Chip key={x.id} label={x.custom ? x.name || '' : t(x.k || '')} on={d.s === x.id}
-                onPress={() => up(s => { s.incomeDraft.s = x.id; s.incomeDraft.flag = null; })} />
+                onPress={() => up(s => { s.incomeDraft.s = x.id; })} />
             ))}
             <Chip label={t('src_own')} onPress={() => up(s => { s.sheet = 'srcown'; })} />
           </Chips>
@@ -195,23 +168,19 @@ export function IncomeScreen() {
         {d.flag === 'outlier' ? (
           <NoteC>
             <BodyS>{t('inc_outlier')}</BodyS>
-            <BtnLine label={t('keep')} onPress={() => { void save(true); }} />
+            <BtnLine label={t('keep')} onPress={() => save(true)} />
           </NoteC>
         ) : null}
-        <Btn label={saving ? t('inc_saving') : t('inc_add')} onPress={() => { void save(false); }} />
+        <Btn label={t('inc_add')} onPress={() => save(false)} />
       </Card>
       <BtnLine label={t('inc_past')} onPress={() => up(s => { s.sheet = 'pastmonth'; })} />
-      <BtnLine label={t('inc_import')} onPress={() => go('incomeimport')} />
       {S.data.income.length ? (
         <StackS>
-          {[...S.data.income].reverse().map((e, i) => {
+          {S.data.income.slice(-6).reverse().map((e, i) => {
             const src = S.data.sources.find(x => x.id === e.s);
             const dd = +e.d.slice(8, 10) + ' ' + monthName(+e.d.slice(5, 7) - 1);
-            const label = e.method === 'historical_total'
-              ? `${monthName(+e.d.slice(5, 7) - 1)} ${e.d.slice(0, 4)} · ${t('inc_month_total')}`
-              : `${dd} · ${src ? (src.custom ? src.name : t(src.k || '')) : e.s}`;
             return (
-              <KV key={i} k={label}>
+              <KV key={i} k={`${dd} · ${src ? (src.custom ? src.name : t(src.k || '')) : e.s}`}>
                 <Fig value={rm(e.a)} p="user" cls="body-s" />
               </KV>
             );
@@ -223,23 +192,13 @@ export function IncomeScreen() {
 }
 
 export function WorkcostsScreen() {
-  const { S, t, up, saveWorkCostAmount, toast } = useApp();
+  const { S, t, up } = useApp();
   const agg = monthsAgg(S.data);
   const netAvg = agg.reduce((a, r) => a + r.net, 0) / Math.max(1, agg.length);
   return (
     <ScreenShell back title={t('money_workcosts')}>
-      {S.workCostSync === 'loading' ? <NoteC><BodyS>{t('wc_sync_loading')}</BodyS></NoteC> : null}
-      {S.workCostSync === 'error' ? <NoteC><BodyS>{t('wc_sync_error')}</BodyS></NoteC> : null}
       <Card gap={8}>
-        <EditList
-          list={S.data.workCosts}
-          onNum={(i, n) => up(s => { s.data.workCosts[i].a = n; })}
-          onCommit={(i, n) => {
-            const id = S.data.workCosts[i]?.id;
-            if (!id) return;
-            void saveWorkCostAmount(id, n).catch(() => toast(t('wc_save_failed')));
-          }}
-        />
+        <EditList list={S.data.workCosts} onNum={(i, n) => up(s => { s.data.workCosts[i].a = n; })} />
         <BtnLine label={t('wc_own')} onPress={() => up(s => { s.sheet = 'wcown'; })} />
       </Card>
       <Card>
@@ -252,18 +211,14 @@ export function WorkcostsScreen() {
 }
 
 export function CommitScreen() {
-  const { S, t, monthName, up, toast, saveCommitmentAmount } = useApp();
+  const { S, t, monthName, up, toast } = useApp();
   const c = S.data.commitments;
   const added = new Set([...c.living, ...c.debts, ...c.savings].map(x => x.id));
-  const presets = INCOME_API_ENABLED
-    ? []
-    : MOCK.commitPresets.filter(id => !added.has(id));
+  const presets = MOCK.commitPresets.filter(id => !added.has(id));
   const allMock = [...MOCK.commitments.living, ...MOCK.commitments.debts, ...MOCK.commitments.savings];
   const em = expByMonth(S.data);
   return (
     <ScreenShell back title={t('money_commit')}>
-      {S.commitmentSync === 'loading' ? <NoteC><BodyS>{t('cm_sync_loading')}</BodyS></NoteC> : null}
-      {S.commitmentSync === 'error' ? <NoteC><BodyS>{t('cm_sync_error')}</BodyS></NoteC> : null}
       {presets.length ? (
         <Chips>
           {presets.map(id => {
@@ -285,15 +240,7 @@ export function CommitScreen() {
       {(['living', 'debts', 'savings'] as const).map(sec => (
         <Card key={sec} gap={8}>
           <BodyS muted>{t(sec === 'living' ? 'cm_living' : sec === 'debts' ? 'cm_debts' : 'cm_savings')}</BodyS>
-          <EditList
-            list={c[sec]}
-            onNum={(i, n) => up(s => { s.data.commitments[sec][i].a = n; })}
-            onCommit={(i, n) => {
-              const id = S.data.commitments[sec][i]?.id;
-              if (!id) return;
-              void saveCommitmentAmount(id, n).catch(() => toast(t('cm_save_failed')));
-            }}
-          />
+          <EditList list={c[sec]} onNum={(i, n) => up(s => { s.data.commitments[sec][i].a = n; })} />
         </Card>
       ))}
       <KV k={t('cm_total')}><Fig value={rm(commitTotal(S.data))} p="calc" /></KV>

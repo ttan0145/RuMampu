@@ -195,11 +195,10 @@ export function KV({ k, children }: { k: React.ReactNode; children: React.ReactN
 
 /* Numeric input that keeps a local string while typing but reports parsed values. */
 export function NumInput({
-  value, onNum, onCommit, style, min0 = true, alignRight, decimal, placeholder,
+  value, onNum, style, min0 = true, alignRight, decimal, placeholder,
 }: {
   value: number | string;
   onNum: (n: number) => void;
-  onCommit?: (n: number) => void;
   style?: ViewStyle | TextStyle | (ViewStyle | TextStyle)[];
   min0?: boolean;
   alignRight?: boolean;
@@ -219,14 +218,7 @@ export function NumInput({
       placeholder={placeholder}
       placeholderTextColor={C.ink40}
       onFocus={() => { focused.current = true; }}
-      onBlur={() => {
-        focused.current = false;
-        let n = parseFloat(local);
-        if (!isFinite(n)) n = 0;
-        if (min0) n = Math.max(0, n);
-        setLocal(String(n));
-        onCommit?.(n);
-      }}
+      onBlur={() => { focused.current = false; setLocal(String(value ?? '')); }}
       onChangeText={txt => {
         setLocal(txt);
         let n = parseFloat(txt);
@@ -267,33 +259,19 @@ export function TextField({
 
 export interface EditItem { id: string; k?: string; custom?: boolean; name?: string; a: number; p?: string }
 
-export function EditRow({
-  label, p, value, onNum, onCommit,
-}: {
-  label: string;
-  p: string;
-  value: number;
-  onNum: (n: number) => void;
-  onCommit?: (n: number) => void;
-}) {
+export function EditRow({ label, p, value, onNum }: { label: string; p: string; value: number; onNum: (n: number) => void }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={{ fontSize: 15, color: C.ink }}>{label}</Text>
         <Prov p={p} />
       </View>
-      <NumInput value={value} onNum={onNum} onCommit={onCommit} alignRight />
+      <NumInput value={value} onNum={onNum} alignRight />
     </View>
   );
 }
 
-export function EditList({
-  list, onNum, onCommit,
-}: {
-  list: EditItem[];
-  onNum: (i: number, n: number) => void;
-  onCommit?: (i: number, n: number) => void;
-}) {
+export function EditList({ list, onNum }: { list: EditItem[]; onNum: (i: number, n: number) => void }) {
   const { t } = useApp();
   return (
     <>
@@ -304,7 +282,6 @@ export function EditList({
           p={c.p || 'user'}
           value={+c.a || 0}
           onNum={n => onNum(i, n)}
-          onCommit={onCommit ? n => onCommit(i, n) : undefined}
         />
       ))}
     </>

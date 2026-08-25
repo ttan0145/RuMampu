@@ -17,12 +17,10 @@ import {
 import {
   BufferScreen, DocsScreen, PrepareScreen, PvCompareScreen, PvMonthScreen, PvSwitchScreen, UpfrontScreen,
 } from './screens/prepare';
-import { ImportIncomeScreen } from './screens/imports';
 
 const SCREENS: Record<Route, React.ComponentType> = {
   home: HomeScreen,
-  money: MoneyScreen, income: IncomeScreen, incomeimport: ImportIncomeScreen,
-  workcosts: WorkcostsScreen, commit: CommitScreen,
+  money: MoneyScreen, income: IncomeScreen, workcosts: WorkcostsScreen, commit: CommitScreen,
   pattern: PatternScreen, coverage: CoverageScreen, record: RecordScreen,
   expenses: ExpensesScreen, expadd: ExpAddScreen, expscan: ExpScanScreen,
   expmonths: ExpMonthsScreen, exlimits: ExLimitsScreen,
