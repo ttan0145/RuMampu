@@ -369,6 +369,32 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/housing/test-result/:
+    post:
+      operationId: housing_test_result_create
+      tags:
+      - housing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HousingTestRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/HousingTestRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/HousingTestRequestRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HousingTestResult'
+          description: ''
   /api/v1/income-coverage/:
     get:
       operationId: income_coverage_retrieve
@@ -775,6 +801,42 @@ components:
       - recorded_minimum
       type: string
       description: '* `recorded_minimum` - recorded_minimum'
+    CarryingRangeResult:
+      type: object
+      properties:
+        lower_monthly_amount:
+          type: number
+          format: double
+        upper_monthly_amount:
+          type: number
+          format: double
+        tested_monthly_home_cost:
+          type: number
+          format: double
+          minimum: 0
+        lower_meaning:
+          type: string
+        upper_meaning:
+          type: string
+        indicative_property_price_lower:
+          type: number
+          format: double
+          minimum: 0
+        indicative_property_price_upper:
+          type: number
+          format: double
+          minimum: 0
+        property_price_limitation:
+          type: string
+      required:
+      - indicative_property_price_lower
+      - indicative_property_price_upper
+      - lower_meaning
+      - lower_monthly_amount
+      - property_price_limitation
+      - tested_monthly_home_cost
+      - upper_meaning
+      - upper_monthly_amount
     CommitmentItem:
       type: object
       properties:
@@ -1059,9 +1121,8 @@ components:
           pattern: ^-?\d{0,3}(?:\.\d{0,3})?$
         tenure_years:
           type: integer
-          maximum: 9223372036854775807
+          maximum: 2147483647
           minimum: 0
-          format: int64
         known_monthly_payment:
           type: string
           format: decimal
@@ -1118,9 +1179,8 @@ components:
           pattern: ^-?\d{0,3}(?:\.\d{0,3})?$
         tenure_years:
           type: integer
-          maximum: 9223372036854775807
+          maximum: 2147483647
           minimum: 0
-          format: int64
         known_monthly_payment:
           type: string
           format: decimal
@@ -1134,6 +1194,145 @@ components:
       - financing_rate
       - property_price
       - tenure_years
+    HousingTestMonthResult:
+      type: object
+      properties:
+        year:
+          type: integer
+        month:
+          type: integer
+          maximum: 12
+          minimum: 1
+        gross_income:
+          type: number
+          format: double
+        usable_income:
+          type: number
+          format: double
+        existing_costs:
+          type: number
+          format: double
+        surplus:
+          type: number
+          format: double
+        shortfall:
+          type: number
+          format: double
+          minimum: 0
+        available_for_home:
+          type: number
+          format: double
+        tested_home_cost:
+          type: number
+          format: double
+          minimum: 0
+        post_housing_residual:
+          type: number
+          format: double
+        is_short:
+          type: boolean
+        existing_shortfall:
+          type: number
+          format: double
+          minimum: 0
+        housing_created_shortfall:
+          type: number
+          format: double
+          minimum: 0
+        housing_added_gap:
+          type: number
+          format: double
+          minimum: 0
+        total_shortfall:
+          type: number
+          format: double
+          minimum: 0
+        shortfall_type:
+          $ref: '#/components/schemas/ShortfallTypeEnum'
+        housing_shortfall:
+          type: number
+          format: double
+          minimum: 0
+      required:
+      - available_for_home
+      - existing_costs
+      - existing_shortfall
+      - gross_income
+      - housing_added_gap
+      - housing_created_shortfall
+      - housing_shortfall
+      - is_short
+      - month
+      - post_housing_residual
+      - shortfall
+      - shortfall_type
+      - surplus
+      - tested_home_cost
+      - total_shortfall
+      - usable_income
+      - year
+    HousingTestRequestRequest:
+      type: object
+      properties:
+        scenario_id:
+          type: integer
+          minimum: 1
+      required:
+      - scenario_id
+    HousingTestResult:
+      type: object
+      properties:
+        scenario_id:
+          type: integer
+          minimum: 1
+        tested_home_cost:
+          type: number
+          format: double
+          minimum: 0
+        tested_months:
+          type: integer
+          minimum: 0
+        short_month_count:
+          type: integer
+          minimum: 0
+        existing_short_month_count:
+          type: integer
+          minimum: 0
+        housing_created_short_month_count:
+          type: integer
+          minimum: 0
+        largest_gap:
+          type: number
+          format: double
+          minimum: 0
+        largest_existing_gap:
+          type: number
+          format: double
+          minimum: 0
+        largest_housing_created_gap:
+          type: number
+          format: double
+          minimum: 0
+        months:
+          type: array
+          items:
+            $ref: '#/components/schemas/HousingTestMonthResult'
+        carrying_range:
+          allOf:
+          - $ref: '#/components/schemas/CarryingRangeResult'
+          nullable: true
+      required:
+      - carrying_range
+      - existing_short_month_count
+      - housing_created_short_month_count
+      - largest_existing_gap
+      - largest_gap
+      - largest_housing_created_gap
+      - months
+      - scenario_id
+      - short_month_count
+      - tested_home_cost
+      - tested_months
     IncomeCoverageObservation:
       type: object
       properties:
@@ -1328,9 +1527,8 @@ components:
           readOnly: true
         row_number:
           type: integer
-          maximum: 9223372036854775807
+          maximum: 2147483647
           minimum: 0
-          format: int64
         raw_amount:
           type: string
           maxLength: 64
@@ -1563,9 +1761,8 @@ components:
           pattern: ^-?\d{0,3}(?:\.\d{0,3})?$
         tenure_years:
           type: integer
-          maximum: 9223372036854775807
+          maximum: 2147483647
           minimum: 0
-          format: int64
         known_monthly_payment:
           type: string
           format: decimal
@@ -1690,6 +1887,16 @@ components:
       - calculated_from_user_record
       type: string
       description: '* `calculated_from_user_record` - calculated_from_user_record'
+    ShortfallTypeEnum:
+      enum:
+      - none
+      - housing_created
+      - existing_and_worsened_by_housing
+      type: string
+      description: |-
+        * `none` - none
+        * `housing_created` - housing_created
+        * `existing_and_worsened_by_housing` - existing_and_worsened_by_housing
     StatusEnum:
       enum:
       - preview
