@@ -275,3 +275,109 @@ def housing_test_result(profile: GuestProfile, scenario):
         'carrying_range': carrying,
     }
 
+
+
+def stateless_housing_test_result(profile: GuestProfile, data):
+    """Run Epic 3 entirely in Django without persisting a housing scenario."""
+    supplied_months = data.get('financial_months')
+    if supplied_months is not None:
+        pre_months = []
+        for source in supplied_months:
+            gross = _decimal(source['gross_income'])
+            usable = _decimal(source['usable_income'])
+            existing_costs = _decimal(source['existing_costs'])
+            surplus = usable - existing_costs
+            pre_months.append({
+                'year': source['year'],
+                'month': source['month'],
+                'gross_income': _money(gross),
+                'usable_income': _money(usable),
+                'existing_costs': _money(existing_costs),
+                'surplus': _money(surplus),
+                'shortfall': _money(max(Decimal('0'), -surplus)),
+            })
+        pre = {'months': pre_months}
+    else:
+        # Backwards-compatible fallback for callers that still rely on persisted finance data.
+        pre = pre_housing_check(profile)
+    calc = calculation_result(data)
+    tested_cost = _money(data.get('tested_monthly_home_cost', calc['total_monthly_cost']))
+    shock = min(Decimal('90'), max(Decimal('0'), _decimal(data.get('income_shock_percent', 0))))
+    shock_factor = (Decimal('100') - shock) / Decimal('100')
+
+    monthly = []
+    for source in pre['months']:
+        usable = _decimal(source['usable_income']) * shock_factor
+        existing_costs = _decimal(source['existing_costs'])
+        available = usable - existing_costs
+        existing_shortfall = max(Decimal('0'), -available)
+        post = available - tested_cost
+        total_shortfall = max(Decimal('0'), -post)
+        housing_created = total_shortfall if existing_shortfall == 0 else Decimal('0')
+        housing_added = max(Decimal('0'), total_shortfall - existing_shortfall)
+        if total_shortfall == 0:
+            kind = 'none'
+        elif existing_shortfall > 0:
+            kind = 'existing_and_worsened_by_housing'
+        else:
+            kind = 'housing_created'
+        monthly.append({
+            **source,
+            'usable_income': _money(usable),
+            'surplus': _money(available),
+            'shortfall': _money(existing_shortfall),
+            'available_for_home': _money(available),
+            'tested_home_cost': tested_cost,
+            'post_housing_residual': _money(post),
+            'is_short': total_shortfall > 0,
+            'existing_shortfall': _money(existing_shortfall),
+            'housing_created_shortfall': _money(housing_created),
+            'housing_added_gap': _money(housing_added),
+            'total_shortfall': _money(total_shortfall),
+            'shortfall_type': kind,
+            'housing_shortfall': _money(total_shortfall),
+        })
+
+    short_rows = [r for r in monthly if r['is_short']]
+    existing_rows = [r for r in monthly if r['existing_shortfall'] > 0]
+    created_rows = [r for r in monthly if r['shortfall_type'] == 'housing_created']
+    capacities = [_decimal(r['available_for_home']) for r in monthly]
+    extras = sum((_decimal(c.get('amount', 0)) for c in data.get('additional_costs', [])), Decimal('0'))
+    carrying = None
+    if capacities:
+        lower = min(capacities)
+        upper = _median(capacities)
+        lower_mortgage = max(Decimal('0'), lower - extras)
+        upper_mortgage = max(Decimal('0'), upper - extras)
+        carrying = {
+            'lower_monthly_amount': _money(lower),
+            'upper_monthly_amount': _money(upper),
+            'tested_monthly_home_cost': tested_cost,
+            'lower_meaning': 'Every recorded month covered this amount.',
+            'upper_meaning': 'Half of the recorded months covered this amount.',
+            'indicative_property_price_lower': _money(property_price_from_monthly_payment(
+                lower_mortgage, data['financing_rate'], data['tenure_years'], data['deposit'])),
+            'indicative_property_price_upper': _money(property_price_from_monthly_payment(
+                upper_mortgage, data['financing_rate'], data['tenure_years'], data['deposit'])),
+            'property_price_limitation': 'Indicative only. Not a valuation, not an offer.',
+        }
+
+    tested_mortgage = max(Decimal('0'), tested_cost - extras)
+    indicative_tested_price = _money(property_price_from_monthly_payment(
+        tested_mortgage, data['financing_rate'], data['tenure_years'], data['deposit']
+    ))
+
+    return {
+        'scenario_id': 0,
+        'tested_home_cost': tested_cost,
+        'indicative_tested_property_price': indicative_tested_price,
+        'tested_months': len(monthly),
+        'short_month_count': len(short_rows),
+        'existing_short_month_count': len(existing_rows),
+        'housing_created_short_month_count': len(created_rows),
+        'largest_gap': _money(max((_decimal(r['total_shortfall']) for r in short_rows), default=Decimal('0'))),
+        'largest_existing_gap': _money(max((_decimal(r['existing_shortfall']) for r in existing_rows), default=Decimal('0'))),
+        'largest_housing_created_gap': _money(max((_decimal(r['housing_created_shortfall']) for r in created_rows), default=Decimal('0'))),
+        'months': monthly,
+        'carrying_range': carrying,
+    }

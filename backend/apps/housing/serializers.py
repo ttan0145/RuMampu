@@ -143,6 +143,24 @@ class HousingTestRequestSerializer(serializers.Serializer):
     scenario_id = serializers.IntegerField(min_value=1)
 
 
+class StatelessFinancialMonthSerializer(serializers.Serializer):
+    year = serializers.IntegerField()
+    month = serializers.IntegerField(min_value=1, max_value=12)
+    gross_income = serializers.DecimalField(max_digits=12, decimal_places=2)
+    usable_income = serializers.DecimalField(max_digits=12, decimal_places=2)
+    existing_costs = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
+
+
+class StatelessHousingTestRequestSerializer(HousingCalculationSerializer):
+    financial_months = StatelessFinancialMonthSerializer(many=True, required=False)
+    tested_monthly_home_cost = serializers.DecimalField(
+        max_digits=12, decimal_places=2, min_value=0, required=False
+    )
+    income_shock_percent = serializers.DecimalField(
+        max_digits=5, decimal_places=2, min_value=0, max_value=90, required=False, default=0
+    )
+
+
 class HousingTestMonthResultSerializer(PreHousingMonthResultSerializer):
     available_for_home = serializers.FloatField()
     tested_home_cost = serializers.FloatField(min_value=0)
@@ -172,8 +190,9 @@ class CarryingRangeResultSerializer(serializers.Serializer):
 
 
 class HousingTestResultSerializer(serializers.Serializer):
-    scenario_id = serializers.IntegerField(min_value=1)
+    scenario_id = serializers.IntegerField(min_value=0)
     tested_home_cost = serializers.FloatField(min_value=0)
+    indicative_tested_property_price = serializers.FloatField(min_value=0, required=False)
     tested_months = serializers.IntegerField(min_value=0)
     short_month_count = serializers.IntegerField(min_value=0)
     existing_short_month_count = serializers.IntegerField(min_value=0)

@@ -12,6 +12,12 @@ export interface HousingScenarioPayload {
   additional_costs?: HousingCostInput[];
 }
 
+export interface HousingCalculationResult {
+  financing_amount: number;
+  monthly_instalment: number;
+  total_monthly_cost: number;
+}
+
 export interface HousingScenarioResponse extends HousingScenarioPayload {
   id: number;
   financing_amount: number;
@@ -68,6 +74,7 @@ export interface CarryingRangeResult {
 export interface HousingTestResult {
   scenario_id: number;
   tested_home_cost: number;
+  indicative_tested_property_price?: number;
   tested_months: number;
   short_month_count: number;
   existing_short_month_count: number;

@@ -1,12 +1,12 @@
 import React from 'react';
+import { calculateHousing, runStatelessHousingTest } from '../../../services/housingService';
 import {
-  calculateHousingSession, getHousingTestResult, getPreHousingResult, indicativePriceForComparedPayment,
+  getHousingCalculationResult, getHousingTestResult, getPreHousingResult,
+  setHousingCalculationResult, setHousingTestResult, setPreHousingResult,
 } from '../../../services/housingSession';
 import { Text, View } from 'react-native';
 import { useApp } from '../state';
-import {
-  currentInstalment, monthsAgg, nf, rm, testRows, totalHomeCost,
-} from '../calc';
+import { nf, rm } from '../calc';
 import { unrepresentedCoverageMonths } from '../money';
 import {
   BodyS, Btn, BtnLine, BtnQuiet, Card, Chip, Chips, Display, Divider, EditList,
@@ -16,10 +16,29 @@ import { C, DISP_FONT } from '../theme';
 import { Band, Waterline } from '../charts';
 import { ScreenShell } from './shell';
 
+
+function useBackendHousingCalculation(data: ReturnType<typeof useApp>['S']['data']) {
+  const [result, setResult] = React.useState(getHousingCalculationResult());
+  const costsKey = data.homeCosts.map(item => `${item.id}:${item.a}`).join('|');
+  React.useEffect(() => {
+    let active = true;
+    const timer = setTimeout(() => {
+      void calculateHousing(data).then(next => {
+        if (!active) return;
+        setHousingCalculationResult(next);
+        setResult(next);
+      }).catch(() => undefined);
+    }, 180);
+    return () => { active = false; clearTimeout(timer); };
+  }, [data.house.price, data.house.deposit, data.house.rate, data.house.years, data.house.knownPayment, costsKey]);
+  return result;
+}
+
 export function HouseScreen() {
   const { S, t, up, go } = useApp();
   const h = S.data.house;
-  const inst = currentInstalment(S.data);
+  const calc = useBackendHousingCalculation(S.data);
+  const inst = calc?.monthly_instalment ?? 0;
   const known = h.knownPayment != null;
   return (
     <ScreenShell back title={t('th_title')}>
@@ -38,7 +57,7 @@ export function HouseScreen() {
               <BodyS muted>{t('th_dep0')}</BodyS>
               <Prov p="official" />
             </View>
-            <KV k={t('th_fin')}><Fig value={rm(Math.max(0, h.price - h.deposit))} p="calc" /></KV>
+            <KV k={t('th_fin')}><Fig value={rm(calc?.financing_amount ?? 0)} p="calc" /></KV>
             <View style={{ gap: 6 }}>
               <BodyS muted>{t('th_rate')}</BodyS>
               <NumInput decimal value={h.rate} onNum={n => up(s => { s.data.house.rate = n; })} />
@@ -50,7 +69,7 @@ export function HouseScreen() {
           </Card>
           <KV k={t('th_inst')}><Fig value={rm(inst)} p="calc" cls="h-l" /></KV>
           <BtnLine label={t('th_known')} onPress={() => up(s => {
-            s.data.house.knownPayment = Math.round(currentInstalment(s.data));
+            s.data.house.knownPayment = Math.round(calc?.monthly_instalment ?? 0);
           })} />
         </>
       ) : (
@@ -72,8 +91,9 @@ export function HouseScreen() {
 
 export function HomecostScreen() {
   const { S, t, up, go } = useApp();
-  const inst = currentInstalment(S.data);
-  const total = totalHomeCost(S.data);
+  const calc = useBackendHousingCalculation(S.data);
+  const inst = calc?.monthly_instalment ?? 0;
+  const total = calc?.total_monthly_cost ?? 0;
   return (
     <ScreenShell back title={t('tc_title')}>
       <Fig value={rm(total)} p="calc" cls="h-xl" />
@@ -96,13 +116,39 @@ export function HomecostScreen() {
         </Card>
       ) : null}
       <Btn label={t('tc_run') + ' →'} onPress={() => {
-        const { preHousing } = calculateHousingSession(S.data);
-        up(state => {
-          state.testRan = true;
-          state.howOpen = false;
-          state.rgHowOpen = false;
-        });
-        go(preHousing.has_existing_shortfall ? 'precheck' : 'result');
+        void runStatelessHousingTest(S.data)
+          .then(housingTest => {
+            const existingMonths = housingTest.months.filter(month => month.existing_shortfall > 0);
+            const worst = existingMonths.reduce<typeof existingMonths[number] | null>((current, month) => {
+              if (!current || month.existing_shortfall > current.existing_shortfall) return month;
+              return current;
+            }, null);
+            const preHousing = {
+              provenance: 'calculated_from_user_record' as const,
+              work_cost_basis: 'current_active_monthly_snapshot' as const,
+              has_existing_shortfall: existingMonths.length > 0,
+              tested_months: housingTest.tested_months,
+              largest_existing_gap: housingTest.largest_existing_gap,
+              worst_month: worst ? { year: worst.year, month: worst.month } : null,
+              months: housingTest.months.map(month => ({
+                year: month.year,
+                month: month.month,
+                gross_income: month.gross_income,
+                usable_income: month.usable_income,
+                existing_costs: month.existing_costs,
+                surplus: month.surplus,
+                shortfall: month.existing_shortfall,
+              })),
+            };
+            setPreHousingResult(preHousing);
+            setHousingTestResult(housingTest);
+            up(state => {
+              state.testRan = true;
+              state.howOpen = false;
+              state.rgHowOpen = false;
+            });
+            go(preHousing.has_existing_shortfall ? 'precheck' : 'result');
+          });
       }} />
     </ScreenShell>
   );
@@ -257,15 +303,35 @@ export function RangeScreen() {
 
 export function CompareScreen() {
   const { S, t, monthName, up } = useApp();
-  const n = monthsAgg(S.data).length;
+  const [results, setResults] = React.useState<Record<number, Awaited<ReturnType<typeof runStatelessHousingTest>>>>({});
+  const paymentsKey = S.data.comparePayments.join('|');
+
+  React.useEffect(() => {
+    let active = true;
+    void Promise.all(S.data.comparePayments.map(async (payment, index) => [index, await runStatelessHousingTest(S.data, payment)] as const))
+      .then(items => {
+        if (!active) return;
+        setResults(Object.fromEntries(items));
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [paymentsKey, S.data.house.rate, S.data.house.years, S.data.house.deposit]);
+
   return (
     <ScreenShell back title={t('rs_compare')}>
       <BodyS muted>{t('cp_note')}</BodyS>
       {S.data.comparePayments.map((p, i) => {
-        const rows = testRows(S.data, p);
-        const s = rows.filter(r => r.short).length;
-        const g = Math.max(...rows.map(r => r.gap), 0);
-        const indicativePrice = indicativePriceForComparedPayment(S.data, p);
+        const result = results[i];
+        const n = result?.tested_months ?? 0;
+        const shortCount = result?.short_month_count ?? 0;
+        const gap = result?.largest_gap ?? 0;
+        const indicativePrice = result?.indicative_tested_property_price ?? 0;
+        const rows = (result?.months ?? []).map(r => ({
+          m: r.month - 1,
+          surplus: r.available_for_home,
+          short: r.is_short,
+          gap: r.total_shortfall,
+        }));
         return (
           <Card key={i} gap={8}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -275,10 +341,10 @@ export function CompareScreen() {
               />
               <View style={{ alignItems: 'flex-end', gap: 2, flexShrink: 1 }}>
                 <Text style={{ fontSize: 13, lineHeight: 18, color: C.ink, fontWeight: '700' }}>
-                  {t('cp_short', { s, n })}
+                  {t('cp_short', { s: shortCount, n })}
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <BodyS muted>{t('cp_gap', { g: nf(g) })}</BodyS>
+                  <BodyS muted>{t('cp_gap', { g: nf(gap) })}</BodyS>
                   <Prov p="calc" />
                 </View>
               </View>
@@ -298,12 +364,29 @@ export function CompareScreen() {
 
 export function ShockScreen() {
   const { S, t, monthName, up } = useApp();
-  const cost = totalHomeCost(S.data);
   const p = S.shock;
-  const rows = testRows(S.data, cost, p);
-  const n = rows.length, s = rows.filter(r => r.short).length;
+  const [result, setResult] = React.useState<Awaited<ReturnType<typeof runStatelessHousingTest>> | null>(null);
   const preset = [0, 10, 20].includes(p);
   const showCustom = !preset || S.sheet === 'shockcustom';
+
+  React.useEffect(() => {
+    let active = true;
+    void runStatelessHousingTest(S.data, undefined, p)
+      .then(next => { if (active) setResult(next); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [p, S.data.house.price, S.data.house.deposit, S.data.house.rate, S.data.house.years, S.data.house.knownPayment]);
+
+  const cost = result?.tested_home_cost ?? 0;
+  const rows = (result?.months ?? []).map(r => ({
+    m: r.month - 1,
+    surplus: r.available_for_home,
+    short: r.is_short,
+    gap: r.total_shortfall,
+  }));
+  const n = result?.tested_months ?? 0;
+  const shortCount = result?.short_month_count ?? 0;
+
   return (
     <ScreenShell back title={t('rs_shock')}>
       <Chips>
@@ -320,11 +403,11 @@ export function ShockScreen() {
           <NumInput value={p} onNum={x => up(st => { st.shock = Math.min(90, Math.max(0, x)); })} />
         </View>
       ) : null}
-      <Display cls="h-l">{t('sh_head', { p, s, n })}</Display>
+      <Display cls="h-l">{t('sh_head', { p, s: shortCount, n })}</Display>
       <FigRow p="assume" />
-      {s ? (
+      {shortCount ? (
         <KV k={t('gap_lbl')}>
-          <Fig value={rm(Math.max(...rows.map(r => r.gap), 0))} p="calc" />
+          <Fig value={rm(result?.largest_gap ?? 0)} p="calc" />
         </KV>
       ) : null}
       <Waterline rows={rows} cost={cost} lineLabel prov="assume" monthName={monthName} />
@@ -332,6 +415,3 @@ export function ShockScreen() {
     </ScreenShell>
   );
 }
-
-
-

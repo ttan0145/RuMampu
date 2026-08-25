@@ -12,8 +12,9 @@ from .serializers import (
     PreHousingCheckSerializer,
     HousingTestRequestSerializer,
     HousingTestResultSerializer,
+    StatelessHousingTestRequestSerializer,
 )
-from .services import calculation_result, housing_test_result, pre_housing_check
+from .services import calculation_result, housing_test_result, pre_housing_check, stateless_housing_test_result
 from finance.services import profile_for_request
 
 
@@ -78,3 +79,15 @@ class HousingTestResultView(APIView):
 
         return Response(housing_test_result(profile, scenario))
 
+
+
+class StatelessHousingTestView(APIView):
+    @extend_schema(
+        request=StatelessHousingTestRequestSerializer,
+        responses=HousingTestResultSerializer,
+    )
+    def post(self, request):
+        serializer = StatelessHousingTestRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        profile = profile_for_request(request)
+        return Response(stateless_housing_test_result(profile, serializer.validated_data))
