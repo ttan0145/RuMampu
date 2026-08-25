@@ -34,14 +34,14 @@ The production-development baseline was completed on 2026-08-24: modular monolit
 
 ## Epic 2 — Income Pattern Analysis
 
-| User story | Current status | Main gap |
-|---|---|---|
-| US2.1 Month-by-month view | Calculated and charted in the frontend | Pure-function tests are missing; empty-record behaviour needs explicit handling. |
-| US2.2 Typical and extreme months | Frontend shows mean, median, high, and low | Insufficient-history behaviour must be defined; never emit `Infinity` or false precision. |
-| US2.3 Lower-income months | Conflicts with the latest boundary | The old below-75%-of-average rule remains in code and must be removed. |
-| US2.4 Coverage check | Frontend prototype | The `12%` narrow-range threshold is also unsupported and should become an unlabelled, explainable coverage description. |
+| User story | Current status | Code/evidence | Next step |
+|---|---|---|---|
+| US2.1 Month-by-month view | Complete (3/3 AC) | Backend aggregation; versioned pattern API; accessible scrollable chart; empty/negative/12-month tests; [acceptance record](epic-2/US2.1_MONTH_BY_MONTH.md) | Historical work-cost versions require a separate requirement. |
+| US2.2 Typical and extreme months | Complete (6/6 AC) | Decimal mean, median, high, low, range, population standard deviation; limited-history UI; [acceptance record](epic-2/US2.2_TYPICAL_AND_EXTREMES.md) | None. |
+| US2.3 Lower-income months | Complete (2/2 AC) | Tied recorded-minimum rule and factual explanation; [acceptance record](epic-2/US2.3_LOWER_INCOME.md) | Epic 3 actual-shortfall reasons remain a future extension. |
+| US2.4 Coverage check | Complete (7/7 AC) | Guest-isolated model/API; explicit Check; persisted represented/unrepresented results and factual observations; [acceptance record](epic-2/US2.4_COVERAGE_CHECK.md) | Account-level declarations wait for an identity requirement. |
 
-Epic 2 should stabilise only after Epic 1's persisted income data. The latest boundary prohibits the 75% rule, coefficient-of-variation scoring, and Low/Moderate/High risk bands.
+Epic 2 is backend-authoritative and complete at 18/18 AC. It returns descriptive facts without unsupported thresholds, stability conclusions, forecasts, or risk bands. See the [Epic 2 index](epic-2/README.md).
 
 ## Epic 5 — Homeownership Preparation
 
@@ -64,5 +64,5 @@ Official Epic 5 rules may support checklists and information only. They must not
 6. E1.5/E1.6 daily-expense entry and review — complete, 6/6 AC each.
 7. E1.7 receipt starting point — complete, 10/10 AC, with production OCR separated from human confirmation.
 8. E1.8 historical CSV import — complete, 8/8 AC, including preview, invalid rows, confirmation, and analysis integration.
-9. E2 remove legacy thresholds and add boundary tests for every pure calculation.
+9. E2 backend-authoritative income pattern and coverage — complete, 18/18 AC.
 10. E5 persist savings, upfront costs, and checklist data before integrating reverified official rules.

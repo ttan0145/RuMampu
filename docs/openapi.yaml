@@ -177,6 +177,53 @@ paths:
               schema:
                 $ref: '#/components/schemas/Health'
           description: ''
+  /api/v1/income-coverage/:
+    get:
+      operationId: income_coverage_retrieve
+      summary: Get the current guest's slower-period coverage check
+      tags:
+      - Income pattern
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncomeCoverageResponse'
+          description: ''
+    put:
+      operationId: income_coverage_update
+      summary: Confirm the current guest's slower-period coverage check
+      tags:
+      - Income pattern
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncomeCoverageUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IncomeCoverageUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IncomeCoverageUpdateRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncomeCoverageResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/income-imports/{batch_id}/:
     get:
       operationId: income_imports_retrieve
@@ -269,6 +316,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/income-pattern/:
+    get:
+      operationId: income_pattern_retrieve
+      summary: Calculate the current guest's recorded income pattern
+      tags:
+      - Income pattern
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncomePatternResponse'
           description: ''
   /api/v1/income/entries/:
     get:
@@ -487,6 +549,16 @@ paths:
           description: ''
 components:
   schemas:
+    AnswerEnum:
+      enum:
+      - 'yes'
+      - 'no'
+      - not_sure
+      type: string
+      description: |-
+        * `yes` - Yes
+        * `no` - No
+        * `not_sure` - Not sure
     ApiError:
       type: object
       properties:
@@ -506,6 +578,11 @@ components:
       required:
       - code
       - message
+    BasisEnum:
+      enum:
+      - recorded_minimum
+      type: string
+      description: '* `recorded_minimum` - recorded_minimum'
     CommitmentItem:
       type: object
       properties:
@@ -666,6 +743,97 @@ components:
       - api_version
       - service
       - status
+    HistoryDepthEnum:
+      enum:
+      - empty
+      - one_month
+      - two_months
+      - three_or_more
+      type: string
+      description: |-
+        * `empty` - empty
+        * `one_month` - one_month
+        * `two_months` - two_months
+        * `three_or_more` - three_or_more
+    IncomeCoverageObservation:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        recorded_month_count:
+          type: integer
+          minimum: 1
+        lowest:
+          type: string
+          format: decimal
+        highest:
+          type: string
+          format: decimal
+        range:
+          type: string
+          format: decimal
+      required:
+      - highest
+      - kind
+      - lowest
+      - range
+      - recorded_month_count
+    IncomeCoverageResponse:
+      type: object
+      properties:
+        answer:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/AnswerEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        slower_months:
+          type: array
+          items:
+            type: integer
+            maximum: 12
+            minimum: 1
+        represented_slower_months:
+          type: array
+          items:
+            type: integer
+            maximum: 12
+            minimum: 1
+        unrepresented_slower_months:
+          type: array
+          items:
+            type: integer
+            maximum: 12
+            minimum: 1
+        recorded_calendar_months:
+          type: array
+          items:
+            type: integer
+            maximum: 12
+            minimum: 1
+        observation:
+          allOf:
+          - $ref: '#/components/schemas/IncomeCoverageObservation'
+          nullable: true
+      required:
+      - answer
+      - observation
+      - recorded_calendar_months
+      - represented_slower_months
+      - slower_months
+      - unrepresented_slower_months
+    IncomeCoverageUpdateRequest:
+      type: object
+      properties:
+        answer:
+          $ref: '#/components/schemas/AnswerEnum'
+        slower_months:
+          type: array
+          items:
+            type: integer
+            maximum: 12
+            minimum: 1
+      required:
+      - answer
     IncomeEntry:
       type: object
       properties:
@@ -833,6 +1001,91 @@ components:
           format: binary
       required:
       - file
+    IncomePatternMonth:
+      type: object
+      properties:
+        month:
+          type: string
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
+        gross_income:
+          type: string
+          format: decimal
+        work_costs:
+          type: string
+          format: decimal
+        usable_income:
+          type: string
+          format: decimal
+        is_lowest_recorded:
+          type: boolean
+      required:
+      - gross_income
+      - is_lowest_recorded
+      - month
+      - usable_income
+      - work_costs
+    IncomePatternResponse:
+      type: object
+      properties:
+        recorded_month_count:
+          type: integer
+          minimum: 0
+        history_depth:
+          $ref: '#/components/schemas/HistoryDepthEnum'
+        provenance:
+          $ref: '#/components/schemas/ProvenanceEnum'
+        monthly_work_cost_total:
+          type: string
+          format: decimal
+        work_cost_basis:
+          $ref: '#/components/schemas/WorkCostBasisEnum'
+        months:
+          type: array
+          items:
+            $ref: '#/components/schemas/IncomePatternMonth'
+        statistics:
+          allOf:
+          - $ref: '#/components/schemas/IncomePatternStatistics'
+          nullable: true
+        lower_income:
+          $ref: '#/components/schemas/LowerIncome'
+      required:
+      - history_depth
+      - lower_income
+      - monthly_work_cost_total
+      - months
+      - provenance
+      - recorded_month_count
+      - statistics
+      - work_cost_basis
+    IncomePatternStatistics:
+      type: object
+      properties:
+        average:
+          type: string
+          format: decimal
+        median:
+          type: string
+          format: decimal
+        highest:
+          type: string
+          format: decimal
+        lowest:
+          type: string
+          format: decimal
+        range:
+          type: string
+          format: decimal
+        standard_deviation:
+          type: string
+          format: decimal
+      required:
+      - average
+      - highest
+      - lowest
+      - median
+      - range
+      - standard_deviation
     IncomeRecord:
       type: object
       properties:
@@ -887,6 +1140,26 @@ components:
           maxLength: 120
       required:
       - name
+    KindEnum:
+      enum:
+      - recorded_range
+      type: string
+      description: '* `recorded_range` - recorded_range'
+    LowerIncome:
+      type: object
+      properties:
+        basis:
+          $ref: '#/components/schemas/BasisEnum'
+        months:
+          type: array
+          items:
+            type: string
+      required:
+      - basis
+      - months
+    NullEnum:
+      enum:
+      - null
     PatchedCommitmentItemUpdateRequest:
       type: object
       properties:
@@ -901,6 +1174,11 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+    ProvenanceEnum:
+      enum:
+      - calculated_from_user_record
+      type: string
+      description: '* `calculated_from_user_record` - calculated_from_user_record'
     StatusEnum:
       enum:
       - preview
@@ -909,6 +1187,11 @@ components:
       description: |-
         * `preview` - Awaiting confirmation
         * `confirmed` - Confirmed
+    WorkCostBasisEnum:
+      enum:
+      - current_active_monthly_snapshot
+      type: string
+      description: '* `current_active_monthly_snapshot` - current_active_monthly_snapshot'
     WorkCostItem:
       type: object
       properties:

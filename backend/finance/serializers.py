@@ -11,9 +11,19 @@ from .models import (
     IncomeEntry,
     IncomeImportBatch,
     IncomeImportRow,
+    IncomeCoverage,
     IncomeSource,
     WorkCostItem,
 )
+
+
+def money_output_field() -> serializers.DecimalField:
+    """Derived totals can exceed the max_digits limit of a single stored entry."""
+    return serializers.DecimalField(
+        max_digits=None,
+        decimal_places=2,
+        coerce_to_string=True,
+    )
 
 
 class ApiErrorBodySerializer(serializers.Serializer):
@@ -25,6 +35,87 @@ class ApiErrorBodySerializer(serializers.Serializer):
 
 class ApiErrorSerializer(serializers.Serializer):
     error = ApiErrorBodySerializer()
+
+
+class IncomePatternMonthSerializer(serializers.Serializer):
+    month = serializers.RegexField(r"^\d{4}-(0[1-9]|1[0-2])$")
+    gross_income = money_output_field()
+    work_costs = money_output_field()
+    usable_income = money_output_field()
+    is_lowest_recorded = serializers.BooleanField()
+
+
+class IncomePatternStatisticsSerializer(serializers.Serializer):
+    average = money_output_field()
+    median = money_output_field()
+    highest = money_output_field()
+    lowest = money_output_field()
+    range = money_output_field()
+    standard_deviation = money_output_field()
+
+
+class LowerIncomeSerializer(serializers.Serializer):
+    basis = serializers.ChoiceField(choices=("recorded_minimum",))
+    months = serializers.ListField(child=serializers.CharField())
+
+
+class IncomePatternResponseSerializer(serializers.Serializer):
+    recorded_month_count = serializers.IntegerField(min_value=0)
+    history_depth = serializers.ChoiceField(
+        choices=("empty", "one_month", "two_months", "three_or_more")
+    )
+    provenance = serializers.ChoiceField(choices=("calculated_from_user_record",))
+    monthly_work_cost_total = money_output_field()
+    work_cost_basis = serializers.ChoiceField(
+        choices=("current_active_monthly_snapshot",)
+    )
+    months = IncomePatternMonthSerializer(many=True)
+    statistics = IncomePatternStatisticsSerializer(allow_null=True)
+    lower_income = LowerIncomeSerializer()
+
+
+class IncomeCoverageObservationSerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(choices=("recorded_range",))
+    recorded_month_count = serializers.IntegerField(min_value=1)
+    lowest = money_output_field()
+    highest = money_output_field()
+    range = money_output_field()
+
+
+class IncomeCoverageResponseSerializer(serializers.Serializer):
+    answer = serializers.ChoiceField(choices=IncomeCoverage.Answer.choices, allow_null=True)
+    slower_months = serializers.ListField(child=serializers.IntegerField(min_value=1, max_value=12))
+    represented_slower_months = serializers.ListField(
+        child=serializers.IntegerField(min_value=1, max_value=12)
+    )
+    unrepresented_slower_months = serializers.ListField(
+        child=serializers.IntegerField(min_value=1, max_value=12)
+    )
+    recorded_calendar_months = serializers.ListField(
+        child=serializers.IntegerField(min_value=1, max_value=12)
+    )
+    observation = IncomeCoverageObservationSerializer(allow_null=True)
+
+
+class IncomeCoverageUpdateSerializer(serializers.Serializer):
+    answer = serializers.ChoiceField(choices=IncomeCoverage.Answer.choices)
+    slower_months = serializers.ListField(
+        child=serializers.IntegerField(min_value=1, max_value=12),
+        default=list,
+    )
+
+    def validate(self, attrs):
+        months = attrs["slower_months"]
+        if len(months) != len(set(months)):
+            raise serializers.ValidationError(
+                {"slower_months": "Each slower month can be selected only once."}
+            )
+        if attrs["answer"] == IncomeCoverage.Answer.YES and not months:
+            raise serializers.ValidationError(
+                {"slower_months": "Select at least one usually slower month."}
+            )
+        attrs["slower_months"] = sorted(months) if attrs["answer"] == "yes" else []
+        return attrs
 
 
 class IncomeSourceSerializer(serializers.ModelSerializer):

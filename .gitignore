@@ -11,3 +11,5 @@ node_modules/
 frontend/src/rumampu/screens/test.tsx
 docs/.DS_Store
 backend/.DS_Store
+output/playwright/epic-2/report/
+output/playwright/epic-2/test-results/

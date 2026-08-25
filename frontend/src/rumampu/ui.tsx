@@ -99,9 +99,17 @@ export function Hdr({ back, title, brand }: { back?: boolean; title?: string; br
 
 /* ---------- buttons ---------- */
 
-export function Btn({ label, onPress }: { label: string; onPress: () => void }) {
+export function Btn({
+  label, onPress, disabled = false,
+}: { label: string; onPress: () => void; disabled?: boolean }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [st.btn, pressed && { opacity: 0.88 }]}>
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      style={({ pressed }) => [st.btn, disabled && { opacity: 0.48 }, pressed && { opacity: 0.88 }]}
+    >
       <Text style={st.btnTxt}>{label}</Text>
     </Pressable>
   );
@@ -127,12 +135,24 @@ export function BtnLine({ label, onPress, style }: { label: string; onPress: () 
 }
 
 export function Chip({
-  label, on, brandOn, onPress,
-}: { label: string; on?: boolean; brandOn?: boolean; onPress: () => void }) {
+  label, on, brandOn, onPress, disabled = false, selectionRole,
+}: {
+  label: string;
+  on?: boolean;
+  brandOn?: boolean;
+  onPress: () => void;
+  disabled?: boolean;
+  selectionRole?: 'radio' | 'checkbox';
+}) {
+  const selected = Boolean(on || brandOn);
   return (
     <Pressable
       onPress={onPress}
-      style={[st.chip, on && st.chipOn, brandOn && st.chipBrandOn]}
+      disabled={disabled}
+      accessibilityRole={selectionRole || 'button'}
+      accessibilityState={{ disabled, ...(selectionRole ? { checked: selected } : {}) }}
+      aria-checked={selectionRole ? selected : undefined}
+      style={[st.chip, on && st.chipOn, brandOn && st.chipBrandOn, disabled && { opacity: 0.48 }]}
     >
       <Text style={{ fontSize: 15, color: on || brandOn ? C.paper : C.ink }}>{label}</Text>
     </Pressable>

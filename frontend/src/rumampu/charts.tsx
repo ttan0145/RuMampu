@@ -1,13 +1,107 @@
 import React from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { C, CHART_COLS, DISP_FONT } from './theme';
 import { Prov } from './ui';
 import { rm } from './calc';
+import { formatApiMoney } from './money';
+import type { ApiIncomePatternMonth } from './api';
 
 /* Chart pieces — mirror the prototype's .wl (waterline), .cov, donut, .hbar and .band CSS. */
 
 export interface WlRow { m: number; surplus: number; short: boolean; gap: number }
+
+function IncomeBar({
+  row, plotHeight, zeroTop, range, label,
+}: {
+  row: ApiIncomePatternMonth;
+  plotHeight: number;
+  zeroTop: number;
+  range: number;
+  label: string;
+}) {
+  const reveal = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    Animated.timing(reveal, {
+      toValue: 1,
+      duration: 360,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [reveal]);
+  const value = Number(row.usable_income);
+  const amount = formatApiMoney(row.usable_income);
+  const height = Math.max(2, Math.abs(value) / range * plotHeight);
+  const top = value >= 0 ? zeroTop - height : zeroTop;
+  return (
+    <View
+      style={ip.col}
+      accessibilityLabel={`${label}: ${amount} calculated usable income${row.is_lowest_recorded ? ', lowest recorded month' : ''}`}
+    >
+      <View style={[ip.plotCol, { height: plotHeight }]}>
+        <Animated.View
+          testID={`income-bar-${row.month}`}
+          style={[
+            ip.bar,
+            {
+              top,
+              height,
+              backgroundColor: row.is_lowest_recorded ? C.brand : C.ink,
+              opacity: reveal,
+              transform: [{ scaleY: reveal }],
+            },
+          ]}
+        />
+      </View>
+      <Text style={ip.amount}>{amount}</Text>
+      <Text style={ip.label}>{label}</Text>
+    </View>
+  );
+}
+
+export function IncomePatternChart({
+  months, monthName, accessibilityLabel,
+}: {
+  months: ApiIncomePatternMonth[];
+  monthName: (month: number) => string;
+  accessibilityLabel: string;
+}) {
+  const values = months.map(row => Number(row.usable_income));
+  const maximum = Math.max(0, ...values);
+  const minimum = Math.min(0, ...values);
+  const rawRange = maximum - minimum;
+  const range = Math.max(0.01, rawRange);
+  const plotHeight = 164;
+  const zeroTop = rawRange === 0 ? plotHeight : maximum / range * plotHeight;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator
+      contentContainerStyle={ip.scroll}
+      accessibilityLabel={accessibilityLabel}
+    >
+      <View style={[ip.chart, { minWidth: Math.max(320, months.length * 94) }]}>
+        <View style={[ip.zero, { top: zeroTop }]} />
+        <View style={ip.columns}>
+          {months.map(row => {
+            const month = Number(row.month.slice(5, 7)) - 1;
+            const year = row.month.slice(2, 4);
+            return (
+              <IncomeBar
+                key={row.month}
+                row={row}
+                plotHeight={plotHeight}
+                zeroTop={zeroTop}
+                range={range}
+                label={`${monthName(month)} ${year}`}
+              />
+            );
+          })}
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
 
 export function Waterline({
   rows, cost, small, lineLabel, prov, noLabels, monthName, xGap,
@@ -205,6 +299,18 @@ const wl = StyleSheet.create({
   lineLblTxt: { fontSize: 11, letterSpacing: 0.66, color: C.ink, fontWeight: '700', fontVariant: ['tabular-nums'] },
   xrow: { flexDirection: 'row', paddingTop: 6 },
   xlbl: { flex: 1, textAlign: 'center', fontSize: 11, letterSpacing: 0.44, color: C.ink64 },
+});
+
+const ip = StyleSheet.create({
+  scroll: { paddingBottom: 4 },
+  chart: { height: 226, position: 'relative' },
+  zero: { position: 'absolute', left: 0, right: 0, borderTopWidth: 1.5, borderTopColor: C.ink40 },
+  columns: { flexDirection: 'row', height: 226, gap: 8 },
+  col: { width: 86, alignItems: 'center' },
+  plotCol: { width: 30, position: 'relative' },
+  bar: { position: 'absolute', left: 2, right: 2, borderRadius: 3 },
+  amount: { marginTop: 6, fontSize: 10, lineHeight: 14, color: C.ink, textAlign: 'center', fontVariant: ['tabular-nums'] },
+  label: { marginTop: 1, fontSize: 10, lineHeight: 14, color: C.ink64, textAlign: 'center' },
 });
 
 const cov = StyleSheet.create({

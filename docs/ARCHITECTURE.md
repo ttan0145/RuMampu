@@ -25,7 +25,8 @@ Microservices are not currently justified. Reconsider them only when independent
 | Work costs | Monthly costs incurred to earn income | US1.3 persisted and accepted |
 | Commitments | Monthly living costs, debts, and savings commitments | US1.4 persisted and accepted |
 | Expenses | Daily expenses, categories, and receipt-confirmation provenance | US1.5–US1.7 persisted and accepted; production OCR pending |
-| Readiness | Monthly cash flow, variability, and explanations of housing pressure | UI prototype; rules pending revision |
+| Income analysis | Monthly usable income, descriptive statistics, recorded minima, and slower-period coverage | Epic 2 backend-authoritative and accepted |
+| Housing readiness | Housing scenarios, cash flow, and explanations of payment pressure | UI prototype; Epic 3 rules pending |
 | Preparation | Cash buffer, upfront costs, document checklist, and comparisons | UI prototype |
 
 Domain logic belongs in the service layer. API views orchestrate input and output only. Do not duplicate business calculations in screen components or serializers.
@@ -37,6 +38,8 @@ Domain logic belongs in the service layer. API views orchestrate input and outpu
 3. Serializers validate transport data; services execute financial rules and transactions.
 4. Models store source facts; aggregates should be calculated or carry explicit provenance.
 5. The API returns stable resource shapes or the consistent error shape; the frontend localises presentation.
+
+For Epic 2, the service recalculates analysis from `IncomeEntry` and active `WorkCostItem` facts. Only the user's explicit `IncomeCoverage` answer is persisted; calculated response snapshots are not stored.
 
 ## 5. Data and privacy rules
 
@@ -51,8 +54,10 @@ Domain logic belongs in the service layer. API views orchestrate input and outpu
 ## 6. Frontend state principles
 
 - API data is the source of truth for connected domains; screen state stores drafts, navigation, and transient UI state only.
-- Prototype mode is for demonstration and is triggered explicitly by the absence of `EXPO_PUBLIC_API_URL`.
+- Formal builds default to connected API mode. Prototype mode is demonstration-only and requires `EXPO_PUBLIC_APP_MODE=prototype`; a missing API URL does not silently change the calculation authority.
+- Epic 2 has no client-side fallback algorithm. Pattern and coverage responses come from the versioned API, while downstream clients consume the confirmed `unrepresented_slower_months` field.
 - When a domain is connected to the API, remove the corresponding mock data incrementally; one field must not be controlled by both mock and API data.
+- Income-pattern and coverage screens treat the last successful server response as authoritative. Draft coverage selections do not become conclusions until an explicit save succeeds.
 
 ## 7. Definition of done
 

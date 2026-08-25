@@ -85,7 +85,7 @@ The measured browser round trip was approximately 114 ms and server loading appr
 1. Open Money and verify the latest month's two income sources and expense categories.
 2. Open Income pattern and verify 12 bars, mean/median/high/low, and visible slow months.
 
-After RM750 work costs, the measured results are mean RM4,438, median RM4,385, maximum RM5,870, and minimum RM3,160. See the [Money overview](../../output/playwright/scenarios/gig-driver-12m/02-money-overview.png) and [income-pattern screenshot](../../output/playwright/scenarios/gig-driver-12m/03-income-pattern-12m.png).
+After RM750 work costs, the authoritative Epic 2 results are average `4437.50`, median `4385.00`, highest `5870.00`, lowest `3160.00`, range `2710.00`, population standard deviation `699.16`, and recorded minimum month `2026-02`. See the current [Epic 2 income-pattern evidence](../../output/playwright/epic-2/evidence/01-income-pattern-12m.png); the older [Money overview](../../output/playwright/scenarios/gig-driver-12m/02-money-overview.png) is retained as Epic 1 evidence.
 
 ### Flow C: complete expense months
 
@@ -104,10 +104,10 @@ See the [housing-test screenshot](../../output/playwright/scenarios/gig-driver-1
 
 ### Flow E: later-Epic reuse
 
-- Epic 2 can use the same 12-month `condition`, income range, and coverage to verify analysis conventions.
+- Epic 2 uses the same 12-month `condition`, income range, and coverage as its deterministic regression baseline.
 - Epic 5 can reuse the income, expense, and housing state to verify buffer, upfront-cash, and scenario comparisons without recreating data.
 
-The Cash buffer screen already reads the entire Aug–Jul record. See the [reuse screenshot](../../output/playwright/scenarios/gig-driver-12m/06-epic5-buffer-reuse.png). Epic 2/5 business rules must still be implemented against their own user stories and acceptance criteria; the fixture does not define product conclusions in advance.
+The Cash buffer screen already reads the entire Aug–Jul record. See the [reuse screenshot](../../output/playwright/scenarios/gig-driver-12m/06-epic5-buffer-reuse.png). Epic 2 is accepted against its own user stories and acceptance criteria; Epic 5 still requires separate delivery. The fixture provides facts and does not define product conclusions.
 
 ## Safeguards and maintenance
 

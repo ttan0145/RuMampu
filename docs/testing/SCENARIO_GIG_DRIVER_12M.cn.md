@@ -85,7 +85,7 @@ Content-Type: application/json
 1. 进入 Money，核对最近月两个收入来源和支出分类。
 2. 进入 Income pattern，验证 12 个柱、平均/中位/最高/最低和淡月可见。
 
-本次结果为扣除 RM750 工作成本后的月均 RM4,438、中位 RM4,385、最高 RM5,870、最低 RM3,160；见[汇总截图](../../output/playwright/scenarios/gig-driver-12m/02-money-overview.png)和[收入形态截图](../../output/playwright/scenarios/gig-driver-12m/03-income-pattern-12m.png)。
+扣除 RM750 工作成本后，Epic 2 权威结果为 average `4437.50`、median `4385.00`、highest `5870.00`、lowest `3160.00`、range `2710.00`、population standard deviation `699.16`，记录最低月为 `2026-02`。参见当前 [Epic 2 收入形态证据](../../output/playwright/epic-2/evidence/01-income-pattern-12m.png)；旧[汇总截图](../../output/playwright/scenarios/gig-driver-12m/02-money-overview.png)继续作为 Epic 1 证据保留。
 
 ### Flow C：完整支出月份
 
@@ -104,10 +104,10 @@ Content-Type: application/json
 
 ### Flow E：为后续 Epic 复用
 
-- Epic 2 可直接使用 12 个月 `condition`、收入高低和覆盖范围验证分析口径。
+- Epic 2 使用相同的 12 个月 `condition`、收入范围和 coverage 作为确定性回归基线。
 - Epic 5 可复用同一收入/支出/住房状态验证 buffer、upfront 和情景对比，而不重新造数据。
 
-当前 Cash buffer 页面已经能读取 Aug–Jul 全部记录；见[复用截图](../../output/playwright/scenarios/gig-driver-12m/06-epic5-buffer-reuse.png)。Epic 2/5 的业务规则仍必须按各自 US/AC 实现，测试夹具不会提前替它们定义产品结论。
+当前 Cash buffer 页面已经能读取 Aug–Jul 全部记录；见[复用截图](../../output/playwright/scenarios/gig-driver-12m/06-epic5-buffer-reuse.png)。Epic 2 已按自己的 US/AC 验收，Epic 5 仍需独立交付。夹具只提供事实，不替产品定义结论。
 
 ## 保护与维护规则
 

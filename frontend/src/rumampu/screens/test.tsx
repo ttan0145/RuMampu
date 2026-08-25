@@ -5,8 +5,9 @@ import { Text, View } from 'react-native';
 import { useApp } from '../state';
 import {
   carryRange, currentInstalment, extrasTotal, monthsAgg, nf, priceForInstalment,
-  rm, slowUnseen, testRows, totalHomeCost,
+  rm, testRows, totalHomeCost,
 } from '../calc';
+import { unrepresentedCoverageMonths } from '../money';
 import {
   BodyS, Btn, BtnLine, BtnQuiet, Card, Chip, Chips, Display, Divider, EditList,
   Fig, FigRow, IcLab, KV, NoteC, NumInput, P, Prov,
@@ -166,7 +167,7 @@ export function ResultScreen() {
   const rows = testRows(S.data, cost);
   const n = rows.length, s = rows.filter(r => r.short).length;
   const g = Math.max(...rows.map(r => r.gap), 0);
-  const un = slowUnseen(S.data, S.coverage);
+  const un = unrepresentedCoverageMonths(S.incomeCoverage);
 
   let lead: React.ReactNode;
   const headline = s ? t('headline', { s, n }) : t('headline_zero', { n });

@@ -34,14 +34,14 @@
 
 ## Epic 2 - Income Pattern Analysis
 
-| User Story | 当前状态 | 主要缺口 |
-|---|---|---|
-| US2.1 Month-by-month view | 前端已计算和绘图 | 缺纯函数测试；空记录页面需专门处理 |
-| US2.2 Typical and extreme months | 前端有均值、中位数、最高、最低 | 需定义记录不足时显示什么，不能输出 `Infinity` 或假精度 |
-| US2.3 Lower-income months | 与最新边界冲突 | 代码仍使用低于平均值 75% 的旧规则，必须移除 |
-| US2.4 Coverage check | 前端原型 | `12%` 窄幅判断也是无来源阈值，需要改为无标签、可解释的记录覆盖描述 |
+| User Story | 当前状态 | 代码/证据 | 下一步 |
+|---|---|---|---|
+| US2.1 Month-by-month view | 完成（3/3 AC） | 后端聚合、版本化 pattern API、可访问滚动图、空值/负值/12 个月测试；[验收记录](epic-2/US2.1_MONTH_BY_MONTH.cn.md) | 历史工作成本版本需另立需求。 |
+| US2.2 Typical and extreme months | 完成（6/6 AC） | Decimal 平均、中位、最高、最低、范围、总体标准差和有限历史 UI；[验收记录](epic-2/US2.2_TYPICAL_AND_EXTREMES.cn.md) | 无。 |
+| US2.3 Lower-income months | 完成（2/2 AC） | 并列记录最低规则和事实性解释；[验收记录](epic-2/US2.3_LOWER_INCOME.cn.md) | Epic 3 actual-shortfall reason 继续作为未来扩展。 |
+| US2.4 Coverage check | 完成（7/7 AC） | 访客隔离 model/API、显式 Check、持久化覆盖结果与事实观察；[验收记录](epic-2/US2.4_COVERAGE_CHECK.cn.md) | 账户级声明等待身份需求。 |
 
-Epic 2 必须等 Epic 1 的真实收入数据稳定后收敛。最新边界禁止 75% 规则、CV 和 Low/Moderate/High 风险带。
+Epic 2 已以后端权威方式完成 18/18 AC，只返回描述事实，不生成无来源阈值、稳定性结论、预测或风险带。参见 [Epic 2 索引](epic-2/README.cn.md)。
 
 ## Epic 5 - Homeownership Preparation
 
@@ -64,5 +64,5 @@ Epic 5 的官方规则只能用于准备清单与信息展示，不能输出审�
 6. E1.5/E1.6 日常支出录入与回顾 - 已分别按 6/6 AC 完成。
 7. E1.7 收据起点流程 - 已按 10/10 AC 完成，并将真实 OCR 与人工确认边界分离。
 8. E1.8 历史 CSV 导入 - 已按 8/8 AC 完成预览、错误行、确认入库及分析联动。
-9. E2 移除旧阈值并为所有纯计算补边界测试。
+9. E2 后端权威收入形态与 coverage - 已按 18/18 AC 完成。
 10. E5 先实现储蓄、前期费用和清单持久化，再接已核验官方规则。

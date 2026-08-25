@@ -2,17 +2,18 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import { useApp } from '../state';
 import { MOCK } from '../mock';
-import { INCOME_API_ENABLED } from '../api';
+import { ApiCoverageAnswer, INCOME_API_ENABLED } from '../api';
+import { formatApiMoney } from '../money';
 import {
   actualMonths, commitTotal, expByMonth, expCatTotals, latestExpMonth,
-  monthsAgg, nf, recSpan, rm, slowUnseen,
+  monthsAgg, nf, recSpan, rm,
 } from '../calc';
 import {
   BodyS, Btn, BtnLine, BtnQuiet, Card, Chip, Chips, Display, Divider, EditList,
   Fig, FigRow, IcLab, KV, NoteC, NumInput, P, Prov, StackS, TextField,
 } from '../ui';
 import { C, DISP_FONT } from '../theme';
-import { Donut, DonutLegend, Waterline } from '../charts';
+import { Donut, DonutLegend, IncomePatternChart } from '../charts';
 import { ScreenShell } from './shell';
 import { isValidIsoDate } from '../validation';
 
@@ -312,95 +313,227 @@ export function CommitScreen() {
 }
 
 export function PatternScreen() {
-  const { S, t, monthName } = useApp();
-  const agg = monthsAgg(S.data);
-  const a = agg.map(r => r.net);
-  const avg = a.reduce((x, y) => x + y, 0) / Math.max(1, a.length);
-  const srt = [...a].sort((x, y) => x - y);
-  const med = (srt.length % 2) ? srt[(srt.length - 1) / 2] : (srt[srt.length / 2 - 1] + srt[srt.length / 2]) / 2;
-  const hi = Math.max(...a), lo = Math.min(...a);
-  const below = agg.filter(r => r.net < avg * 0.75).map(r => monthName(r.m));
+  const { S, t, monthName, go, refreshIncomePattern } = useApp();
+  React.useEffect(() => {
+    if (S.incomePatternSync === 'idle') {
+      void refreshIncomePattern().catch(() => undefined);
+    }
+  }, [S.incomePatternSync, refreshIncomePattern]);
+  const pattern = S.incomePattern;
+  const monthLabel = (value: string) => {
+    const month = Number(value.slice(5, 7)) - 1;
+    return `${monthName(month)} ${value.slice(0, 4)}`;
+  };
+
+  if (!INCOME_API_ENABLED) {
+    return (
+      <ScreenShell back title={t('money_pattern')}>
+        <NoteC><BodyS>{t('pt_api_required')}</BodyS></NoteC>
+      </ScreenShell>
+    );
+  }
+
+  if (!pattern && (S.incomePatternSync === 'idle' || S.incomePatternSync === 'loading')) {
+    return (
+      <ScreenShell back title={t('money_pattern')}>
+        <BodyS muted>{t('pt_loading')}</BodyS>
+      </ScreenShell>
+    );
+  }
+
+  if (!pattern) {
+    return (
+      <ScreenShell back title={t('money_pattern')}>
+        <NoteC><BodyS>{t('pt_error')}</BodyS></NoteC>
+        <Btn label={t('retry')} onPress={() => { void refreshIncomePattern().catch(() => undefined); }} />
+      </ScreenShell>
+    );
+  }
+
+  if (pattern.history_depth === 'empty' || !pattern.statistics) {
+    return (
+      <ScreenShell back title={t('money_pattern')}>
+        {S.incomePatternSync === 'error' ? <NoteC><BodyS>{t('pt_error')}</BodyS></NoteC> : null}
+        <Display cls="h-l">{t('pt_empty')}</Display>
+        <BodyS muted>{t('pt_empty_note')}</BodyS>
+        <Btn label={t('pt_add_income')} onPress={() => go('income')} />
+      </ScreenShell>
+    );
+  }
+
+  const stats = pattern.statistics;
+  const limited = pattern.history_depth === 'one_month'
+    ? t('pt_limited_one')
+    : pattern.history_depth === 'two_months' ? t('pt_limited_two') : null;
+  const lower = pattern.lower_income.months.map(monthLabel);
   return (
     <ScreenShell back title={t('money_pattern')}>
+      {S.incomePatternSync === 'error' ? (
+        <NoteC>
+          <BodyS>{t('pt_error')}</BodyS>
+          <BtnLine label={t('retry')} onPress={() => { void refreshIncomePattern().catch(() => undefined); }} />
+        </NoteC>
+      ) : null}
       <View>
-        <Fig value={rm(avg)} p="calc" cls="h-xl" />
-        <BodyS muted>{t('pt_avg')} · {t('pt_range', { x: nf((hi - lo) / 2) })}</BodyS>
+        <Fig value={formatApiMoney(stats.average)} p="calc" cls="h-xl" />
+        <BodyS muted>{t('pt_avg')} · {t('pt_month_count', { n: pattern.recorded_month_count })}</BodyS>
       </View>
+      {limited ? <NoteC><BodyS>{limited}</BodyS></NoteC> : null}
       <BodyS muted>{t('pt_bymonth')}</BodyS>
-      <Waterline
-        rows={agg.map(r => ({ m: r.m, surplus: r.net, short: false, gap: 0 }))}
-        cost={0} small prov="calc" monthName={monthName}
+      <IncomePatternChart
+        months={pattern.months}
+        monthName={monthName}
+        accessibilityLabel={t('pt_chart_accessibility')}
       />
-      <Card gap={8}>
-        <KV k={t('pt_med')}><Fig value={rm(med)} p="calc" /></KV>
-        <KV k={t('pt_high')}><Fig value={rm(hi)} p="calc" /></KV>
-        <KV k={t('pt_low')}><Fig value={rm(lo)} p="calc" /></KV>
-      </Card>
+      {pattern.months.length > 4 ? <BodyS muted>{t('pt_scroll')}</BodyS> : null}
+      <StackS>
+        <KV k={t('pt_med')}><Fig value={formatApiMoney(stats.median)} p="calc" /></KV>
+        <Divider />
+        <KV k={t('pt_high')}><Fig value={formatApiMoney(stats.highest)} p="calc" /></KV>
+        <Divider />
+        <KV k={t('pt_low')}><Fig value={formatApiMoney(stats.lowest)} p="calc" /></KV>
+        <Divider />
+        <KV k={t('pt_range_total')}><Fig value={formatApiMoney(stats.range)} p="calc" /></KV>
+        <Divider />
+        <KV k={t('pt_std')}><Fig value={formatApiMoney(stats.standard_deviation)} p="calc" /></KV>
+      </StackS>
+      <BodyS muted>{t('pt_work_basis', { x: formatApiMoney(pattern.monthly_work_cost_total) })}</BodyS>
       <BodyS muted>{t('pt_rule')}</BodyS>
-      <BodyS>{below.length ? t('pt_some', { m: below.join(', ') }) : t('pt_none')}</BodyS>
+      <BodyS>{lower.length ? t('pt_some', { m: lower.join(', ') }) : t('pt_none')}</BodyS>
     </ScreenShell>
   );
 }
 
 export function CoverageScreen() {
-  const { S, t, monthName, up } = useApp();
-  const sp = recSpan(S.data);
-  const ans = S.coverage.answer;
-  let body: React.ReactNode = null;
-  if (ans === 'yes') {
-    const un = slowUnseen(S.data, S.coverage);
-    const slowNames = S.coverage.slow.map(monthName).join(', ');
-    body = (
-      <>
-        <P>{t('cv_pick')}</P>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {[...Array(12)].map((_, i) => {
-            const on = S.coverage.slow.includes(i);
-            return (
-              <View key={i} style={{ flexBasis: '22%', flexGrow: 1 }}>
-                <Text
-                  onPress={() => up(s => {
-                    const idx = s.coverage.slow.indexOf(i);
-                    if (idx >= 0) s.coverage.slow.splice(idx, 1); else s.coverage.slow.push(i);
-                  })}
-                  style={{
-                    minHeight: 48, borderWidth: 1.5, borderColor: on ? C.ink : C.ink40, borderRadius: 12,
-                    fontSize: 14, textAlign: 'center', textAlignVertical: 'center', lineHeight: 48,
-                    color: on ? C.paper : C.ink, backgroundColor: on ? C.ink : 'transparent', overflow: 'hidden',
-                  }}
-                >{monthName(i)}</Text>
-              </View>
-            );
-          })}
-        </View>
-        {S.coverage.slow.length && sp ? (
-          un.length ? (
-            <NoteC><BodyS>{t('cv_unseen', { slow: slowNames, a: monthName(sp.from.m), b: monthName(sp.to.m) })}</BodyS></NoteC>
-          ) : (
-            <Card><BodyS>{t('cv_seen', { slow: slowNames, a: monthName(sp.from.m), b: monthName(sp.to.m) })}</BodyS></Card>
-          )
+  const { S, t, monthName, refreshIncomeCoverage, saveIncomeCoverage, toast } = useApp();
+  const confirmed = S.incomeCoverage;
+  const [answer, setAnswer] = React.useState<ApiCoverageAnswer | null>(confirmed?.answer || null);
+  const [slowerMonths, setSlowerMonths] = React.useState<number[]>(confirmed?.slower_months || []);
+  const confirmedAnswer = confirmed?.answer || null;
+  const confirmedKey = [...(confirmed?.slower_months || [])].sort((a, b) => a - b).join(',');
+
+  React.useEffect(() => {
+    setAnswer(confirmedAnswer);
+    setSlowerMonths(confirmedKey ? confirmedKey.split(',').map(Number) : []);
+  }, [confirmedAnswer, confirmedKey]);
+
+  const selectedKey = [...slowerMonths].sort((a, b) => a - b).join(',');
+  const dirty = answer !== confirmedAnswer || selectedKey !== confirmedKey;
+  const showConfirmed = Boolean(confirmed?.answer) && (!dirty || S.coverageSync === 'error');
+  const controlsDisabled = S.coverageSync === 'idle'
+    || S.coverageSync === 'loading'
+    || S.coverageSync === 'saving'
+    || (S.coverageSync === 'error' && !confirmed);
+  const monthList = (months: number[]) => months.map(month => monthName(month - 1)).join(', ');
+  const chooseAnswer = (next: ApiCoverageAnswer) => {
+    setAnswer(next);
+    if (next !== 'yes') setSlowerMonths([]);
+  };
+  const checkCoverage = async () => {
+    if (!answer) return;
+    if (answer === 'yes' && slowerMonths.length === 0) {
+      toast(t('cv_select_required'), 'error');
+      return;
+    }
+    try {
+      await saveIncomeCoverage({ answer, slowerMonths });
+      toast(t('saved'));
+    } catch {
+      toast(t('cv_save_failed'), 'error');
+    }
+  };
+
+  let result: React.ReactNode = null;
+  if (showConfirmed && confirmed?.answer === 'yes') {
+    result = (
+      <StackS>
+        {confirmed.represented_slower_months.length ? (
+          <Card><BodyS>{t('cv_represented', { m: monthList(confirmed.represented_slower_months) })}</BodyS></Card>
         ) : null}
-      </>
+        {confirmed.unrepresented_slower_months.length ? (
+          <NoteC><BodyS>{t('cv_unrepresented', { m: monthList(confirmed.unrepresented_slower_months) })}</BodyS></NoteC>
+        ) : null}
+      </StackS>
     );
-  } else if (ans === 'no' || ans === 'notsure') {
-    const nets = monthsAgg(S.data).map(r => r.net);
-    const avg = nets.reduce((x, y) => x + y, 0) / Math.max(1, nets.length);
-    const spread = Math.max(...nets) - Math.min(...nets);
-    const narrow = spread < avg * 0.12;
-    const msg = narrow ? t('cv_narrow')
-      : t('cv_varied', { a: sp ? monthName(sp.from.m) : '', b: sp ? monthName(sp.to.m) : '' });
-    body = narrow ? <NoteC><BodyS>{msg}</BodyS></NoteC> : <Card><BodyS>{msg}</BodyS></Card>;
+  } else if (showConfirmed && confirmed?.answer && confirmed.answer !== 'yes') {
+    const observation = confirmed.observation;
+    result = observation ? (
+      <Card>
+        <BodyS>{t('cv_observation', {
+          n: observation.recorded_month_count,
+          lo: formatApiMoney(observation.lowest),
+          hi: formatApiMoney(observation.highest),
+          range: formatApiMoney(observation.range),
+        })}</BodyS>
+      </Card>
+    ) : <NoteC><BodyS>{t('cv_no_history')}</BodyS></NoteC>;
   }
+
+  if (!INCOME_API_ENABLED) {
+    return (
+      <ScreenShell back title={t('money_coverage')}>
+        <NoteC><BodyS>{t('cv_api_required')}</BodyS></NoteC>
+      </ScreenShell>
+    );
+  }
+
   return (
     <ScreenShell back title={t('money_coverage')}>
+      {(S.coverageSync === 'idle' || S.coverageSync === 'loading') && !confirmed ? (
+        <BodyS muted>{t('cv_loading')}</BodyS>
+      ) : null}
+      {S.coverageSync === 'error' ? (
+        <NoteC>
+          <BodyS>{t('cv_error')}</BodyS>
+          {!confirmed ? (
+            <BtnLine label={t('retry')} onPress={() => { void refreshIncomeCoverage().catch(() => undefined); }} />
+          ) : null}
+        </NoteC>
+      ) : null}
       <Display cls="h-l">{t('cv_q')}</Display>
       <Chips>
-        {([['yes', 'cv_yes'], ['no', 'cv_no'], ['notsure', 'cv_notsure']] as const).map(([v, k]) => (
-          <Chip key={v} label={t(k)} brandOn={ans === v}
-            onPress={() => up(s => { s.coverage.answer = v; })} />
+        {([['yes', 'cv_yes'], ['no', 'cv_no'], ['not_sure', 'cv_notsure']] as const).map(([value, key]) => (
+          <Chip key={value} label={t(key)} brandOn={answer === value}
+            disabled={controlsDisabled}
+            selectionRole="radio"
+            onPress={() => chooseAnswer(value)} />
         ))}
       </Chips>
-      {body}
+      {answer === 'yes' ? (
+        <>
+          <P>{t('cv_pick')}</P>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {[...Array(12)].map((_, index) => {
+              const month = index + 1;
+              const on = slowerMonths.includes(month);
+              return (
+                <View key={month} style={{ flexBasis: '22%', flexGrow: 1 }}>
+                  <Chip
+                    label={monthName(index)}
+                    brandOn={on}
+                    disabled={controlsDisabled}
+                    selectionRole="checkbox"
+                    onPress={() => setSlowerMonths(previous => (
+                      previous.includes(month)
+                        ? previous.filter(value => value !== month)
+                        : [...previous, month].sort((a, b) => a - b)
+                    ))}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        </>
+      ) : null}
+      {answer ? (
+        <Btn
+          label={S.coverageSync === 'saving' ? t('cv_checking') : t('cv_check')}
+          disabled={controlsDisabled}
+          onPress={() => { if (!controlsDisabled) void checkCoverage(); }}
+        />
+      ) : null}
+      {S.coverageSync === 'error' && showConfirmed ? <BodyS muted>{t('cv_previous')}</BodyS> : null}
+      {result}
       <BodyS muted>{t('cv_note')}</BodyS>
     </ScreenShell>
   );

@@ -1,6 +1,10 @@
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+const configuredAppMode = process.env.EXPO_PUBLIC_APP_MODE?.trim().toLowerCase();
 
-export const INCOME_API_ENABLED = Boolean(configuredApiUrl);
+export const APP_MODE: 'api' | 'prototype' = configuredAppMode === 'prototype'
+  ? 'prototype'
+  : 'api';
+export const INCOME_API_ENABLED = APP_MODE === 'api';
 const API_ROOT = (configuredApiUrl || 'http://127.0.0.1:8000/api/v1').replace(/\/$/, '');
 
 export interface ApiIncomeSource {
@@ -95,6 +99,58 @@ export interface ApiIncomeImportBatch {
   rows: ApiIncomeImportRow[];
 }
 
+export type ApiHistoryDepth = 'empty' | 'one_month' | 'two_months' | 'three_or_more';
+
+export interface ApiIncomePatternMonth {
+  month: string;
+  gross_income: string;
+  work_costs: string;
+  usable_income: string;
+  is_lowest_recorded: boolean;
+}
+
+export interface ApiIncomePatternStatistics {
+  average: string;
+  median: string;
+  highest: string;
+  lowest: string;
+  range: string;
+  standard_deviation: string;
+}
+
+export interface ApiIncomePattern {
+  recorded_month_count: number;
+  history_depth: ApiHistoryDepth;
+  provenance: 'calculated_from_user_record';
+  monthly_work_cost_total: string;
+  work_cost_basis: 'current_active_monthly_snapshot';
+  months: ApiIncomePatternMonth[];
+  statistics: ApiIncomePatternStatistics | null;
+  lower_income: {
+    basis: 'recorded_minimum';
+    months: string[];
+  };
+}
+
+export type ApiCoverageAnswer = 'yes' | 'no' | 'not_sure';
+
+export interface ApiIncomeCoverageObservation {
+  kind: 'recorded_range';
+  recorded_month_count: number;
+  lowest: string;
+  highest: string;
+  range: string;
+}
+
+export interface ApiIncomeCoverage {
+  answer: ApiCoverageAnswer | null;
+  slower_months: number[];
+  represented_slower_months: number[];
+  unrepresented_slower_months: number[];
+  recorded_calendar_months: number[];
+  observation: ApiIncomeCoverageObservation | null;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -141,6 +197,27 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function fetchIncomeRecord(): Promise<ApiIncomeRecord> {
   return request<ApiIncomeRecord>('/income/record/');
+}
+
+export function fetchIncomePattern(): Promise<ApiIncomePattern> {
+  return request<ApiIncomePattern>('/income-pattern/');
+}
+
+export function fetchIncomeCoverage(): Promise<ApiIncomeCoverage> {
+  return request<ApiIncomeCoverage>('/income-coverage/');
+}
+
+export function updateIncomeCoverage(input: {
+  answer: ApiCoverageAnswer;
+  slowerMonths: number[];
+}): Promise<ApiIncomeCoverage> {
+  return request<ApiIncomeCoverage>('/income-coverage/', {
+    method: 'PUT',
+    body: JSON.stringify({
+      answer: input.answer,
+      slower_months: input.slowerMonths,
+    }),
+  });
 }
 
 export function createIncomeSource(name: string): Promise<ApiIncomeSource> {

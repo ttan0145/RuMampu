@@ -7,6 +7,7 @@ from .models import (
     FinancialPeriod,
     GuestProfile,
     IncomeEntry,
+    IncomeCoverage,
     IncomeImportBatch,
     IncomeImportRow,
     IncomeSource,
@@ -18,6 +19,7 @@ admin.site.register(GuestProfile)
 admin.site.register(IncomeSource)
 admin.site.register(FinancialPeriod)
 admin.site.register(IncomeEntry)
+admin.site.register(IncomeCoverage)
 admin.site.register(WorkCostItem)
 admin.site.register(CommitmentItem)
 admin.site.register(ExpenseCategory)

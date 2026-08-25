@@ -94,6 +94,8 @@ def _split_amount(total: Decimal, weights: tuple[Decimal, ...]) -> list[Decimal]
 
 
 def _reset_epic1_finance(profile) -> None:
+    if hasattr(profile, "income_coverage"):
+        profile.income_coverage.delete()
     profile.income_import_batches.all().delete()
     profile.income_entries.all().delete()
     profile.financial_periods.all().delete()

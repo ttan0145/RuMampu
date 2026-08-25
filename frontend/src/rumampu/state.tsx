@@ -1,8 +1,11 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { AppData, MOCK } from './mock';
 import { Lang, STRINGS } from './strings';
-import { CoverageState, preHousingOk } from './calc';
+import { preHousingOk } from './calc';
 import {
+  ApiCoverageAnswer,
+  ApiIncomeCoverage,
+  ApiIncomePattern,
   createExpense as createExpenseRequest,
   createExpenseCategory as createExpenseCategoryRequest,
   createWorkCost as createWorkCostRequest,
@@ -11,10 +14,13 @@ import {
   fetchCommitments,
   fetchExpenseCategories,
   fetchExpenses,
+  fetchIncomeCoverage,
+  fetchIncomePattern,
   fetchIncomeRecord,
   fetchWorkCosts,
   INCOME_API_ENABLED,
   isOutlierConfirmation,
+  updateIncomeCoverage as updateIncomeCoverageRequest,
   updateCommitment as updateCommitmentRequest,
   updateWorkCost as updateWorkCostRequest,
 } from './api';
@@ -55,7 +61,6 @@ export interface AppState {
   onboarded: boolean;
   splash: boolean;
   data: AppData;
-  coverage: CoverageState;
   testRan: boolean;
   howOpen: boolean;
   rgHowOpen: boolean;
@@ -74,6 +79,10 @@ export interface AppState {
   workCostSync: 'disabled' | 'loading' | 'ready' | 'error';
   commitmentSync: 'disabled' | 'loading' | 'ready' | 'error';
   expenseSync: 'disabled' | 'loading' | 'ready' | 'error';
+  incomePattern: ApiIncomePattern | null;
+  incomeCoverage: ApiIncomeCoverage | null;
+  incomePatternSync: 'disabled' | 'idle' | 'loading' | 'ready' | 'error';
+  coverageSync: 'disabled' | 'idle' | 'loading' | 'ready' | 'saving' | 'error';
   sheet: string | null;
 }
 
@@ -93,7 +102,6 @@ function initialState(): AppState {
     stack: [],
     onboard: 0, onboarded: false, splash: true,
     data,
-    coverage: { answer: null, slow: [] },
     testRan: false,
     howOpen: false, rgHowOpen: false, tcOpen: false, dcOpen: false,
     docsChecked: [], keptTests: [],
@@ -107,6 +115,10 @@ function initialState(): AppState {
     workCostSync: INCOME_API_ENABLED ? 'loading' : 'disabled',
     commitmentSync: INCOME_API_ENABLED ? 'loading' : 'disabled',
     expenseSync: INCOME_API_ENABLED ? 'loading' : 'disabled',
+    incomePattern: null,
+    incomeCoverage: null,
+    incomePatternSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
+    coverageSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
     sheet: null,
   };
 }
@@ -132,6 +144,12 @@ export interface Ctx {
   saveIncomeEntry: (input: SaveIncomeInput) => Promise<'saved' | 'outlier'>;
   saveIncomeSource: (name: string) => Promise<string>;
   refreshIncomeRecord: () => Promise<void>;
+  refreshIncomePattern: () => Promise<void>;
+  refreshIncomeCoverage: () => Promise<void>;
+  saveIncomeCoverage: (input: {
+    answer: ApiCoverageAnswer;
+    slowerMonths: number[];
+  }) => Promise<void>;
   saveWorkCostAmount: (id: string, amount: number) => Promise<void>;
   saveCustomWorkCost: (name: string, amount: number) => Promise<string>;
   saveCommitmentAmount: (id: string, amount: number) => Promise<void>;
@@ -144,16 +162,28 @@ export interface Ctx {
     merchant?: string;
     confirmReceipt?: boolean;
   }) => Promise<void>;
-  toast: (msg: string) => void;
-  toastMsg: { msg: string; key: number } | null;
+  toast: (msg: string, tone?: 'success' | 'error') => void;
+  toastMsg: { msg: string; key: number; tone: 'success' | 'error' } | null;
 }
 
 const AppCtx = createContext<Ctx | null>(null);
 
+function applyConfirmedCoverage(state: AppState, coverage: ApiIncomeCoverage): void {
+  state.incomeCoverage = coverage;
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [S, setS] = useState<AppState>(initialState);
-  const [toastMsg, setToastMsg] = useState<{ msg: string; key: number } | null>(null);
+  const [toastMsg, setToastMsg] = useState<{
+    msg: string;
+    key: number;
+    tone: 'success' | 'error';
+  } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const patternRequestVersion = useRef(0);
+  const patternRefreshInFlight = useRef<Promise<void> | null>(null);
+  const coverageRequestVersion = useRef(0);
+  const coverageRefreshInFlight = useRef<Promise<void> | null>(null);
 
   const up = useCallback((fn: (s: AppState) => void) => {
     setS(prev => {
@@ -345,6 +375,95 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [up]);
 
+  const refreshIncomePattern = useCallback((): Promise<void> => {
+    if (!INCOME_API_ENABLED) return Promise.resolve();
+    if (patternRefreshInFlight.current) return patternRefreshInFlight.current;
+
+    const version = ++patternRequestVersion.current;
+    up(s => { s.incomePatternSync = 'loading'; });
+    const request = (async () => {
+      try {
+        const pattern = await fetchIncomePattern();
+        if (version !== patternRequestVersion.current) return;
+        up(s => {
+          s.incomePattern = pattern;
+          s.incomePatternSync = 'ready';
+        });
+      } catch (error) {
+        if (version !== patternRequestVersion.current) return;
+        up(s => { s.incomePatternSync = 'error'; });
+        throw error;
+      }
+    })();
+    patternRefreshInFlight.current = request;
+    const clear = () => {
+      if (patternRefreshInFlight.current === request) patternRefreshInFlight.current = null;
+    };
+    void request.then(clear, clear);
+    return request;
+  }, [up]);
+
+  const refreshIncomeCoverage = useCallback((): Promise<void> => {
+    if (!INCOME_API_ENABLED) return Promise.resolve();
+    if (coverageRefreshInFlight.current) return coverageRefreshInFlight.current;
+
+    const version = ++coverageRequestVersion.current;
+    up(s => { s.coverageSync = 'loading'; });
+    const request = (async () => {
+      try {
+        const coverage = await fetchIncomeCoverage();
+        if (version !== coverageRequestVersion.current) return;
+        up(s => {
+          applyConfirmedCoverage(s, coverage);
+          s.coverageSync = 'ready';
+        });
+      } catch (error) {
+        if (version !== coverageRequestVersion.current) return;
+        up(s => { s.coverageSync = 'error'; });
+        throw error;
+      }
+    })();
+    coverageRefreshInFlight.current = request;
+    const clear = () => {
+      if (coverageRefreshInFlight.current === request) coverageRefreshInFlight.current = null;
+    };
+    void request.then(clear, clear);
+    return request;
+  }, [up]);
+
+  const saveIncomeCoverage = useCallback(async (input: {
+    answer: ApiCoverageAnswer;
+    slowerMonths: number[];
+  }): Promise<void> => {
+    if (input.answer === 'yes' && input.slowerMonths.length === 0) {
+      throw new Error('At least one slower month is required.');
+    }
+    if (!INCOME_API_ENABLED) {
+      throw new Error('Income coverage requires the connected API mode.');
+    }
+    const version = ++coverageRequestVersion.current;
+    coverageRefreshInFlight.current = null;
+    up(s => { s.coverageSync = 'saving'; });
+    try {
+      const coverage = await updateIncomeCoverageRequest(input);
+      if (version !== coverageRequestVersion.current) return;
+      up(s => {
+        applyConfirmedCoverage(s, coverage);
+        s.coverageSync = 'ready';
+      });
+    } catch (error) {
+      if (version !== coverageRequestVersion.current) return;
+      // Keep the last server-confirmed coverage visible and available for retry.
+      up(s => { s.coverageSync = 'error'; });
+      throw error;
+    }
+  }, [up]);
+
+  React.useEffect(() => {
+    if (!INCOME_API_ENABLED || S.coverageSync !== 'idle') return;
+    void refreshIncomeCoverage().catch(() => undefined);
+  }, [S.coverageSync, refreshIncomeCoverage]);
+
   const saveIncomeEntry = useCallback(async (input: SaveIncomeInput): Promise<'saved' | 'outlier'> => {
     if (!INCOME_API_ENABLED) {
       up(s => {
@@ -519,20 +638,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [up]);
 
-  const toast = useCallback((msg: string) => {
+  const toast = useCallback((msg: string, tone: 'success' | 'error' = 'success') => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToastMsg({ msg, key: Date.now() });
+    setToastMsg({ msg, key: Date.now(), tone });
     toastTimer.current = setTimeout(() => setToastMsg(null), 1800);
   }, []);
 
   const value = useMemo<Ctx>(() => ({
     S, up, t, monthName, go, goTab, backNav, runTest,
-    saveIncomeEntry, saveIncomeSource, refreshIncomeRecord, saveWorkCostAmount, saveCustomWorkCost,
+    saveIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
+    refreshIncomeCoverage, saveIncomeCoverage, saveWorkCostAmount, saveCustomWorkCost,
     saveCommitmentAmount, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   }), [
     S, up, t, monthName, go, goTab, backNav, runTest,
-    saveIncomeEntry, saveIncomeSource, refreshIncomeRecord, saveWorkCostAmount, saveCustomWorkCost,
+    saveIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
+    refreshIncomeCoverage, saveIncomeCoverage, saveWorkCostAmount, saveCustomWorkCost,
     saveCommitmentAmount, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   ]);

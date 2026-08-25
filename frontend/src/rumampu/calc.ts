@@ -2,8 +2,6 @@ import { AppData } from './mock';
 
 /* Derived calculations — ported verbatim from the prototype. All pure functions over the data. */
 
-export interface CoverageState { answer: 'yes' | 'no' | 'notsure' | null; slow: number[] }
-
 export interface MonthRow { y: number; m: number; gross: number; net: number; surplus: number }
 export interface TestRow extends MonthRow { short: boolean; gap: number }
 
@@ -122,13 +120,6 @@ export function recSpan(data: AppData): { from: MonthRow; to: MonthRow; list: Mo
   const a = monthsAgg(data);
   if (!a.length) return null;
   return { from: a[0], to: a[a.length - 1], list: a };
-}
-
-export function slowUnseen(data: AppData, coverage: CoverageState): number[] {
-  const sp = recSpan(data);
-  if (!sp || coverage.answer !== 'yes' || !coverage.slow.length) return [];
-  const seen = new Set(sp.list.map(r => r.m));
-  return coverage.slow.filter(m => !seen.has(m));
 }
 
 export function upfrontNeed(data: AppData): number {

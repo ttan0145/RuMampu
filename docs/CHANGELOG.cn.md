@@ -2,9 +2,37 @@
 
 语言：**中文（CN）** | [English](CHANGELOG.md)
 
+## 2026-08-25 — Epic 2 后端权威收入形态
+
+状态：完成并已加固；已获准交付 main
+
+### 交付
+
+- 完成 US2.1–US2.4 和 18/18 条验收标准。
+- 新增版本化 `GET /api/v1/income-pattern/` 与 `GET/PUT /api/v1/income-coverage/`，不增加 legacy alias。
+- 将月度聚合、当前工作成本扣减、描述统计、记录最低月识别和 coverage 评估移入应用服务。
+- 新增按访客隔离的一对一 coverage 持久化，派生分析继续实时计算。
+- 删除前端无来源阈值，改用 typed 权威响应、明确的 empty/limited/loading/saving/error/retry 状态和可横向滚动的可访问图表。
+- 建立英文主版本与 `.cn.md` 镜像：需求快照、ADR 0002、API Contract、逐 US 验收记录、实施矩阵与索引。
+- 删除 Epic 2 客户端 fallback 算法，将 API 模式设为正式默认，并让下游 coverage 提示直接使用权威响应。
+- 增加过期响应拒绝与请求去重；coverage 保存失败时保留上一次确认结果及用户可重试草稿。
+- 增加 model/service coverage 不变量、异常旧数据安全读取、支持大额聚合的金额响应字段、可访问选择状态与仓库 CI 门槛。
+
+### 测试与验收
+
+- 后端 `finance` 全套 80 项通过，其中 22 项为 Epic 2 专项。
+- 12 个月场景固定验证 average `4437.50`、median `4385.00`、highest `5870.00`、lowest `3160.00`、range `2710.00`、population standard deviation `699.16`、最低月 `2026-02`。
+- TypeScript、migration drift、Django system check、OpenAPI 生成/校验及 6 条可执行 Playwright Epic 2 流程全部通过。
+
+### 边界
+
+- 当前有效月度工作成本应用于全部记录月，并明确标识为 current-snapshot basis；不暗示历史成本版本。
+- API 只返回描述事实，不返回预测、稳定分类、风险带、住房 shortfall reason 或无来源阈值。
+- Coverage 持久化属于当前访客会话，不是账户级永久声明。
+
 ## 2026-08-25 — Epic 1 正式闭环
 
-状态：本地完成，等待负责人批准后再提交或推送
+状态：完成；已交付 main
 
 ### 交付
 

@@ -1,6 +1,9 @@
 import uuid
 
+from django.core.exceptions import ValidationError
 from django.db import models
+
+from .validators import validate_slower_months
 
 
 class GuestProfile(models.Model):
@@ -301,3 +304,49 @@ class IncomeImportRow(models.Model):
 
     def __str__(self) -> str:
         return f"{self.batch.file_name}:{self.row_number}"
+
+
+class IncomeCoverage(models.Model):
+    class Answer(models.TextChoices):
+        YES = "yes", "Yes"
+        NO = "no", "No"
+        NOT_SURE = "not_sure", "Not sure"
+
+    profile = models.OneToOneField(
+        GuestProfile,
+        on_delete=models.CASCADE,
+        related_name="income_coverage",
+    )
+    answer = models.CharField(
+        max_length=12,
+        choices=Answer.choices,
+    )
+    slower_months = models.JSONField(
+        default=list,
+        blank=True,
+        validators=[validate_slower_months],
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(answer__in=("yes", "no", "not_sure")),
+                name="valid_income_coverage_answer",
+            )
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+        if self.answer == self.Answer.YES and not self.slower_months:
+            raise ValidationError(
+                {"slower_months": "Select at least one usually slower month."}
+            )
+        if self.answer in (self.Answer.NO, self.Answer.NOT_SURE) and self.slower_months:
+            raise ValidationError(
+                {"slower_months": "No and Not sure answers cannot store slower months."}
+            )
+
+    def __str__(self) -> str:
+        return f"{self.profile.public_id}: {self.answer}"

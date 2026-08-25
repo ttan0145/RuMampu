@@ -13,6 +13,7 @@ urlpatterns = [
     path("api/redoc/", SpectacularRedocView.as_view(url_name="api-schema"), name="api-redoc"),
 
     path("api/v1/health/", HealthCheckView.as_view(), name="health-check-v1"),
+    path("api/v1/", include("finance.analysis_urls")),
     path("api/v1/income/", include("finance.urls")),
     path("api/v1/income-imports/", include("finance.income_import_urls")),
     path("api/v1/work-costs/", include("finance.work_cost_urls")),

@@ -384,7 +384,9 @@ export function ToastView() {
       opacity: anim,
       transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
     }}>
-      <Text style={{ color: C.confirm, fontSize: 18 }}>✓</Text>
+      <Text style={{ color: toastMsg.tone === 'error' ? C.short : C.confirm, fontSize: 18 }}>
+        {toastMsg.tone === 'error' ? '!' : '✓'}
+      </Text>
       <Text style={{ color: C.paper, fontSize: 15, flexShrink: 1 }}>{toastMsg.msg}</Text>
     </Animated.View>
   );

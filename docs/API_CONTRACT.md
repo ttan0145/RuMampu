@@ -83,6 +83,9 @@ After confirmation, the client retries the same data with `confirm_outlier: true
 | POST | `/api/v1/expense-categories/` | Create a custom expense category |
 | GET | `/api/v1/expenses/` | Current guest's daily expenses |
 | POST | `/api/v1/expenses/` | Create a daily expense manually or from confirmed receipt values |
+| GET | `/api/v1/income-pattern/` | Recalculate the current guest's month-by-month income pattern |
+| GET | `/api/v1/income-coverage/` | Read the current guest's confirmed slower-period coverage answer |
+| PUT | `/api/v1/income-coverage/` | Confirm and evaluate a slower-period coverage answer |
 
 The OpenAPI schema is authoritative for complete request and response field definitions.
 
@@ -152,7 +155,7 @@ Update an amount:
 }
 ```
 
-Current work-cost amounts represent monthly costs. The frontend subtracts all active work costs from each recorded month's income and labels the result as calculated.
+Current work-cost amounts represent monthly costs. The income-pattern application service subtracts all active work costs once from each recorded month's aggregated gross income and identifies the result as calculated.
 
 ## 6. Financial commitments
 
@@ -267,7 +270,59 @@ Example preview response:
 
 The client displays parsed amounts, dates, sources, and invalid rows before the user confirms. Confirmation creates only valid rows in one transaction, reuses an active same-name source or creates a custom source, and marks entries with `entry_method: "import"`. Confirming an already confirmed batch returns the same state without duplicates. Import has no minimum history of six or twelve months.
 
-## 9. Compatibility and change policy
+## 9. Income-pattern analysis
+
+`GET /api/v1/income-pattern/` recalculates analysis from source records; no derived snapshot is stored. Monthly rows use `YYYY-MM`, and every monetary field is a two-decimal string.
+
+```json
+{
+  "recorded_month_count": 2,
+  "history_depth": "two_months",
+  "provenance": "calculated_from_user_record",
+  "monthly_work_cost_total": "750.00",
+  "work_cost_basis": "current_active_monthly_snapshot",
+  "months": [{
+    "month": "2026-01",
+    "gross_income": "4380.00",
+    "work_costs": "750.00",
+    "usable_income": "3630.00",
+    "is_lowest_recorded": false
+  }],
+  "statistics": {
+    "average": "4065.00",
+    "median": "4065.00",
+    "highest": "4500.00",
+    "lowest": "3630.00",
+    "range": "870.00",
+    "standard_deviation": "435.00"
+  },
+  "lower_income": {"basis": "recorded_minimum", "months": ["2026-01"]}
+}
+```
+
+`history_depth` is `empty`, `one_month`, `two_months`, or `three_or_more`. Empty records return `statistics: null`. With one month the factual statistics remain available, but `lower_income.months` stays empty because no comparison exists. With two or more months, all tied recorded minima are marked. Population standard deviation is calculated with `Decimal` and rounded `ROUND_HALF_UP` to two decimals.
+
+Coverage uses explicit confirmation:
+
+```json
+{
+  "answer": "yes",
+  "slower_months": [1, 3, 8]
+}
+```
+
+- `answer` is `yes`, `no`, or `not_sure`.
+- `yes` requires at least one unique month from 1 through 12; the server sorts the list.
+- `no` and `not_sure` clear `slower_months` regardless of submitted values.
+- The response separates `represented_slower_months` and `unrepresented_slower_months` by comparing calendar month numbers across all recorded years.
+- For `no` and `not_sure`, `observation` is either `null` or a factual `recorded_range` containing only month count, lowest, highest, and range.
+- Coverage is isolated and persisted one-to-one per guest profile. Analysis results are not persisted.
+- Transport validation, model validation, and the application service all enforce canonical slower months: integer values 1–12, unique, sorted, required for `yes`, and empty for `no`/`not_sure`. A malformed legacy row is returned fail-safe as an unknown answer rather than escaping the response contract.
+- Stored income amounts retain their per-entry digit limit, while derived monetary response fields do not reuse that limit; valid same-month aggregates can therefore exceed one entry's maximum and still return a two-decimal string.
+
+The API does not return prediction, stability, risk, or fixed-threshold conclusions.
+
+## 10. Compatibility and change policy
 
 - v1 may add optional fields and endpoints. Removing fields, changing types, or changing existing semantics is breaking.
 - Breaking changes require a new version path and ADR.
@@ -275,7 +330,7 @@ The client displays parsed amounts, dates, sources, and invalid rows before the 
 - `/api/v1/dev/scenarios/` is disabled-by-default local test infrastructure, not part of the production v1 contract, and excluded from OpenAPI. See the [test-scenario document](testing/SCENARIO_GIG_DRIVER_12M.md) for safeguards.
 - POST endpoints do not currently accept idempotency keys. The frontend disables duplicate submission while a request is pending; an idempotency protocol must precede offline synchronisation or automatic retries.
 
-## 10. Maintenance
+## 11. Maintenance
 
 After changing a serializer, view, or URL, run:
 

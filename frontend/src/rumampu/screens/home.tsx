@@ -2,8 +2,9 @@ import React from 'react';
 import { clearHousingSession } from '../../../services/housingSession';
 import { useApp } from '../state';
 import {
-  recSpan, rm, slowUnseen, testRows, totalHomeCost,
+  recSpan, rm, testRows, totalHomeCost,
 } from '../calc';
+import { unrepresentedCoverageMonths } from '../money';
 import { Btn, BtnLine, BodyS, Display, Fig, FigRow, KV, NoteC } from '../ui';
 import { CovStrip } from '../charts';
 import { ScreenShell } from './shell';
@@ -41,7 +42,7 @@ export function HomeScreen() {
   const rows = testRows(S.data, cost);
   const s = rows.filter(r => r.short).length;
   const g = Math.max(...rows.map(r => r.gap), 0);
-  const un = slowUnseen(S.data, S.coverage);
+  const un = unrepresentedCoverageMonths(S.incomeCoverage);
 
   return (
     <ScreenShell brand>
@@ -52,7 +53,7 @@ export function HomeScreen() {
       <BodyS muted>{t('covspan', { a: monthName(sp.from.m), b: monthName(sp.to.m) })}</BodyS>
       {un.length ? (
         <NoteC><BodyS>{t('cov_missed', { m: un.map(monthName).join(', ') })}</BodyS></NoteC>
-      ) : S.coverage.answer === null ? (
+      ) : S.incomeCoverage?.answer == null ? (
         <BtnLine label={t('cov_unchecked') + ' →'} onPress={() => go('coverage')} />
       ) : null}
       <Btn label={t('home_retest')} onPress={() => { clearHousingSession(); go('house'); }} />

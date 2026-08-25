@@ -83,6 +83,9 @@
 | POST | `/api/v1/expense-categories/` | 新建自定义支出分类 |
 | GET | `/api/v1/expenses/` | 当前访客的日常支出记录 |
 | POST | `/api/v1/expenses/` | 手动新建一笔日常支出 |
+| GET | `/api/v1/income-pattern/` | 重新计算当前访客的逐月收入形态 |
+| GET | `/api/v1/income-coverage/` | 读取当前访客已确认的慢时期覆盖回答 |
+| PUT | `/api/v1/income-coverage/` | 确认并评估慢时期覆盖回答 |
 
 请求和响应字段的完整定义以 OpenAPI schema 为准。
 
@@ -152,7 +155,7 @@
 }
 ```
 
-当前成本金额代表每月成本，前端从每个记录月收入中扣除全部有效工作成本，并把结果标记为计算值。
+当前成本金额代表月度成本。收入形态应用服务先聚合每个记录月的总收入，再只扣一次全部有效工作成本，并将结果标为计算值。
 
 ## 6. 财务承诺
 
@@ -267,7 +270,59 @@
 
 客户端必须显示识别后的金额、日期、来源以及错误行，再由用户调用 confirm。confirm 在事务中只创建无错误的行，复用同名有效来源或创建自定义来源，收入记录标为 `entry_method: "import"`；已确认批次再次 confirm 返回同一状态，不重复创建收入。导入不要求 6 或 12 个月最低历史长度。
 
-## 9. 兼容与变更
+## 9. 收入形态分析
+
+`GET /api/v1/income-pattern/` 从源记录实时重算，不存储派生快照。月度行使用 `YYYY-MM`，全部金额字段均为两位小数字符串。
+
+```json
+{
+  "recorded_month_count": 2,
+  "history_depth": "two_months",
+  "provenance": "calculated_from_user_record",
+  "monthly_work_cost_total": "750.00",
+  "work_cost_basis": "current_active_monthly_snapshot",
+  "months": [{
+    "month": "2026-01",
+    "gross_income": "4380.00",
+    "work_costs": "750.00",
+    "usable_income": "3630.00",
+    "is_lowest_recorded": false
+  }],
+  "statistics": {
+    "average": "4065.00",
+    "median": "4065.00",
+    "highest": "4500.00",
+    "lowest": "3630.00",
+    "range": "870.00",
+    "standard_deviation": "435.00"
+  },
+  "lower_income": {"basis": "recorded_minimum", "months": ["2026-01"]}
+}
+```
+
+`history_depth` 为 `empty`、`one_month`、`two_months` 或 `three_or_more`。空记录返回 `statistics: null`。单月仍返回事实统计，但由于无法比较，`lower_income.months` 为空。两个及以上记录月会标记所有并列最低月。总体标准差以 `Decimal` 计算，并按 `ROUND_HALF_UP` 保留两位。
+
+Coverage 采用显式确认：
+
+```json
+{
+  "answer": "yes",
+  "slower_months": [1, 3, 8]
+}
+```
+
+- `answer` 为 `yes`、`no` 或 `not_sure`。
+- `yes` 至少需要一个 1–12 的唯一月份，服务端统一排序。
+- `no` 与 `not_sure` 无论收到什么值都会清空 `slower_months`。
+- 响应通过比较所有记录年份的日历月份编号，分别返回 `represented_slower_months` 和 `unrepresented_slower_months`。
+- 对 `no` 与 `not_sure`，`observation` 为 `null`，或只包含记录月数、最低、最高和范围的事实性 `recorded_range`。
+- Coverage 按访客一对一隔离持久化；分析结果不持久化。
+- 传输校验、模型校验与应用服务共同保证慢月份的规范形态：仅限 1–12 的整数、不得重复、升序保存、`yes` 必须非空，`no`/`not_sure` 必须为空。若遇到不合规的旧数据，响应会安全降级为未知回答，不让非法状态越过契约边界。
+- 单笔收入继续遵守其位数上限，但派生金额响应不复用单笔上限；因此同月多个合法记录的聚合值即使超过单笔最大值，也能正常返回两位小数字符串。
+
+API 不返回预测、稳定性、风险或固定阈值结论。
+
+## 10. 兼容与变更
 
 - v1 内允许新增可选字段和新端点；删除字段、改类型或改变既有语义属于破坏性变更。
 - 破坏性变更必须通过新版本路径和 ADR 引入。
@@ -275,7 +330,7 @@
 - `/api/v1/dev/scenarios/` 是默认关闭的本地测试基建，不属于生产 v1 契约且从 OpenAPI 排除；完整保护规则见[测试场景文档](testing/SCENARIO_GIG_DRIVER_12M.cn.md)。
 - POST 当前不支持幂等键。前端必须在请求进行中禁用重复提交；在离线同步或自动重试上线前，需要先设计幂等协议。
 
-## 10. 维护方式
+## 11. 维护方式
 
 修改 serializer、view 或 URL 后运行：
 

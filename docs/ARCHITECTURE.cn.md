@@ -25,7 +25,8 @@ RuMampu 需要让收入不规律的用户理解住房付款压力，而不是给
 | Work costs | 为获得收入而发生的每月成本 | US1.3 已持久化并验收 |
 | Commitments | 生活成本、债务与储蓄等每月承诺 | US1.4 已持久化并验收 |
 | Expenses | 日常支出、分类及收据确认来源 | US1.5–US1.7 已持久化并验收；生产 OCR 待实现 |
-| Readiness | 月度现金流、波动和住房压力解释 | UI 原型，规则待校正 |
+| Income analysis | 月度可用收入、描述统计、记录最低月与慢时期 coverage | Epic 2 已以后端权威方式验收 |
+| Housing readiness | 住房情景、现金流和付款压力解释 | UI 原型，Epic 3 规则待实现 |
 | Preparation | 缓冲金、前期费用、材料清单与对比 | UI 原型 |
 
 领域逻辑放在服务层，API view 只负责输入输出编排。不要把新的业务计算复制到页面组件或 serializer 中。
@@ -37,6 +38,8 @@ RuMampu 需要让收入不规律的用户理解住房付款压力，而不是给
 3. Serializer 校验传输数据，服务层执行财务规则和事务。
 4. 模型保存原始事实；聚合值应优先计算或明确标注来源。
 5. API 返回稳定的资源结构或统一错误结构，前端负责本地化展示。
+
+Epic 2 服务从 `IncomeEntry` 与有效 `WorkCostItem` 事实实时重算。只持久化用户明确的 `IncomeCoverage` 回答，不保存计算响应快照。
 
 ## 5. 数据与隐私规则
 
@@ -51,8 +54,10 @@ RuMampu 需要让收入不规律的用户理解住房付款压力，而不是给
 ## 6. 前端状态原则
 
 - API 数据是已接通领域的事实来源；页面状态只保存草稿、导航和短暂 UI 状态。
-- 原型模式仅用于演示，必须由缺少 `EXPO_PUBLIC_API_URL` 显式触发。
+- 正式构建默认连接后端 API。原型模式仅用于演示，必须显式设置 `EXPO_PUBLIC_APP_MODE=prototype`；缺少 API URL 不会再静默切换计算权威。
+- Epic 2 不保留客户端 fallback 算法；收入形态与 coverage 均来自版本化 API，下游客户端直接消费服务端确认的 `unrepresented_slower_months`。
 - 新领域接入 API 时，应逐步移除对应 mock 数据，不能让同一字段同时由 mock 和 API 决定。
+- 收入形态与 coverage 页面以上一次成功的服务端响应为权威；coverage 草稿只有显式保存成功后才能成为结论。
 
 ## 7. 完成定义
 

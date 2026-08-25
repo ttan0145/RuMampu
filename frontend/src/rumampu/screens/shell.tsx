@@ -11,6 +11,7 @@ export function ScreenShell({
     <View style={{ flex: 1, backgroundColor: C.paper }}>
       <Hdr back={back} title={title} brand={brand} />
       <ScrollView
+        testID="screen-scroll"
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24, gap: 16 }}
         keyboardShouldPersistTaps="handled"

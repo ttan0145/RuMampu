@@ -6,7 +6,9 @@ RuMampu helps Malaysians with irregular income understand housing-payment pressu
 
 ## Current status
 
-Epic 1 is complete across the full stack, with all 56 acceptance criteria covered:
+Epic 1 and Epic 2 are complete across the full stack: 56/56 Epic 1 acceptance criteria and 18/18 Epic 2 acceptance criteria are covered.
+
+Epic 1 provides:
 
 - guest-session-isolated income profiles;
 - default and custom income sources;
@@ -23,11 +25,24 @@ Epic 1 is complete across the full stack, with all 56 acceptance criteria covere
 - Expo frontend synchronisation with the Django API; and
 - versioned `/api/v1` endpoints, a consistent error response, and an OpenAPI contract.
 
+Epic 2 adds:
+
+- backend-authoritative month-by-month usable-income analysis;
+- average, median, highest, lowest, range, and population standard deviation as two-decimal calculated values;
+- explicit empty, one-month, two-month, and three-or-more history states;
+- recorded-minimum month identification without unsupported thresholds or risk labels;
+- guest-isolated, persistent slower-month coverage answers; and
+- represented/unrepresented month results plus factual No/Not sure observations;
+- a single backend calculation authority with stale-response protection and failed-save recovery; and
+- repeatable backend, TypeScript, OpenAPI, migration, and Playwright quality gates in GitHub Actions.
+
 See the [Epic 1 implementation and acceptance index](docs/epic-1/README.md) for criterion-level evidence and the [project changelog](docs/CHANGELOG.md) for the delivery record.
 
-The [Epic 1 completion report](docs/epic-1/EPIC_1_COMPLETION_REPORT.md) summarises the release. Production-grade OCR, user accounts, cross-device synchronisation, and formal delivery of Epics 2 and 5 remain outside this milestone; see the [Epic 1/2/5 implementation matrix](docs/EPIC_1_2_5_IMPLEMENTATION_MATRIX.md) for the boundary.
+See the [Epic 2 implementation and acceptance index](docs/epic-2/README.md) for all 18 criteria, calculation boundaries, and browser evidence.
 
-The formal requirements are available as searchable Markdown: [all user stories and acceptance criteria](docs/requirements/USER_STORIES_AND_ACCEPTANCE_CRITERIA.md) and [Epic 1 user stories and acceptance criteria](docs/requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md). Delivery is organised by user story and verified by acceptance criterion.
+The [Epic 1 completion report](docs/epic-1/EPIC_1_COMPLETION_REPORT.md) summarises that release. Production-grade OCR, user accounts, cross-device synchronisation, income prediction, risk scoring, and formal delivery of Epic 5 remain outside the current milestone; see the [Epic 1/2/5 implementation matrix](docs/EPIC_1_2_5_IMPLEMENTATION_MATRIX.md) for the boundary.
+
+The formal requirements are available as searchable Markdown: [all user stories and acceptance criteria](docs/requirements/USER_STORIES_AND_ACCEPTANCE_CRITERIA.md), [Epic 1](docs/requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md), and [Epic 2](docs/requirements/EPIC_2_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md). Delivery is organised by user story and verified by acceptance criterion.
 
 ## Technical structure
 
@@ -72,7 +87,7 @@ Copy-Item .env.example .env
 npm start
 ```
 
-Expo Web and Django should use the same hostname, such as `localhost`, so the guest-session cookie is retained consistently. Without `EXPO_PUBLIC_API_URL`, the frontend uses in-memory prototype data. When it is set, the connected income, work-cost, commitment, and daily-expense flows use the API.
+Expo Web and Django should use the same hostname, such as `localhost`, so the guest-session cookie is retained consistently. Without `EXPO_PUBLIC_API_URL`, the frontend uses in-memory prototype data. When it is set, the connected income, work-cost, commitment, daily-expense, income-pattern, and coverage flows use the API.
 
 ### Fast simulation profile
 
@@ -97,6 +112,7 @@ Run at least the following before committing:
 # Frontend type checking
 Set-Location frontend
 npm run typecheck
+npm run test:e2e:epic2
 ```
 
-A work package is complete only when its code, tests, API schema, and affected documentation agree. Foundational decisions are recorded in [ADR 0001](docs/adr/0001-foundation-and-api-contract.md).
+A work package is complete only when its code, tests, API schema, and affected documentation agree. Foundational decisions are recorded in [ADR 0001](docs/adr/0001-foundation-and-api-contract.md); the Epic 2 calculation boundary is recorded in [ADR 0002](docs/adr/0002-backend-authoritative-income-pattern.md).

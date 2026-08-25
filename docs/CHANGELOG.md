@@ -2,9 +2,37 @@
 
 Language: **English** | [Chinese (CN)](CHANGELOG.cn.md)
 
+## 2026-08-25 — Epic 2 backend-authoritative income patterns
+
+Status: complete and hardened; main delivery authorised
+
+### Delivered
+
+- Completed US2.1–US2.4 and 18/18 acceptance criteria.
+- Added versioned `GET /api/v1/income-pattern/` and `GET/PUT /api/v1/income-coverage/` without legacy aliases.
+- Moved monthly aggregation, current work-cost subtraction, descriptive statistics, recorded-minimum identification, and coverage evaluation into application services.
+- Added guest-isolated one-to-one coverage persistence while keeping derived analysis ephemeral.
+- Replaced unsupported frontend thresholds with typed authoritative responses, explicit empty/limited/loading/saving/error/retry states, and a horizontally scrolling accessible chart.
+- Added English primary documentation with `.cn.md` mirrors: requirement snapshot, ADR 0002, API contract, per-US acceptance records, implementation matrix, and index.
+- Removed the Epic 2 client-side fallback algorithm, made API mode the formal default, and linked downstream coverage warnings to the authoritative response.
+- Added stale-response rejection and request de-duplication; failed coverage saves preserve the last confirmed result and the user's retryable draft.
+- Added model/service coverage invariants, fail-safe legacy-row reads, aggregate-safe monetary response fields, accessible selection state, and repository CI gates.
+
+### Tests and acceptance
+
+- Backend `finance` suite: 80 tests passed, including 22 dedicated Epic 2 cases.
+- The 12-month scenario verifies average `4437.50`, median `4385.00`, highest `5870.00`, lowest `3160.00`, range `2710.00`, population standard deviation `699.16`, and minimum month `2026-02`.
+- TypeScript, migration drift, Django system check, OpenAPI generation/validation, and all 6 executable Playwright Epic 2 flows passed.
+
+### Boundaries
+
+- Current active monthly work costs are applied to every recorded month and identified as a current-snapshot basis; historical cost versioning is not implied.
+- The API returns descriptive facts only. It does not return forecasts, stability classifications, risk bands, housing shortfall reasons, or unsupported thresholds.
+- Coverage persistence belongs to the current guest session, not a permanent account-level declaration.
+
 ## 2026-08-25 — Epic 1 full-stack completion
 
-Status: complete locally; waiting for owner approval before commit or push
+Status: complete; delivered on main
 
 ### Delivered
 
