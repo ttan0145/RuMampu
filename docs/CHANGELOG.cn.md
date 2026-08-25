@@ -17,6 +17,7 @@
 - 删除 Epic 2 客户端 fallback 算法，将 API 模式设为正式默认，并让下游 coverage 提示直接使用权威响应。
 - 增加过期响应拒绝与请求去重；coverage 保存失败时保留上一次确认结果及用户可重试草稿。
 - 增加 model/service coverage 不变量、异常旧数据安全读取、支持大额聚合的金额响应字段、可访问选择状态与仓库 CI 门槛。
+- 已 rebase 到组员的 US3.1–US3.3 与 Neon 改动，保留 housing 流程，恢复有文档说明的本地 SQLite fallback，并补全 housing OpenAPI 响应 schema，确保合并后的 main 仍可测试。
 
 ### 测试与验收
 

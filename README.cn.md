@@ -73,6 +73,8 @@ Copy-Item .env.example .env
 .\.venv\Scripts\python.exe manage.py runserver localhost:8000
 ```
 
+本地 SQLite 使用时让 `backend/.env` 中的 `PGHOST` 保持为空。接入 Neon/PostgreSQL 时设置完整的 `PG*` 变量；TLS 默认要求 `require`。
+
 可用入口：
 
 - 健康检查：`http://localhost:8000/api/v1/health/`

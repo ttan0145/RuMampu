@@ -12,7 +12,7 @@ The project is a modular monolith:
 
 - Expo/React Native provides interaction, local drafts, and multilingual presentation;
 - Django REST Framework provides validation, business rules, and persistence;
-- SQLite is used for local development; the production database will be selected with the deployment design; and
+- SQLite is the zero-configuration local/test database; setting the documented `PG*` environment variables switches the same application to Neon/PostgreSQL with required TLS; and
 - OpenAPI is the machine-readable contract between frontend and backend.
 
 Microservices are not currently justified. Reconsider them only when independent deployment, scaling, or permission boundaries become real requirements.

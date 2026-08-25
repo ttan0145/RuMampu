@@ -25,7 +25,7 @@ jobs:
         run: |
           python manage.py check
           python manage.py makemigrations --check --dry-run
-          python manage.py test finance
+          python manage.py test
       - name: Validate committed OpenAPI contract
         working-directory: backend
         run: |

@@ -43,15 +43,15 @@ class HousingScenarioSerializer(serializers.ModelSerializer):
                 HousingCost.objects.create(scenario=instance, **cost)
         return instance
 
-    def get_financing_amount(self, obj):
+    def get_financing_amount(self, obj: HousingScenario) -> float:
         from .services import financing_amount
         return round(financing_amount(obj.property_price, obj.deposit), 2)
 
-    def get_monthly_instalment(self, obj):
+    def get_monthly_instalment(self, obj: HousingScenario) -> float:
         from .services import scenario_instalment
         return round(scenario_instalment(obj), 2)
 
-    def get_total_monthly_cost(self, obj):
+    def get_total_monthly_cost(self, obj: HousingScenario) -> float:
         from .services import scenario_total_monthly_cost
         return round(scenario_total_monthly_cost(obj), 2)
 
@@ -70,3 +70,32 @@ class PreHousingCheckSerializer(serializers.Serializer):
     work_costs = serializers.ListField(child=serializers.DictField())
     commitments = serializers.DictField()
     expenses = serializers.ListField(child=serializers.DictField(), required=False)
+
+
+class HousingCalculationResultSerializer(serializers.Serializer):
+    financing_amount = serializers.FloatField()
+    monthly_instalment = serializers.FloatField()
+    total_monthly_cost = serializers.FloatField()
+
+
+class PreHousingMonthResultSerializer(serializers.Serializer):
+    year = serializers.IntegerField()
+    month = serializers.IntegerField(min_value=1, max_value=12)
+    gross_income = serializers.FloatField()
+    usable_income = serializers.FloatField()
+    existing_costs = serializers.FloatField()
+    surplus = serializers.FloatField()
+    shortfall = serializers.FloatField(min_value=0)
+
+
+class PreHousingWorstMonthSerializer(serializers.Serializer):
+    year = serializers.IntegerField()
+    month = serializers.IntegerField(min_value=1, max_value=12)
+
+
+class PreHousingCheckResultSerializer(serializers.Serializer):
+    has_existing_shortfall = serializers.BooleanField()
+    tested_months = serializers.IntegerField(min_value=0)
+    largest_existing_gap = serializers.FloatField(min_value=0)
+    worst_month = PreHousingWorstMonthSerializer(allow_null=True)
+    months = PreHousingMonthResultSerializer(many=True)

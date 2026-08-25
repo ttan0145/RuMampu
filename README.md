@@ -71,6 +71,8 @@ Copy-Item .env.example .env
 .\.venv\Scripts\python.exe manage.py runserver localhost:8000
 ```
 
+Leave `PGHOST` empty in `backend/.env` for local SQLite. To use Neon/PostgreSQL, set all documented `PG*` values; TLS defaults to `require`.
+
 Available endpoints:
 
 - health check: `http://localhost:8000/api/v1/health/`

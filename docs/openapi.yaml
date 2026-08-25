@@ -177,6 +177,199 @@ paths:
               schema:
                 $ref: '#/components/schemas/Health'
           description: ''
+  /api/v1/housing/calculate/:
+    post:
+      operationId: housing_calculate_create
+      tags:
+      - housing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HousingCalculationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/HousingCalculationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/HousingCalculationRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HousingCalculationResult'
+          description: ''
+  /api/v1/housing/pre-check/:
+    post:
+      operationId: housing_pre_check_create
+      tags:
+      - housing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreHousingCheckRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PreHousingCheckRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PreHousingCheckRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreHousingCheckResult'
+          description: ''
+  /api/v1/housing/scenarios/:
+    get:
+      operationId: housing_scenarios_list
+      tags:
+      - housing
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HousingScenario'
+          description: ''
+    post:
+      operationId: housing_scenarios_create
+      tags:
+      - housing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HousingScenarioRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/HousingScenarioRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/HousingScenarioRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HousingScenario'
+          description: ''
+  /api/v1/housing/scenarios/{id}/:
+    get:
+      operationId: housing_scenarios_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this housing scenario.
+        required: true
+      tags:
+      - housing
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HousingScenario'
+          description: ''
+    put:
+      operationId: housing_scenarios_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this housing scenario.
+        required: true
+      tags:
+      - housing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HousingScenarioRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/HousingScenarioRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/HousingScenarioRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HousingScenario'
+          description: ''
+    patch:
+      operationId: housing_scenarios_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this housing scenario.
+        required: true
+      tags:
+      - housing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedHousingScenarioRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedHousingScenarioRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedHousingScenarioRequest'
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HousingScenario'
+          description: ''
+    delete:
+      operationId: housing_scenarios_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this housing scenario.
+        required: true
+      tags:
+      - housing
+      security:
+      - {}
+      responses:
+        '204':
+          description: No response body
   /api/v1/income-coverage/:
     get:
       operationId: income_coverage_retrieve
@@ -755,6 +948,181 @@ components:
         * `one_month` - one_month
         * `two_months` - two_months
         * `three_or_more` - three_or_more
+    HousingCalculationRequest:
+      type: object
+      properties:
+        property_price:
+          type: number
+          format: double
+          minimum: 0
+        deposit:
+          type: number
+          format: double
+          minimum: 0
+        financing_rate:
+          type: number
+          format: double
+          minimum: 0
+        tenure_years:
+          type: integer
+          minimum: 1
+        known_monthly_payment:
+          type: number
+          format: double
+          minimum: 0
+          nullable: true
+        additional_costs:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - deposit
+      - financing_rate
+      - property_price
+      - tenure_years
+    HousingCalculationResult:
+      type: object
+      properties:
+        financing_amount:
+          type: number
+          format: double
+        monthly_instalment:
+          type: number
+          format: double
+        total_monthly_cost:
+          type: number
+          format: double
+      required:
+      - financing_amount
+      - monthly_instalment
+      - total_monthly_cost
+    HousingCost:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        category:
+          type: string
+          maxLength: 100
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+      required:
+      - amount
+      - category
+      - id
+    HousingCostRequest:
+      type: object
+      properties:
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+      required:
+      - amount
+      - category
+    HousingScenario:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        property_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        deposit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        financing_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,3})?$
+        tenure_years:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        known_monthly_payment:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        additional_costs:
+          type: array
+          items:
+            $ref: '#/components/schemas/HousingCost'
+        financing_amount:
+          type: number
+          format: double
+          readOnly: true
+        monthly_instalment:
+          type: number
+          format: double
+          readOnly: true
+        total_monthly_cost:
+          type: number
+          format: double
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - financing_amount
+      - financing_rate
+      - id
+      - monthly_instalment
+      - property_price
+      - tenure_years
+      - total_monthly_cost
+      - updated_at
+    HousingScenarioRequest:
+      type: object
+      properties:
+        property_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        deposit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        financing_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,3})?$
+        tenure_years:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        known_monthly_payment:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        additional_costs:
+          type: array
+          items:
+            $ref: '#/components/schemas/HousingCostRequest'
+      required:
+      - financing_rate
+      - property_price
+      - tenure_years
     IncomeCoverageObservation:
       type: object
       properties:
@@ -1167,6 +1535,35 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+    PatchedHousingScenarioRequest:
+      type: object
+      properties:
+        property_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        deposit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        financing_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,3})?$
+        tenure_years:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        known_monthly_payment:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        additional_costs:
+          type: array
+          items:
+            $ref: '#/components/schemas/HousingCostRequest'
     PatchedWorkCostItemUpdateRequest:
       type: object
       properties:
@@ -1174,6 +1571,102 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+    PreHousingCheckRequest:
+      type: object
+      properties:
+        income:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        work_costs:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        commitments:
+          type: object
+          additionalProperties: {}
+        expenses:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - commitments
+      - income
+      - work_costs
+    PreHousingCheckResult:
+      type: object
+      properties:
+        has_existing_shortfall:
+          type: boolean
+        tested_months:
+          type: integer
+          minimum: 0
+        largest_existing_gap:
+          type: number
+          format: double
+          minimum: 0
+        worst_month:
+          allOf:
+          - $ref: '#/components/schemas/PreHousingWorstMonth'
+          nullable: true
+        months:
+          type: array
+          items:
+            $ref: '#/components/schemas/PreHousingMonthResult'
+      required:
+      - has_existing_shortfall
+      - largest_existing_gap
+      - months
+      - tested_months
+      - worst_month
+    PreHousingMonthResult:
+      type: object
+      properties:
+        year:
+          type: integer
+        month:
+          type: integer
+          maximum: 12
+          minimum: 1
+        gross_income:
+          type: number
+          format: double
+        usable_income:
+          type: number
+          format: double
+        existing_costs:
+          type: number
+          format: double
+        surplus:
+          type: number
+          format: double
+        shortfall:
+          type: number
+          format: double
+          minimum: 0
+      required:
+      - existing_costs
+      - gross_income
+      - month
+      - shortfall
+      - surplus
+      - usable_income
+      - year
+    PreHousingWorstMonth:
+      type: object
+      properties:
+        year:
+          type: integer
+        month:
+          type: integer
+          maximum: 12
+          minimum: 1
+      required:
+      - month
+      - year
     ProvenanceEnum:
       enum:
       - calculated_from_user_record

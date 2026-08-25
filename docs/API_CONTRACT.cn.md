@@ -86,6 +86,10 @@
 | GET | `/api/v1/income-pattern/` | 重新计算当前访客的逐月收入形态 |
 | GET | `/api/v1/income-coverage/` | 读取当前访客已确认的慢时期覆盖回答 |
 | PUT | `/api/v1/income-coverage/` | 确认并评估慢时期覆盖回答 |
+| POST | `/api/v1/housing/calculate/` | 计算融资额、月供与住房月总成本 |
+| POST | `/api/v1/housing/pre-check/` | 在加入住房成本前评估现有月度缺口 |
+| GET/POST | `/api/v1/housing/scenarios/` | 列出或创建住房场景 |
+| GET/PUT/PATCH/DELETE | `/api/v1/housing/scenarios/{id}/` | 读取、更新或删除住房场景 |
 
 请求和响应字段的完整定义以 OpenAPI schema 为准。
 

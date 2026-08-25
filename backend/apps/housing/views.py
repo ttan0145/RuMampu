@@ -2,9 +2,16 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
 
 from .models import HousingScenario
-from .serializers import HousingCalculationSerializer, HousingScenarioSerializer, PreHousingCheckSerializer
+from .serializers import (
+    HousingCalculationResultSerializer,
+    HousingCalculationSerializer,
+    HousingScenarioSerializer,
+    PreHousingCheckResultSerializer,
+    PreHousingCheckSerializer,
+)
 from .services import calculation_result, pre_housing_check
 
 
@@ -19,6 +26,10 @@ class HousingScenarioViewSet(viewsets.ModelViewSet):
 
 
 class HousingCalculationView(APIView):
+    @extend_schema(
+        request=HousingCalculationSerializer,
+        responses=HousingCalculationResultSerializer,
+    )
     def post(self, request):
         serializer = HousingCalculationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -26,6 +37,10 @@ class HousingCalculationView(APIView):
 
 
 class PreHousingCheckView(APIView):
+    @extend_schema(
+        request=PreHousingCheckSerializer,
+        responses=PreHousingCheckResultSerializer,
+    )
     def post(self, request):
         serializer = PreHousingCheckSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

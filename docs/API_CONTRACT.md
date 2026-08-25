@@ -86,6 +86,10 @@ After confirmation, the client retries the same data with `confirm_outlier: true
 | GET | `/api/v1/income-pattern/` | Recalculate the current guest's month-by-month income pattern |
 | GET | `/api/v1/income-coverage/` | Read the current guest's confirmed slower-period coverage answer |
 | PUT | `/api/v1/income-coverage/` | Confirm and evaluate a slower-period coverage answer |
+| POST | `/api/v1/housing/calculate/` | Calculate financing, instalment, and total monthly housing cost |
+| POST | `/api/v1/housing/pre-check/` | Evaluate existing monthly shortfalls before housing costs |
+| GET/POST | `/api/v1/housing/scenarios/` | List or create housing scenarios |
+| GET/PUT/PATCH/DELETE | `/api/v1/housing/scenarios/{id}/` | Read, update, or delete a housing scenario |
 
 The OpenAPI schema is authoritative for complete request and response field definitions.
 

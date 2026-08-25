@@ -17,6 +17,7 @@ Status: complete and hardened; main delivery authorised
 - Removed the Epic 2 client-side fallback algorithm, made API mode the formal default, and linked downstream coverage warnings to the authoritative response.
 - Added stale-response rejection and request de-duplication; failed coverage saves preserve the last confirmed result and the user's retryable draft.
 - Added model/service coverage invariants, fail-safe legacy-row reads, aggregate-safe monetary response fields, accessible selection state, and repository CI gates.
+- Rebased onto the team's US3.1–US3.3 and Neon work, preserved the housing flows, restored a documented local SQLite fallback, and completed housing OpenAPI response schemas so the combined main branch remains testable.
 
 ### Tests and acceptance
 
