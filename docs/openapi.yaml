@@ -369,6 +369,32 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/housing/test/:
+    post:
+      operationId: housing_test_create
+      tags:
+      - housing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatelessHousingTestRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StatelessHousingTestRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StatelessHousingTestRequestRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HousingTestResult'
+          description: ''
   /api/v1/housing/test-result/:
     post:
       operationId: housing_test_result_create
@@ -1284,8 +1310,12 @@ components:
       properties:
         scenario_id:
           type: integer
-          minimum: 1
+          minimum: 0
         tested_home_cost:
+          type: number
+          format: double
+          minimum: 0
+        indicative_tested_property_price:
           type: number
           format: double
           minimum: 0
@@ -1897,6 +1927,78 @@ components:
         * `none` - none
         * `housing_created` - housing_created
         * `existing_and_worsened_by_housing` - existing_and_worsened_by_housing
+    StatelessFinancialMonthRequest:
+      type: object
+      properties:
+        year:
+          type: integer
+        month:
+          type: integer
+          maximum: 12
+          minimum: 1
+        gross_income:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        usable_income:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        existing_costs:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+      required:
+      - existing_costs
+      - gross_income
+      - month
+      - usable_income
+      - year
+    StatelessHousingTestRequestRequest:
+      type: object
+      properties:
+        property_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        deposit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        financing_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,3})?$
+        tenure_years:
+          type: integer
+          minimum: 1
+        known_monthly_payment:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        additional_costs:
+          type: array
+          items:
+            $ref: '#/components/schemas/HousingCalculationCostRequest'
+        financial_months:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatelessFinancialMonthRequest'
+        tested_monthly_home_cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        income_shock_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          default: '0.00'
+      required:
+      - deposit
+      - financing_rate
+      - property_price
+      - tenure_years
     StatusEnum:
       enum:
       - preview
