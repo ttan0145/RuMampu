@@ -24,6 +24,7 @@ urlpatterns = [
 
     path("api/v1/dev/scenarios/", include("finance.scenario_urls")),
 
+
     path("api/health/", HealthCheckView.as_view(), name="health-check-legacy"),
     path("api/income/", include("finance.urls")),
 ]
