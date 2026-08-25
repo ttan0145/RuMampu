@@ -384,6 +384,9 @@ class IncomeImportUploadSerializer(serializers.Serializer):
 
 
 class IncomeImportRowSerializer(serializers.ModelSerializer):
+    # Explicit bounds prevent drf-spectacular from changing this schema
+    # between SQLite (int64 inference) and PostgreSQL (int32 inference).
+    row_number = serializers.IntegerField(min_value=0, max_value=2147483647)
     date = serializers.DateField(source="income_date", allow_null=True)
     is_valid = serializers.BooleanField(read_only=True)
     imported_entry_id = serializers.IntegerField(allow_null=True, read_only=True)

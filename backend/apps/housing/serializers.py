@@ -13,6 +13,7 @@ class HousingCostSerializer(serializers.ModelSerializer):
 
 
 class HousingScenarioSerializer(serializers.ModelSerializer):
+    tenure_years = serializers.IntegerField(min_value=0, max_value=2147483647)
     additional_costs = HousingCostSerializer(many=True, required=False)
     financing_amount = serializers.SerializerMethodField()
     monthly_instalment = serializers.SerializerMethodField()
