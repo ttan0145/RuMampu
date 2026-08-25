@@ -2,12 +2,23 @@
    When the backend lands, this module is the natural seam to replace with API data. */
 
 export interface Source { id: string; k?: string; custom?: boolean; name?: string }
-export interface IncomeEntry { a: number; d: string; s: string }
+export interface IncomeEntry {
+  a: number;
+  d: string;
+  s: string;
+  method?: 'manual' | 'historical_total' | 'import';
+}
 export interface CostItem { id: string; k?: string; a: number; custom?: boolean; name?: string; dv?: boolean; p?: string }
 export interface Commitments { living: CostItem[]; debts: CostItem[]; savings: CostItem[] }
 export interface House { price: number; deposit: number; rate: number; years: number; knownPayment: number | null }
 export interface ExpenseCat { id: string; k?: string; custom?: boolean; name?: string }
-export interface ExpenseEntry { a: number; d: string; c: string }
+export interface ExpenseEntry {
+  a: number;
+  d: string;
+  c: string;
+  method?: 'manual' | 'receipt';
+  merchant?: string;
+}
 export interface AfterMonth { y: number; m: number; inc: number; home: number }
 
 export interface AppData {

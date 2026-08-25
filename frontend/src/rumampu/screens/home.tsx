@@ -26,11 +26,11 @@ export function HomeScreen() {
   if (!S.testRan) {
     return (
       <ScreenShell brand>
-        <Display cls="h-xl">{t('home_rec', { n })}</Display>
+        <Display cls="h-xl">{t(n === 1 ? 'home_rec_one' : 'home_rec', { n })}</Display>
         <FigRow p="user" />
         <CovStrip months={covMonths} monthName={monthName} unknownLabel={t('unknown')} />
         <BodyS muted>{t('covspan', { a: monthName(sp.from.m), b: monthName(sp.to.m) })}</BodyS>
-        {n < 4 ? <NoteC><BodyS>{t('home_rec_thin', { n })}</BodyS></NoteC> : null}
+        {n < 4 ? <NoteC><BodyS>{t(n === 1 ? 'home_rec_thin_one' : 'home_rec_thin', { n })}</BodyS></NoteC> : null}
         <Btn label={t('home_test')} onPress={() => go('house')} />
       </ScreenShell>
     );

@@ -1,38 +1,48 @@
-# RuMampu — frontend
+# RuMampu frontend
 
-Expo (React Native + TypeScript) port of the `rumampu18.html` design prototype. The UI, copy
-(EN / BM / 中文), charts, and affordability math are a 1:1 translation of the prototype.
+Language: **English** | [Chinese (CN)](README.cn.md)
 
-## Run
+Expo + React Native + TypeScript client with English, Bahasa Melayu, and Chinese localisation. The screens originated in the early design prototype and are being connected to the production Django API one domain at a time. English is the default application language.
 
-```bash
-npm install
-npx expo start        # then press i (iOS simulator), a (Android), or w (web)
+## Start
+
+```powershell
+npm ci
+Copy-Item .env.example .env
+npm start
 ```
+
+`EXPO_PUBLIC_API_URL` should point to the versioned API, for example:
+
+```text
+http://localhost:8000/api/v1
+```
+
+Expo Web and Django should use the same hostname so that `credentials: include` can persist the guest-session cookie. If no API URL is configured, the client enters an in-memory prototype mode intended for demonstrations only.
 
 ## Structure
 
-```
-app/                     expo-router entry (loads fonts, mounts the app)
+```text
+app/                         Expo Router entry point
 src/rumampu/
-  theme.ts               design tokens (colors, type scale) — mirrors the prototype's CSS variables
-  strings.ts             all user-facing copy in 3 languages (verbatim from the prototype)
-  mock.ts                seed data + data types — REPLACE THIS with API data when the backend lands
-  calc.ts                pure derived calculations (months aggregation, instalment, test rows, …)
-  state.tsx              central app state, navigation (route + stack + tabs), i18n helper, toast
-  ui.tsx                 primitives (buttons, chips, cards, fields, provenance chips, …)
-  charts.tsx             waterline chart, coverage strip, donut, limit bars, range band
-  svgs.tsx               logo, onboarding hero illustrations, row icons
-  overlays.tsx           bottom sheets, onboarding, splash, toast, tab bar
-  screens/               one file per tab group (home, money, expenses, test, prepare)
+  api.ts                     Versioned API client and consistent error parsing
+  state.tsx                  Application state, navigation, and API synchronisation boundary
+  mock.ts                    Prototype data for domains not yet connected
+  calc.ts                    Pure calculation functions
+  strings.ts                 English, Bahasa Melayu, and Chinese localisation
+  theme.ts / ui.tsx          Design tokens and UI primitives
+  charts.tsx / svgs.tsx      Charts and graphics
+  overlays.tsx               Sheets, onboarding, and global feedback
+  screens/                   Domain screens
 ```
 
-## Backend integration notes
+## Development rules
 
-- All data lives in the state provider (`state.tsx`), seeded from `mock.ts`. Swapping
-  `initialState()`'s `data: MOCK` for fetched data (and persisting mutations) is the
-  integration seam — screens and calculations only read from `S.data`.
-- Amount/date fields are plain text inputs (`YYYY-MM-DD`); swap in a native date picker
-  (`@react-native-community/datetimepicker`) if wanted.
-- The receipt scan is a preview: it fakes OCR with a 1.4s delay and a sample result,
-  matching the prototype.
+- API data is the source of truth for connected domains and must not be overwritten by mock data.
+- Screen components do not construct URLs; all requests go through `api.ts`.
+- Flow control uses the API error `code`, never the English fallback `message`.
+- Monetary responses are decimal strings and must be converted explicitly before numeric calculations.
+- Duplicate submissions must be disabled while a save request is in progress; API idempotency is not implemented yet.
+- Run `npm run typecheck` before committing.
+
+Historical-income import uses `expo-document-picker` to select a UTF-8 CSV and strictly follows the preview/confirm protocol. See the [API contract](../docs/API_CONTRACT.md). Receipt OCR, selected calculations, and Epic 5 screens remain prototype behaviour.

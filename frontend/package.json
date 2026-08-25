@@ -6,6 +6,7 @@
     "@expo-google-fonts/space-grotesk": "^0.4.1",
     "expo": "~57.0.16",
     "expo-constants": "~57.0.14",
+    "expo-document-picker": "~57.0.1",
     "expo-font": "~57.0.1",
     "expo-image-picker": "~57.0.13",
     "expo-linking": "~57.0.7",
@@ -29,7 +30,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit"
   },
   "private": true
 }
