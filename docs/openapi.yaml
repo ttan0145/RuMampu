@@ -219,7 +219,6 @@ paths:
           multipart/form-data:
             schema:
               $ref: '#/components/schemas/PreHousingCheckRequest'
-        required: true
       security:
       - {}
       responses:
@@ -948,34 +947,46 @@ components:
         * `one_month` - one_month
         * `two_months` - two_months
         * `three_or_more` - three_or_more
+    HousingCalculationCostRequest:
+      type: object
+      properties:
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+      required:
+      - amount
     HousingCalculationRequest:
       type: object
       properties:
         property_price:
-          type: number
-          format: double
-          minimum: 0
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
         deposit:
-          type: number
-          format: double
-          minimum: 0
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
         financing_rate:
-          type: number
-          format: double
-          minimum: 0
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,3})?$
         tenure_years:
           type: integer
           minimum: 1
         known_monthly_payment:
-          type: number
-          format: double
-          minimum: 0
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
           nullable: true
         additional_costs:
           type: array
           items:
-            type: object
-            additionalProperties: {}
+            $ref: '#/components/schemas/HousingCalculationCostRequest'
       required:
       - deposit
       - financing_rate
@@ -1573,6 +1584,11 @@ components:
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
     PreHousingCheckRequest:
       type: object
+      description: |-
+        Accept the prototype payload while the server uses the session-owned record.
+
+        The optional fields keep older clients source-compatible. They are deliberately
+        not passed to the calculation service.
       properties:
         income:
           type: array
@@ -1592,13 +1608,13 @@ components:
           items:
             type: object
             additionalProperties: {}
-      required:
-      - commitments
-      - income
-      - work_costs
     PreHousingCheckResult:
       type: object
       properties:
+        provenance:
+          $ref: '#/components/schemas/ProvenanceEnum'
+        work_cost_basis:
+          $ref: '#/components/schemas/WorkCostBasisEnum'
         has_existing_shortfall:
           type: boolean
         tested_months:
@@ -1620,7 +1636,9 @@ components:
       - has_existing_shortfall
       - largest_existing_gap
       - months
+      - provenance
       - tested_months
+      - work_cost_basis
       - worst_month
     PreHousingMonthResult:
       type: object

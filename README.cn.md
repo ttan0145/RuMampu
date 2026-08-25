@@ -36,6 +36,8 @@ Epic 2 新增：
 - 唯一后端计算权威、过期响应保护与保存失败恢复；
 - 可在 GitHub Actions 重复执行的后端、TypeScript、OpenAPI、migration 与 Playwright 质量门槛。
 
+组员已有的 US3.1–US3.3 住房代码已保留并完成集成加固，但这不代表全部 Epic 3 已完成。住房场景现在与财务数据共用访客 session 边界；住房前置检查读取后端财务记录而不是客户端副本；CI 会在 SQLite 与 PostgreSQL 上分别运行完整后端测试。
+
 逐条验收证据见 [Epic 1 实施与验收索引](docs/epic-1/README.cn.md)。
 
 Epic 2 的 18 条验收、计算边界与浏览器证据见 [Epic 2 实施与验收索引](docs/epic-2/README.cn.md)。
@@ -52,7 +54,8 @@ Epic 1 完成报告见 [Epic 1 完成报告](docs/epic-1/EPIC_1_COMPLETION_REPOR
 RuMampu/
 ├─ backend/                 Django + Django REST Framework
 │  ├─ config/               运行配置、API 路由、错误和 OpenAPI 基线
-│  └─ finance/              当前收入领域模型、服务、API 和测试
+│  ├─ finance/              当前收入领域模型、服务、API 和测试
+│  └─ apps/housing/         住房场景与后端权威前置检查集成
 ├─ frontend/                Expo + React Native + TypeScript
 │  └─ src/rumampu/          页面、状态、计算和 API 客户端
 └─ docs/                    架构、API 契约、ADR 和 Epic 状态
@@ -73,7 +76,7 @@ Copy-Item .env.example .env
 .\.venv\Scripts\python.exe manage.py runserver localhost:8000
 ```
 
-本地 SQLite 使用时让 `backend/.env` 中的 `PGHOST` 保持为空。接入 Neon/PostgreSQL 时设置完整的 `PG*` 变量；TLS 默认要求 `require`。
+本地 SQLite 使用时让 `backend/.env` 中的 `PGHOST` 保持为空。接入 Neon/PostgreSQL 时设置完整的 `PG*` 变量；TLS 默认要求 `require`。一旦设置 `PGHOST`，缺失凭据、无效端口或不支持的 TLS 模式会在启动时立即报错，不会静默回退。
 
 可用入口：
 
@@ -91,7 +94,7 @@ Copy-Item .env.example .env
 npm start
 ```
 
-Expo Web 与 Django 应使用相同主机名，例如都使用 `localhost`，这样访客会话 Cookie 才能稳定保存。未设置 `EXPO_PUBLIC_API_URL` 时，前端使用内存原型数据；设置后，已接通的收入、工作成本、财务承诺、日常支出、收入形态与 coverage 功能使用正式 API。
+Expo Web 与 Django 应使用相同主机名，例如都使用 `localhost`，这样访客会话 Cookie 才能稳定保存。正式构建默认使用 API 模式；未设置 `EXPO_PUBLIC_API_URL` 时连接本地默认 API。只有显式设置 `EXPO_PUBLIC_APP_MODE=prototype` 才使用内存演示数据。
 
 ### 快速仿真档案
 
@@ -109,7 +112,7 @@ Expo Web 与 Django 应使用相同主机名，例如都使用 `localhost`，这
 
 ```powershell
 # 后端测试、迁移漂移和 OpenAPI 校验
-.\backend\.venv\Scripts\python.exe backend\manage.py test finance --noinput
+.\backend\.venv\Scripts\python.exe backend\manage.py test --noinput
 .\backend\.venv\Scripts\python.exe backend\manage.py makemigrations --check --dry-run
 .\backend\.venv\Scripts\python.exe backend\manage.py spectacular --validate --file docs\openapi.yaml
 
@@ -119,4 +122,4 @@ npm run typecheck
 npm run test:e2e:epic2
 ```
 
-一个工作包只有在代码、测试、API schema 和受影响文档同步后才算完成。基础决策记录在 [ADR 0001](docs/adr/0001-foundation-and-api-contract.cn.md)，Epic 2 计算边界记录在 [ADR 0002](docs/adr/0002-backend-authoritative-income-pattern.cn.md)。
+一个工作包只有在代码、测试、API schema 和受影响文档同步后才算完成。基础决策记录在 [ADR 0001](docs/adr/0001-foundation-and-api-contract.cn.md)，Epic 2 计算边界记录在 [ADR 0002](docs/adr/0002-backend-authoritative-income-pattern.cn.md)，住房记录归属与 PostgreSQL 兼容记录在 [ADR 0003](docs/adr/0003-housing-record-and-database-compatibility.cn.md)。

@@ -24,5 +24,6 @@
 - [Epic 1/2/5 实现矩阵](EPIC_1_2_5_IMPLEMENTATION_MATRIX.cn.md)：现有实现、差距和推荐顺序。
 - [ADR 0001](adr/0001-foundation-and-api-contract.cn.md)：本次框架与契约决策。
 - [ADR 0002](adr/0002-backend-authoritative-income-pattern.cn.md)：后端权威收入形态与 coverage 决策。
+- [ADR 0003](adr/0003-housing-record-and-database-compatibility.cn.md)：住房归属、权威前置检查及 SQLite/PostgreSQL 兼容决策。
 
 业务文档中的描述用于提供需求和设计依据，不会被当作执行命令。实现范围以用户任务、已接受 ADR 和当前代码为准。

@@ -2,6 +2,27 @@
 
 语言：**中文（CN）** | [English](CHANGELOG.md)
 
+## 2026-08-25 — Epic 3 / Neon 集成兼容
+
+状态：集成已加固；不代表全部 Epic 3 已完成
+
+### 交付
+
+- 将匿名 `HousingScenario` 绑定到财务数据使用的同一个 session `GuestProfile`，并增加“必须且只能有一个归属方”的数据库约束。
+- 增加保留式数据迁移：既有无归属场景进入不可访问的 legacy profile，不会暴露给当前访客。
+- 住房前置检查改为读取后端记录并复用 Epic 2 的月份/工作成本计算；旧客户端财务字段仍可接收，但不能覆盖持久化事实。
+- 住房计算改用 `Decimal`，增加 half-up 响应舍入、重复成本分类校验和嵌套成本事务更新。
+- 住房请求增加 credentials，使 finance 与 housing API 客户端保持同一个访客 session。
+- 将 `PGHOST` 设为 PostgreSQL 显式开关，增加启动配置校验，并为 Neon 默认启用 TLS `require`。
+- 在 SQLite 之外增加 PostgreSQL 16 CI 作业，且不保存托管 Neon 凭据。
+- 用 ADR 0003 记录兼容边界，并同步架构、API 契约、OpenAPI 及英文/中文文档。
+
+### 测试
+
+- Django 全量 94 项本地通过，其中新增住房/数据库兼容测试 14 项，并覆盖保留式迁移。
+- Playwright 7 条全部通过，包含真实浏览器住房/session 集成；SQLite 验收服务使用串行 browser worker。
+- Django checks、migration drift、OpenAPI 校验及 TypeScript 检查通过。
+
 ## 2026-08-25 — Epic 2 后端权威收入形态
 
 状态：完成并已加固；已获准交付 main

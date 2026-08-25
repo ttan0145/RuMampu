@@ -11,7 +11,7 @@ Language: **English** | [Chinese (CN)](API_CONTRACT.cn.md)
 - Ordinary requests and responses use UTF-8 JSON; file-upload endpoints use `multipart/form-data`.
 - JSON fields use `snake_case`.
 - Primary resource IDs are integers; public guest IDs are UUIDs.
-- Monetary responses use two-decimal strings such as `"777.25"`; clients must not rely on binary floating-point precision.
+- Finance-domain monetary responses use two-decimal strings such as `"777.25"`; the existing housing numeric-response exception is documented in section 10. Clients must not perform authoritative calculations with binary floating point.
 - Calendar dates use `YYYY-MM-DD`; timestamps use timezone-aware ISO 8601.
 - The current identity boundary is the Django session cookie. Web clients must send credentials.
 - Successful responses return resources or resource arrays directly without a redundant `data` wrapper.
@@ -87,8 +87,8 @@ After confirmation, the client retries the same data with `confirm_outlier: true
 | GET | `/api/v1/income-coverage/` | Read the current guest's confirmed slower-period coverage answer |
 | PUT | `/api/v1/income-coverage/` | Confirm and evaluate a slower-period coverage answer |
 | POST | `/api/v1/housing/calculate/` | Calculate financing, instalment, and total monthly housing cost |
-| POST | `/api/v1/housing/pre-check/` | Evaluate existing monthly shortfalls before housing costs |
-| GET/POST | `/api/v1/housing/scenarios/` | List or create housing scenarios |
+| POST | `/api/v1/housing/pre-check/` | Evaluate the current guest record before housing costs |
+| GET/POST | `/api/v1/housing/scenarios/` | List or create current-owner housing scenarios |
 | GET/PUT/PATCH/DELETE | `/api/v1/housing/scenarios/{id}/` | Read, update, or delete a housing scenario |
 
 The OpenAPI schema is authoritative for complete request and response field definitions.
@@ -326,7 +326,33 @@ Coverage uses explicit confirmation:
 
 The API does not return prediction, stability, risk, or fixed-threshold conclusions.
 
-## 10. Compatibility and change policy
+## 10. Housing integration
+
+Housing scenario requests use the same credentialed Django session as the finance APIs. An anonymous scenario belongs to the current `GuestProfile`; an authenticated scenario belongs to its user. List, detail, update, and delete operations never query a global pool of `user = null` rows. Each additional-cost category must be unique within a scenario.
+
+The authoritative pre-housing request is an empty JSON object:
+
+```json
+{}
+```
+
+The backend reads the session-owned income entries, current active work costs, current active commitments, and confirmed expenses. It reuses the Epic 2 month aggregation and work-cost basis. Older v1 clients may still send `income`, `work_costs`, `commitments`, and `expenses`; those optional transport fields are accepted but ignored so client state cannot replace persisted facts.
+
+```json
+{
+  "provenance": "calculated_from_user_record",
+  "work_cost_basis": "current_active_monthly_snapshot",
+  "has_existing_shortfall": true,
+  "tested_months": 2,
+  "largest_existing_gap": 200.0,
+  "worst_month": {"year": 2026, "month": 2},
+  "months": []
+}
+```
+
+Housing services use `Decimal` internally and round monetary outputs half-up. The housing endpoints retain their existing numeric JSON response fields during v1 compatibility; finance-domain monetary responses continue to use two-decimal strings.
+
+## 11. Compatibility and change policy
 
 - v1 may add optional fields and endpoints. Removing fields, changing types, or changing existing semantics is breaking.
 - Breaking changes require a new version path and ADR.
@@ -334,7 +360,7 @@ The API does not return prediction, stability, risk, or fixed-threshold conclusi
 - `/api/v1/dev/scenarios/` is disabled-by-default local test infrastructure, not part of the production v1 contract, and excluded from OpenAPI. See the [test-scenario document](testing/SCENARIO_GIG_DRIVER_12M.md) for safeguards.
 - POST endpoints do not currently accept idempotency keys. The frontend disables duplicate submission while a request is pending; an idempotency protocol must precede offline synchronisation or automatic retries.
 
-## 11. Maintenance
+## 12. Maintenance
 
 After changing a serializer, view, or URL, run:
 

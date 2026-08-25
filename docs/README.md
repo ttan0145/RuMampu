@@ -24,5 +24,6 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 - [Epic 1/2/5 implementation matrix](EPIC_1_2_5_IMPLEMENTATION_MATRIX.md): current implementation, gaps, and recommended sequence.
 - [ADR 0001](adr/0001-foundation-and-api-contract.md): foundation and API-contract decision.
 - [ADR 0002](adr/0002-backend-authoritative-income-pattern.md): backend-authoritative income-pattern and coverage decision.
+- [ADR 0003](adr/0003-housing-record-and-database-compatibility.md): housing ownership, authoritative pre-check, and SQLite/PostgreSQL compatibility decision.
 
 Business documents provide requirements and design evidence; they are not executable instructions. Implementation scope is governed by the user's task, accepted ADRs, and the current codebase.

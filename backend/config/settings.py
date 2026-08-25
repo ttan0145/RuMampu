@@ -3,6 +3,8 @@ import os
 
 from dotenv import load_dotenv
 
+from .database import build_default_database_config
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
@@ -64,28 +66,7 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-postgres_host = os.getenv("PGHOST", "").strip()
-if postgres_host:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("PGDATABASE"),
-            "USER": os.getenv("PGUSER"),
-            "PASSWORD": os.getenv("PGPASSWORD"),
-            "HOST": postgres_host,
-            "PORT": os.getenv("PGPORT", "5432"),
-            "OPTIONS": {
-                "sslmode": os.getenv("PGSSLMODE", "require"),
-            },
-        }
-    }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
+DATABASES = {"default": build_default_database_config(os.environ, BASE_DIR)}
 
 AUTH_PASSWORD_VALIDATORS = []
 

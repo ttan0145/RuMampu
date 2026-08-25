@@ -32,14 +32,9 @@ export async function updateHousingScenario(id: number, data: AppData): Promise<
   });
 }
 
-export async function runPreHousingCheck(data: AppData): Promise<PreHousingResult> {
+export async function runPreHousingCheck(): Promise<PreHousingResult> {
   return apiRequest<PreHousingResult>('/housing/pre-check/', {
     method: 'POST',
-    body: JSON.stringify({
-      income: data.income,
-      work_costs: data.workCosts,
-      commitments: data.commitments,
-      expenses: data.expenses,
-    }),
+    body: JSON.stringify({}),
   });
 }

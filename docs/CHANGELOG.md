@@ -2,6 +2,27 @@
 
 Language: **English** | [Chinese (CN)](CHANGELOG.cn.md)
 
+## 2026-08-25 — Epic 3 / Neon integration compatibility
+
+Status: integration-hardened; this does not declare all of Epic 3 complete
+
+### Delivered
+
+- Bound anonymous `HousingScenario` rows to the same session-owned `GuestProfile` as finance data and added an exactly-one-owner database constraint.
+- Added a preserving data migration that moves existing unowned scenarios to an inaccessible legacy profile rather than exposing them to a current guest.
+- Changed the pre-housing check to read the backend record and reuse Epic 2 month/work-cost calculations; legacy client finance fields remain accepted but cannot override persisted facts.
+- Changed housing calculations to `Decimal`, added half-up response rounding, duplicate-cost validation, and transactional nested-cost updates.
+- Added credentialed housing requests so the finance and housing API clients retain one guest session.
+- Made `PGHOST` an explicit PostgreSQL switch with startup validation and TLS `require` by default for Neon.
+- Added a PostgreSQL 16 CI job alongside SQLite, without storing hosted Neon credentials.
+- Recorded the compatibility boundary in ADR 0003 and updated the architecture, API contract, OpenAPI, and English/CN documentation.
+
+### Tests
+
+- Full Django suite: 94 tests passed locally, including 14 new housing/database compatibility cases and a preserving migration test.
+- All 7 Playwright flows passed, including the real-browser housing/session integration; browser workers are serialised for the SQLite acceptance server.
+- Django checks, migration drift, OpenAPI validation, and TypeScript checks passed.
+
 ## 2026-08-25 — Epic 2 backend-authoritative income patterns
 
 Status: complete and hardened; main delivery authorised

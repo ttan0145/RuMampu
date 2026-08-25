@@ -32,6 +32,45 @@ jobs:
           python manage.py spectacular --file /tmp/rumampu-openapi.yaml --validate
           diff -u ../docs/openapi.yaml /tmp/rumampu-openapi.yaml
 
+  backend-postgresql:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: rumampu_test
+          POSTGRES_USER: rumampu
+          POSTGRES_PASSWORD: rumampu-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rumampu -d rumampu_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: 127.0.0.1
+      PGDATABASE: rumampu_test
+      PGUSER: rumampu
+      PGPASSWORD: rumampu-ci
+      PGPORT: 5432
+      PGSSLMODE: disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+      - name: Run migrations and tests on PostgreSQL
+        working-directory: backend
+        run: |
+          python manage.py check
+          python manage.py migrate --noinput
+          python manage.py test
+
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -59,6 +98,6 @@ jobs:
       - name: Install Playwright browser
         working-directory: frontend
         run: npx playwright install --with-deps chromium
-      - name: Run Epic 2 browser acceptance
+      - name: Run browser acceptance
         working-directory: frontend
-        run: npm run test:e2e:epic2
+        run: npm run test:e2e

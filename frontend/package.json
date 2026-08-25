@@ -35,7 +35,8 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.e2e.json --noEmit",
     "test:e2e": "playwright test",
-    "test:e2e:epic2": "playwright test e2e/epic2.spec.ts"
+    "test:e2e:epic2": "playwright test e2e/epic2.spec.ts",
+    "test:e2e:housing": "playwright test e2e/housing-integration.spec.ts"
   },
   "private": true
 }

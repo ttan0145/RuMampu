@@ -11,6 +11,9 @@ const browserChannel = process.env.PLAYWRIGHT_CHANNEL?.trim();
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
+  // The local acceptance server uses SQLite; serial workers prevent independent
+  // scenario loaders from contending for the single database writer lock.
+  workers: 1,
   timeout: 45_000,
   expect: { timeout: 8_000 },
   outputDir: '../output/playwright/epic-2/test-results',

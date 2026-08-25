@@ -11,7 +11,7 @@
 - 一般请求与响应使用 UTF-8 JSON；文件上传端点使用 `multipart/form-data`。
 - JSON 字段使用 `snake_case`。
 - 主资源 ID 使用整数；公开访客 ID 使用 UUID。
-- 金额响应使用两位小数字符串，例如 `"777.25"`，禁止依赖二进制浮点精度。
+- Finance 领域金额响应使用两位小数字符串，例如 `"777.25"`；既有住房 numeric 响应例外见第 10 节。客户端不得使用二进制浮点数进行权威计算。
 - 自然日使用 `YYYY-MM-DD`；时间戳使用带时区的 ISO 8601。
 - 当前身份边界是 Django session Cookie。Web 客户端必须发送 credentials。
 - 成功响应直接返回资源或资源数组，不增加无意义的 `data` 包装层。
@@ -87,8 +87,8 @@
 | GET | `/api/v1/income-coverage/` | 读取当前访客已确认的慢时期覆盖回答 |
 | PUT | `/api/v1/income-coverage/` | 确认并评估慢时期覆盖回答 |
 | POST | `/api/v1/housing/calculate/` | 计算融资额、月供与住房月总成本 |
-| POST | `/api/v1/housing/pre-check/` | 在加入住房成本前评估现有月度缺口 |
-| GET/POST | `/api/v1/housing/scenarios/` | 列出或创建住房场景 |
+| POST | `/api/v1/housing/pre-check/` | 使用当前访客记录评估加入住房成本前的现有月度缺口 |
+| GET/POST | `/api/v1/housing/scenarios/` | 列出或创建当前归属方的住房场景 |
 | GET/PUT/PATCH/DELETE | `/api/v1/housing/scenarios/{id}/` | 读取、更新或删除住房场景 |
 
 请求和响应字段的完整定义以 OpenAPI schema 为准。
@@ -326,7 +326,33 @@ Coverage 采用显式确认：
 
 API 不返回预测、稳定性、风险或固定阈值结论。
 
-## 10. 兼容与变更
+## 10. 住房集成
+
+住房场景请求与财务 API 使用同一个携带 credentials 的 Django session。匿名场景归属于当前 `GuestProfile`，登录场景归属于对应用户；列表、详情、修改和删除不会查询全局 `user = null` 数据池。一个场景内的附加成本分类必须唯一。
+
+权威住房前置检查只需发送空 JSON：
+
+```json
+{}
+```
+
+后端读取当前 session 持有的收入记录、当前有效工作成本、当前有效承诺和已确认支出，并复用 Epic 2 的月份聚合与工作成本口径。旧版 v1 客户端仍可发送 `income`、`work_costs`、`commitments` 和 `expenses`；这些可选传输字段只为兼容而接收，不参与计算，客户端状态不能替换持久化事实。
+
+```json
+{
+  "provenance": "calculated_from_user_record",
+  "work_cost_basis": "current_active_monthly_snapshot",
+  "has_existing_shortfall": true,
+  "tested_months": 2,
+  "largest_existing_gap": 200.0,
+  "worst_month": {"year": 2026, "month": 2},
+  "months": []
+}
+```
+
+住房服务内部使用 `Decimal` 并按 half-up 处理金额响应。为保持 v1 兼容，住房端点继续使用既有 numeric JSON 金额字段；finance 领域的金额响应继续使用两位小数字符串。
+
+## 11. 兼容与变更
 
 - v1 内允许新增可选字段和新端点；删除字段、改类型或改变既有语义属于破坏性变更。
 - 破坏性变更必须通过新版本路径和 ADR 引入。
@@ -334,7 +360,7 @@ API 不返回预测、稳定性、风险或固定阈值结论。
 - `/api/v1/dev/scenarios/` 是默认关闭的本地测试基建，不属于生产 v1 契约且从 OpenAPI 排除；完整保护规则见[测试场景文档](testing/SCENARIO_GIG_DRIVER_12M.cn.md)。
 - POST 当前不支持幂等键。前端必须在请求进行中禁用重复提交；在离线同步或自动重试上线前，需要先设计幂等协议。
 
-## 11. 维护方式
+## 12. 维护方式
 
 修改 serializer、view 或 URL 后运行：
 

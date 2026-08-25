@@ -36,6 +36,8 @@ Epic 2 adds:
 - a single backend calculation authority with stale-response protection and failed-save recovery; and
 - repeatable backend, TypeScript, OpenAPI, migration, and Playwright quality gates in GitHub Actions.
 
+The team's existing US3.1–US3.3 housing work is preserved and integration-hardened, but this does not declare all of Epic 3 complete. Housing scenarios now share the finance guest-session boundary, the pre-housing check reads the backend financial record instead of a client copy, and CI runs the full backend suite on both SQLite and PostgreSQL.
+
 See the [Epic 1 implementation and acceptance index](docs/epic-1/README.md) for criterion-level evidence and the [project changelog](docs/CHANGELOG.md) for the delivery record.
 
 See the [Epic 2 implementation and acceptance index](docs/epic-2/README.md) for all 18 criteria, calculation boundaries, and browser evidence.
@@ -50,7 +52,8 @@ The formal requirements are available as searchable Markdown: [all user stories 
 RuMampu/
 ├─ backend/                 Django + Django REST Framework
 │  ├─ config/               Runtime configuration, API routing, errors, and OpenAPI baseline
-│  └─ finance/              Finance domain models, services, APIs, and tests
+│  ├─ finance/              Finance domain models, services, APIs, and tests
+│  └─ apps/housing/         Housing scenarios and backend-authoritative pre-check integration
 ├─ frontend/                Expo + React Native + TypeScript
 │  └─ src/rumampu/          Screens, state, calculations, localisation, and API client
 └─ docs/                    Architecture, API contract, ADRs, and Epic evidence
@@ -71,7 +74,7 @@ Copy-Item .env.example .env
 .\.venv\Scripts\python.exe manage.py runserver localhost:8000
 ```
 
-Leave `PGHOST` empty in `backend/.env` for local SQLite. To use Neon/PostgreSQL, set all documented `PG*` values; TLS defaults to `require`.
+Leave `PGHOST` empty in `backend/.env` for local SQLite. To use Neon/PostgreSQL, set all documented `PG*` values; TLS defaults to `require`. Once `PGHOST` is set, incomplete credentials, invalid ports, and unsupported TLS modes fail during startup instead of silently falling back.
 
 Available endpoints:
 
@@ -89,7 +92,7 @@ Copy-Item .env.example .env
 npm start
 ```
 
-Expo Web and Django should use the same hostname, such as `localhost`, so the guest-session cookie is retained consistently. Without `EXPO_PUBLIC_API_URL`, the frontend uses in-memory prototype data. When it is set, the connected income, work-cost, commitment, daily-expense, income-pattern, and coverage flows use the API.
+Expo Web and Django should use the same hostname, such as `localhost`, so the guest-session cookie is retained consistently. Formal builds use API mode and fall back to the local API URL when `EXPO_PUBLIC_API_URL` is absent. In-memory demonstration data requires the explicit `EXPO_PUBLIC_APP_MODE=prototype` setting.
 
 ### Fast simulation profile
 
@@ -107,7 +110,7 @@ Run at least the following before committing:
 
 ```powershell
 # Backend tests, migration drift, and OpenAPI validation
-.\backend\.venv\Scripts\python.exe backend\manage.py test finance --noinput
+.\backend\.venv\Scripts\python.exe backend\manage.py test --noinput
 .\backend\.venv\Scripts\python.exe backend\manage.py makemigrations --check --dry-run
 .\backend\.venv\Scripts\python.exe backend\manage.py spectacular --validate --file docs\openapi.yaml
 
@@ -117,4 +120,4 @@ npm run typecheck
 npm run test:e2e:epic2
 ```
 
-A work package is complete only when its code, tests, API schema, and affected documentation agree. Foundational decisions are recorded in [ADR 0001](docs/adr/0001-foundation-and-api-contract.md); the Epic 2 calculation boundary is recorded in [ADR 0002](docs/adr/0002-backend-authoritative-income-pattern.md).
+A work package is complete only when its code, tests, API schema, and affected documentation agree. Foundational decisions are recorded in [ADR 0001](docs/adr/0001-foundation-and-api-contract.md); the Epic 2 calculation boundary is recorded in [ADR 0002](docs/adr/0002-backend-authoritative-income-pattern.md); housing-record ownership and PostgreSQL compatibility are recorded in [ADR 0003](docs/adr/0003-housing-record-and-database-compatibility.md).

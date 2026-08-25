@@ -120,7 +120,7 @@ export function HomecostScreen() {
               setHousingScenarioId(created.id);
             }
             await updateHousingScenario(scenarioId, S.data);
-            const result = await runPreHousingCheck(S.data);
+            const result = await runPreHousingCheck();
             setPreHousingResult(result);
             up(state => {
               state.testRan = !result.has_existing_shortfall;

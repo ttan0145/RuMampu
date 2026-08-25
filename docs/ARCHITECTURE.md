@@ -4,7 +4,7 @@ Language: **English** | [Chinese (CN)](ARCHITECTURE.cn.md)
 
 ## 1. Goal
 
-RuMampu helps people with irregular income understand housing-payment pressure without making a credit decision. The architecture prioritises traceable financial conventions, clear privacy boundaries, explainable behaviour on unreliable mobile networks, and a shared data foundation for Epics 1, 2, and 5.
+RuMampu helps people with irregular income understand housing-payment pressure without making a credit decision. The architecture prioritises traceable financial conventions, clear privacy boundaries, explainable behaviour on unreliable mobile networks, and a shared data foundation for Epics 1, 2, 3, and 5.
 
 ## 2. System shape
 
@@ -26,7 +26,7 @@ Microservices are not currently justified. Reconsider them only when independent
 | Commitments | Monthly living costs, debts, and savings commitments | US1.4 persisted and accepted |
 | Expenses | Daily expenses, categories, and receipt-confirmation provenance | US1.5–US1.7 persisted and accepted; production OCR pending |
 | Income analysis | Monthly usable income, descriptive statistics, recorded minima, and slower-period coverage | Epic 2 backend-authoritative and accepted |
-| Housing readiness | Housing scenarios, cash flow, and explanations of payment pressure | UI prototype; Epic 3 rules pending |
+| Housing readiness | Housing scenarios, cash flow, and explanations of payment pressure | US3.1–US3.3 integration present; remaining Epic 3 delivery pending |
 | Preparation | Cash buffer, upfront costs, document checklist, and comparisons | UI prototype |
 
 Domain logic belongs in the service layer. API views orchestrate input and output only. Do not duplicate business calculations in screen components or serializers.
@@ -41,9 +41,12 @@ Domain logic belongs in the service layer. API views orchestrate input and outpu
 
 For Epic 2, the service recalculates analysis from `IncomeEntry` and active `WorkCostItem` facts. Only the user's explicit `IncomeCoverage` answer is persisted; calculated response snapshots are not stored.
 
+The Epic 3 pre-housing check reuses that same record and work-cost convention, then applies active commitments and confirmed expense months. Legacy request fields remain accepted during v1 migration, but clients cannot replace the server-owned financial facts. Housing scenarios belong to exactly one authenticated user or guest profile.
+
 ## 5. Data and privacy rules
 
 - A guest may access only the data associated with the current session.
+- Finance records and anonymous housing scenarios use the same `GuestProfile`; anonymous `user = null` rows are never treated as a shared pool.
 - The database uses `Decimal`; API responses use two-decimal monetary strings.
 - Dates represent calendar days in the user's locale; timestamps are timezone-aware ISO 8601 values.
 - Import and OCR results retain provenance and confirmation status and must not become untraceable facts.
@@ -68,6 +71,7 @@ Every work package must include at least:
 - API changes reflected in OpenAPI and `API_CONTRACT.md`;
 - passing strict TypeScript checks;
 - no ungenerated migration drift;
+- full backend tests on SQLite and PostgreSQL before Neon deployment;
 - no credit judgement, 75% low-income threshold, or unconfirmed financial conclusion; and
 - updated README, Epic matrix, and relevant ADRs.
 
