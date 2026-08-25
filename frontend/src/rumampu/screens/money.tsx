@@ -6,7 +6,7 @@ import { ApiCoverageAnswer, INCOME_API_ENABLED } from '../api';
 import { formatApiMoney } from '../money';
 import {
   actualMonths, commitTotal, expByMonth, expCatTotals, latestExpMonth,
-  monthsAgg, nf, recSpan, rm,
+  monthsAgg, nf, recordSummary, rm,
 } from '../calc';
 import {
   BodyS, Btn, BtnLine, BtnQuiet, Card, Chip, Chips, Display, Divider, EditList,
@@ -93,30 +93,82 @@ function catLabel(S: ReturnType<typeof useApp>['S'], t: (k: string) => string, i
   return c ? (c.custom ? c.name || '' : t(c.k || '')) : id;
 }
 
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <Display cls="h-m" style={{ fontSize: 17, lineHeight: 23 }}>{children}</Display>;
+}
+
+function RecordMetric({ value, label }: { value: string; label: string }) {
+  return (
+    <View accessibilityLabel={`${value} ${label}`} style={{ flex: 1, minWidth: 0, gap: 2 }}>
+      <Display cls="h-l">{value}</Display>
+      <BodyS muted>{label}</BodyS>
+    </View>
+  );
+}
+
+function SessionStatus({ label }: { label: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      <Text style={{ color: C.confirm, fontSize: 16, lineHeight: 18 }}>✓</Text>
+      <BodyS muted>{label}</BodyS>
+    </View>
+  );
+}
+
 export function RecordScreen() {
-  const { S, t, monthName } = useApp();
-  const sp = recSpan(S.data);
-  const n = sp ? sp.list.length : 0;
-  const e = S.data.income.length;
-  const last = e ? S.data.income[e - 1].d : '';
-  const lastLbl = last ? (+last.slice(8, 10)) + ' ' + monthName(+last.slice(5, 7) - 1) : '';
+  const { S, t, monthName, go } = useApp();
+  const summary = recordSummary(S.data);
+  const n = summary.recordedMonthCount;
+  const last = summary.latestEntryDate;
+  const lastLbl = last ? `${+last.slice(8, 10)} ${monthName(+last.slice(5, 7) - 1)} ${last.slice(0, 4)}` : '';
   return (
     <ScreenShell back title={t('money_record')}>
-      <Fig value={t(n === 1 ? 'rc_months_one' : 'rc_months', { n })} p="user" cls="h-l" />
-      <BodyS muted>{t('rc_entries', { e, d: lastLbl })}</BodyS>
-      <Card gap={8}>
-        <BodyS muted>{t('rc_tests')}</BodyS>
-        {S.keptTests.length ? S.keptTests.map((k, i) => (
-          <KV key={i} k={`${rm(k.pay)} · ${t('cp_short', { s: k.s, n: k.n })}`}>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-              <BodyS muted>{t('gap_lbl')}</BodyS>
-              <Fig value={rm(k.g)} p="calc" cls="body-s" />
-            </View>
-          </KV>
-        )) : <BodyS muted>{t('rc_none')}</BodyS>}
+      <Card gap={12}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <SectionTitle>{t('rc_summary')}</SectionTitle>
+          <Prov p="user" />
+        </View>
+        <View style={{ flexDirection: 'row', gap: 18 }}>
+          <RecordMetric value={String(n)} label={t(n === 1 ? 'rc_month_metric_one' : 'rc_month_metric')} />
+          <RecordMetric value={String(summary.entryCount)} label={t('rc_entry_metric')} />
+        </View>
+        <Divider />
+        <View style={{ gap: 2 }}>
+          <BodyS muted>{t('rc_latest_label')}</BodyS>
+          {lastLbl ? <Display cls="h-m">{lastLbl}</Display> : <BodyS>{t('rc_latest_empty')}</BodyS>}
+        </View>
       </Card>
-      <BodyS muted>{t('rc_live')}</BodyS>
-      <BodyS>{t('rc_keep_line')}</BodyS>
+
+      <View style={{ gap: 8 }}>
+        <SectionTitle>{t('rc_tests')}</SectionTitle>
+        {S.keptTests.length ? S.keptTests.map((k, i) => (
+          <Card key={i} gap={12}>
+            <View style={{ gap: 2 }}>
+              <Fig value={t('rc_pay_month', { p: rm(k.pay) })} p="calc" cls="h-m" />
+            </View>
+            <View style={{ flexDirection: 'row', gap: 14 }}>
+              <RecordMetric value={t('rc_short_value', { s: k.s, n: k.n })} label={t('rc_short_label')} />
+              <RecordMetric value={rm(k.g)} label={t('gap_lbl')} />
+            </View>
+            <SessionStatus label={t('rc_test_session')} />
+          </Card>
+        )) : (
+          <Card gap={10}>
+            <View style={{ gap: 3 }}>
+              <Display cls="h-m" style={{ fontSize: 17, lineHeight: 23 }}>{t('rc_none_title')}</Display>
+              <BodyS muted>{t('rc_none_body')}</BodyS>
+            </View>
+            <BtnQuiet onPress={() => go('house')} style={{ backgroundColor: C.paper }}>
+              <IcLab name="book"><P>{t('rc_test_action')}</P></IcLab>
+            </BtnQuiet>
+          </Card>
+        )}
+      </View>
+
+      <Card gap={8} style={{ backgroundColor: C.paper }}>
+        <SectionTitle>{t('rc_about')}</SectionTitle>
+        <BodyS muted>{t('rc_live')}</BodyS>
+      </Card>
     </ScreenShell>
   );
 }

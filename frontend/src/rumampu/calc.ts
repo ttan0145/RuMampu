@@ -4,6 +4,11 @@ import { AppData } from './mock';
 
 export interface MonthRow { y: number; m: number; gross: number; net: number; surplus: number }
 export interface TestRow extends MonthRow { short: boolean; gap: number }
+export interface RecordSummary {
+  recordedMonthCount: number;
+  entryCount: number;
+  latestEntryDate: string | null;
+}
 
 export const EXP_FULL_DAYS = 20;
 
@@ -56,6 +61,32 @@ export function monthsAgg(data: AppData): MonthRow[] {
   const wc = workCostTotal(data);
   return [...map.values()].sort((a, b) => (a.y * 12 + a.m) - (b.y * 12 + b.m))
     .map(r => ({ ...r, net: r.gross - wc, surplus: r.gross - wc - commitFor(data, r.y * 12 + r.m) }));
+}
+
+function datedMonthKey(value: string): number | null {
+  const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(value);
+  if (!match) return null;
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+  return Number(match[1]) * 12 + month - 1;
+}
+
+export function recordSummary(data: AppData): RecordSummary {
+  const months = new Set<number>();
+  let latestEntryDate: string | null = null;
+  const addDate = (date: string) => {
+    const key = datedMonthKey(date);
+    if (key == null) return;
+    months.add(key);
+    if (latestEntryDate == null || date > latestEntryDate) latestEntryDate = date;
+  };
+  data.income.forEach(entry => addDate(entry.d));
+  data.expenses.forEach(entry => addDate(entry.d));
+  return {
+    recordedMonthCount: months.size,
+    entryCount: data.income.length + data.expenses.length,
+    latestEntryDate,
+  };
 }
 
 export function actualMonths(data: AppData): MonthRow[] {

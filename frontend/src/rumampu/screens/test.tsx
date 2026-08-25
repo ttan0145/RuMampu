@@ -174,7 +174,7 @@ export function PrecheckScreen() {
 }
 
 export function ResultScreen() {
-  const { S, t, monthName, up, go, toast } = useApp();
+  const { S, t, monthName, up, go } = useApp();
   React.useEffect(() => {
     up(state => { state.stack = ['homecost']; });
   }, [up]);
@@ -193,6 +193,12 @@ export function ResultScreen() {
   const s = result.short_month_count;
   const g = result.largest_gap;
   const un = unrepresentedCoverageMonths(S.incomeCoverage);
+  const kept = S.keptTests.some(test => (
+    test.pay === Math.round(cost)
+    && test.s === s
+    && test.n === n
+    && test.g === Math.round(g)
+  ));
 
   let lead: React.ReactNode;
   const headline = s ? t('headline', { s, n }) : t('headline_zero', { n });
@@ -240,17 +246,52 @@ export function ResultScreen() {
       <Waterline rows={rows} cost={cost} lineLabel prov="calc" monthName={monthName} />
       <BtnLine label={t('rs_how')} onPress={() => up(x2 => { x2.howOpen = !x2.howOpen; })} />
       {S.howOpen ? <Card><BodyS>{t('rs_how_body', { c: nf(cost) })}</BodyS></Card> : null}
-      <BtnLine label={t('rs_keep')} onPress={() => {
-        up(x2 => {
-          x2.keptTests.push({
-            pay: Math.round(cost),
-            s,
-            n,
-            g: Math.round(g),
-          });
-        });
-        toast(t('rs_kept'));
-      }} />
+      {kept ? (
+        <View style={{
+          gap: 4,
+          padding: 14,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: C.ink14,
+          backgroundColor: C.card,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ color: C.confirm, fontSize: 18, lineHeight: 20 }}>✓</Text>
+            <Display cls="h-m" style={{ fontSize: 17, lineHeight: 23 }}>{t('rs_kept')}</Display>
+          </View>
+          <BodyS muted>{t('rs_kept_session')}</BodyS>
+        </View>
+      ) : (
+        <BtnQuiet
+          arrow={false}
+          style={{ backgroundColor: C.paper, borderColor: C.brand }}
+          onPress={() => {
+            up(x2 => {
+              const duplicate = x2.keptTests.some(test => (
+                test.pay === Math.round(cost)
+                && test.s === s
+                && test.n === n
+                && test.g === Math.round(g)
+              ));
+              if (!duplicate) {
+                x2.keptTests.push({
+                  pay: Math.round(cost),
+                  s,
+                  n,
+                  g: Math.round(g),
+                });
+              }
+            });
+          }}
+        >
+          <IcLab name="book">
+            <View style={{ gap: 2 }}>
+              <P>{t('rs_keep')}</P>
+              <BodyS muted>{t('rs_keep_hint')}</BodyS>
+            </View>
+          </IcLab>
+        </BtnQuiet>
+      )}
       <View style={{ gap: 8 }}>
         <BtnQuiet onPress={() => go('range')}><IcLab name="band"><P>{t('rs_range')}</P></IcLab></BtnQuiet>
         <BtnQuiet onPress={() => go('compare')}><IcLab name="columns"><P>{t('rs_compare')}</P></IcLab></BtnQuiet>
