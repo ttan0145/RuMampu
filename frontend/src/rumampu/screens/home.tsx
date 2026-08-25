@@ -1,4 +1,5 @@
 import React from 'react';
+import { clearHousingSession } from '../../../services/housingSession';
 import { useApp } from '../state';
 import {
   recSpan, rm, slowUnseen, testRows, totalHomeCost,
@@ -8,7 +9,7 @@ import { CovStrip } from '../charts';
 import { ScreenShell } from './shell';
 
 export function HomeScreen() {
-  const { S, t, monthName, go, runTest } = useApp();
+  const { S, t, monthName, go } = useApp();
   const sp = recSpan(S.data);
   const n = sp ? sp.list.length : 0;
 
@@ -54,7 +55,7 @@ export function HomeScreen() {
       ) : S.coverage.answer === null ? (
         <BtnLine label={t('cov_unchecked') + ' →'} onPress={() => go('coverage')} />
       ) : null}
-      <Btn label={t('home_retest')} onPress={runTest} />
+      <Btn label={t('home_retest')} onPress={() => { clearHousingSession(); go('house'); }} />
     </ScreenShell>
   );
 }

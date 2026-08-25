@@ -1,4 +1,6 @@
 import React from 'react';
+import { createHousingScenario, runPreHousingCheck, updateHousingScenario } from '../../../services/housingService';
+import { getHousingScenarioId, getPreHousingResult, setHousingScenarioId, setPreHousingResult } from '../../../services/housingSession';
 import { Text, View } from 'react-native';
 import { useApp } from '../state';
 import {
@@ -14,7 +16,8 @@ import { Band, Waterline } from '../charts';
 import { ScreenShell } from './shell';
 
 export function HouseScreen() {
-  const { S, t, up, go } = useApp();
+  const { S, t, up, go, toast } = useApp();
+  const [saving, setSaving] = React.useState(false);
   const h = S.data.house;
   const inst = currentInstalment(S.data);
   const known = h.knownPayment != null;
@@ -62,13 +65,25 @@ export function HouseScreen() {
           <BtnLine label={t('cancel')} onPress={() => up(s => { s.data.house.knownPayment = null; })} />
         </>
       )}
-      <Btn label={t('th_next') + ' →'} onPress={() => go('homecost')} />
+      <Btn label={saving ? 'Saving…' : t('th_next') + ' →'} onPress={() => {
+        if (saving) return;
+        setSaving(true);
+        void createHousingScenario(S.data)
+          .then(result => {
+            setHousingScenarioId(result.id);
+            setPreHousingResult(null);
+            go('homecost');
+          })
+          .catch(() => toast('Could not save the housing scenario. Check that the Django backend is running.'))
+          .finally(() => setSaving(false));
+      }} />
     </ScreenShell>
   );
 }
 
 export function HomecostScreen() {
-  const { S, t, up, runTest } = useApp();
+  const { S, t, up, go, toast } = useApp();
+  const [checking, setChecking] = React.useState(false);
   const inst = currentInstalment(S.data);
   const total = totalHomeCost(S.data);
   return (
@@ -92,19 +107,49 @@ export function HomecostScreen() {
           />
         </Card>
       ) : null}
-      <Btn label={t('tc_run') + ' →'} onPress={runTest} />
+      <Btn label={checking ? 'Checking…' : t('tc_run') + ' →'} onPress={() => {
+        if (checking) return;
+        setChecking(true);
+        void (async () => {
+          try {
+            let scenarioId = getHousingScenarioId();
+            if (scenarioId == null) {
+              const created = await createHousingScenario(S.data);
+              scenarioId = created.id;
+              setHousingScenarioId(created.id);
+            }
+            await updateHousingScenario(scenarioId, S.data);
+            const result = await runPreHousingCheck(S.data);
+            setPreHousingResult(result);
+            up(state => {
+              state.testRan = !result.has_existing_shortfall;
+              state.howOpen = false;
+              state.rgHowOpen = false;
+            });
+            go(result.has_existing_shortfall ? 'precheck' : 'result');
+          } catch {
+            toast('Could not run the housing check. Check that the Django backend is running.');
+          } finally {
+            setChecking(false);
+          }
+        })();
+      }} />
     </ScreenShell>
   );
 }
 
 export function PrecheckScreen() {
-  const { S, t, monthName, goTab } = useApp();
-  const rows = testRows(S.data, 0);
-  const worst = rows.reduce((a, b) => (a.surplus < b.surplus ? a : b), rows[0]);
-  const x = Math.max(0, -worst.surplus);
+  const { t, monthName, goTab, up } = useApp();
+  const result = getPreHousingResult();
+  React.useEffect(() => {
+    up(state => { state.stack = ['house']; });
+  }, [up]);
+  const worst = result?.worst_month;
+  const monthIndex = worst ? worst.month - 1 : 0;
+  const gap = result?.largest_existing_gap || 0;
   return (
     <ScreenShell back title={t('pc_title')}>
-      <Display cls="h-l">{t('pc_msg', { m: monthName(worst.m), x: nf(x) })}</Display>
+      <Display cls="h-l">{t('pc_msg', { m: monthName(monthIndex), x: nf(gap) })}</Display>
       <FigRow p="calc" />
       <BodyS muted>{t('pc_msg2')}</BodyS>
       <Btn label={t('pc_btn')} onPress={() => goTab('money')} />
@@ -114,6 +159,9 @@ export function PrecheckScreen() {
 
 export function ResultScreen() {
   const { S, t, monthName, up, go, toast } = useApp();
+  React.useEffect(() => {
+    up(state => { state.stack = ['house']; });
+  }, [up]);
   const cost = totalHomeCost(S.data);
   const rows = testRows(S.data, cost);
   const n = rows.length, s = rows.filter(r => r.short).length;
