@@ -138,3 +138,49 @@ class PreHousingCheckResultSerializer(serializers.Serializer):
     largest_existing_gap = serializers.FloatField(min_value=0)
     worst_month = PreHousingWorstMonthSerializer(allow_null=True)
     months = PreHousingMonthResultSerializer(many=True)
+
+class HousingTestRequestSerializer(serializers.Serializer):
+    scenario_id = serializers.IntegerField(min_value=1)
+
+
+class HousingTestMonthResultSerializer(PreHousingMonthResultSerializer):
+    available_for_home = serializers.FloatField()
+    tested_home_cost = serializers.FloatField(min_value=0)
+    post_housing_residual = serializers.FloatField()
+    is_short = serializers.BooleanField()
+    existing_shortfall = serializers.FloatField(min_value=0)
+    housing_created_shortfall = serializers.FloatField(min_value=0)
+    housing_added_gap = serializers.FloatField(min_value=0)
+    total_shortfall = serializers.FloatField(min_value=0)
+    shortfall_type = serializers.ChoiceField(choices=[
+        'none',
+        'housing_created',
+        'existing_and_worsened_by_housing',
+    ])
+    housing_shortfall = serializers.FloatField(min_value=0)
+
+
+class CarryingRangeResultSerializer(serializers.Serializer):
+    lower_monthly_amount = serializers.FloatField()
+    upper_monthly_amount = serializers.FloatField()
+    tested_monthly_home_cost = serializers.FloatField(min_value=0)
+    lower_meaning = serializers.CharField()
+    upper_meaning = serializers.CharField()
+    indicative_property_price_lower = serializers.FloatField(min_value=0)
+    indicative_property_price_upper = serializers.FloatField(min_value=0)
+    property_price_limitation = serializers.CharField()
+
+
+class HousingTestResultSerializer(serializers.Serializer):
+    scenario_id = serializers.IntegerField(min_value=1)
+    tested_home_cost = serializers.FloatField(min_value=0)
+    tested_months = serializers.IntegerField(min_value=0)
+    short_month_count = serializers.IntegerField(min_value=0)
+    existing_short_month_count = serializers.IntegerField(min_value=0)
+    housing_created_short_month_count = serializers.IntegerField(min_value=0)
+    largest_gap = serializers.FloatField(min_value=0)
+    largest_existing_gap = serializers.FloatField(min_value=0)
+    largest_housing_created_gap = serializers.FloatField(min_value=0)
+    months = HousingTestMonthResultSerializer(many=True)
+    carrying_range = CarryingRangeResultSerializer(allow_null=True)
+

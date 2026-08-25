@@ -1,5 +1,5 @@
 import { AppData } from '../src/rumampu/mock';
-import { HousingScenarioPayload, HousingScenarioResponse, PreHousingResult } from '../types/housing';
+import { HousingScenarioPayload, HousingScenarioResponse, HousingTestResult, PreHousingResult } from '../types/housing';
 import { apiRequest } from './api';
 
 function scenarioPayload(data: AppData, includeCosts: boolean): HousingScenarioPayload {
@@ -36,5 +36,12 @@ export async function runPreHousingCheck(): Promise<PreHousingResult> {
   return apiRequest<PreHousingResult>('/housing/pre-check/', {
     method: 'POST',
     body: JSON.stringify({}),
+  });
+}
+
+export async function runHousingTest(scenarioId: number): Promise<HousingTestResult> {
+  return apiRequest<HousingTestResult>('/housing/test-result/', {
+    method: 'POST',
+    body: JSON.stringify({ scenario_id: scenarioId }),
   });
 }

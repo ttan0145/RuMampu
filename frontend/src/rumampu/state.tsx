@@ -314,7 +314,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const goTab = useCallback((tab: Tab) => {
     up(s => {
       s.stack = [];
-      if (tab === 'test') s.route = s.testRan ? (preHousingOk(s.data) ? 'result' : 'precheck') : 'house';
+      if (tab === 'test') s.route = s.testRan ? 'result' : 'house';
       else s.route = tab;
     });
   }, [up]);
@@ -327,7 +327,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const root: Route = (tab === 'test') ? (s.testRan ? 'result' : 'house') : tab;
       const target: Tab = s.route === root ? 'home' : tab;
       s.stack = [];
-      if (target === 'test') s.route = s.testRan ? (preHousingOk(s.data) ? 'result' : 'precheck') : 'house';
+      if (target === 'test') s.route = s.testRan ? 'result' : 'house';
       else s.route = target;
     });
   }, [up]);

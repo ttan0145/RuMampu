@@ -40,3 +40,41 @@ export interface PreHousingResult {
   worst_month: { year: number; month: number } | null;
   months: PreHousingMonthResult[];
 }
+
+export interface HousingTestMonthResult extends PreHousingMonthResult {
+  available_for_home: number;
+  tested_home_cost: number;
+  post_housing_residual: number;
+  is_short: boolean;
+  existing_shortfall: number;
+  housing_created_shortfall: number;
+  housing_added_gap: number;
+  total_shortfall: number;
+  shortfall_type: 'none' | 'housing_created' | 'existing_and_worsened_by_housing';
+  housing_shortfall: number;
+}
+
+export interface CarryingRangeResult {
+  lower_monthly_amount: number;
+  upper_monthly_amount: number;
+  tested_monthly_home_cost: number;
+  lower_meaning: string;
+  upper_meaning: string;
+  indicative_property_price_lower: number;
+  indicative_property_price_upper: number;
+  property_price_limitation: string;
+}
+
+export interface HousingTestResult {
+  scenario_id: number;
+  tested_home_cost: number;
+  tested_months: number;
+  short_month_count: number;
+  existing_short_month_count: number;
+  housing_created_short_month_count: number;
+  largest_gap: number;
+  largest_existing_gap: number;
+  largest_housing_created_gap: number;
+  months: HousingTestMonthResult[];
+  carrying_range: CarryingRangeResult | null;
+}

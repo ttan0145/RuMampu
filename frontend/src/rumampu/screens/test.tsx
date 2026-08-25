@@ -1,11 +1,11 @@
 import React from 'react';
-import { createHousingScenario, runPreHousingCheck, updateHousingScenario } from '../../../services/housingService';
-import { getHousingScenarioId, getPreHousingResult, setHousingScenarioId, setPreHousingResult } from '../../../services/housingSession';
+import {
+  calculateHousingSession, getHousingTestResult, getPreHousingResult, indicativePriceForComparedPayment,
+} from '../../../services/housingSession';
 import { Text, View } from 'react-native';
 import { useApp } from '../state';
 import {
-  carryRange, currentInstalment, extrasTotal, monthsAgg, nf, priceForInstalment,
-  rm, testRows, totalHomeCost,
+  currentInstalment, monthsAgg, nf, rm, testRows, totalHomeCost,
 } from '../calc';
 import { unrepresentedCoverageMonths } from '../money';
 import {
@@ -17,8 +17,7 @@ import { Band, Waterline } from '../charts';
 import { ScreenShell } from './shell';
 
 export function HouseScreen() {
-  const { S, t, up, go, toast } = useApp();
-  const [saving, setSaving] = React.useState(false);
+  const { S, t, up, go } = useApp();
   const h = S.data.house;
   const inst = currentInstalment(S.data);
   const known = h.knownPayment != null;
@@ -66,25 +65,13 @@ export function HouseScreen() {
           <BtnLine label={t('cancel')} onPress={() => up(s => { s.data.house.knownPayment = null; })} />
         </>
       )}
-      <Btn label={saving ? 'Saving…' : t('th_next') + ' →'} onPress={() => {
-        if (saving) return;
-        setSaving(true);
-        void createHousingScenario(S.data)
-          .then(result => {
-            setHousingScenarioId(result.id);
-            setPreHousingResult(null);
-            go('homecost');
-          })
-          .catch(() => toast('Could not save the housing scenario. Check that the Django backend is running.'))
-          .finally(() => setSaving(false));
-      }} />
+      <Btn label={t('th_next') + ' →'} onPress={() => go('homecost')} />
     </ScreenShell>
   );
 }
 
 export function HomecostScreen() {
-  const { S, t, up, go, toast } = useApp();
-  const [checking, setChecking] = React.useState(false);
+  const { S, t, up, go } = useApp();
   const inst = currentInstalment(S.data);
   const total = totalHomeCost(S.data);
   return (
@@ -108,32 +95,14 @@ export function HomecostScreen() {
           />
         </Card>
       ) : null}
-      <Btn label={checking ? 'Checking…' : t('tc_run') + ' →'} onPress={() => {
-        if (checking) return;
-        setChecking(true);
-        void (async () => {
-          try {
-            let scenarioId = getHousingScenarioId();
-            if (scenarioId == null) {
-              const created = await createHousingScenario(S.data);
-              scenarioId = created.id;
-              setHousingScenarioId(created.id);
-            }
-            await updateHousingScenario(scenarioId, S.data);
-            const result = await runPreHousingCheck();
-            setPreHousingResult(result);
-            up(state => {
-              state.testRan = !result.has_existing_shortfall;
-              state.howOpen = false;
-              state.rgHowOpen = false;
-            });
-            go(result.has_existing_shortfall ? 'precheck' : 'result');
-          } catch {
-            toast('Could not run the housing check. Check that the Django backend is running.');
-          } finally {
-            setChecking(false);
-          }
-        })();
+      <Btn label={t('tc_run') + ' →'} onPress={() => {
+        const { preHousing } = calculateHousingSession(S.data);
+        up(state => {
+          state.testRan = true;
+          state.howOpen = false;
+          state.rgHowOpen = false;
+        });
+        go(preHousing.has_existing_shortfall ? 'precheck' : 'result');
       }} />
     </ScreenShell>
   );
@@ -143,7 +112,7 @@ export function PrecheckScreen() {
   const { t, monthName, goTab, up } = useApp();
   const result = getPreHousingResult();
   React.useEffect(() => {
-    up(state => { state.stack = ['house']; });
+    up(state => { state.stack = ['homecost']; });
   }, [up]);
   const worst = result?.worst_month;
   const monthIndex = worst ? worst.month - 1 : 0;
@@ -161,12 +130,22 @@ export function PrecheckScreen() {
 export function ResultScreen() {
   const { S, t, monthName, up, go, toast } = useApp();
   React.useEffect(() => {
-    up(state => { state.stack = ['house']; });
+    up(state => { state.stack = ['homecost']; });
   }, [up]);
-  const cost = totalHomeCost(S.data);
-  const rows = testRows(S.data, cost);
-  const n = rows.length, s = rows.filter(r => r.short).length;
-  const g = Math.max(...rows.map(r => r.gap), 0);
+
+  const result = getHousingTestResult();
+  if (!result) return <ScreenShell back title={t('rs_title')}><View /></ScreenShell>;
+
+  const cost = result.tested_home_cost;
+  const rows = result.months.map(r => ({
+    m: r.month - 1,
+    surplus: r.available_for_home,
+    short: r.is_short,
+    gap: r.total_shortfall,
+  }));
+  const n = result.tested_months;
+  const s = result.short_month_count;
+  const g = result.largest_gap;
   const un = unrepresentedCoverageMonths(S.incomeCoverage);
 
   let lead: React.ReactNode;
@@ -200,6 +179,18 @@ export function ResultScreen() {
     <ScreenShell back title={t('rs_title')}>
       {lead}
       {s ? <KV k={t('gap_lbl')}><Fig value={rm(g)} p="calc" /></KV> : null}
+      {s ? (
+        <Card gap={8}>
+          <Display cls="h-m">{t('rs_shortfall_breakdown')}</Display>
+          <KV k={t('rs_existing_shortfall')}>
+            <Fig value={`${result.existing_short_month_count} / ${n}`} p="calc" />
+          </KV>
+          <KV k={t('rs_housing_shortfall')}>
+            <Fig value={`${result.housing_created_short_month_count} / ${n}`} p="calc" />
+          </KV>
+          <BodyS muted>{t('rs_shortfall_breakdown_note')}</BodyS>
+        </Card>
+      ) : null}
       <Waterline rows={rows} cost={cost} lineLabel prov="calc" monthName={monthName} />
       <BtnLine label={t('rs_how')} onPress={() => up(x2 => { x2.howOpen = !x2.howOpen; })} />
       {S.howOpen ? <Card><BodyS>{t('rs_how_body', { c: nf(cost) })}</BodyS></Card> : null}
@@ -207,9 +198,9 @@ export function ResultScreen() {
         up(x2 => {
           x2.keptTests.push({
             pay: Math.round(cost),
-            s: rows.filter(r => r.short).length,
-            n: rows.length,
-            g: Math.round(Math.max(...rows.map(r => r.gap), 0)),
+            s,
+            n,
+            g: Math.round(g),
           });
         });
         toast(t('rs_kept'));
@@ -225,29 +216,41 @@ export function ResultScreen() {
 
 export function RangeScreen() {
   const { S, t, up } = useApp();
-  const cr = carryRange(S.data);
+  const result = getHousingTestResult();
+  const cr = result?.carrying_range;
   if (!cr) return <ScreenShell back title={t('rs_range')}><View /></ScreenShell>;
-  const h = S.data.house, ex = extrasTotal(S.data);
-  const rd = (v: number) => Math.round(v / 1000) * 1000;
-  const pLo = rd(priceForInstalment(S.data, cr.lo - ex) + h.deposit);
-  const pHi = rd(priceForInstalment(S.data, cr.hi - ex) + h.deposit);
-  const you = totalHomeCost(S.data);
-  const lo = cr.lo * 0.8, hiS = Math.max(cr.hi, you) * 1.15;
+
+  const h = S.data.house;
+  const loValue = cr.lower_monthly_amount;
+  const hiValue = cr.upper_monthly_amount;
+  const you = cr.tested_monthly_home_cost;
+  const lo = loValue * 0.8;
+  const hiS = Math.max(hiValue, you, loValue + 1) * 1.15;
   const pos = (v: number) => Math.min(100, Math.max(0, (v - lo) / (hiS - lo) * 100));
+
   return (
     <ScreenShell back title={t('rs_range')}>
-      <Display cls="h-l">{t('rg_lead', { a: nf(cr.lo), b: nf(cr.hi) })}</Display>
+      <Display cls="h-l">{t('rg_lead', { a: nf(loValue), b: nf(hiValue) })}</Display>
       <FigRow p="calc" />
       <Band
-        loPct={pos(cr.lo)} hiPct={pos(cr.hi)} pinPct={pos(you)}
+        loPct={pos(loValue)} hiPct={pos(hiValue)} pinPct={pos(you)}
         pinTop={rm(you)} pinBottom={t('rg_pin')} prov="calc"
       />
       <BtnLine label={t('rg_how')} onPress={() => up(s => { s.rgHowOpen = !s.rgHowOpen; })} />
-      {S.rgHowOpen ? <Card><BodyS>{t('rg_how_body', { a: nf(cr.lo), b: nf(cr.hi) })}</BodyS></Card> : null}
+      {S.rgHowOpen ? (
+        <Card>
+          <BodyS>{t('rg_how_body', { a: nf(loValue), b: nf(hiValue) })}</BodyS>
+        </Card>
+      ) : null}
       <Divider />
-      <P>{t('rg_price', { r: h.rate, y: h.years, p: nf(pLo), q: nf(pHi) })}</P>
+      <P>{t('rg_price', {
+        r: h.rate,
+        y: h.years,
+        p: nf(cr.indicative_property_price_lower),
+        q: nf(cr.indicative_property_price_upper),
+      })}</P>
       <FigRow p="assume" />
-      <BodyS muted>{t('rg_ind')}</BodyS>
+      <BodyS muted>{cr.property_price_limitation || t('rg_ind')}</BodyS>
     </ScreenShell>
   );
 }
@@ -262,6 +265,7 @@ export function CompareScreen() {
         const rows = testRows(S.data, p);
         const s = rows.filter(r => r.short).length;
         const g = Math.max(...rows.map(r => r.gap), 0);
+        const indicativePrice = indicativePriceForComparedPayment(S.data, p);
         return (
           <Card key={i} gap={8}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -278,6 +282,11 @@ export function CompareScreen() {
                   <Prov p="calc" />
                 </View>
               </View>
+            </View>
+            <P>{t('cp_price', { payment: nf(p), price: nf(indicativePrice) })}</P>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <BodyS muted>{t('cp_price_note')}</BodyS>
+              <Prov p="assume" />
             </View>
             <Waterline rows={rows} cost={p} small monthName={monthName} />
           </Card>
@@ -323,3 +332,6 @@ export function ShockScreen() {
     </ScreenShell>
   );
 }
+
+
+
