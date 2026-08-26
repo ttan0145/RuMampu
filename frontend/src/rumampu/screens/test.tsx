@@ -409,10 +409,8 @@ export function CompareScreen() {
 
 export function ShockScreen() {
   const { S, t, monthName, up } = useApp();
-  const p = S.shock;
+  const p = [0, 10, 20].includes(S.shock) ? S.shock : 0;
   const [result, setResult] = React.useState<Awaited<ReturnType<typeof runStatelessHousingTest>> | null>(null);
-  const preset = [0, 10, 20].includes(p);
-  const showCustom = !preset || S.sheet === 'shockcustom';
 
   React.useEffect(() => {
     let active = true;
@@ -434,28 +432,30 @@ export function ShockScreen() {
 
   return (
     <ScreenShell back title={t('rs_shock')}>
+      <BodyS muted>{t('sh_disclaimer')}</BodyS>
       <Chips>
         {[0, 10, 20].map(v => (
-          <Chip key={v} label={v === 0 ? '0%' : `−${v}%`} on={p === v}
-            onPress={() => up(x => { x.shock = v; x.sheet = null; })} />
+          <Chip
+            key={v}
+            label={v === 0 ? '0%' : `−${v}%`}
+            on={p === v}
+            selectionRole="radio"
+            onPress={() => up(x => { x.shock = v; x.sheet = null; })}
+          />
         ))}
-        <Chip label={t('sh_custom')} on={!preset}
-          onPress={() => up(x => { x.sheet = 'shockcustom'; })} />
       </Chips>
-      {showCustom ? (
-        <View style={{ gap: 6 }}>
-          <BodyS muted>{t('sh_pct')}</BodyS>
-          <NumInput value={p} onNum={x => up(st => { st.shock = Math.min(90, Math.max(0, x)); })} />
-        </View>
-      ) : null}
-      <Display cls="h-l">{t('sh_head', { p, s: shortCount, n })}</Display>
+      <View accessibilityLabel={`Income shock ${p}% result`}>
+        <Display cls="h-l">{t('sh_head', { p, s: shortCount, n })}</Display>
+      </View>
       <FigRow p="assume" />
       {shortCount ? (
         <KV k={t('gap_lbl')}>
           <Fig value={rm(result?.largest_gap ?? 0)} p="calc" />
         </KV>
       ) : null}
-      <Waterline rows={rows} cost={cost} lineLabel prov="assume" monthName={monthName} />
+      <View accessibilityLabel={`Income shock ${p}% recorded-month chart`}>
+        <Waterline rows={rows} cost={cost} lineLabel prov="assume" monthName={monthName} />
+      </View>
       <BodyS muted>{t('sh_note')}</BodyS>
     </ScreenShell>
   );
