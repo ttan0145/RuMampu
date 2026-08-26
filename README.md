@@ -117,7 +117,9 @@ Run at least the following before committing:
 # Frontend type checking
 Set-Location frontend
 npm run typecheck
-npm run test:e2e:epic2
+npm run test:e2e:acceptance
 ```
+
+Epic 1 and Epic 2 browser acceptance is mapped as `Epic → US → AC` and checked for missing or duplicate criteria before execution. See the [Playwright acceptance-test standard](docs/testing/PLAYWRIGHT_ACCEPTANCE_STANDARD.md) for commands, evidence policy, and completion rules.
 
 A work package is complete only when its code, tests, API schema, and affected documentation agree. Foundational decisions are recorded in [ADR 0001](docs/adr/0001-foundation-and-api-contract.md); the Epic 2 calculation boundary is recorded in [ADR 0002](docs/adr/0002-backend-authoritative-income-pattern.md); housing-record ownership and PostgreSQL compatibility are recorded in [ADR 0003](docs/adr/0003-housing-record-and-database-compatibility.md).

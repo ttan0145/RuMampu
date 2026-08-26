@@ -10,6 +10,8 @@ node_modules/
 **/node_modules/
 docs/.DS_Store
 backend/.DS_Store
-output/playwright/epic-2/report/
-output/playwright/epic-2/test-results/
+output/playwright/report/
+output/playwright/test-results/
+output/playwright/*/report/
+output/playwright/*/test-results/
 .DS_Store

@@ -1,17 +1,7 @@
 import { expect, Page, test } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
-import path from 'node:path';
+import { captureEvidence } from './support/app';
 
 const API = 'http://localhost:8000/api/v1';
-
-const EVIDENCE = path.resolve(
-  __dirname,
-  '../../output/playwright/epic-4/evidence'
-);
-
-test.beforeAll(() => {
-  mkdirSync(EVIDENCE, { recursive: true });
-});
 
 async function openApp(page: Page): Promise<void> {
   await page.goto('/');
@@ -126,13 +116,7 @@ test(
     // Make sure first scenario is visible before screenshot
     await payment1.scrollIntoViewIfNeeded();
 
-    await page.screenshot({
-      path: path.join(
-        EVIDENCE,
-        '01-us4.3-payment-comparison.png'
-      ),
-      fullPage: true,
-    });
+    await captureEvidence(page, 'epic-4', '01-us4.3-payment-comparison.png');
   }
 );
 
@@ -174,13 +158,7 @@ test(
     // Show edited Payment 1 = RM1,100
     await payment1.scrollIntoViewIfNeeded();
 
-    await page.screenshot({
-      path: path.join(
-        EVIDENCE,
-        '02-us4.3-edited-payment-1100.png'
-      ),
-      fullPage: true,
-    });
+    await captureEvidence(page, 'epic-4', '02-us4.3-edited-payment-1100.png');
 
     // Evidence 3:
     // Scroll to Payment 3 so the screenshot visibly proves
@@ -190,12 +168,6 @@ test(
     await expect(payment2).toHaveValue('1200');
     await expect(payment3).toHaveValue('1400');
 
-    await page.screenshot({
-      path: path.join(
-        EVIDENCE,
-        '03-us4.3-other-payments-unchanged.png'
-      ),
-      fullPage: true,
-    });
+    await captureEvidence(page, 'epic-4', '03-us4.3-other-payments-unchanged.png');
   }
 );

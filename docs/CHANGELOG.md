@@ -2,6 +2,25 @@
 
 Language: **English** | [Chinese (CN)](CHANGELOG.cn.md)
 
+## 2026-08-26 — Playwright acceptance-test standardisation
+
+Status: implemented locally; not committed or pushed
+
+### Delivered
+
+- Standardised browser acceptance as `Epic → US → AC`, with formal ACs exposed as named report steps and non-requirement regressions separated as `TECH-*` hardening tests.
+- Added an executable Epic 1 suite with 8 US scenarios and exact 56/56 AC mapping; reorganised Epic 2 into 4 US scenarios with exact 18/18 AC mapping while retaining its failure, race, and boundary regressions.
+- Added a static traceability gate that rejects missing, unknown, or duplicated criteria before browser execution.
+- Added shared app, evidence, and acceptance helpers; normal regression runs no longer rewrite reviewed evidence screenshots.
+- Moved shared Playwright reports and failure artefacts out of the Epic 2 evidence tree and documented English-primary/CN-mirror rules and commands.
+
+### Verification
+
+- Traceability gate: Epic 1 `56/56`; Epic 2 `18/18`.
+- TypeScript passed.
+- All 27 repository Playwright scenarios passed in the bundled Chromium, including Epic 1, Epic 2, Epic 3, Epic 4, Epic 8, and the housing integration flow.
+- The acceptance run exposed and fixed a first-load guest-session race by waiting for the income bootstrap before requesting coverage.
+
 ## 2026-08-25 — Epic 3 / Neon integration compatibility
 
 Status: integration-hardened; this does not declare all of Epic 3 complete

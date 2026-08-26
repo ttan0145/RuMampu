@@ -1,0 +1,6 @@
+amount,date,source
+900.00,2026-05-03,E-hailing
+850.00,2026-05-17,Weekend market
+800.00,2026-06-10,Freelance
+oops,2026-06-20,Broken amount
+100.00,not-a-date,Broken date

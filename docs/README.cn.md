@@ -20,6 +20,7 @@
 - [US1.8 验收记录](epic-1/US1.8_HISTORICAL_IMPORT.cn.md)：历史 CSV 预览、错误行、确认入库与分析联动的 8 条 AC 证据。
 - [Epic 1 完成报告](epic-1/EPIC_1_COMPLETION_REPORT.cn.md)：56/56 AC、迁移、自动化与真实浏览器验收总览。
 - [Epic 2 实施与验收索引](epic-2/README.cn.md)：18/18 AC、逐 US 证据、API 边界与浏览器验收。
+- [Playwright 验收测试规范](testing/PLAYWRIGHT_ACCEPTANCE_STANDARD.cn.md)：Epic/US/AC 命名、精确追踪门槛、证据政策、命令和完成规则。
 - [12 个月网约车司机仿真场景](testing/SCENARIO_GIG_DRIVER_12M.cn.md)：一键测试数据、开发专用 API、Playwright 回归流及 Epic 2/5 复用边界。
 - [Epic 1/2/5 实现矩阵](EPIC_1_2_5_IMPLEMENTATION_MATRIX.cn.md)：现有实现、差距和推荐顺序。
 - [ADR 0001](adr/0001-foundation-and-api-contract.cn.md)：本次框架与契约决策。

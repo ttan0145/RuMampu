@@ -1,17 +1,7 @@
 import { expect, Page, test } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
-import path from 'node:path';
+import { captureEvidence } from './support/app';
 
 const API = 'http://localhost:8000/api/v1';
-
-const EVIDENCE = path.resolve(
-  __dirname,
-  '../../output/playwright/epic-3/evidence'
-);
-
-test.beforeAll(() => {
-  mkdirSync(EVIDENCE, { recursive: true });
-});
 
 async function openApp(page: Page): Promise<void> {
   await page.goto('/');
@@ -52,13 +42,7 @@ test('US3 housing stress test uses recorded financial history', async ({ page })
 
   // Evidence 1:
   // Screen before entering the housing stress test
-  await page.screenshot({
-    path: path.join(
-      EVIDENCE,
-      '01-pre-housing-check.png'
-    ),
-    fullPage: true,
-  });
+  await captureEvidence(page, 'epic-3', '01-pre-housing-check.png');
 
 // Open the Housing Test
 await page
@@ -95,13 +79,7 @@ await expect(
 ).toBeVisible();
 
 // Screenshot the completed housing input
-await page.screenshot({
-  path: path.join(
-    EVIDENCE,
-    '02-housing-input.png'
-  ),
-  fullPage: true,
-});
+await captureEvidence(page, 'epic-3', '02-housing-input.png');
 
 // Go to Total monthly cost
 await page
@@ -115,13 +93,7 @@ await expect(
 ).toBeVisible();
 
 // Screenshot before running the historical test
-await page.screenshot({
-  path: path.join(
-    EVIDENCE,
-    '03-before-running-test.png'
-  ),
-  fullPage: true,
-});
+await captureEvidence(page, 'epic-3', '03-before-running-test.png');
 
 // Run the test
 await page
@@ -143,11 +115,5 @@ await page
 
   // Evidence 4:
   // Final historical housing stress-test result
-  await page.screenshot({
-    path: path.join(
-      EVIDENCE,
-      '04-historical-housing-result.png'
-    ),
-    fullPage: true,
-  });
+  await captureEvidence(page, 'epic-3', '04-historical-housing-result.png');
 });

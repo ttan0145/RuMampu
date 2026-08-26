@@ -1,16 +1,26 @@
 import { defineConfig } from '@playwright/test';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 
 const npm = process.platform === 'win32'
   ? '"C:\\Program Files\\nodejs\\npm.cmd"'
   : 'npm';
 
-// GitHub Actions creates backend/.venv. Your Mac project uses RuMampu/venv.
-// Because the backend webServer runs with cwd='../backend':
-//   CI    -> ./.venv/bin/python
-//   local -> ../venv/bin/python
-const python = process.platform === 'win32'
-  ? (process.env.CI ? '.\\.venv\\Scripts\\python.exe' : '..\\venv\\Scripts\\python.exe')
-  : (process.env.CI ? './.venv/bin/python' : '../venv/bin/python');
+const repositoryDirectory = path.resolve(__dirname, '..');
+const pythonCandidates = process.platform === 'win32'
+  ? [
+      path.join(repositoryDirectory, 'backend', '.venv', 'Scripts', 'python.exe'),
+      path.join(repositoryDirectory, 'venv', 'Scripts', 'python.exe'),
+      path.join(repositoryDirectory, '.venv', 'Scripts', 'python.exe'),
+    ]
+  : [
+      path.join(repositoryDirectory, 'backend', '.venv', 'bin', 'python'),
+      path.join(repositoryDirectory, 'venv', 'bin', 'python'),
+      path.join(repositoryDirectory, '.venv', 'bin', 'python'),
+    ];
+const python = process.env.PLAYWRIGHT_PYTHON?.trim()
+  || pythonCandidates.find(candidate => existsSync(candidate))
+  || (process.platform === 'win32' ? 'python' : 'python3');
 
 const browserChannel = process.env.PLAYWRIGHT_CHANNEL?.trim();
 
@@ -20,10 +30,10 @@ export default defineConfig({
   workers: 1,
   timeout: 45_000,
   expect: { timeout: 8_000 },
-  outputDir: '../output/playwright/epic-2/test-results',
+  outputDir: '../output/playwright/test-results',
   reporter: [
     ['list'],
-    ['html', { outputFolder: '../output/playwright/epic-2/report', open: 'never' }],
+    ['html', { outputFolder: '../output/playwright/report', open: 'never' }],
   ],
   use: {
     baseURL: 'http://localhost:8081',

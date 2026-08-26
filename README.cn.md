@@ -119,7 +119,9 @@ Expo Web 与 Django 应使用相同主机名，例如都使用 `localhost`，这
 # 前端类型检查
 Set-Location frontend
 npm run typecheck
-npm run test:e2e:epic2
+npm run test:e2e:acceptance
 ```
+
+Epic 1 和 Epic 2 的浏览器验收已经按 `Epic → US → AC` 建立映射，并在执行前检查缺失或重复 AC。命令、证据政策和完成规则见 [Playwright 验收测试规范](docs/testing/PLAYWRIGHT_ACCEPTANCE_STANDARD.cn.md)。
 
 一个工作包只有在代码、测试、API schema 和受影响文档同步后才算完成。基础决策记录在 [ADR 0001](docs/adr/0001-foundation-and-api-contract.cn.md)，Epic 2 计算边界记录在 [ADR 0002](docs/adr/0002-backend-authoritative-income-pattern.cn.md)，住房记录归属与 PostgreSQL 兼容记录在 [ADR 0003](docs/adr/0003-housing-record-and-database-compatibility.cn.md)。

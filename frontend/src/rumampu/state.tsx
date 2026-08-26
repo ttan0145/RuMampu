@@ -460,9 +460,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [up]);
 
   React.useEffect(() => {
-    if (!INCOME_API_ENABLED || S.coverageSync !== 'idle') return;
+    // Let the income bootstrap establish the guest session before coverage starts.
+    // Parallel first requests can otherwise create different anonymous sessions.
+    if (!INCOME_API_ENABLED || S.incomeSync !== 'ready' || S.coverageSync !== 'idle') return;
     void refreshIncomeCoverage().catch(() => undefined);
-  }, [S.coverageSync, refreshIncomeCoverage]);
+  }, [S.coverageSync, S.incomeSync, refreshIncomeCoverage]);
 
   const saveIncomeEntry = useCallback(async (input: SaveIncomeInput): Promise<'saved' | 'outlier'> => {
     if (!INCOME_API_ENABLED) {

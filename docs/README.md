@@ -20,6 +20,7 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 - [US1.8 acceptance record](epic-1/US1.8_HISTORICAL_IMPORT.md): evidence for 8 criteria covering CSV preview, invalid rows, confirmation, and analysis integration.
 - [Epic 1 completion report](epic-1/EPIC_1_COMPLETION_REPORT.md): overview of all 56 criteria, migrations, automation, and real-browser acceptance.
 - [Epic 2 implementation and acceptance index](epic-2/README.md): all 18 criteria, per-US evidence, API boundaries, and browser acceptance.
+- [Playwright acceptance-test standard](testing/PLAYWRIGHT_ACCEPTANCE_STANDARD.md): Epic/US/AC naming, exact traceability gate, evidence policy, commands, and completion rules.
 - [12-month Malaysian e-hailing driver scenario](testing/SCENARIO_GIG_DRIVER_12M.md): one-request test data, development-only API, Playwright flows, and reuse boundaries for Epics 2 and 5.
 - [Epic 1/2/5 implementation matrix](EPIC_1_2_5_IMPLEMENTATION_MATRIX.md): current implementation, gaps, and recommended sequence.
 - [ADR 0001](adr/0001-foundation-and-api-contract.md): foundation and API-contract decision.

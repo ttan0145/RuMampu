@@ -1,12 +1,9 @@
 import { expect, Page, test } from '@playwright/test';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { captureEvidence } from './support/app';
 
 const API = 'http://localhost:8000/api/v1';
-const EVIDENCE = path.resolve(__dirname, '../../output/playwright/epic-8/evidence');
-
-test.beforeAll(() => mkdirSync(EVIDENCE, { recursive: true }));
-
 async function openApp(page: Page): Promise<void> {
   await page.goto('/');
   const splash = page.getByLabel('RuMampu');
@@ -65,7 +62,7 @@ test('US8.1 summarises mixed dated income and expenses without using array order
   await expect(page.getByText('Latest entry', { exact: true })).toBeVisible();
   await expect(page.getByText('5 Mar 2026', { exact: true })).toBeVisible();
   await expect(page.getByText(/not saved to a RuMampu account/)).toBeVisible();
-  await page.screenshot({ path: path.join(EVIDENCE, '01-record-mixed-summary.png'), fullPage: true });
+  await captureEvidence(page, 'epic-8', '01-record-mixed-summary.png');
 });
 
 test('US8.1 counts one represented month with multiple same-month entries', async ({ page }) => {
@@ -92,7 +89,7 @@ test('US8.1 handles an empty current record without an invalid latest date', asy
   await expect(page.getByText('Run a housing test and keep the result here for this session.', { exact: true })).toBeVisible();
   await expect(page.getByText('Go to Test', { exact: true })).toBeVisible();
   await expect(page.getByText(/not saved to a RuMampu account/)).toBeVisible();
-  await page.screenshot({ path: path.join(EVIDENCE, '02-record-empty-state.png'), fullPage: true });
+  await captureEvidence(page, 'epic-8', '02-record-empty-state.png');
 });
 
 test('US8.2 keeps a completed housing test only once in the current frontend session', async ({ page }) => {
@@ -123,7 +120,7 @@ test('US8.2 keeps a completed housing test only once in the current frontend ses
   await expect(page.getByText('Largest gap', { exact: true })).toBeVisible();
   await expect(page.getByText('Kept for this session.', { exact: true })).toHaveCount(1);
   await expect(page.locator('body')).not.toContainText(/permanent|cloud backup/i);
-  await page.screenshot({ path: path.join(EVIDENCE, '03-kept-test-session-record.png'), fullPage: true });
+  await captureEvidence(page, 'epic-8', '03-kept-test-session-record.png');
 });
 
 test('US8.3 lets the user select an available interface language', async ({ page }) => {

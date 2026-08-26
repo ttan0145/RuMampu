@@ -2,6 +2,25 @@
 
 语言：**中文（CN）** | [English](CHANGELOG.md)
 
+## 2026-08-26 — Playwright 验收测试标准化
+
+状态：已在本地实施；尚未提交或推送
+
+### 交付
+
+- 将浏览器验收统一为 `Epic → US → AC`，正式 AC 作为报告中的具名 step，非需求回归独立标为 `TECH-*` hardening 测试。
+- 新增可执行 Epic 1 suite：8 个 US 场景、56/56 AC 精确映射；将 Epic 2 重组为 4 个 US 场景、18/18 AC 精确映射，并保留失败、竞态和边界回归。
+- 增加静态追踪门槛，在浏览器执行前拒绝缺失、未知或重复的 AC。
+- 增加共享 app、evidence 和 acceptance helper；普通回归测试不再改写已审核的证据截图。
+- 将共享 Playwright 报告与失败产物移出 Epic 2 证据目录，并记录英文主版本、中文镜像的规则与命令。
+
+### 验证
+
+- 追踪门槛：Epic 1 `56/56`；Epic 2 `18/18`。
+- TypeScript 通过。
+- 仓库全部 27 条 Playwright 场景均在内置 Chromium 通过，覆盖 Epic 1、Epic 2、Epic 3、Epic 4、Epic 8 与 housing integration。
+- 验收测试发现并修复了首屏 guest session 竞态：coverage 现在会等待 income bootstrap 建立会话后再请求。
+
 ## 2026-08-25 — Epic 3 / Neon 集成兼容
 
 状态：集成已加固；不代表全部 Epic 3 已完成
