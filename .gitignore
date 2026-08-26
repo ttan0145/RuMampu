@@ -12,3 +12,4 @@ docs/.DS_Store
 backend/.DS_Store
 output/playwright/epic-2/report/
 output/playwright/epic-2/test-results/
+.DS_Store

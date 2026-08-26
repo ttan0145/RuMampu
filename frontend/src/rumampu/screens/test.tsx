@@ -377,7 +377,9 @@ export function CompareScreen() {
           <Card key={i} gap={8}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
               <NumInput
-                value={p} style={{ width: 118 }}
+                value={p}
+                style={{ width: 118 }}
+                accessibilityLabel={t('cp_pay', { i: i + 1 })}
                 onNum={x => up(st => { st.data.comparePayments[i] = Math.max(0, x); })}
               />
               <View style={{ alignItems: 'flex-end', gap: 2, flexShrink: 1 }}>
@@ -395,7 +397,9 @@ export function CompareScreen() {
               <BodyS muted>{t('cp_price_note')}</BodyS>
               <Prov p="assume" />
             </View>
-            <Waterline rows={rows} cost={p} small monthName={monthName} />
+            <View accessibilityLabel={`Payment ${i + 1} recorded-month chart`}>
+              <Waterline rows={rows} cost={p} small monthName={monthName} />
+            </View>
           </Card>
         );
       })}

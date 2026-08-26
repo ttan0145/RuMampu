@@ -215,7 +215,7 @@ export function KV({ k, children }: { k: React.ReactNode; children: React.ReactN
 
 /* Numeric input that keeps a local string while typing but reports parsed values. */
 export function NumInput({
-  value, onNum, onCommit, style, min0 = true, alignRight, decimal, placeholder,
+  value, onNum, onCommit, style, min0 = true, alignRight, decimal, placeholder, accessibilityLabel,
 }: {
   value: number | string;
   onNum: (n: number) => void;
@@ -225,6 +225,7 @@ export function NumInput({
   alignRight?: boolean;
   decimal?: boolean;
   placeholder?: string;
+  accessibilityLabel?: string;
 }) {
   const [local, setLocal] = React.useState(String(value ?? ''));
   const focused = React.useRef(false);
@@ -237,6 +238,7 @@ export function NumInput({
       keyboardType={decimal ? 'decimal-pad' : 'number-pad'}
       value={local}
       placeholder={placeholder}
+      accessibilityLabel={accessibilityLabel}
       placeholderTextColor={C.ink40}
       onFocus={() => { focused.current = true; }}
       onBlur={() => {
