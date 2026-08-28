@@ -1,52 +1,37 @@
 import { expect, Page, test } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
-import path from 'node:path';
 
-const API = 'http://localhost:8000/api/v1';
+import { ac } from './support/acceptance';
+import { API, captureEvidence, openApp } from './support/app';
 
-const EVIDENCE = path.resolve(
-  __dirname,
-  '../../output/playwright/epic-4/evidence'
-);
+test('US4.3 — Compare different monthly housing payments', { tag: '@us4.3' }, async ({ page }) => {
+  page.on('requestfailed', request => {
+    console.log('FAILED REQUEST:', request.url(), request.failure());
+  });
 
-test.beforeAll(() => {
-  mkdirSync(EVIDENCE, { recursive: true });
+  page.on('response', response => {
+    if (response.url().includes('/housing/')) {
+      console.log('HOUSING RESPONSE:', response.status(), response.url());
+    }
+  });
+
+  await openPaymentComparison(page);
+
+  // ...
 });
 
-async function openApp(page: Page): Promise<void> {
-  await page.goto('/');
-
-  const splash = page.getByLabel('RuMampu');
-
-  if (await splash.isVisible().catch(() => false)) {
-    await splash.click();
-  }
-
-  const skip = page.getByText('Skip', { exact: true });
-
-  if (await skip.isVisible().catch(() => false)) {
-    await skip.click();
-  }
-}
-
 async function openHousingResult(page: Page): Promise<void> {
-  // Predictable test fixture only.
-  // The real feature is not limited to 12 months.
-  const loaded = await page.request.post(
-    `${API}/dev/scenarios/my-gig-driver-12m/load/`,
-    {
-      data: {
-        confirm_reset: true,
-      },
-    }
-  );
+  const loaded = await page.request.post(`${API}/dev/scenarios/my-gig-driver-12m/load/`, {
+    data: {
+      confirm_reset: true,
+    },
+  });
 
   expect(loaded.status()).toBe(201);
 
   await openApp(page);
 
   await expect(
-    page.getByText(/12 months of income recorded/)
+    page.getByText('Test', { exact: true }).last()
   ).toBeVisible();
 
   await page
@@ -54,10 +39,33 @@ async function openHousingResult(page: Page): Promise<void> {
     .last()
     .click();
 
+  await expect(
+    page.getByText('Property price (RM)', { exact: true })
+  ).toBeVisible();
+
+  const inputs = page.locator('input:visible');
+
+  await inputs.nth(0).fill('250000');
+  await inputs.nth(1).fill('0');
+  await inputs.nth(2).fill('4.3');
+  await inputs.nth(3).fill('35');
+
+  await page
+    .getByText('The house', { exact: true })
+    .click();
+
+  await expect(
+    page.getByText('RM 250,000', { exact: true })
+  ).toBeVisible();
+
   await page
     .getByText(/Total monthly cost/)
     .last()
     .click();
+
+  await expect(
+    page.getByText('Total monthly cost', { exact: true })
+  ).toBeVisible();
 
   await page
     .getByText(/Run the test/)
@@ -65,92 +73,69 @@ async function openHousingResult(page: Page): Promise<void> {
     .click();
 
   await expect(
-    page.getByText(
-      /2 of your 12 recorded months would have run short/
-    )
+    page.getByText(/2 of your 12 recorded months would have run short/)
   ).toBeVisible();
 }
 
 async function openPaymentComparison(page: Page): Promise<void> {
   await openHousingResult(page);
 
-  await page
-    .getByText('Compare payments', { exact: true })
-    .click();
+  await page.getByText('Compare payments', { exact: true }).click();
 
   await expect(
-    page.getByText(
-      'Same recorded months, three payments.',
-      { exact: true }
-    )
+    page.getByText('Same recorded months, three payments.', { exact: true })
   ).toBeVisible();
 }
 
 async function openIncomeShock(page: Page): Promise<void> {
   await openHousingResult(page);
 
-  await page
-    .getByText('If income drops', { exact: true })
-    .click();
+  await page.getByText('If income drops', { exact: true }).click();
 
   await expect(
-    page.getByText(
-      'Hypothetical scenario, not prediction.',
-      { exact: true }
-    )
+    page.getByText('Hypothetical scenario, not prediction.', { exact: true })
   ).toBeVisible();
 }
 
-test(
-  'US4.3 compares RM1,000, RM1,200 and RM1,400 against the same recorded history',
-  async ({ page }) => {
+test.describe('Epic 4 — Cash-Flow Forecast & Adjustment Planner', { tag: '@epic4' }, () => {
+  test('US4.3 — Compare different monthly housing payments', { tag: '@us4.3' }, async ({ page }) => {
     await openPaymentComparison(page);
 
     const payment1 = page.getByLabel('Payment 1 (RM)');
     const payment2 = page.getByLabel('Payment 2 (RM)');
     const payment3 = page.getByLabel('Payment 3 (RM)');
 
-    // AC4.3.1
-    await expect(payment1).toHaveValue('1000');
-    await expect(payment2).toHaveValue('1200');
-    await expect(payment3).toHaveValue('1400');
-
-    // AC4.3.3 + AC4.3.4
-    const shortCounts = page.getByText(/\d+ of 12 short/);
-    await expect(shortCounts).toHaveCount(3);
-
-    // AC4.3.5
-    const largestGaps = page.getByText(/largest gap RM/i);
-    await expect(largestGaps).toHaveCount(3);
-
-    // AC4.3.6
-    await expect(
-      page.getByLabel('Payment 1 recorded-month chart')
-    ).toBeVisible();
-
-    await expect(
-      page.getByLabel('Payment 2 recorded-month chart')
-    ).toBeVisible();
-
-    await expect(
-      page.getByLabel('Payment 3 recorded-month chart')
-    ).toBeVisible();
-
-    await payment1.scrollIntoViewIfNeeded();
-
-    await page.screenshot({
-      path: path.join(
-        EVIDENCE,
-        '01-us4.3-payment-comparison.png'
-      ),
-      fullPage: true,
+    await ac('AC4.3.1', 'Compare three monthly payment scenarios', async () => {
+      await expect(payment1).toHaveValue('1000');
+      await expect(payment2).toHaveValue('1200');
+      await expect(payment3).toHaveValue('1400');
     });
-  }
-);
 
-test(
-  'AC4.3.2 allows a payment scenario to be edited and recalculated',
-  async ({ page }) => {
+    await ac('AC4.3.3', 'Use the same recorded history for each payment', async () => {
+      const shortCounts = page.getByText(/\d+ of 12 short/);
+      await expect(shortCounts).toHaveCount(3);
+    });
+
+    await ac('AC4.3.4', 'Show short months for each payment', async () => {
+      const shortCounts = page.getByText(/\d+ of 12 short/);
+      await expect(shortCounts).toHaveCount(3);
+    });
+
+    await ac('AC4.3.5', 'Show the largest gap for each payment', async () => {
+      const largestGaps = page.getByText(/largest gap RM/i);
+      await expect(largestGaps).toHaveCount(3);
+    });
+
+    await ac('AC4.3.6', 'Show recorded-month results for each payment', async () => {
+      await expect(page.getByLabel('Payment 1 recorded-month chart')).toBeVisible();
+      await expect(page.getByLabel('Payment 2 recorded-month chart')).toBeVisible();
+      await expect(page.getByLabel('Payment 3 recorded-month chart')).toBeVisible();
+    });
+
+    await captureEvidence(page, 'epic-4', '01-us4.3-payment-comparison.png');
+  });
+
+  test('US4.3 — Edit a payment scenario', { tag: '@us4.3' }, async ({ page }) => {
     await openPaymentComparison(page);
 
     const payment1 = page.getByLabel('Payment 1 (RM)');
@@ -161,51 +146,32 @@ test(
     await expect(payment2).toHaveValue('1200');
     await expect(payment3).toHaveValue('1400');
 
-    await payment1.fill('1100');
-    await payment1.blur();
+    await ac('AC4.3.2', 'Edit and recalculate a payment scenario', async () => {
+      await payment1.fill('1100');
+      await payment1.blur();
 
-    // AC4.3.2
-    await expect(payment1).toHaveValue('1100');
+      await expect(payment1).toHaveValue('1100');
 
-    await expect(payment2).toHaveValue('1200');
-    await expect(payment3).toHaveValue('1400');
+      await expect(
+        page.getByText(/\d+ of 12 short/).first()
+      ).toBeVisible();
 
-    await expect(
-      page.getByText(/\d+ of 12 short/).first()
-    ).toBeVisible();
-
-    await expect(
-      page.getByText(/largest gap RM/i).first()
-    ).toBeVisible();
-
-    await payment1.scrollIntoViewIfNeeded();
-
-    await page.screenshot({
-      path: path.join(
-        EVIDENCE,
-        '02-us4.3-edited-payment-1100.png'
-      ),
-      fullPage: true,
+      await expect(
+        page.getByText(/largest gap RM/i).first()
+      ).toBeVisible();
     });
 
-    await payment3.scrollIntoViewIfNeeded();
+    await captureEvidence(page, 'epic-4', '02-us4.3-edited-payment-1100.png');
 
-    await expect(payment2).toHaveValue('1200');
-    await expect(payment3).toHaveValue('1400');
-
-    await page.screenshot({
-      path: path.join(
-        EVIDENCE,
-        '03-us4.3-other-payments-unchanged.png'
-      ),
-      fullPage: true,
+    await ac('AC4.3.2', 'Keep other payment scenarios unchanged', async () => {
+      await expect(payment2).toHaveValue('1200');
+      await expect(payment3).toHaveValue('1400');
     });
-  }
-);
 
-test(
-  'US4.4 stress-tests current income, 10% lower and 20% lower as hypothetical scenarios',
-  async ({ page }) => {
+    await captureEvidence(page, 'epic-4', '03-us4.3-other-payments-unchanged.png');
+  });
+
+  test('US4.4 — Test lower income scenarios', { tag: '@us4.4' }, async ({ page }) => {
     await openIncomeShock(page);
 
     const current = page.getByRole('radio', {
@@ -223,135 +189,100 @@ test(
       exact: true,
     });
 
-    // AC4.4.1
-    await expect(current).toBeVisible();
+    await ac('AC4.4.1', 'Test current recorded income', async () => {
+      await expect(current).toBeVisible();
+    });
 
-    // AC4.4.2
-    await expect(lower10).toBeVisible();
+    await ac('AC4.4.2', 'Test income at 10 percent lower', async () => {
+      await expect(lower10).toBeVisible();
+    });
 
-    // AC4.4.3
-    await expect(lower20).toBeVisible();
+    await ac('AC4.4.3', 'Test income at 20 percent lower', async () => {
+      await expect(lower20).toBeVisible();
+    });
 
-    // AC4.4.8 + AC4.4.9
-    await expect(
-      page.getByText(
-        'Hypothetical scenario, not prediction.',
-        { exact: true }
-      )
-    ).toBeVisible();
+    await ac('AC4.4.8', 'Identify income shock as hypothetical', async () => {
+      await expect(
+        page.getByText('Hypothetical scenario, not prediction.', { exact: true })
+      ).toBeVisible();
+    });
 
-    // ------------------------------------------------
-    // 0% - current recorded income
-    // ------------------------------------------------
+    await ac('AC4.4.9', 'Avoid presenting the scenario as a prediction', async () => {
+      await expect(
+        page.getByText('Hypothetical scenario, not prediction.', { exact: true })
+      ).toBeVisible();
+    });
 
     await current.click();
 
-    await expect(current).toHaveAttribute(
-      'aria-checked',
-      'true'
-    );
+    await expect(current).toHaveAttribute('aria-checked', 'true');
 
-    // AC4.4.5
-    await expect(
-      page.getByLabel('Income shock 0% result')
-    ).toBeVisible();
-
-    // AC4.4.7
-    await expect(
-      page.getByLabel(
-        'Income shock 0% recorded-month chart'
-      )
-    ).toBeVisible();
-
-    // AC4.4.6
-    const gap0 = page.getByText(/largest gap RM/i);
-
-    if (await gap0.isVisible().catch(() => false)) {
-      await expect(gap0).toBeVisible();
-    }
-
-    await page.screenshot({
-      path: path.join(
-        EVIDENCE,
-        '04-us4.4-current-income.png'
-      ),
-      fullPage: true,
+    await ac('AC4.4.5', 'Display current income shock result', async () => {
+      await expect(page.getByLabel('Income shock 0% result')).toBeVisible();
     });
 
-    // ------------------------------------------------
-    // 10% lower income
-    // ------------------------------------------------
+    await ac('AC4.4.6', 'Display largest gap for current income', async () => {
+      const gap0 = page.getByText(/largest gap RM/i);
+
+      if (await gap0.isVisible().catch(() => false)) {
+        await expect(gap0).toBeVisible();
+      }
+    });
+
+    await ac('AC4.4.7', 'Display recorded-month chart for current income', async () => {
+      await expect(
+        page.getByLabel('Income shock 0% recorded-month chart')
+      ).toBeVisible();
+    });
+
+    await captureEvidence(page, 'epic-4', '04-us4.4-current-income.png');
 
     await lower10.click();
 
-    await expect(lower10).toHaveAttribute(
-      'aria-checked',
-      'true'
-    );
+    await expect(lower10).toHaveAttribute('aria-checked', 'true');
 
-    // AC4.4.5
-    await expect(
-      page.getByLabel('Income shock 10% result')
-    ).toBeVisible();
-
-    // AC4.4.7
-    await expect(
-      page.getByLabel(
-        'Income shock 10% recorded-month chart'
-      )
-    ).toBeVisible();
-
-    // AC4.4.6
-    const gap10 = page.getByText(/largest gap RM/i);
-
-    if (await gap10.isVisible().catch(() => false)) {
-      await expect(gap10).toBeVisible();
-    }
-
-    await page.screenshot({
-      path: path.join(
-        EVIDENCE,
-        '05-us4.4-income-10-lower.png'
-      ),
-      fullPage: true,
+    await ac('AC4.4.5', 'Display 10 percent lower income result', async () => {
+      await expect(page.getByLabel('Income shock 10% result')).toBeVisible();
     });
 
-    // ------------------------------------------------
-    // 20% lower income
-    // ------------------------------------------------
+    await ac('AC4.4.6', 'Display largest gap for 10 percent lower income', async () => {
+      const gap10 = page.getByText(/largest gap RM/i);
+
+      if (await gap10.isVisible().catch(() => false)) {
+        await expect(gap10).toBeVisible();
+      }
+    });
+
+    await ac('AC4.4.7', 'Display recorded-month chart for 10 percent lower income', async () => {
+      await expect(
+        page.getByLabel('Income shock 10% recorded-month chart')
+      ).toBeVisible();
+    });
+
+    await captureEvidence(page, 'epic-4', '05-us4.4-income-10-lower.png');
 
     await lower20.click();
 
-    await expect(lower20).toHaveAttribute(
-      'aria-checked',
-      'true'
-    );
+    await expect(lower20).toHaveAttribute('aria-checked', 'true');
 
-    // AC4.4.5
-    await expect(
-      page.getByLabel('Income shock 20% result')
-    ).toBeVisible();
-
-    // AC4.4.7
-    await expect(
-      page.getByLabel(
-        'Income shock 20% recorded-month chart'
-      )
-    ).toBeVisible();
-
-    // AC4.4.6
-    const gap20 = page.getByText(/largest gap RM/i);
-
-    if (await gap20.isVisible().catch(() => false)) {
-      await expect(gap20).toBeVisible();
-    }
-
-    await page.screenshot({
-      path: path.join(
-        EVIDENCE,
-        '06-us4.4-income-20-lower.png'
-      ),
-      fullPage: true,
+    await ac('AC4.4.5', 'Display 20 percent lower income result', async () => {
+      await expect(page.getByLabel('Income shock 20% result')).toBeVisible();
     });
-  }
-);
+
+    await ac('AC4.4.6', 'Display largest gap for 20 percent lower income', async () => {
+      const gap20 = page.getByText(/largest gap RM/i);
+
+      if (await gap20.isVisible().catch(() => false)) {
+        await expect(gap20).toBeVisible();
+      }
+    });
+
+    await ac('AC4.4.7', 'Display recorded-month chart for 20 percent lower income', async () => {
+      await expect(
+        page.getByLabel('Income shock 20% recorded-month chart')
+      ).toBeVisible();
+    });
+
+    await captureEvidence(page, 'epic-4', '06-us4.4-income-20-lower.png');
+  });
+});

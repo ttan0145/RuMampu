@@ -49,9 +49,8 @@ export default defineConfig({
       env: {
         ...process.env,
         ENABLE_TEST_SCENARIOS: 'True',
+
         // Acceptance tests must use the local SQLite database, not Neon.
-        // settings.py loads backend/.env, but python-dotenv does not override
-        // environment variables already supplied here.
         PGHOST: '',
         PGDATABASE: '',
         PGUSER: '',
@@ -60,7 +59,6 @@ export default defineConfig({
         PGSSLMODE: '',
       },
       url: 'http://localhost:8000/api/v1/health/',
-      // Do not accidentally reuse a manually-running Django server connected to Neon.
       reuseExistingServer: false,
       timeout: 120_000,
     },
@@ -71,10 +69,10 @@ export default defineConfig({
         ...process.env,
         CI: '1',
         EXPO_PUBLIC_APP_MODE: 'api',
-        EXPO_PUBLIC_API_URL: 'http://localhost:8000/api/v1',
+        EXPO_PUBLIC_PLAYWRIGHT_TEST_MODE: 'true',
       },
       url: 'http://localhost:8081',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 120_000,
     },
   ],

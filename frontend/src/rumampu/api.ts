@@ -1,4 +1,8 @@
-const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+const configuredApiUrl = (
+  process.env.EXPO_PUBLIC_PLAYWRIGHT_TEST_MODE === 'true'
+    ? process.env.EXPO_PUBLIC_PLAYWRIGHT_API_URL
+    : process.env.EXPO_PUBLIC_API_URL
+)?.trim();
 const configuredAppMode = process.env.EXPO_PUBLIC_APP_MODE?.trim().toLowerCase();
 
 export const APP_MODE: 'api' | 'prototype' = configuredAppMode === 'prototype'

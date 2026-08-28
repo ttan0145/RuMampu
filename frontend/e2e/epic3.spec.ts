@@ -1,119 +1,80 @@
-import { expect, Page, test } from '@playwright/test';
-import { captureEvidence } from './support/app';
+import { expect, test } from '@playwright/test';
 
-const API = 'http://localhost:8000/api/v1';
+import { ac } from './support/acceptance';
+import { API, captureEvidence, openApp } from './support/app';
 
-async function openApp(page: Page): Promise<void> {
-  await page.goto('/');
-
-  const splash = page.getByLabel('RuMampu');
-
-  if (await splash.isVisible().catch(() => false)) {
-    await splash.click();
-  }
-
-  const skip = page.getByText('Skip', { exact: true });
-
-  if (await skip.isVisible().catch(() => false)) {
-    await skip.click();
-  }
-}
-
-test('US3 housing stress test uses recorded financial history', async ({ page }) => {
-  // Load the 12-month test scenario into the backend
-  const loaded = await page.request.post(
-    `${API}/dev/scenarios/my-gig-driver-12m/load/`,
-    {
+test.describe('Epic 3 — Housing Cost & Stress Test', { tag: '@epic3' }, () => {
+  test('US3.1 — Test housing affordability against recorded financial history', { tag: '@us3.1' }, async ({ page }) => {
+    const loaded = await page.request.post(`${API}/dev/scenarios/my-gig-driver-12m/load/`, {
       data: {
         confirm_reset: true,
       },
-    }
-  );
+    });
 
-  expect(loaded.status()).toBe(201);
+    expect(loaded.status()).toBe(201);
 
-  // Open RuMampu
-  await openApp(page);
+    await openApp(page);
 
-  // Confirm the historical income data was loaded
-  await expect(
-    page.getByText(/12 months of income recorded/)
-  ).toBeVisible();
+    await ac('AC3.1.1', 'Use recorded financial history', async () => {
+      await expect(page.getByText(/12 months of income recorded/)).toBeVisible();
+    });
 
-  // Evidence 1:
-  // Screen before entering the housing stress test
-  await captureEvidence(page, 'epic-3', '01-pre-housing-check.png');
+    await captureEvidence(page, 'epic-3', '01-pre-housing-check.png');
 
-// Open the Housing Test
-await page
-  .getByText('Test', { exact: true })
-  .last()
-  .click();
+    await page.getByText('Test', { exact: true }).last().click();
 
-// Wait until The house screen has loaded
-await expect(
-  page.getByText('Property price (RM)', { exact: true })
-).toBeVisible();
+    await expect(page.getByText('Property price (RM)', { exact: true })).toBeVisible();
 
-// The house screen has these inputs in order:
-// 0 = Property price
-// 1 = Deposit
-// 2 = Interest / profit rate
-// 3 = Loan tenure
+    const inputs = page.locator('input:visible');
 
-const inputs = page.locator('input');
+    await ac('AC3.1.2', 'Enter property price', async () => {
+      await expect(inputs.nth(0)).toBeVisible();
+      await inputs.nth(0).fill('250000');
+    });
 
-// Enter the Epic 3 housing scenario
-await inputs.nth(0).fill('250000');
-await inputs.nth(1).fill('0');
-await inputs.nth(2).fill('4.3');
-await inputs.nth(3).fill('35');
+    await ac('AC3.1.3', 'Enter deposit amount', async () => {
+      await expect(inputs.nth(1)).toBeVisible();
+      await inputs.nth(1).fill('0');
+    });
 
-// Remove focus so NumInput commits the entered values
-await page.getByText('The house', { exact: true }).click();
+    await ac('AC3.1.4', 'Enter interest or profit rate', async () => {
+      await expect(inputs.nth(2)).toBeVisible();
+      await inputs.nth(2).fill('4.3');
+    });
 
-// Wait for the backend calculation.
-// RM250,000 property - RM0 deposit = RM250,000 financing.
-await expect(
-  page.getByText('RM 250,000', { exact: true })
-).toBeVisible();
+    await ac('AC3.1.5', 'Enter loan tenure', async () => {
+      await expect(inputs.nth(3)).toBeVisible();
+      await inputs.nth(3).fill('35');
+    });
 
-// Screenshot the completed housing input
-await captureEvidence(page, 'epic-3', '02-housing-input.png');
+    await page.getByText('The house', { exact: true }).click();
 
-// Go to Total monthly cost
-await page
-  .getByText(/Total monthly cost/)
-  .last()
-  .click();
+    await ac('AC3.1.6', 'Calculate financing amount', async () => {
+      await expect(page.getByText('RM 250,000', { exact: true })).toBeVisible();
+    });
 
-// Make sure the page calculation is ready
-await expect(
-  page.getByText('Total monthly cost', { exact: true })
-).toBeVisible();
+    await captureEvidence(page, 'epic-3', '02-housing-input.png');
 
-// Screenshot before running the historical test
-await captureEvidence(page, 'epic-3', '03-before-running-test.png');
+    await page.getByText(/Total monthly cost/).last().click();
 
-// Run the test
-await page
-  .getByText(/Run the test/)
-  .last()
-  .click();
+    await ac('AC3.1.7', 'Display total monthly housing cost', async () => {
+      await expect(page.getByText('Total monthly cost', { exact: true })).toBeVisible();
+    });
 
-  // Confirm the expected historical result
-  await expect(
-    page.getByText(
-      /2 of your 12 recorded months would have run short/
-    )
-  ).toBeVisible();
+    await captureEvidence(page, 'epic-3', '03-before-running-test.png');
 
-  // Confirm the expected shortfall amount
-  await expect(
-    page.getByText('RM 742', { exact: true })
-  ).toBeVisible();
+    await page.getByText(/Run the test/).last().click();
 
-  // Evidence 4:
-  // Final historical housing stress-test result
-  await captureEvidence(page, 'epic-3', '04-historical-housing-result.png');
+    await ac('AC3.1.8', 'Test housing cost against recorded history', async () => {
+      await expect(
+        page.getByText(/2 of your 12 recorded months would have run short/)
+      ).toBeVisible();
+    });
+
+    await ac('AC3.1.9', 'Display historical shortfall amount', async () => {
+      await expect(page.getByText('RM 742', { exact: true })).toBeVisible();
+    });
+
+    await captureEvidence(page, 'epic-3', '04-historical-housing-result.png');
+  });
 });
