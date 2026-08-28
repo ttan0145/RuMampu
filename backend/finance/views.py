@@ -31,7 +31,7 @@ from .serializers import (
     WorkCostItemSerializer,
     WorkCostItemUpdateSerializer,
 )
-from .services import create_income_entry, is_unusually_high, profile_for_request
+from .services import create_income_entry, is_unusually_high, profile_for_income_request, profile_for_request
 
 
 class IncomeRecordView(APIView):
@@ -100,7 +100,7 @@ class IncomeEntryListCreateView(APIView):
         responses={200: IncomeEntrySerializer(many=True)},
     )
     def get(self, request):
-        profile = profile_for_request(request)
+        profile = profile_for_income_request(request)
         return Response(IncomeEntrySerializer(profile.income_entries.all(), many=True).data)
 
     @extend_schema(
@@ -122,7 +122,7 @@ class IncomeEntryListCreateView(APIView):
         },
     )
     def post(self, request):
-        profile = profile_for_request(request)
+        profile = profile_for_income_request(request)
         serializer = IncomeEntryCreateSerializer(
             data=request.data,
             context={"profile": profile},

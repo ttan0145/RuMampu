@@ -48,18 +48,33 @@ DEFAULT_EXPENSE_CATEGORIES = (
     ("family", "Family"),
     ("other", "Other"),
 )
-
-
+#after changing this, it still takes as long to process data, but as of now since we're not doing login yet, can forget about saving data in db for now
 def profile_for_request(request) -> GuestProfile:
     if not request.session.session_key:
         request.session.create()
+    profile, created = GuestProfile.objects.get_or_create(
+        session_key=request.session.session_key,
+    )
+    # Defaults are profile bootstrap data. Creating/checking them on every API
+    # request adds many unnecessary database round trips, especially against a
+    # remote PostgreSQL database. Existing guest profiles were already
+    # initialised by the previous request flow; new profiles are initialised once.
+    if created:
+        ensure_default_sources(profile)
+        ensure_default_work_costs(profile)
+        ensure_default_commitments(profile)
+        ensure_default_expense_categories(profile)
+    return profile
+
+#to be used for now 
+def profile_for_income_request(request):
+    if not request.session.session_key:
+        request.session.create()
+
     profile, _ = GuestProfile.objects.get_or_create(
         session_key=request.session.session_key,
     )
-    ensure_default_sources(profile)
-    ensure_default_work_costs(profile)
-    ensure_default_commitments(profile)
-    ensure_default_expense_categories(profile)
+
     return profile
 
 
