@@ -9,8 +9,16 @@ from .database import build_default_database_config
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.getenv("SECRET_KEY", "rumampu-local-development-only")
-DEBUG = os.getenv("DEBUG", "True").lower() in {"1", "true", "yes"}
+SECRET_KEY = os.getenv(
+    "SECRET_KEY",
+    "rumampu-local-development-only",
+)
+
+DEBUG = os.getenv(
+    "DEBUG",
+    "False",
+).lower() in {"1", "true", "yes"}
+
 ENABLE_TEST_SCENARIOS = DEBUG and os.getenv(
     "ENABLE_TEST_SCENARIOS",
     "False",
