@@ -16,6 +16,7 @@ import { C, DISP_FONT } from '../theme';
 import { Donut, DonutLegend, IncomePatternChart } from '../charts';
 import { ScreenShell } from './shell';
 import { isValidIsoDate } from '../validation';
+import { DatePickerField } from '../date-picker';
 
 export function MoneyScreen() {
   const { S, t, monthName, go } = useApp();
@@ -231,8 +232,13 @@ export function IncomeScreen() {
         </View>
         <View style={{ gap: 6 }}>
           <BodyS muted>{t('inc_date')}</BodyS>
-          <TextField value={d.d} keyboardType="numbers-and-punctuation" placeholder="YYYY-MM-DD"
-            onChangeText={v => up(s => { s.incomeDraft.d = v; s.incomeDraft.flag = null; })} />
+          <DatePickerField
+            value={d.d}
+            mode="date"
+            monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
+            maximumDate={new Date()}
+            onChange={v => up(s => { s.incomeDraft.d = v; s.incomeDraft.flag = null; })}
+          />
         </View>
         <View style={{ gap: 6 }}>
           <BodyS muted>{t('inc_source')}</BodyS>

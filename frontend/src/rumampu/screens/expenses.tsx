@@ -13,6 +13,7 @@ import { C, DISP_FONT } from '../theme';
 import { HBar, Shimmer } from '../charts';
 import { ScreenShell } from './shell';
 import { isValidIsoDate } from '../validation';
+import { DatePickerField } from '../date-picker';
 
 function useCatLabel() {
   const { S, t } = useApp();
@@ -261,8 +262,13 @@ export function ExpAddScreen() {
         </View>
         <View style={{ gap: 6 }}>
           <BodyS muted>{t('inc_date')}</BodyS>
-          <TextField value={d.d} keyboardType="numbers-and-punctuation" placeholder="YYYY-MM-DD"
-            onChangeText={v => { setError(null); up(s => { s.expDraft.d = v; }); }} />
+          <DatePickerField
+            value={d.d}
+            mode="date"
+            monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
+            maximumDate={new Date()}
+            onChange={v => { setError(null); up(s => { s.expDraft.d = v; }); }}
+          />
         </View>
         {error ? <BodyS>{t(`ex_${error === 'amount' ? 'amount_positive' : error === 'date' ? 'date_invalid' : 'save_failed'}`)}</BodyS> : null}
         <Btn label={saving ? t('ex_saving') : t('ex_add')} onPress={() => { void save(); }} />

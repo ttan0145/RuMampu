@@ -9,6 +9,7 @@ import { monthsAgg } from './calc';
 import { C, DISP_FONT } from './theme';
 import { Btn, BodyS, PROV_G } from './ui';
 import { Hero, Logo } from './svgs';
+import { DatePickerField } from './date-picker';
 
 /* ---------- bottom sheets ---------- */
 
@@ -88,7 +89,7 @@ function isValidPastMonth(value: string): boolean {
 
 export function SheetHost() {
   const {
-    S, t, up, saveIncomeEntry, saveIncomeSource, saveCustomWorkCost,
+    S, t, up, monthName, saveIncomeEntry, saveIncomeSource, saveCustomWorkCost,
     saveExpenseCategory, toast,
   } = useApp();
   const sheet = S.sheet;
@@ -170,8 +171,13 @@ export function SheetHost() {
           <BodyS muted>{t('inc_past_hint')}</BodyS>
           <BodyS muted>{t('inc_past_no_min')}</BodyS>
           <BodyS muted>{t('inc_past_month')}</BodyS>
-          <SheetInput keyboardType="numbers-and-punctuation" placeholder="YYYY-MM" value={sel}
-            onChangeText={value => { setPastM(value); setPastError(null); }} />
+          <DatePickerField
+            value={sel}
+            mode="month"
+            monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
+            maximumDate={new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)}
+            onChange={value => { setPastM(value); setPastError(null); }}
+          />
           <BodyS muted>{t('inc_amount')}</BodyS>
           <SheetInput keyboardType="numbers-and-punctuation" value={pastA}
             onChangeText={value => { setPastA(value); setPastError(null); }} />
