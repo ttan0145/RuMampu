@@ -21,6 +21,7 @@ import { C, DISP_FONT } from '../theme';
 import { Band, Waterline } from '../charts';
 import { ScreenShell } from './shell';
 import { useHousingCalculation } from '../useHousingCalculation';
+import { ApiError } from '../../../services/api';
 
 export function HouseScreen() {
   const { S, t, up, go } = useApp();
@@ -109,11 +110,20 @@ export function HomecostScreen() {
         void (async () => {
           try {
             const currentScenario = getHousingScenario();
+            const scenarioRequest = currentScenario
+              ? updateHousingScenario(currentScenario.id, S.data).catch(error => {
+                  // A scenario ID can become stale after switching between the
+                  // local backend and the deployed backend. Recreate it once.
+                  if (error instanceof ApiError && error.status === 404) {
+                    setHousingScenario(null);
+                    return createHousingScenario(S.data);
+                  }
+                  throw error;
+                })
+              : createHousingScenario(S.data);
             const [preHousing, scenario] = await Promise.all([
               runPreHousingCheck(),
-              currentScenario
-                ? updateHousingScenario(currentScenario.id, S.data)
-                : createHousingScenario(S.data),
+              scenarioRequest,
             ]);
             setHousingScenario(scenario);
             const housingTest = await runHousingTest(scenario.id);
