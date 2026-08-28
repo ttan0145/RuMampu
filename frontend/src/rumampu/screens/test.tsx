@@ -1,8 +1,13 @@
 import React from 'react';
-import { calculateHousing, runStatelessHousingTest } from '../../../services/housingService';
 import {
-  getHousingCalculationResult, getHousingTestResult, getPreHousingResult,
-  setHousingCalculationResult, setHousingTestResult, setPreHousingResult,
+  createHousingScenario,
+  runHousingTest,
+  runPreHousingCheck,
+  updateHousingScenario,
+} from '../../../services/housingService';
+import {
+  getHousingScenario, getHousingTestResult, getPreHousingResult,
+  setHousingScenario, setHousingTestResult, setPreHousingResult,
 } from '../../../services/housingSession';
 import { Text, View } from 'react-native';
 import { useApp } from '../state';
@@ -15,29 +20,12 @@ import {
 import { C, DISP_FONT } from '../theme';
 import { Band, Waterline } from '../charts';
 import { ScreenShell } from './shell';
-
-
-function useBackendHousingCalculation(data: ReturnType<typeof useApp>['S']['data']) {
-  const [result, setResult] = React.useState(getHousingCalculationResult());
-  const costsKey = data.homeCosts.map(item => `${item.id}:${item.a}`).join('|');
-  React.useEffect(() => {
-    let active = true;
-    const timer = setTimeout(() => {
-      void calculateHousing(data).then(next => {
-        if (!active) return;
-        setHousingCalculationResult(next);
-        setResult(next);
-      }).catch(() => undefined);
-    }, 180);
-    return () => { active = false; clearTimeout(timer); };
-  }, [data.house.price, data.house.deposit, data.house.rate, data.house.years, data.house.knownPayment, costsKey]);
-  return result;
-}
+import { useHousingCalculation } from '../useHousingCalculation';
 
 export function HouseScreen() {
   const { S, t, up, go } = useApp();
   const h = S.data.house;
-  const calc = useBackendHousingCalculation(S.data);
+  const calc = useHousingCalculation(S.data);
   const inst = calc?.monthly_instalment ?? 0;
   const known = h.knownPayment != null;
   return (
@@ -90,8 +78,9 @@ export function HouseScreen() {
 }
 
 export function HomecostScreen() {
-  const { S, t, up, go } = useApp();
-  const calc = useBackendHousingCalculation(S.data);
+  const { S, t, up, go, toast } = useApp();
+  const calc = useHousingCalculation(S.data);
+  const [running, setRunning] = React.useState(false);
   const inst = calc?.monthly_instalment ?? 0;
   const total = calc?.total_monthly_cost ?? 0;
   return (
@@ -115,31 +104,19 @@ export function HomecostScreen() {
           />
         </Card>
       ) : null}
-      <Btn label={t('tc_run') + ' →'} onPress={() => {
-        void runStatelessHousingTest(S.data)
-          .then(housingTest => {
-            const existingMonths = housingTest.months.filter(month => month.existing_shortfall > 0);
-            const worst = existingMonths.reduce<typeof existingMonths[number] | null>((current, month) => {
-              if (!current || month.existing_shortfall > current.existing_shortfall) return month;
-              return current;
-            }, null);
-            const preHousing = {
-              provenance: 'calculated_from_user_record' as const,
-              work_cost_basis: 'current_active_monthly_snapshot' as const,
-              has_existing_shortfall: existingMonths.length > 0,
-              tested_months: housingTest.tested_months,
-              largest_existing_gap: housingTest.largest_existing_gap,
-              worst_month: worst ? { year: worst.year, month: worst.month } : null,
-              months: housingTest.months.map(month => ({
-                year: month.year,
-                month: month.month,
-                gross_income: month.gross_income,
-                usable_income: month.usable_income,
-                existing_costs: month.existing_costs,
-                surplus: month.surplus,
-                shortfall: month.existing_shortfall,
-              })),
-            };
+      <Btn label={t(running ? 'housing_running' : 'tc_run') + (running ? '' : ' →')} disabled={running} onPress={() => {
+        setRunning(true);
+        void (async () => {
+          try {
+            const currentScenario = getHousingScenario();
+            const [preHousing, scenario] = await Promise.all([
+              runPreHousingCheck(),
+              currentScenario
+                ? updateHousingScenario(currentScenario.id, S.data)
+                : createHousingScenario(S.data),
+            ]);
+            setHousingScenario(scenario);
+            const housingTest = await runHousingTest(scenario.id);
             setPreHousingResult(preHousing);
             setHousingTestResult(housingTest);
             up(state => {
@@ -148,7 +125,12 @@ export function HomecostScreen() {
               state.rgHowOpen = false;
             });
             go(preHousing.has_existing_shortfall ? 'precheck' : 'result');
-          });
+          } catch {
+            toast(t('housing_run_failed'), 'error');
+          } finally {
+            setRunning(false);
+          }
+        })();
       }} />
     </ScreenShell>
   );
@@ -344,19 +326,21 @@ export function RangeScreen() {
 
 export function CompareScreen() {
   const { S, t, monthName, up } = useApp();
-  const [results, setResults] = React.useState<Record<number, Awaited<ReturnType<typeof runStatelessHousingTest>>>>({});
+  const [results, setResults] = React.useState<Record<number, Awaited<ReturnType<typeof runHousingTest>>>>({});
   const paymentsKey = S.data.comparePayments.join('|');
+  const scenarioId = getHousingScenario()?.id ?? getHousingTestResult()?.scenario_id;
 
   React.useEffect(() => {
+    if (!scenarioId) return;
     let active = true;
-    void Promise.all(S.data.comparePayments.map(async (payment, index) => [index, await runStatelessHousingTest(S.data, payment)] as const))
+    void Promise.all(S.data.comparePayments.map(async (payment, index) => [index, await runHousingTest(scenarioId, payment)] as const))
       .then(items => {
         if (!active) return;
         setResults(Object.fromEntries(items));
       })
       .catch(() => undefined);
     return () => { active = false; };
-  }, [paymentsKey, S.data.house.rate, S.data.house.years, S.data.house.deposit]);
+  }, [paymentsKey, scenarioId]);
 
   return (
     <ScreenShell back title={t('rs_compare')}>
@@ -410,15 +394,17 @@ export function CompareScreen() {
 export function ShockScreen() {
   const { S, t, monthName, up } = useApp();
   const p = [0, 10, 20].includes(S.shock) ? S.shock : 0;
-  const [result, setResult] = React.useState<Awaited<ReturnType<typeof runStatelessHousingTest>> | null>(null);
+  const [result, setResult] = React.useState<Awaited<ReturnType<typeof runHousingTest>> | null>(null);
+  const scenarioId = getHousingScenario()?.id ?? getHousingTestResult()?.scenario_id;
 
   React.useEffect(() => {
+    if (!scenarioId) return;
     let active = true;
-    void runStatelessHousingTest(S.data, undefined, p)
+    void runHousingTest(scenarioId, undefined, p)
       .then(next => { if (active) setResult(next); })
       .catch(() => undefined);
     return () => { active = false; };
-  }, [p, S.data.house.price, S.data.house.deposit, S.data.house.rate, S.data.house.years, S.data.house.knownPayment]);
+  }, [p, scenarioId]);
 
   const cost = result?.tested_home_cost ?? 0;
   const rows = (result?.months ?? []).map(r => ({

@@ -16,6 +16,9 @@ export interface HousingCalculationResult {
   financing_amount: number;
   monthly_instalment: number;
   total_monthly_cost: number;
+  upfront_required: number;
+  cash_on_hand: number;
+  upfront_gap: number;
 }
 
 export interface HousingScenarioResponse extends HousingScenarioPayload {
@@ -71,10 +74,20 @@ export interface CarryingRangeResult {
   property_price_limitation: string;
 }
 
+export interface StartingLiquidityResult {
+  required_amount: number;
+  months: Array<{
+    year: number;
+    month: number;
+    closing_balance: number;
+  }>;
+}
+
 export interface HousingTestResult {
   scenario_id: number;
   tested_home_cost: number;
   indicative_tested_property_price?: number;
+  income_shock_percent: number;
   tested_months: number;
   short_month_count: number;
   existing_short_month_count: number;
@@ -84,4 +97,5 @@ export interface HousingTestResult {
   largest_housing_created_gap: number;
   months: HousingTestMonthResult[];
   carrying_range: CarryingRangeResult | null;
+  starting_liquidity: StartingLiquidityResult;
 }

@@ -1,8 +1,22 @@
-import { HousingCalculationResult, HousingTestResult, PreHousingResult } from '../types/housing';
+import {
+  HousingCalculationResult,
+  HousingScenarioResponse,
+  HousingTestResult,
+  PreHousingResult,
+} from '../types/housing';
 
 let preHousingResult: PreHousingResult | null = null;
 let housingTestResult: HousingTestResult | null = null;
 let housingCalculationResult: HousingCalculationResult | null = null;
+let housingScenario: HousingScenarioResponse | null = null;
+
+export function setHousingScenario(result: HousingScenarioResponse | null): void {
+  housingScenario = result;
+}
+
+export function getHousingScenario(): HousingScenarioResponse | null {
+  return housingScenario;
+}
 
 export function setPreHousingResult(result: PreHousingResult | null): void {
   preHousingResult = result;
@@ -28,8 +42,13 @@ export function getHousingCalculationResult(): HousingCalculationResult | null {
   return housingCalculationResult;
 }
 
-export function clearHousingSession(): void {
+export function clearHousingResults(): void {
   preHousingResult = null;
   housingTestResult = null;
+}
+
+export function clearHousingSession(): void {
+  clearHousingResults();
   housingCalculationResult = null;
+  housingScenario = null;
 }

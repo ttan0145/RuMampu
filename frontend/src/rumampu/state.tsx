@@ -1,7 +1,6 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { AppData, MOCK } from './mock';
 import { Lang, STRINGS } from './strings';
-import { preHousingOk } from './calc';
 import {
   ApiCoverageAnswer,
   ApiIncomeCoverage,
@@ -140,7 +139,6 @@ export interface Ctx {
   go: (r: Route) => void;
   goTab: (tab: Tab) => void;
   backNav: () => void;
-  runTest: () => void;
   saveIncomeEntry: (input: SaveIncomeInput) => Promise<'saved' | 'outlier'>;
   saveIncomeSource: (name: string) => Promise<string>;
   refreshIncomeRecord: () => Promise<void>;
@@ -330,16 +328,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       s.stack = [];
       if (target === 'test') s.route = s.testRan ? 'result' : 'house';
       else s.route = target;
-    });
-  }, [up]);
-
-  const runTest = useCallback(() => {
-    up(s => {
-      s.stack.push(s.route);
-      s.howOpen = false; s.rgHowOpen = false;
-      if (!preHousingOk(s.data)) { s.route = 'precheck'; return; }
-      s.testRan = true;
-      s.route = 'result';
     });
   }, [up]);
 
@@ -648,13 +636,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<Ctx>(() => ({
-    S, up, t, monthName, go, goTab, backNav, runTest,
+    S, up, t, monthName, go, goTab, backNav,
     saveIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, saveWorkCostAmount, saveCustomWorkCost,
     saveCommitmentAmount, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   }), [
-    S, up, t, monthName, go, goTab, backNav, runTest,
+    S, up, t, monthName, go, goTab, backNav,
     saveIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, saveWorkCostAmount, saveCustomWorkCost,
     saveCommitmentAmount, toast, toastMsg,

@@ -58,10 +58,18 @@ def calculation_result(data):
         principal, data['financing_rate'], data['tenure_years']
     )
     total = calculate_total_home_cost(monthly, data.get('additional_costs', []))
+    upfront_required = _decimal(data['deposit']) + sum(
+        (_decimal(item.get('amount', 0)) for item in data.get('upfront_costs', [])),
+        Decimal('0'),
+    )
+    cash_on_hand = _decimal(data.get('cash_on_hand', 0))
     return {
         'financing_amount': _money(principal),
         'monthly_instalment': _money(monthly),
         'total_monthly_cost': _money(total),
+        'upfront_required': _money(upfront_required),
+        'cash_on_hand': _money(cash_on_hand),
+        'upfront_gap': _money(max(Decimal('0'), upfront_required - cash_on_hand)),
     }
 
 
@@ -175,7 +183,32 @@ def property_price_from_monthly_payment(monthly_payment, annual_rate, years, dep
     return principal + deposit
 
 
-def housing_test_result(profile: GuestProfile, scenario):
+def _starting_liquidity(monthly):
+    """Return the opening buffer needed to keep the tested path non-negative."""
+
+    balance = Decimal('0')
+    lowest_balance = Decimal('0')
+    rows = []
+    for month in monthly:
+        balance += _decimal(month['post_housing_residual'])
+        lowest_balance = min(lowest_balance, balance)
+        rows.append({
+            'year': month['year'],
+            'month': month['month'],
+            'closing_balance': _money(balance),
+        })
+    return {
+        'required_amount': _money(max(Decimal('0'), -lowest_balance)),
+        'months': rows,
+    }
+
+
+def housing_test_result(
+    profile: GuestProfile,
+    scenario,
+    tested_monthly_home_cost=None,
+    income_shock_percent=0,
+):
     """Calculate US3.4 and US3.5 from the user's recorded financial months.
 
     Existing shortfalls are measured before the tested home cost. A
@@ -183,12 +216,19 @@ def housing_test_result(profile: GuestProfile, scenario):
     and becomes negative only after the tested home cost is applied.
     """
     pre = pre_housing_check(profile)
-    tested_cost = _money(scenario_total_monthly_cost(scenario))
+    scenario_cost = scenario_total_monthly_cost(scenario)
+    tested_cost = _money(
+        scenario_cost if tested_monthly_home_cost is None else tested_monthly_home_cost
+    )
+    shock = min(Decimal('90'), max(Decimal('0'), _decimal(income_shock_percent)))
+    shock_factor = (Decimal('100') - shock) / Decimal('100')
 
     monthly = []
     for row in pre['months']:
-        available = _decimal(row['surplus'])
-        existing_shortfall = max(Decimal('0'), _decimal(row['shortfall']))
+        usable_income = _decimal(row['usable_income']) * shock_factor
+        existing_costs = _decimal(row['existing_costs'])
+        available = usable_income - existing_costs
+        existing_shortfall = max(Decimal('0'), -available)
         post_housing_residual = available - tested_cost
         total_shortfall = max(Decimal('0'), -post_housing_residual)
         housing_created_shortfall = (
@@ -205,6 +245,9 @@ def housing_test_result(profile: GuestProfile, scenario):
 
         monthly.append({
             **row,
+            'usable_income': _money(usable_income),
+            'surplus': _money(available),
+            'shortfall': _money(existing_shortfall),
             'available_for_home': _money(available),
             'tested_home_cost': tested_cost,
             'post_housing_residual': _money(post_housing_residual),
@@ -252,9 +295,23 @@ def housing_test_result(profile: GuestProfile, scenario):
             'property_price_limitation': 'Indicative only. Not a valuation, not an offer.',
         }
 
+    extras = sum(
+        (_decimal(cost.amount) for cost in scenario.additional_costs.all()),
+        Decimal('0'),
+    )
+    tested_mortgage = max(Decimal('0'), tested_cost - extras)
+    indicative_tested_price = _money(property_price_from_monthly_payment(
+        tested_mortgage,
+        scenario.financing_rate,
+        scenario.tenure_years,
+        scenario.deposit,
+    ))
+
     return {
         'scenario_id': scenario.id,
         'tested_home_cost': tested_cost,
+        'indicative_tested_property_price': indicative_tested_price,
+        'income_shock_percent': _money(shock),
         'tested_months': len(monthly),
         'short_month_count': len(short_rows),
         'existing_short_month_count': len(existing_short_rows),
@@ -273,6 +330,7 @@ def housing_test_result(profile: GuestProfile, scenario):
         )),
         'months': monthly,
         'carrying_range': carrying,
+        'starting_liquidity': _starting_liquidity(monthly),
     }
 
 
@@ -371,6 +429,7 @@ def stateless_housing_test_result(profile: GuestProfile, data):
         'scenario_id': 0,
         'tested_home_cost': tested_cost,
         'indicative_tested_property_price': indicative_tested_price,
+        'income_shock_percent': _money(shock),
         'tested_months': len(monthly),
         'short_month_count': len(short_rows),
         'existing_short_month_count': len(existing_rows),
@@ -380,4 +439,5 @@ def stateless_housing_test_result(profile: GuestProfile, data):
         'largest_housing_created_gap': _money(max((_decimal(r['housing_created_shortfall']) for r in created_rows), default=Decimal('0'))),
         'months': monthly,
         'carrying_range': carrying,
+        'starting_liquidity': _starting_liquidity(monthly),
     }

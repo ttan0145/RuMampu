@@ -1075,6 +1075,15 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/HousingCalculationCostRequest'
+        cash_on_hand:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          default: '0.00'
+        upfront_costs:
+          type: array
+          items:
+            $ref: '#/components/schemas/HousingCalculationCostRequest'
       required:
       - deposit
       - financing_rate
@@ -1092,10 +1101,25 @@ components:
         total_monthly_cost:
           type: number
           format: double
+        upfront_required:
+          type: number
+          format: double
+          minimum: 0
+        cash_on_hand:
+          type: number
+          format: double
+          minimum: 0
+        upfront_gap:
+          type: number
+          format: double
+          minimum: 0
       required:
+      - cash_on_hand
       - financing_amount
       - monthly_instalment
       - total_monthly_cost
+      - upfront_gap
+      - upfront_required
     HousingCost:
       type: object
       properties:
@@ -1303,6 +1327,15 @@ components:
         scenario_id:
           type: integer
           minimum: 1
+        tested_monthly_home_cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        income_shock_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          default: '0.00'
       required:
       - scenario_id
     HousingTestResult:
@@ -1318,6 +1351,11 @@ components:
         indicative_tested_property_price:
           type: number
           format: double
+          minimum: 0
+        income_shock_percent:
+          type: number
+          format: double
+          maximum: 90
           minimum: 0
         tested_months:
           type: integer
@@ -1351,16 +1389,20 @@ components:
           allOf:
           - $ref: '#/components/schemas/CarryingRangeResult'
           nullable: true
+        starting_liquidity:
+          $ref: '#/components/schemas/StartingLiquidityResult'
       required:
       - carrying_range
       - existing_short_month_count
       - housing_created_short_month_count
+      - income_shock_percent
       - largest_existing_gap
       - largest_gap
       - largest_housing_created_gap
       - months
       - scenario_id
       - short_month_count
+      - starting_liquidity
       - tested_home_cost
       - tested_months
     IncomeCoverageObservation:
@@ -1927,6 +1969,36 @@ components:
         * `none` - none
         * `housing_created` - housing_created
         * `existing_and_worsened_by_housing` - existing_and_worsened_by_housing
+    StartingLiquidityMonthResult:
+      type: object
+      properties:
+        year:
+          type: integer
+        month:
+          type: integer
+          maximum: 12
+          minimum: 1
+        closing_balance:
+          type: number
+          format: double
+      required:
+      - closing_balance
+      - month
+      - year
+    StartingLiquidityResult:
+      type: object
+      properties:
+        required_amount:
+          type: number
+          format: double
+          minimum: 0
+        months:
+          type: array
+          items:
+            $ref: '#/components/schemas/StartingLiquidityMonthResult'
+      required:
+      - months
+      - required_amount
     StatelessFinancialMonthRequest:
       type: object
       properties:
@@ -1978,6 +2050,15 @@ components:
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
           nullable: true
         additional_costs:
+          type: array
+          items:
+            $ref: '#/components/schemas/HousingCalculationCostRequest'
+        cash_on_hand:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          default: '0.00'
+        upfront_costs:
           type: array
           items:
             $ref: '#/components/schemas/HousingCalculationCostRequest'

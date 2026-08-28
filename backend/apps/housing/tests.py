@@ -234,5 +234,109 @@ class HousingCalculationApiTests(TestCase):
                 "financing_amount": 270000.0,
                 "monthly_instalment": 750.0,
                 "total_monthly_cost": 850.1,
+                "upfront_required": 30000.0,
+                "cash_on_hand": 0.0,
+                "upfront_gap": 30000.0,
             },
         )
+
+    def test_calculation_returns_authoritative_upfront_gap(self):
+        response = self.client.post(
+            "/api/v1/housing/calculate/",
+            data={
+                "property_price": "300000.00",
+                "deposit": "30000.00",
+                "financing_rate": "0.000",
+                "tenure_years": 30,
+                "cash_on_hand": "25000.00",
+                "upfront_costs": [
+                    {"category": "Legal", "amount": "2500.00"},
+                    {"category": "Moving", "amount": "500.00"},
+                ],
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["upfront_required"], 33000.0)
+        self.assertEqual(response.json()["cash_on_hand"], 25000.0)
+        self.assertEqual(response.json()["upfront_gap"], 8000.0)
+
+
+class HousingTestResultApiTests(HousingApiTestMixin, TestCase):
+    test_url = "/api/v1/housing/test-result/"
+
+    def setUp(self):
+        self.client = Client()
+        self.profile_instance = self.profile()
+        self.profile_instance.work_cost_items.update(monthly_amount=Decimal("0.00"))
+        self.profile_instance.commitment_items.update(monthly_amount=Decimal("0.00"))
+        self.add_income(self.profile_instance, "2026-01", "600.00")
+        self.add_income(self.profile_instance, "2026-02", "1000.00")
+        created = self.client.post(
+            self.scenarios_url,
+            data={
+                **self.scenario_payload,
+                "known_monthly_payment": "500.00",
+                "additional_costs": [],
+            },
+            content_type="application/json",
+        )
+        self.scenario_id = created.json()["id"]
+
+    def test_saved_scenario_drives_test_and_starting_liquidity(self):
+        response = self.client.post(
+            self.test_url,
+            data={"scenario_id": self.scenario_id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["scenario_id"], self.scenario_id)
+        self.assertEqual(payload["tested_home_cost"], 500.0)
+        self.assertEqual(payload["short_month_count"], 0)
+        self.assertEqual(payload["income_shock_percent"], 0.0)
+        self.assertEqual(payload["starting_liquidity"]["required_amount"], 0.0)
+        self.assertEqual(
+            [row["closing_balance"] for row in payload["starting_liquidity"]["months"]],
+            [100.0, 600.0],
+        )
+
+    def test_payment_comparison_override_is_calculated_without_mutating_scenario(self):
+        response = self.client.post(
+            self.test_url,
+            data={
+                "scenario_id": self.scenario_id,
+                "tested_monthly_home_cost": "700.00",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["tested_home_cost"], 700.0)
+        self.assertEqual(payload["short_month_count"], 1)
+        self.assertEqual(payload["largest_gap"], 100.0)
+        self.assertEqual(payload["starting_liquidity"]["required_amount"], 100.0)
+        self.assertEqual(
+            HousingScenario.objects.get(id=self.scenario_id).known_monthly_payment,
+            Decimal("500.00"),
+        )
+
+    def test_income_shock_is_calculated_from_authoritative_record(self):
+        response = self.client.post(
+            self.test_url,
+            data={
+                "scenario_id": self.scenario_id,
+                "income_shock_percent": "20.00",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["income_shock_percent"], 20.0)
+        self.assertEqual(payload["short_month_count"], 1)
+        self.assertEqual(payload["largest_gap"], 20.0)
+        self.assertEqual(payload["starting_liquidity"]["required_amount"], 20.0)

@@ -2,6 +2,25 @@
 
 Language: **English** | [Chinese (CN)](CHANGELOG.cn.md)
 
+## 2026-08-28 — I1 backend-authoritative housing calculations
+
+Status: complete and verified for main delivery
+
+### Delivered
+
+- Changed the formal housing flow to create or update a guest-owned scenario, request the independent pre-housing check, and run the historical test by scenario ID.
+- Reused `/housing/test-result/` for payment comparisons and income-drop scenarios through non-persisted overrides; the formal frontend no longer calls the stateless `/housing/test/` endpoint or submits client-derived finance months.
+- Removed frontend housing formulas and the `preHousingOk()` navigation decision from `calc.ts` and `state.tsx`.
+- Added backend-authoritative upfront gaps and starting-liquidity paths, then changed Home and Preparation screens to render retained server responses.
+- Added serializer/service/API coverage, regenerated OpenAPI, and recorded the decision in ADR 0004.
+
+### Verification
+
+- Full backend suite: 98 tests passed, including 18 housing tests.
+- TypeScript and OpenAPI validation passed; Django system checks and migration-drift checks passed.
+- The complete Playwright suite passed 28/28 scenarios; the traceability gate confirmed Epic 1 at 56/56 ACs and Epic 2 at 18/18 ACs.
+- Fixed profile bootstrap when an income-entry request is the first request in a session, so historical totals cannot leave the profile without default sources, work costs, commitments, or expense categories.
+
 ## 2026-08-26 — Playwright acceptance-test standardisation
 
 Status: implemented locally; not committed or pushed

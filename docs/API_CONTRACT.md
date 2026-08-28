@@ -90,6 +90,7 @@ After confirmation, the client retries the same data with `confirm_outlier: true
 | POST | `/api/v1/housing/pre-check/` | Evaluate the current guest record before housing costs |
 | GET/POST | `/api/v1/housing/scenarios/` | List or create current-owner housing scenarios |
 | GET/PUT/PATCH/DELETE | `/api/v1/housing/scenarios/{id}/` | Read, update, or delete a housing scenario |
+| POST | `/api/v1/housing/test-result/` | Test a current-owner scenario against the authoritative finance record |
 
 The OpenAPI schema is authoritative for complete request and response field definitions.
 
@@ -351,6 +352,18 @@ The backend reads the session-owned income entries, current active work costs, c
 ```
 
 Housing services use `Decimal` internally and round monetary outputs half-up. The housing endpoints retain their existing numeric JSON response fields during v1 compatibility; finance-domain monetary responses continue to use two-decimal strings.
+
+`POST /api/v1/housing/calculate/` also returns the authoritative `upfront_required`, echoed `cash_on_hand`, and `upfront_gap` when the client supplies `upfront_costs` and `cash_on_hand`. These are derived display results and are not persisted as scenario facts.
+
+The formal housing-test flow is:
+
+1. create or update the current-owner `/housing/scenarios/` resource;
+2. request `/housing/pre-check/` for the navigation decision; and
+3. submit its `scenario_id` to `/housing/test-result/` for the displayed historical result.
+
+The test-result request may include `tested_monthly_home_cost` for a non-persisted payment comparison and `income_shock_percent` from 0 through 90 for a hypothetical income-drop case. Both reuse the saved scenario's rate, tenure, deposit, additional costs, and the backend finance record. They do not mutate the scenario. The response includes the tested monthly result, shortfalls, carrying range, indicative price conversion, and `starting_liquidity` path.
+
+`POST /api/v1/housing/test/` remains a compatibility endpoint for older stateless clients. The formal frontend does not call it and does not submit a client-derived copy of financial months.
 
 ## 11. Compatibility and change policy
 

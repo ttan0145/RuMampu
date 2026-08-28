@@ -26,8 +26,8 @@ Microservices are not currently justified. Reconsider them only when independent
 | Commitments | Monthly living costs, debts, and savings commitments | US1.4 persisted and accepted |
 | Expenses | Daily expenses, categories, and receipt-confirmation provenance | US1.5–US1.7 persisted and accepted; production OCR pending |
 | Income analysis | Monthly usable income, descriptive statistics, recorded minima, and slower-period coverage | Epic 2 backend-authoritative and accepted |
-| Housing readiness | Housing scenarios, cash flow, and explanations of payment pressure | US3.1–US3.3 integration present; remaining Epic 3 delivery pending |
-| Preparation | Cash buffer, upfront costs, document checklist, and comparisons | UI prototype |
+| Housing readiness | Housing scenarios, cash flow, and explanations of payment pressure | Django-authoritative calculation and navigation flow |
+| Preparation | Cash buffer, upfront costs, document checklist, and comparisons | Financial results backend-authoritative; checklist remains UI state |
 
 Domain logic belongs in the service layer. API views orchestrate input and output only. Do not duplicate business calculations in screen components or serializers.
 
@@ -41,7 +41,7 @@ Domain logic belongs in the service layer. API views orchestrate input and outpu
 
 For Epic 2, the service recalculates analysis from `IncomeEntry` and active `WorkCostItem` facts. Only the user's explicit `IncomeCoverage` answer is persisted; calculated response snapshots are not stored.
 
-The Epic 3 pre-housing check reuses that same record and work-cost convention, then applies active commitments and confirmed expense months. Legacy request fields remain accepted during v1 migration, but clients cannot replace the server-owned financial facts. Housing scenarios belong to exactly one authenticated user or guest profile.
+The housing flow reuses that same record and work-cost convention, then applies active commitments and confirmed expense months. The frontend persists a current-owner `HousingScenario`, obtains the independent pre-housing result, and runs the historical test by scenario ID. Payment comparisons and income-drop cases are overrides on that saved scenario; they do not introduce client-side financial formulas or mutate the saved scenario. Legacy stateless requests remain accepted during v1 migration, but the formal frontend does not use them. Housing scenarios belong to exactly one authenticated user or guest profile.
 
 ## 5. Data and privacy rules
 
@@ -61,6 +61,7 @@ The Epic 3 pre-housing check reuses that same record and work-cost convention, t
 - Epic 2 has no client-side fallback algorithm. Pattern and coverage responses come from the versioned API, while downstream clients consume the confirmed `unrepresented_slower_months` field.
 - When a domain is connected to the API, remove the corresponding mock data incrementally; one field must not be controlled by both mock and API data.
 - Income-pattern and coverage screens treat the last successful server response as authoritative. Draft coverage selections do not become conclusions until an explicit save succeeds.
+- Housing screens retain the last successful scenario, pre-check, calculation, and test responses. Display and navigation both use those responses; the frontend does not recalculate instalments, total home cost, shortfalls, carrying range, payment comparisons, income shocks, upfront gaps, or starting liquidity.
 
 ## 7. Definition of done
 

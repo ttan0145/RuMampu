@@ -2,6 +2,25 @@
 
 语言：**中文（CN）** | [English](CHANGELOG.md)
 
+## 2026-08-28 — I1 住房计算后端权威化
+
+状态：已完成并通过 main 交付前验证
+
+### 已交付
+
+- 正式住房流程改为创建或更新访客归属 scenario、独立请求住房前置检查，再按 scenario ID 运行历史测试。
+- 付款比较和收入下降通过非持久化覆盖值复用 `/housing/test-result/`；正式前端不再调用无状态 `/housing/test/`，也不再提交客户端计算的财务月份。
+- 从 `calc.ts` 和 `state.tsx` 移除前端住房公式及 `preHousingOk()` 导航判断。
+- 增加后端权威的前期资金缺口和起始缓冲金路径，并让首页与准备页展示保留的服务端响应。
+- 增加 serializer、service 与 API 测试覆盖，重新生成 OpenAPI，并以 ADR 0004 记录决策。
+
+### 验证
+
+- 完整后端测试 98 项通过，其中住房测试 18 项。
+- TypeScript、OpenAPI 校验、Django 系统检查及 migration drift 检查通过。
+- 完整 Playwright 套件 28/28 通过；traceability gate 确认 Epic 1 为 56/56 AC、Epic 2 为 18/18 AC。
+- 修复收入明细请求作为 session 首个请求时的 profile 初始化，避免历史月总额先创建 profile 后缺失默认收入来源、工作成本、固定开支和支出分类。
+
 ## 2026-08-26 — Playwright 验收测试标准化
 
 状态：已在本地实施；尚未提交或推送

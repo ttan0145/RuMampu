@@ -90,6 +90,7 @@
 | POST | `/api/v1/housing/pre-check/` | 使用当前访客记录评估加入住房成本前的现有月度缺口 |
 | GET/POST | `/api/v1/housing/scenarios/` | 列出或创建当前归属方的住房场景 |
 | GET/PUT/PATCH/DELETE | `/api/v1/housing/scenarios/{id}/` | 读取、更新或删除住房场景 |
+| POST | `/api/v1/housing/test-result/` | 使用权威财务记录测试当前归属方的住房场景 |
 
 请求和响应字段的完整定义以 OpenAPI schema 为准。
 
@@ -351,6 +352,18 @@ API 不返回预测、稳定性、风险或固定阈值结论。
 ```
 
 住房服务内部使用 `Decimal` 并按 half-up 处理金额响应。为保持 v1 兼容，住房端点继续使用既有 numeric JSON 金额字段；finance 领域的金额响应继续使用两位小数字符串。
+
+当客户端提交 `upfront_costs` 与 `cash_on_hand` 时，`POST /api/v1/housing/calculate/` 还会返回权威计算的 `upfront_required`、原样确认的 `cash_on_hand` 和 `upfront_gap`。这些是用于展示的派生结果，不作为 scenario 事实持久化。
+
+正式住房测试流程为：
+
+1. 创建或更新当前归属方的 `/housing/scenarios/` 资源；
+2. 请求 `/housing/pre-check/`，以其响应决定导航；
+3. 将 `scenario_id` 提交到 `/housing/test-result/`，获得展示用历史测试结果。
+
+测试请求可以携带 `tested_monthly_home_cost`，用于不持久化的付款比较；也可以携带 0 至 90 的 `income_shock_percent`，用于假设收入下降场景。两者都会复用已保存 scenario 的利率、年期、头期、附加成本及后端财务记录，且不会修改 scenario。响应包括测试月度结果、短缺、承担区间、参考房价换算及 `starting_liquidity` 路径。
+
+`POST /api/v1/housing/test/` 仅作为旧版无状态客户端的兼容端点保留。正式前端不再调用它，也不会提交由客户端计算的财务月份副本。
 
 ## 11. 兼容与变更
 

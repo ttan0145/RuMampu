@@ -77,7 +77,14 @@ class HousingTestResultView(APIView):
             from rest_framework.exceptions import NotFound
             raise NotFound('Housing scenario not found.')
 
-        return Response(housing_test_result(profile, scenario))
+        return Response(housing_test_result(
+            profile,
+            scenario,
+            tested_monthly_home_cost=serializer.validated_data.get(
+                'tested_monthly_home_cost'
+            ),
+            income_shock_percent=serializer.validated_data['income_shock_percent'],
+        ))
 
 
 

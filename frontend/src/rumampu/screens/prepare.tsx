@@ -1,9 +1,9 @@
 import React from 'react';
 import { Text, View } from 'react-native';
+import { getHousingTestResult } from '../../../services/housingSession';
 import { useApp } from '../state';
-import {
-  bufferNeed, nf, recSpan, rm, testRows, totalHomeCost, upfrontNeed,
-} from '../calc';
+import { nf, rm } from '../calc';
+import { useHousingCalculation } from '../useHousingCalculation';
 import {
   Badge, BodyS, Btn, BtnLine, BtnQuiet, Card, Display, Divider, EditList,
   Fig, FigRow, IcLab, KV, NoteC, P, Prov,
@@ -34,8 +34,11 @@ export function PrepareScreen() {
 
 export function UpfrontScreen() {
   const { S, t, up } = useApp();
+  const calculation = useHousingCalculation(S.data);
   const dep = S.data.house.deposit;
-  const need = upfrontNeed(S.data), have = S.data.cashOnHand, gap = Math.max(0, need - have);
+  const need = calculation?.upfront_required ?? 0;
+  const have = calculation?.cash_on_hand ?? 0;
+  const gap = calculation?.upfront_gap ?? 0;
   const scale = Math.max(need, have, 1) * 1.12;
   const pct = (v: number) => v / scale * 100;
   return (
@@ -86,17 +89,31 @@ export function UpfrontScreen() {
 }
 
 export function BufferScreen() {
-  const { S, t, monthName } = useApp();
-  const cost = totalHomeCost(S.data);
-  const b = bufferNeed(S.data, cost);
-  const maxAbs = Math.max(...b.rows.map(r => Math.abs(r.bal)), 1);
+  const { t, monthName, goTab } = useApp();
+  const result = getHousingTestResult();
+  const liquidity = result?.starting_liquidity;
+  if (!liquidity || liquidity.months.length === 0) {
+    return (
+      <ScreenShell back title={t('pr_buffer')}>
+        <BodyS muted>{t('housing_result_required')}</BodyS>
+        <Btn label={t('home_test')} onPress={() => goTab('test')} />
+      </ScreenShell>
+    );
+  }
+  const rows = liquidity.months.map(row => ({
+    y: row.year,
+    m: row.month - 1,
+    bal: row.closing_balance,
+  }));
+  const maxAbs = Math.max(...rows.map(r => Math.abs(r.bal)), 1);
   const mid = 52;
-  const sp = recSpan(S.data)!;
+  const first = rows[0];
+  const last = rows[rows.length - 1];
   return (
     <ScreenShell back title={t('pr_buffer')}>
-      <Fig value={rm(b.need)} p="calc" cls="h-xl" />
+      <Fig value={rm(liquidity.required_amount)} p="calc" cls="h-xl" />
       <BodyS muted>{t('bf_def')}</BodyS>
-      {b.need === 0 ? (
+      {liquidity.required_amount === 0 ? (
         <NoteC>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <BodyS>{t('bf_zero')}</BodyS>
@@ -107,7 +124,7 @@ export function BufferScreen() {
       <BodyS muted>{t('bf_bal')}</BodyS>
       <View style={{ paddingTop: 10, paddingRight: 34, paddingBottom: 26, paddingLeft: 2, marginRight: -20 }}>
         <View style={{ flexDirection: 'row', gap: 8, height: 104 }}>
-          {b.rows.map((r, i) => {
+          {rows.map((r, i) => {
             const h = Math.max(3, Math.abs(r.bal) / maxAbs * 46);
             const neg = r.bal < 0;
             return (
@@ -121,7 +138,7 @@ export function BufferScreen() {
           <View style={{ position: 'absolute', left: -2, right: -14, bottom: 104 - mid, borderTopWidth: 2.5, borderTopColor: C.ink }} />
         </View>
         <View style={{ flexDirection: 'row', gap: 8, paddingTop: 6 }}>
-          {b.rows.map((r, i) => (
+          {rows.map((r, i) => (
             <Text key={i} style={{ flex: 1, minWidth: 14, textAlign: 'center', fontSize: 11, letterSpacing: 0.44, color: C.ink64 }}>
               {monthName(r.m).toUpperCase()}
             </Text>
@@ -129,7 +146,7 @@ export function BufferScreen() {
         </View>
         <View style={{ marginTop: 2, alignItems: 'flex-start' }}><Prov p="calc" /></View>
       </View>
-      <BodyS muted>{t('bf_basis', { a: monthName(sp.from.m), b: monthName(sp.to.m) })}</BodyS>
+      <BodyS muted>{t('bf_basis', { a: monthName(first.m), b: monthName(last.m) })}</BodyS>
     </ScreenShell>
   );
 }
@@ -206,10 +223,18 @@ export function PvMonthScreen() {
 }
 
 export function PvCompareScreen() {
-  const { S, t } = useApp();
-  const cost = totalHomeCost(S.data);
-  const rows = testRows(S.data, cost);
-  const n = rows.length, s = rows.filter(r => r.short).length;
+  const { S, t, goTab } = useApp();
+  const result = getHousingTestResult();
+  if (!result) {
+    return (
+      <ScreenShell back title={t('pv_then')}>
+        <BodyS muted>{t('housing_result_required')}</BodyS>
+        <Btn label={t('home_test')} onPress={() => goTab('test')} />
+      </ScreenShell>
+    );
+  }
+  const n = result.tested_months;
+  const s = result.short_month_count;
   const am = S.data.after.months;
   const s2 = am.filter(r => r.inc < r.home).length;
   return (

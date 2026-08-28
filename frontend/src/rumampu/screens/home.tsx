@@ -1,18 +1,17 @@
 import React from 'react';
-import { clearHousingSession } from '../../../services/housingSession';
+import { clearHousingResults, getHousingTestResult } from '../../../services/housingSession';
 import { useApp } from '../state';
-import {
-  recSpan, rm, testRows, totalHomeCost,
-} from '../calc';
+import { recSpan, rm } from '../calc';
 import { unrepresentedCoverageMonths } from '../money';
 import { Btn, BtnLine, BodyS, Display, Fig, FigRow, KV, NoteC } from '../ui';
 import { CovStrip } from '../charts';
 import { ScreenShell } from './shell';
 
 export function HomeScreen() {
-  const { S, t, monthName, go } = useApp();
+  const { S, t, monthName, go, up } = useApp();
   const sp = recSpan(S.data);
-  const n = sp ? sp.list.length : 0;
+  const housingResult = getHousingTestResult();
+  const n = housingResult?.tested_months ?? (sp ? sp.list.length : 0);
 
   if (!sp) {
     return (
@@ -25,7 +24,7 @@ export function HomeScreen() {
 
   const covMonths = new Map(sp.list.map(r => [r.m, r]));
 
-  if (!S.testRan) {
+  if (!S.testRan || !housingResult) {
     return (
       <ScreenShell brand>
         <Display cls="h-xl">{t(n === 1 ? 'home_rec_one' : 'home_rec', { n })}</Display>
@@ -38,10 +37,8 @@ export function HomeScreen() {
     );
   }
 
-  const cost = totalHomeCost(S.data);
-  const rows = testRows(S.data, cost);
-  const s = rows.filter(r => r.short).length;
-  const g = Math.max(...rows.map(r => r.gap), 0);
+  const s = housingResult.short_month_count;
+  const g = housingResult.largest_gap;
   const un = unrepresentedCoverageMonths(S.incomeCoverage);
 
   return (
@@ -56,7 +53,11 @@ export function HomeScreen() {
       ) : S.incomeCoverage?.answer == null ? (
         <BtnLine label={t('cov_unchecked') + ' →'} onPress={() => go('coverage')} />
       ) : null}
-      <Btn label={t('home_retest')} onPress={() => { clearHousingSession(); go('house'); }} />
+      <Btn label={t('home_retest')} onPress={() => {
+        clearHousingResults();
+        up(state => { state.testRan = false; });
+        go('house');
+      }} />
     </ScreenShell>
   );
 }
