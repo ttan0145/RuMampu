@@ -222,7 +222,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           next.incomeSync = 'ready';
           return next;
         });
-      } catch {
+      } catch (error) {
+        console.error('Failed to load income record from backend:', error);
         if (active) {
           up(s => {
             s.incomeSync = 'error';

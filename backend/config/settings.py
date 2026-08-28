@@ -15,11 +15,8 @@ ENABLE_TEST_SCENARIOS = DEBUG and os.getenv(
     "ENABLE_TEST_SCENARIOS",
     "False",
 ).lower() in {"1", "true", "yes"}
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost,testserver").split(",")
-    if host.strip()
-]
+
+ALLOWED_HOSTS = ["*"]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -47,6 +44,8 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "config.urls"
+
+CORS_ALLOW_ALL_ORIGINS = True #must removed once we host
 
 TEMPLATES = [
     {
