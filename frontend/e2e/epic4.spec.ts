@@ -189,6 +189,11 @@ test.describe('Epic 4 — Cash-Flow Forecast & Adjustment Planner', { tag: '@epi
       exact: true,
     });
 
+    const custom = page.getByRole('radio', {
+      name: 'Custom',
+      exact: true,
+    });
+
     await ac('AC4.4.1', 'Test current recorded income', async () => {
       await expect(current).toBeVisible();
     });
@@ -199,6 +204,16 @@ test.describe('Epic 4 — Cash-Flow Forecast & Adjustment Planner', { tag: '@epi
 
     await ac('AC4.4.3', 'Test income at 20 percent lower', async () => {
       await expect(lower20).toBeVisible();
+    });
+
+    await ac('AC4.4.4', 'Test a custom income reduction percentage', async () => {
+      await expect(custom).toBeVisible();
+      await custom.click();
+      const customInput = page.getByLabel('Custom income shock percentage');
+      await expect(customInput).toBeVisible();
+      await customInput.fill('15');
+      await page.getByRole('button', { name: 'Done', exact: true }).click();
+      await expect(page.getByLabel('Income shock 15% result')).toBeVisible();
     });
 
     await ac('AC4.4.8', 'Identify income shock as hypothetical', async () => {

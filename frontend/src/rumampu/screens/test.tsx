@@ -9,7 +9,7 @@ import {
   getHousingScenario, getHousingTestResult, getPreHousingResult,
   setHousingScenario, setHousingTestResult, setPreHousingResult,
 } from '../../../services/housingSession';
-import { Text, View } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
 import { useApp } from '../state';
 import { nf, rm } from '../calc';
 import { unrepresentedCoverageMonths } from '../money';
@@ -393,7 +393,10 @@ export function CompareScreen() {
 
 export function ShockScreen() {
   const { S, t, monthName, up } = useApp();
-  const p = [0, 10, 20].includes(S.shock) ? S.shock : 0;
+  const p = Math.min(90, Math.max(0, S.shock));
+  const isCustom = ![0, 10, 20].includes(p);
+  const [customOpen, setCustomOpen] = React.useState(isCustom);
+  const [customPct, setCustomPct] = React.useState(isCustom ? String(p) : '');
   const [result, setResult] = React.useState<Awaited<ReturnType<typeof runHousingTest>> | null>(null);
   const scenarioId = getHousingScenario()?.id ?? getHousingTestResult()?.scenario_id;
 
@@ -424,12 +427,57 @@ export function ShockScreen() {
           <Chip
             key={v}
             label={v === 0 ? '0%' : `−${v}%`}
-            on={p === v}
+            on={p === v && !customOpen}
             selectionRole="radio"
-            onPress={() => up(x => { x.shock = v; x.sheet = null; })}
+            onPress={() => {
+              setCustomOpen(false);
+              setCustomPct('');
+              up(x => { x.shock = v; x.sheet = null; });
+            }}
           />
         ))}
+        <Chip
+          label={t('sh_custom')}
+          on={customOpen || isCustom}
+          selectionRole="radio"
+          onPress={() => {
+            setCustomOpen(true);
+            setCustomPct(isCustom ? String(p) : '');
+          }}
+        />
       </Chips>
+      {customOpen ? (
+        <View style={{ gap: 8, maxWidth: 220 }}>
+          <BodyS muted>{t('sh_pct')}</BodyS>
+          <TextInput
+            value={customPct}
+            accessibilityLabel="Custom income shock percentage"
+            keyboardType="decimal-pad"
+            placeholder="e.g. 15"
+            placeholderTextColor={C.ink40}
+            onChangeText={setCustomPct}
+            style={{
+              minHeight: 46,
+              borderWidth: 1.5,
+              borderColor: C.ink40,
+              borderRadius: 12,
+              paddingHorizontal: 14,
+              fontSize: 16,
+              color: C.ink,
+              backgroundColor: C.paper,
+            }}
+          />
+          <Btn
+            label={t('done')}
+            onPress={() => {
+              const raw = Number.parseFloat(customPct);
+              const next = Number.isFinite(raw) ? Math.min(90, Math.max(0, raw)) : 0;
+              setCustomPct(String(next));
+              up(x => { x.shock = next; x.sheet = null; });
+            }}
+          />
+        </View>
+      ) : null}
       <View accessibilityLabel={`Income shock ${p}% result`}>
         <Display cls="h-l">{t('sh_head', { p, s: shortCount, n })}</Display>
       </View>
