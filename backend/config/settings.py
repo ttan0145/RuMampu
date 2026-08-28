@@ -53,7 +53,7 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "config.urls"
 
-CORS_ALLOW_ALL_ORIGINS = True #must removed once we host
+CORS_ALLOW_ALL_ORIGINS = False
 
 TEMPLATES = [
     {
@@ -116,13 +116,24 @@ SPECTACULAR_SETTINGS = {
     "SWAGGER_UI_SETTINGS": {"persistAuthorization": True},
 }
 
+CORS_ALLOW_ALL_ORIGINS = False
+
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv(
         "CORS_ALLOWED_ORIGINS",
-        "http://localhost:8081,http://127.0.0.1:8081,http://localhost:19006,http://127.0.0.1:19006",
+        (
+            "http://localhost:8081,"
+            "http://127.0.0.1:8081,"
+            "http://localhost:19006,"
+            "http://127.0.0.1:19006,"
+            "https://rumampu-frontend.vercel.app"
+        ),
     ).split(",")
     if origin.strip()
 ]
+
 CORS_ALLOW_CREDENTIALS = True
-SESSION_COOKIE_SAMESITE = "Lax"
+
+SESSION_COOKIE_SAMESITE = "None"
+SESSION_COOKIE_SECURE = not DEBUG
