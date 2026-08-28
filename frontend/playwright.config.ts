@@ -63,13 +63,13 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: `${npm} run web -- --port 8081`,
+      command:
+        'EXPO_PUBLIC_API_URL=http://localhost:8000/api/v1 npm run web -- --port 8081',
       cwd: '.',
       env: {
         ...process.env,
         CI: '1',
-        EXPO_PUBLIC_APP_MODE: 'api',
-        EXPO_PUBLIC_PLAYWRIGHT_TEST_MODE: 'true',
+        EXPO_PUBLIC_API_URL: 'http://localhost:8000/api/v1',
       },
       url: 'http://localhost:8081',
       reuseExistingServer: false,

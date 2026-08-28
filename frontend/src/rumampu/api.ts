@@ -1,6 +1,8 @@
+import { Platform } from 'react-native';
+
 const configuredApiUrl = (
-  process.env.EXPO_PUBLIC_PLAYWRIGHT_TEST_MODE === 'true'
-    ? process.env.EXPO_PUBLIC_PLAYWRIGHT_API_URL
+  Platform.OS === 'web'
+    ? 'http://localhost:8000/api/v1'
     : process.env.EXPO_PUBLIC_API_URL
 )?.trim();
 const configuredAppMode = process.env.EXPO_PUBLIC_APP_MODE?.trim().toLowerCase();
