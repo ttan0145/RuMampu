@@ -16,6 +16,13 @@ export function PrepareScreen() {
   const { t, go } = useApp();
   return (
     <ScreenShell title={t('tab_prepare')}>
+      <NoteC>
+        <View style={{ gap: 3, alignItems: 'flex-start' }}>
+          <Badge label={t('pr_coming')} />
+          <BodyS muted>{t('pr_coming_note')}</BodyS>
+        </View>
+      </NoteC>
+      {/*
       <BtnQuiet onPress={() => go('upfront')}><IcLab name="wallet"><P>{t('pr_upfront')}</P></IcLab></BtnQuiet>
       <BtnQuiet onPress={() => go('buffer')}><IcLab name="ring"><P>{t('pr_buffer')}</P></IcLab></BtnQuiet>
       <BtnQuiet onPress={() => go('docs')}><IcLab name="file"><P>{t('pr_docs')}</P></IcLab></BtnQuiet>
@@ -28,6 +35,7 @@ export function PrepareScreen() {
           </View>
         </IcLab>
       </BtnQuiet>
+      */}
     </ScreenShell>
   );
 }
