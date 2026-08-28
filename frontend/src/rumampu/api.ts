@@ -5,14 +5,17 @@ const configuredApiUrl = (
     ? 'http://localhost:8000/api/v1'
     : process.env.EXPO_PUBLIC_API_URL
 )?.trim();
-const configuredAppMode = process.env.EXPO_PUBLIC_APP_MODE?.trim().toLowerCase();
+const configuredAppMode = process.env.EXPO_PUBLIC_API_URL;
 
 export const APP_MODE: 'api' | 'prototype' = configuredAppMode === 'prototype'
   ? 'prototype'
   : 'api';
 export const INCOME_API_ENABLED = APP_MODE === 'api';
-const API_ROOT = (configuredApiUrl || 'http://127.0.0.1:8000/api/v1').replace(/\/$/, '');
 
+const API_ROOT = (
+  configuredApiUrl ||
+  'http://127.0.0.1:8000/api/v1'
+).replace(/\/$/, '');
 export interface ApiIncomeSource {
   id: number;
   slug: string;

@@ -1,9 +1,8 @@
 import { Platform } from 'react-native';
 
-const API_BASE_URL = (
-  Platform.OS === 'web'
-    ? 'http://localhost:8000/api/v1'
-    : process.env.EXPO_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1'
+const API_ROOT = (
+  process.env.EXPO_PUBLIC_API_URL ||
+  'http://127.0.0.1:8000/api/v1'
 ).replace(/\/$/, '');
 
 export class ApiError extends Error {
@@ -19,7 +18,7 @@ export class ApiError extends Error {
 }
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${API_ROOT}${path}`, {
     ...init,
     credentials: 'include',
     headers: {
@@ -36,4 +35,4 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   return body as T;
 }
 
-export { API_BASE_URL };
+export { API_ROOT };
