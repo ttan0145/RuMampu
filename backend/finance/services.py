@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+import hashlib
 from decimal import Decimal
 from statistics import median
 
@@ -49,10 +50,21 @@ DEFAULT_EXPENSE_CATEGORIES = (
     ("other", "Other"),
 )
 def profile_for_request(request) -> GuestProfile:
-    if not request.session.session_key:
-        request.session.create()
+    client_id = request.headers.get("X-RuMampu-Client-ID", "").strip()
+
+    if client_id:
+        # Web deployments may not reliably preserve Django's cross-site session
+        # cookie. Hash the browser's stable anonymous ID into the existing
+        # 40-character session_key field so no model/migration change is needed.
+        profile_key = hashlib.sha256(client_id.encode("utf-8")).hexdigest()[:40]
+    else:
+        # Keep the existing Expo Go/native/local behaviour unchanged.
+        if not request.session.session_key:
+            request.session.create()
+        profile_key = request.session.session_key
+
     profile, created = GuestProfile.objects.get_or_create(
-        session_key=request.session.session_key,
+        session_key=profile_key,
     )
     # Defaults are profile bootstrap data. Creating/checking them on every API
     # request adds many unnecessary database round trips, especially against a

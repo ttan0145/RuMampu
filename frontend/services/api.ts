@@ -1,42 +1,28 @@
 import { Platform } from 'react-native';
 
-const DEPLOYED_API_ROOT = 'https://rumampu.vercel.app/api/v1';
-const LOCAL_API_ROOT = 'http://localhost:8000/api/v1';
+const API_ROOT = (
+  process.env.EXPO_PUBLIC_API_URL ||
+  'http://localhost:8000/api/v1'
+).replace(/\/$/, '');
 
-function isPrivateOrLocalApi(url: string): boolean {
-  try {
-    const hostname = new URL(url).hostname;
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return true;
-    if (hostname.startsWith('10.') || hostname.startsWith('192.168.')) return true;
-    const match = hostname.match(/^172\.(\d+)\./);
-    return Boolean(match && Number(match[1]) >= 16 && Number(match[1]) <= 31);
-  } catch {
-    return false;
-  }
-}
-
-function resolveApiRoot(): string {
-  const configured = process.env.EXPO_PUBLIC_API_URL?.trim();
-
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-
-    // Local browser testing
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:8000/api/v1';
-    }
-
-    // Deployed web
-    return configured && !isPrivateOrLocalApi(configured)
-      ? configured
-      : 'https://rumampu.vercel.app/api/v1';
+function getClientId(): string | null {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    return null;
   }
 
-  // Expo Go / native testing
-  return configured || 'http://localhost:8000/api/v1';
-}
+  const storageKey = 'rumampu_client_id';
+  let clientId = window.localStorage.getItem(storageKey);
 
-const API_ROOT = resolveApiRoot().replace(/\/$/, '');
+  if (!clientId) {
+    clientId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    window.localStorage.setItem(storageKey, clientId);
+  }
+
+  return clientId;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -51,11 +37,14 @@ export class ApiError extends Error {
 }
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const clientId = getClientId();
+
   const response = await fetch(`${API_ROOT}${path}`, {
     ...init,
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
+      ...(clientId ? { 'X-RuMampu-Client-ID': clientId } : {}),
       ...(init.headers || {}),
     },
   });

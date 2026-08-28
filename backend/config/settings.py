@@ -2,14 +2,13 @@ from pathlib import Path
 import os
 
 from dotenv import load_dotenv
+from corsheaders.defaults import default_headers
 
 from .database import build_default_database_config
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 load_dotenv(BASE_DIR / ".env")
-
 
 SECRET_KEY = os.getenv(
     "SECRET_KEY",
@@ -26,9 +25,7 @@ ENABLE_TEST_SCENARIOS = DEBUG and os.getenv(
     "False",
 ).lower() in {"1", "true", "yes"}
 
-
 ALLOWED_HOSTS = ["*"]
-
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -44,7 +41,6 @@ INSTALLED_APPS = [
     "apps.housing",
 ]
 
-
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
@@ -55,7 +51,6 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
-
 
 ROOT_URLCONF = "config.urls"
 
@@ -75,47 +70,28 @@ TEMPLATES = [
     },
 ]
 
-
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-
-DATABASES = {
-    "default": build_default_database_config(
-        os.environ,
-        BASE_DIR,
-    )
-}
-
+DATABASES = {"default": build_default_database_config(os.environ, BASE_DIR)}
 
 AUTH_PASSWORD_VALIDATORS = []
 
-
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "Asia/Kuala_Lumpur"
-
 USE_I18N = True
 USE_TZ = True
 
-
 STATIC_URL = "static/"
-
-
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],
-    "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.AllowAny",
-    ],
-    "DEFAULT_RENDERER_CLASSES": [
-        "rest_framework.renderers.JSONRenderer",
-    ],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "config.exceptions.api_exception_handler",
 }
-
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "RuMampu API",
@@ -136,18 +112,9 @@ SPECTACULAR_SETTINGS = {
             ("receipt", "Receipt confirmed by user"),
         ],
     },
-    "PREPROCESSING_HOOKS": [
-        "config.schema.only_public_v1_endpoints",
-    ],
-    "SWAGGER_UI_SETTINGS": {
-        "persistAuthorization": True,
-    },
+    "PREPROCESSING_HOOKS": ["config.schema.only_public_v1_endpoints"],
+    "SWAGGER_UI_SETTINGS": {"persistAuthorization": True},
 }
-
-
-# -------------------------------------------------------------------
-# CORS
-# -------------------------------------------------------------------
 
 CORS_ALLOW_ALL_ORIGINS = False
 
@@ -167,26 +134,17 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
-
-
-# -------------------------------------------------------------------
-# CSRF
-# -------------------------------------------------------------------
-
-CSRF_TRUSTED_ORIGINS = [
-    "https://rumampu-frontend.vercel.app",
-]
-
-CSRF_COOKIE_SAMESITE = "None"
-CSRF_COOKIE_SECURE = not DEBUG
-
-
-# -------------------------------------------------------------------
-# SESSION COOKIES
-# -------------------------------------------------------------------
+CORS_ALLOW_HEADERS = (
+    *default_headers,
+    "x-rumampu-client-id",
+)
 
 SESSION_COOKIE_SAMESITE = "None"
 SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_HTTPONLY = True
 
-SESSION_SAVE_EVERY_REQUEST = True
+CSRF_COOKIE_SAMESITE = "None"
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_TRUSTED_ORIGINS = [
+    "https://rumampu-frontend.vercel.app",
+]
