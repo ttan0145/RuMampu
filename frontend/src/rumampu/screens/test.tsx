@@ -96,11 +96,20 @@ export function HomecostScreen() {
       </BtnQuiet>
       {S.tcOpen ? (
         <Card gap={8}>
-          <KV k={t('tc_inst')}>
-            <Fig value={rm(inst)} p={S.data.house.knownPayment != null ? 'user' : 'calc'} />
-          </KV>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={{ fontSize: 15, color: C.ink }}>{t('tc_inst')}</Text>
+              <Text style={{ fontSize: 13, lineHeight: 18, color: C.ink64 }}>{t('tc_inst_desc')}</Text>
+            </View>
+            <Text style={{ fontSize: 18, fontFamily: DISP_FONT, color: C.ink }}>{rm(inst)}</Text>
+          </View>
           <EditList
-            list={S.data.homeCosts.map(c => ({ ...c, p: 'assume' }))}
+            decimal
+            list={S.data.homeCosts.map(c => ({
+              ...c,
+              p: undefined,
+              description: t(`${c.k}_desc`),
+            }))}
             onNum={(i, n) => up(s => { s.data.homeCosts[i].a = n; })}
           />
         </Card>

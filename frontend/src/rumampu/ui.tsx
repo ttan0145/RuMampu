@@ -289,34 +289,41 @@ export function TextField({
   );
 }
 
-export interface EditItem { id: string; k?: string; custom?: boolean; name?: string; a: number; p?: string }
+export interface EditItem { id: string; k?: string; custom?: boolean; name?: string; a: number; p?: string; description?: string }
 
 export function EditRow({
-  label, p, value, onNum, onCommit,
+  label, p, description, value, onNum, onCommit, decimal = false,
 }: {
   label: string;
-  p: string;
+  p?: string;
+  description?: string;
   value: number;
   onNum: (n: number) => void;
   onCommit?: (n: number) => void;
+  decimal?: boolean;
 }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={{ fontSize: 15, color: C.ink }}>{label}</Text>
-        <Prov p={p} />
+        {description ? (
+          <Text style={{ fontSize: 13, lineHeight: 18, color: C.ink64 }}>{description}</Text>
+        ) : p ? (
+          <Prov p={p} />
+        ) : null}
       </View>
-      <NumInput value={value} onNum={onNum} onCommit={onCommit} alignRight />
+      <NumInput value={value} onNum={onNum} onCommit={onCommit} alignRight decimal={decimal} />
     </View>
   );
 }
 
 export function EditList({
-  list, onNum, onCommit,
+  list, onNum, onCommit, decimal = false,
 }: {
   list: EditItem[];
   onNum: (i: number, n: number) => void;
   onCommit?: (i: number, n: number) => void;
+  decimal?: boolean;
 }) {
   const { t } = useApp();
   return (
@@ -326,9 +333,11 @@ export function EditList({
           key={c.id + i}
           label={c.custom ? (c.name || '') : t(c.k || '')}
           p={c.p || 'user'}
+          description={c.description}
           value={+c.a || 0}
           onNum={n => onNum(i, n)}
           onCommit={onCommit ? n => onCommit(i, n) : undefined}
+          decimal={decimal}
         />
       ))}
     </>
