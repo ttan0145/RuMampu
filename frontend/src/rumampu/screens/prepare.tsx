@@ -192,6 +192,11 @@ export function DocsScreen() {
   );
 }
 
+// EN: Epic 7 Homeownership Monitoring starts here as an Iteration 3 preview only.
+// This frontend prototype toggles local state and does not create real post-purchase
+// account data, backend records, or persistence.
+// 中文：Epic 7“购房后监测”在这里仅作为 Iteration 3 预览。这个前端原型只切换本地状态，
+// 不创建真实的购房后账号数据、后端记录或持久化存储。
 export function PvSwitchScreen() {
   const { S, t, up, go, toast } = useApp();
   return (
@@ -209,6 +214,9 @@ export function PvSwitchScreen() {
   );
 }
 
+// EN: Epic 7 preview for monitoring one post-purchase month. Values come from
+// static mock data, so this is not a real database-backed monitoring feature yet.
+// 中文：Epic 7 的单月购房后监测预览。这里的数值来自静态 mock 数据，目前还不是数据库驱动的真实监测功能。
 export function PvMonthScreen() {
   const { S, t, monthName } = useApp();
   const cur = S.data.after.months[S.data.after.months.length - 1];
@@ -230,6 +238,11 @@ export function PvMonthScreen() {
   );
 }
 
+// EN: Epic 7 preview comparing the earlier housing test with mock post-purchase
+// results. It reuses the latest housing test result but does not store actual
+// homeowner history.
+// 中文：Epic 7 预览：把先前住房测试与 mock 购房后结果对比。它复用最近一次住房测试结果，
+// 但不保存真实业主历史。
 export function PvCompareScreen() {
   const { S, t, goTab } = useApp();
   const result = getHousingTestResult();

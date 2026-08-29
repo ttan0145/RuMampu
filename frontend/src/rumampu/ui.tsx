@@ -88,6 +88,8 @@ export function Hdr({ back, title, brand }: { back?: boolean; title?: string; br
           {title || ''}
         </Text>
       )}
+      {/* EN: US8.3 uses this Header control to open language selection; the rest of Header remains shared UI. */}
+      {/* 中文：US8.3 使用这个 Header 控件打开语言选择；Header 其他部分仍是共享 UI。 */}
       <Pressable style={st.langbtn} onPress={() => up(s => { s.sheet = 'lang'; })} accessibilityLabel={t('lang_pick')}>
         <Text style={{ fontFamily: DISP_FONT, fontSize: 13, letterSpacing: 0.8, color: C.ink }}>
           {S.lang.toUpperCase()} ▾

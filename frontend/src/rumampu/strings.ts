@@ -151,6 +151,8 @@ en: {
   pv_then_b: 'Since buying: {s2} of your first {n2} months have run short.',
   pv_then_why: 'The earlier record had no year-end month in it. Two arrived after buying.',
   see_pattern: 'Income pattern', see_coverage: 'Coverage check',
+  // EN: Epic 8 Your Record localisation keys for US8.1 and US8.2 display copy.
+  // 中文：Epic 8 “记录档案”本地化 key，用于 US8.1 和 US8.2 的展示文案。
   money_record: 'Your record',
   rc_months: '{n} months recorded',
   rc_months_one: '1 month recorded',
@@ -174,6 +176,8 @@ en: {
   rc_pay_month: '{p} / month',
   rc_short_label: 'Short months',
   rc_short_value: '{s} of {n}',
+  // EN: Epic 8 Keep This Test action/status copy shown from the housing Result screen.
+  // 中文：Epic 8 “留存这次测试”的操作与状态文案，显示在住房测试结果页。
   rs_keep: 'Keep this test', rs_keep_hint: 'Add this result to Your record for this session.', rs_kept: 'Test kept', rs_kept_session: 'Kept for this session.',
   entry_saved_n: 'Entry saved. The analysis now uses {n} months.',
   inc_past: 'Add a past month',
@@ -381,6 +385,8 @@ ms: {
   pv_then_b: 'Sejak membeli: {s2} daripada {n2} bulan pertama anda kurang.',
   pv_then_why: 'Rekod awal tiada bulan hujung tahun di dalamnya. Dua bulan begitu tiba selepas membeli.',
   see_pattern: 'Corak pendapatan', see_coverage: 'Semakan liputan',
+  // EN: Epic 8 Your Record localisation keys for US8.1 and US8.2 display copy.
+  // 中文：Epic 8 “记录档案”本地化 key，用于 US8.1 和 US8.2 的展示文案。
   money_record: 'Rekod anda',
   rc_months: '{n} bulan direkod',
   rc_months_one: '1 bulan direkod',
@@ -404,6 +410,8 @@ ms: {
   rc_pay_month: '{p} / bulan',
   rc_short_label: 'Bulan kurang',
   rc_short_value: '{s} daripada {n}',
+  // EN: Epic 8 Keep This Test action/status copy shown from the housing Result screen.
+  // 中文：Epic 8 “留存这次测试”的操作与状态文案，显示在住房测试结果页。
   rs_keep: 'Simpan ujian ini', rs_keep_hint: 'Tambah hasil ini ke Rekod anda untuk sesi ini.', rs_kept: 'Ujian disimpan', rs_kept_session: 'Disimpan untuk sesi ini.',
   entry_saved_n: 'Catatan disimpan. Analisis kini menggunakan {n} bulan.',
   inc_past: 'Tambah bulan lalu',
@@ -611,6 +619,8 @@ zh: {
   pv_then_b: '买房后：头 {n2} 个月中 {s2} 个短缺。',
   pv_then_why: '先前的记录里没有年末月份，买房后遇上了两个。',
   see_pattern: '收入形态', see_coverage: '覆盖检查',
+  // EN: Epic 8 Your Record localisation keys for US8.1 and US8.2 display copy.
+  // 中文：Epic 8 “记录档案”本地化 key，用于 US8.1 和 US8.2 的展示文案。
   money_record: '记录档案',
   rc_months: '已记录 {n} 个月',
   rc_months_one: '已记录 1 个月',
@@ -634,6 +644,8 @@ zh: {
   rc_pay_month: '{p} / 月',
   rc_short_label: '短缺月份',
   rc_short_value: '{n} 个月中 {s} 个',
+  // EN: Epic 8 Keep This Test action/status copy shown from the housing Result screen.
+  // 中文：Epic 8 “留存这次测试”的操作与状态文案，显示在住房测试结果页。
   rs_keep: '留存这次测试', rs_keep_hint: '把这个结果加入记录档案，仅供本次会话查看。', rs_kept: '测试已留存', rs_kept_session: '仅在本次会话中留存。',
   entry_saved_n: '已记录。分析现在用上 {n} 个月。',
   inc_past: '补记过去的月份',

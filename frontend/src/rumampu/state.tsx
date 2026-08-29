@@ -30,6 +30,9 @@ export type Route =
   | 'home' | 'money' | 'income' | 'incomeimport' | 'workcosts' | 'commit' | 'pattern' | 'coverage' | 'record'
   | 'expenses' | 'expadd' | 'expscan' | 'expmonths' | 'exlimits'
   | 'house' | 'homecost' | 'precheck' | 'result' | 'range' | 'compare' | 'shock'
+  // EN: Epic 7 preview routes are registered for future Iteration 3 work; this
+  // does not make them an Iteration 1 implementation.
+  // 中文：Epic 7 预览路由为未来 Iteration 3 工作保留；这不代表它们是 Iteration 1 实现。
   | 'prepare' | 'upfront' | 'buffer' | 'docs' | 'pv_switch' | 'pv_month' | 'pv_compare';
 
 export type Tab = 'home' | 'money' | 'test' | 'prepare';
@@ -45,6 +48,9 @@ export const TAB_OF: Record<Route, Tab> = {
   pv_switch: 'prepare', pv_month: 'prepare', pv_compare: 'prepare',
 };
 
+// EN: US8.2 stores the compact kept-test summary used by Your Record during the
+// current frontend session: payment, short months, tested months, and largest gap.
+// 中文：US8.2 在当前前端会话中保存“记录档案”需要的留存测试摘要：月供、短缺月份、测试月份和最大缺口。
 export interface KeptTest { pay: number; s: number; n: number; g: number }
 export interface ScanState {
   stage: 'pick' | 'read' | 'confirm';
@@ -103,6 +109,9 @@ function initialState(): AppState {
     data,
     testRan: false,
     howOpen: false, rgHowOpen: false, tcOpen: false, dcOpen: false,
+    // EN: keptTests starts empty for each AppProvider lifetime, matching the
+    // Iteration 1 current-session scope instead of account-level saved history.
+    // 中文：每次 AppProvider 生命周期开始时 keptTests 为空，符合 Iteration 1 当前会话范围，而不是账号级历史保存。
     docsChecked: [], keptTests: [],
     expDraft: { a: '', c: 'meals', d: '2026-08-23' },
     scan: { stage: 'pick' },
@@ -310,6 +319,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     up(s => { s.stack.push(s.route); s.route = r; s.howOpen = false; s.rgHowOpen = false; });
   }, [up]);
 
+  // EN: Epic 8 uses goTab() for AC8.4 bottom-tab navigation, but the navigation
+  // model is shared by every epic.
+  // 中文：Epic 8 使用 goTab() 满足 AC8.4 底部导航，但这个导航模型由所有 epic 共用。
   const goTab = useCallback((tab: Tab) => {
     up(s => {
       s.stack = [];
@@ -318,6 +330,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, [up]);
 
+  // EN: Epic 8 uses backNav() for AC8.4.6 Back behaviour; it remains shared app
+  // infrastructure rather than Epic 8-only code.
+  // 中文：Epic 8 使用 backNav() 支持 AC8.4.6 返回行为；它仍是共享应用基础设施，不是 Epic 8 专属代码。
   const backNav = useCallback(() => {
     up(s => {
       const prev = s.stack.pop();

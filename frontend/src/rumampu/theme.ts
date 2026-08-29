@@ -1,6 +1,9 @@
 import { TextStyle } from 'react-native';
 
 /* Design tokens — mirrors the :root CSS variables of the prototype exactly. */
+// EN: Epic 8 uses these shared tokens for AC8.5 colour consistency; the token
+// file is shared visual infrastructure, not Epic 8-only implementation.
+// 中文：Epic 8 使用这些共享 token 满足 AC8.5 的颜色一致性；此文件是共享视觉基础设施，不是 Epic 8 专属实现。
 export const C = {
   ink: '#3C5152',
   paper: '#FFFFFF',

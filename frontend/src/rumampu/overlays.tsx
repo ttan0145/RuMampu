@@ -111,6 +111,9 @@ export function SheetHost() {
 
   if (!sheet || sheet === 'shockcustom') return null;
 
+  // EN: US8.3 language selection lives in this sheet. It presents the supported
+  // languages and writes the selected language back to current app state.
+  // 中文：US8.3 的语言选择在这个底部弹层中完成。它展示支持的语言，并把选择写回当前应用状态。
   if (sheet === 'lang') {
     return (
       <SheetFrame onClose={close}>
@@ -404,6 +407,9 @@ const TABS: [string, string, string][] = [
   ['home', '⌂', 'tab_home'], ['money', '◔', 'tab_money'], ['test', '≟', 'tab_test'], ['prepare', '☰', 'tab_prepare'],
 ];
 
+// EN: Epic 8 uses the shared TabBar to satisfy AC8.4 bottom navigation across
+// Home, Money, Test, and Prepare; the component itself is shared app infrastructure.
+// 中文：Epic 8 使用共享 TabBar 满足 AC8.4 中 Home、Money、Test、Prepare 的底部导航；组件本身属于共享基础设施。
 export function TabBar() {
   const { S, t, goTab } = useApp();
   const insets = useSafeAreaInsets();

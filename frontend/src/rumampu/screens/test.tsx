@@ -185,6 +185,12 @@ export function ResultScreen() {
   const s = result.short_month_count;
   const g = result.largest_gap;
   const un = unrepresentedCoverageMonths(S.incomeCoverage);
+
+  // EN: US8.2 only owns the "keep this test" layer here. Array.some() checks
+  // whether one kept summary already matches the current displayed result and
+  // returns a boolean for the before/after Keep This Test UI.
+  // 中文：US8.2 在这里仅负责“留存这次测试”这一层。Array.some() 会检查是否已有一条留存摘要
+  // 与当前展示结果一致，并返回布尔值来决定按钮或已留存状态的显示。
   const kept = S.keptTests.some(test => (
     test.pay === Math.round(cost)
     && test.s === s
@@ -239,6 +245,9 @@ export function ResultScreen() {
       <BtnLine label={t('rs_how')} onPress={() => up(x2 => { x2.howOpen = !x2.howOpen; })} />
       {S.howOpen ? <Card><BodyS>{t('rs_how_body', { c: nf(cost) })}</BodyS></Card> : null}
       {kept ? (
+        // EN: AC8.2.2/AC8.2.5 show the kept status after saving and repeat the
+        // session-only scope instead of implying permanent account storage.
+        // 中文：AC8.2.2/AC8.2.5 在保存后显示已留存状态，并再次说明仅限本次会话，不暗示永久账号存储。
         <View style={{
           gap: 4,
           padding: 14,
@@ -259,6 +268,12 @@ export function ResultScreen() {
           style={{ backgroundColor: C.paper, borderColor: C.brand }}
           onPress={() => {
             up(x2 => {
+              // EN: Re-check inside the state update so repeated taps cannot add
+              // duplicates. The compared fields are the monthly payment, short
+              // month count, tested month count, and largest gap; rounded money
+              // values match what Your Record displays.
+              // 中文：在状态更新内部再次检查，避免重复点击加入重复卡片。比较字段包括月供、短缺月份数、
+              // 测试月份数和最大缺口；金额先 Math.round()，与“记录档案”的展示保持一致。
               const duplicate = x2.keptTests.some(test => (
                 test.pay === Math.round(cost)
                 && test.s === s
@@ -266,6 +281,11 @@ export function ResultScreen() {
                 && test.g === Math.round(g)
               ));
               if (!duplicate) {
+                // EN: Iteration 1 stores only the summary fields Your Record
+                // needs in frontend session state, not a persistent account copy
+                // of the whole HousingTestResult.
+                // 中文：Iteration 1 只把“记录档案”需要的摘要字段放进前端会话状态，
+                // 不保存完整 HousingTestResult，也不是账号级永久存储。
                 x2.keptTests.push({
                   pay: Math.round(cost),
                   s,

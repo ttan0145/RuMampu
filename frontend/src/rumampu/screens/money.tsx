@@ -98,6 +98,9 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <Display cls="h-m" style={{ fontSize: 17, lineHeight: 23 }}>{children}</Display>;
 }
 
+// EN: US8.1/US8.2 use this compact metric block in Your Record for both
+// financial-summary numbers and kept-test summary numbers.
+// 中文：US8.1/US8.2 在“记录档案”中复用这个小型数字区块，用来展示财务摘要和留存测试摘要。
 function RecordMetric({ value, label }: { value: string; label: string }) {
   return (
     <View accessibilityLabel={`${value} ${label}`} style={{ flex: 1, minWidth: 0, gap: 2 }}>
@@ -107,6 +110,9 @@ function RecordMetric({ value, label }: { value: string; label: string }) {
   );
 }
 
+// EN: US8.2.5 needs the kept-test status to say "this session" so the UI does
+// not imply account storage, cloud sync, or permanent saved history.
+// 中文：US8.2.5 要求留存状态说明“本次会话”，避免让用户以为它已保存到账户、云端或永久历史。
 function SessionStatus({ label }: { label: string }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -117,10 +123,21 @@ function SessionStatus({ label }: { label: string }) {
 }
 
 export function RecordScreen() {
+  // EN: Your Record is the US8.1/US8.2 screen. It reads current AppProvider
+  // state and does not add account persistence or login behaviour.
+  // 中文：“记录档案”是 US8.1/US8.2 的页面。它读取当前 AppProvider 状态，不新增账号持久化或登录行为。
   const { S, t, monthName, go } = useApp();
+
+  // EN: US8.1 delegates recorded months, entry count, and latest-entry date to
+  // recordSummary() so the page does not duplicate the counting rules.
+  // 中文：US8.1 把已记录月份、记录条数和最近记录日期交给 recordSummary()，避免页面重复计算规则。
   const summary = recordSummary(S.data);
   const n = summary.recordedMonthCount;
   const last = summary.latestEntryDate;
+
+  // EN: The latest-entry label formats the actual financial business date for
+  // the selected language; it is not based on created_at or updated_at.
+  // 中文：最近记录标签格式化真实财务业务日期，并按当前语言显示；它不使用 created_at 或 updated_at。
   const lastLbl = last ? `${+last.slice(8, 10)} ${monthName(+last.slice(5, 7) - 1)} ${last.slice(0, 4)}` : '';
   return (
     <ScreenShell back title={t('money_record')}>
@@ -129,6 +146,8 @@ export function RecordScreen() {
           <SectionTitle>{t('rc_summary')}</SectionTitle>
           <Prov p="user" />
         </View>
+        {/* EN: AC8.1.1/AC8.1.2 show the month count and individual-entry count together. */}
+        {/* 中文：AC8.1.1/AC8.1.2 把月份数和单笔记录数并排展示。 */}
         <View style={{ flexDirection: 'row', gap: 18 }}>
           <RecordMetric value={String(n)} label={t(n === 1 ? 'rc_month_metric_one' : 'rc_month_metric')} />
           <RecordMetric value={String(summary.entryCount)} label={t('rc_entry_metric')} />
@@ -136,12 +155,16 @@ export function RecordScreen() {
         <Divider />
         <View style={{ gap: 2 }}>
           <BodyS muted>{t('rc_latest_label')}</BodyS>
+          {/* EN: AC8.1.3 has an explicit empty state so no fake latest date is rendered. */}
+          {/* 中文：AC8.1.3 在没有记录时显示空状态文案，不渲染伪造的最近日期。 */}
           {lastLbl ? <Display cls="h-m">{lastLbl}</Display> : <BodyS>{t('rc_latest_empty')}</BodyS>}
         </View>
       </Card>
 
       <View style={{ gap: 8 }}>
         <SectionTitle>{t('rc_tests')}</SectionTitle>
+        {/* EN: AC8.2.3 displays kept tests from S.keptTests, the current frontend session state. */}
+        {/* 中文：AC8.2.3 从当前前端会话状态 S.keptTests 中展示留存测试。 */}
         {S.keptTests.length ? S.keptTests.map((k, i) => (
           <Card key={i} gap={12}>
             <View style={{ gap: 2 }}>
@@ -156,6 +179,8 @@ export function RecordScreen() {
         )) : (
           <Card gap={10}>
             <View style={{ gap: 3 }}>
+              {/* EN: AC8.2.4 handles the no-kept-test state and links the user back to Test. */}
+              {/* 中文：AC8.2.4 处理没有留存测试的状态，并引导用户回到测试页。 */}
               <Display cls="h-m" style={{ fontSize: 17, lineHeight: 23 }}>{t('rc_none_title')}</Display>
               <BodyS muted>{t('rc_none_body')}</BodyS>
             </View>
@@ -168,6 +193,8 @@ export function RecordScreen() {
 
       <Card gap={8} style={{ backgroundColor: C.paper }}>
         <SectionTitle>{t('rc_about')}</SectionTitle>
+        {/* EN: AC8.1.5/AC8.2.5 explain current guest-session scope only. */}
+        {/* 中文：AC8.1.5/AC8.2.5 只说明当前访客会话范围，不暗示保存到 RuMampu 账号。 */}
         <BodyS muted>{t('rc_live')}</BodyS>
       </Card>
     </ScreenShell>
