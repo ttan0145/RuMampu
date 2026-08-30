@@ -48,6 +48,8 @@ export default defineConfig({
       cwd: '../backend',
       env: {
         ...process.env,
+
+        DEBUG: 'True',
         ENABLE_TEST_SCENARIOS: 'True',
 
         // Acceptance tests must use the local SQLite database, not Neon.
@@ -62,14 +64,18 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 120_000,
     },
+
     {
-      command:
-        'EXPO_PUBLIC_API_URL=http://localhost:8000/api/v1 npm run web -- --port 8081',
+      command: 'npm run web -- --port 8081 --clear',
       cwd: '.',
       env: {
         ...process.env,
         CI: '1',
-        EXPO_PUBLIC_API_URL: 'http://localhost:8000/api/v1',
+        EXPO_NO_DOTENV: '1',
+        EXPO_PUBLIC_E2E: '1',
+
+        // Override only for Playwright. Keep frontend/.env for Expo Go.
+        EXPO_PUBLIC_PLAYWRIGHT_API_URL: 'http://localhost:8000/api/v1',
       },
       url: 'http://localhost:8081',
       reuseExistingServer: false,

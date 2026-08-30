@@ -1,9 +1,10 @@
 import { Platform } from 'react-native';
 
 const API_ROOT = (
-  process.env.EXPO_PUBLIC_API_URL ||
-  'http://localhost:8000/api/v1'
-).replace(/\/$/, '');
+  process.env.EXPO_PUBLIC_E2E === '1'
+    ? process.env.EXPO_PUBLIC_PLAYWRIGHT_API_URL
+    : process.env.EXPO_PUBLIC_API_URL
+) || 'http://localhost:8000/api/v1';
 
 function getClientId(): string | null {
   if (Platform.OS !== 'web' || typeof window === 'undefined') {

@@ -9,9 +9,10 @@ export const APP_MODE: 'api' | 'prototype' = configuredAppMode === 'prototype'
 export const INCOME_API_ENABLED = APP_MODE === 'api';
 
 const API_ROOT = (
-  configuredApiUrl ||
-  'http://127.0.0.1:8000/api/v1'
-).replace(/\/$/, '');
+  process.env.EXPO_PUBLIC_E2E === '1'
+    ? process.env.EXPO_PUBLIC_PLAYWRIGHT_API_URL
+    : process.env.EXPO_PUBLIC_API_URL
+) || 'http://localhost:8000/api/v1';
 
 export interface ApiIncomeSource {
   id: number;
