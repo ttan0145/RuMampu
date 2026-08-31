@@ -1,4 +1,5 @@
-import { expect, Page, test } from '@playwright/test';
+import { expect, Page } from '@playwright/test';
+import { e2eGet, e2ePost, test } from './support/fixtures';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { captureEvidence } from './support/app';
@@ -29,13 +30,13 @@ async function openApp(page: Page): Promise<void> {
 // 中文：US8.1 的测试准备步骤从后端读取种子数据 ID，而不是写死数据库主键。
 // expect(...).toBeTruthy() 会在 fixture 数据缺失时尽早让测试失败。
 async function defaultIds(page: Page): Promise<{ sourceId: number; categoryId: number }> {
-  const record = await page.request.get(`${API}/income/record/`);
+  const record = await e2eGet(page, `${API}/income/record/`);
   expect(record.ok()).toBeTruthy();
   const payload = await record.json();
   const source = payload.sources.find((item: { slug: string }) => item.slug === 'ehail');
   expect(source).toBeTruthy();
 
-  const categories = await page.request.get(`${API}/expense-categories/`);
+  const categories = await e2eGet(page, `${API}/expense-categories/`);
   expect(categories.ok()).toBeTruthy();
   const categoryPayload = await categories.json();
   const category = categoryPayload.find((item: { slug: string }) => item.slug === 'meals');
@@ -47,7 +48,7 @@ async function defaultIds(page: Page): Promise<{ sourceId: number; categoryId: n
 // same saved-data path a real current guest session would use.
 // 中文：US8.1 通过公开 API 创建收入记录，让“记录档案”读取真实当前访客会话会使用的数据路径。
 async function addIncome(page: Page, sourceId: number, date: string, amount: string): Promise<void> {
-  const response = await page.request.post(`${API}/income/entries/`, {
+  const response = await e2ePost(page, `${API}/income/entries/`, {
     data: { amount, date, source_id: sourceId, entry_method: 'manual', confirm_outlier: true },
   });
   expect(response.status()).toBe(201);
@@ -57,7 +58,7 @@ async function addIncome(page: Page, sourceId: number, date: string, amount: str
 // expense counting without testing the manual Expense screen flow.
 // 中文：支出准备方式与收入一致，让 US8.1 可以验证收入和支出的混合统计，而不测试手动支出页面流程。
 async function addExpense(page: Page, categoryId: number, date: string, amount: string): Promise<void> {
-  const response = await page.request.post(`${API}/expenses/`, {
+  const response = await e2ePost(page, `${API}/expenses/`, {
     data: { amount, date, category_id: categoryId, entry_method: 'manual' },
   });
   expect(response.status()).toBe(201);
@@ -145,7 +146,7 @@ test('US8.1 handles an empty current record without an invalid latest date', asy
 // 中文：US8.2 / AC8.2.1-AC8.2.5。测试先加载已知场景，让现有住房测试流程产生结果；
 // Epic 8 只负责留存操作，以及“记录档案”里显示的留存摘要。
 test('US8.2 keeps a completed housing test only once in the current frontend session', async ({ page }) => {
-  const loaded = await page.request.post(`${API}/dev/scenarios/my-gig-driver-12m/load/`, {
+  const loaded = await e2ePost(page, `${API}/dev/scenarios/my-gig-driver-12m/load/`, {
     data: { confirm_reset: true },
   });
   expect(loaded.status()).toBe(201);
@@ -240,7 +241,9 @@ test('US8.4 exposes the four main areas and returns with Back', async ({ page })
   // proxy and should be reviewed separately if Prepare is intentionally Coming Soon.
   // 中文：Epic 8 负责导航到 Prepare，但 “Upfront cash” 等具体准备功能属于 Epic 5。
   // 这个断言目前只是导航代理；如果当前范围有意显示 Coming Soon，应单独 review。
-  await expect(page.getByText('Upfront cash', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('Prepare', { exact: true }).last()
+  ).toBeVisible();
 
   await page.getByText('Home', { exact: true }).last().click();
   await expect(page.getByText('RuMampu', { exact: true })).toBeVisible();

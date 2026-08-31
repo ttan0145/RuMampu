@@ -1,11 +1,12 @@
-import { expect, test } from '@playwright/test';
+import { expect } from '@playwright/test';
+import { e2ePost, test } from './support/fixtures';
 
 import { ac } from './support/acceptance';
 import { API, captureEvidence, openApp } from './support/app';
 
 test.describe('Epic 3 — Housing Cost & Stress Test', { tag: '@epic3' }, () => {
   test('US3.1 — Test housing affordability against recorded financial history', { tag: '@us3.1' }, async ({ page }) => {
-    const loaded = await page.request.post(`${API}/dev/scenarios/my-gig-driver-12m/load/`, {
+    const loaded = await e2ePost(page, `${API}/dev/scenarios/my-gig-driver-12m/load/`, {
       data: {
         confirm_reset: true,
       },
@@ -50,7 +51,7 @@ test.describe('Epic 3 — Housing Cost & Stress Test', { tag: '@epic3' }, () => 
     await page.getByText('The house', { exact: true }).click();
 
     await ac('AC3.1.6', 'Calculate financing amount', async () => {
-      await expect(page.getByText('RM 250,000', { exact: true })).toBeVisible();
+      await expect(page.getByText('RM 250,000.00', { exact: true })).toBeVisible();
     });
 
     await captureEvidence(page, 'epic-3', '02-housing-input.png');
@@ -72,7 +73,7 @@ test.describe('Epic 3 — Housing Cost & Stress Test', { tag: '@epic3' }, () => 
     });
 
     await ac('AC3.1.9', 'Display historical shortfall amount', async () => {
-      await expect(page.getByText('RM 742', { exact: true })).toBeVisible();
+      await expect(page.getByText('RM 742.37', { exact: true })).toBeVisible();
     });
 
     await captureEvidence(page, 'epic-3', '04-historical-housing-result.png');

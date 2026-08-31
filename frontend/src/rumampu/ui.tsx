@@ -229,11 +229,7 @@ export function NumInput({
   placeholder?: string;
   accessibilityLabel?: string;
 }) {
-  const formatLocal = React.useCallback((v: number | string) => {
-    if (!decimal) return String(v ?? '');
-    const n = typeof v === 'number' ? v : Number(v);
-    return Number.isFinite(n) ? n.toFixed(2) : String(v ?? '');
-  }, [decimal]);
+  const formatLocal = React.useCallback((v: number | string) => String(v ?? ''), []);
   const [local, setLocal] = React.useState(formatLocal(value));
   const focused = React.useRef(false);
   React.useEffect(() => {
@@ -253,7 +249,7 @@ export function NumInput({
         let n = parseFloat(local);
         if (!isFinite(n)) n = 0;
         if (min0) n = Math.max(0, n);
-        setLocal(decimal ? n.toFixed(2) : String(Math.trunc(n)));
+        setLocal(decimal ? String(n) : String(Math.trunc(n)));
         onCommit?.(n);
       }}
       onChangeText={txt => {

@@ -1,31 +1,32 @@
-import { expect, Page, test } from '@playwright/test';
+import { expect, Page } from '@playwright/test';
+import { e2eGet, e2ePatch, e2ePost, test } from './support/fixtures';
 import { ac } from './support/acceptance';
 import { API, captureEvidence, openApp, openMoneyScreen } from './support/app';
 
 async function loadTwelveMonthScenario(page: Page): Promise<void> {
-  const response = await page.request.post(`${API}/dev/scenarios/my-gig-driver-12m/load/`, {
+  const response = await e2ePost(page, `${API}/dev/scenarios/my-gig-driver-12m/load/`, {
     data: { confirm_reset: true },
   });
   expect(response.status()).toBe(201);
 }
 
 async function addIncomeMonth(page: Page, date: string, amount: string): Promise<void> {
-  const record = await page.request.get(`${API}/income/record/`);
+  const record = await e2eGet(page, `${API}/income/record/`);
   expect(record.ok()).toBeTruthy();
   const payload = await record.json();
   const source = payload.sources.find((item: { slug: string }) => item.slug === 'ehail');
-  const created = await page.request.post(`${API}/income/entries/`, {
+  const created = await e2ePost(page, `${API}/income/entries/`, {
     data: { amount, date, source_id: source.id, entry_method: 'manual', confirm_outlier: true },
   });
   expect(created.status()).toBe(201);
 }
 
 async function setPetrolWorkCost(page: Page, amount: string): Promise<void> {
-  const response = await page.request.get(`${API}/work-costs/`);
+  const response = await e2eGet(page, `${API}/work-costs/`);
   expect(response.ok()).toBeTruthy();
   const items = await response.json();
   const petrol = items.find((item: { slug: string }) => item.slug === 'petrol');
-  const updated = await page.request.patch(`${API}/work-costs/${petrol.id}/`, {
+  const updated = await e2ePatch(page, `${API}/work-costs/${petrol.id}/`, {
     data: { monthly_amount: amount },
   });
   expect(updated.ok()).toBeTruthy();

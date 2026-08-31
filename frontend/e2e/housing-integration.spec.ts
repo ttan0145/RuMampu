@@ -1,4 +1,5 @@
-import { expect, Page, test } from '@playwright/test';
+import { expect, Page } from '@playwright/test';
+import { test } from './support/fixtures';
 const API = 'http://localhost:8000/api/v1';
 async function openApp(page: Page): Promise<void> {
   await page.goto('/');

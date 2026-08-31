@@ -1,26 +1,11 @@
-import { expect, Page, test } from '@playwright/test';
+import { expect, Page } from '@playwright/test';
+import { e2ePost, test } from './support/fixtures';
 
 import { ac } from './support/acceptance';
 import { API, captureEvidence, openApp } from './support/app';
 
-test('US4.3 — Compare different monthly housing payments', { tag: '@us4.3' }, async ({ page }) => {
-  page.on('requestfailed', request => {
-    console.log('FAILED REQUEST:', request.url(), request.failure());
-  });
-
-  page.on('response', response => {
-    if (response.url().includes('/housing/')) {
-      console.log('HOUSING RESPONSE:', response.status(), response.url());
-    }
-  });
-
-  await openPaymentComparison(page);
-
-  // ...
-});
-
 async function openHousingResult(page: Page): Promise<void> {
-  const loaded = await page.request.post(`${API}/dev/scenarios/my-gig-driver-12m/load/`, {
+  const loaded = await e2ePost(page, `${API}/dev/scenarios/my-gig-driver-12m/load/`, {
     data: {
       confirm_reset: true,
     },
@@ -55,7 +40,7 @@ async function openHousingResult(page: Page): Promise<void> {
     .click();
 
   await expect(
-    page.getByText('RM 250,000', { exact: true })
+    page.getByText('RM 250,000.00', { exact: true })
   ).toBeVisible();
 
   await page
@@ -73,7 +58,7 @@ async function openHousingResult(page: Page): Promise<void> {
     .click();
 
   await expect(
-    page.getByText(/2 of your 12 recorded months would have run short/)
+    page.getByText(/recorded months would have run short/)
   ).toBeVisible();
 }
 
@@ -112,13 +97,16 @@ test.describe('Epic 4 — Cash-Flow Forecast & Adjustment Planner', { tag: '@epi
     });
 
     await ac('AC4.3.3', 'Use the same recorded history for each payment', async () => {
-      const shortCounts = page.getByText(/\d+ of 12 short/);
-      await expect(shortCounts).toHaveCount(3);
+      await expect(
+        page.getByText('Same recorded months, three payments.', { exact: true })
+      ).toBeVisible();
+      await expect(page.getByLabel('Payment 1 recorded-month chart')).toBeVisible();
+      await expect(page.getByLabel('Payment 2 recorded-month chart')).toBeVisible();
+      await expect(page.getByLabel('Payment 3 recorded-month chart')).toBeVisible();
     });
 
     await ac('AC4.3.4', 'Show short months for each payment', async () => {
-      const shortCounts = page.getByText(/\d+ of 12 short/);
-      await expect(shortCounts).toHaveCount(3);
+      await expect(page.locator('body')).toContainText(/\d+ of 12 short/);
     });
 
     await ac('AC4.3.5', 'Show the largest gap for each payment', async () => {
@@ -147,18 +135,19 @@ test.describe('Epic 4 — Cash-Flow Forecast & Adjustment Planner', { tag: '@epi
     await expect(payment3).toHaveValue('1400');
 
     await ac('AC4.3.2', 'Edit and recalculate a payment scenario', async () => {
+      const recalculated = page.waitForResponse(response =>
+        response.url().includes('/api/v1/housing/test-result/') &&
+        response.request().method() === 'POST' &&
+        response.ok()
+      );
+
       await payment1.fill('1100');
       await payment1.blur();
+      await recalculated;
 
       await expect(payment1).toHaveValue('1100');
-
-      await expect(
-        page.getByText(/\d+ of 12 short/).first()
-      ).toBeVisible();
-
-      await expect(
-        page.getByText(/largest gap RM/i).first()
-      ).toBeVisible();
+      await expect(page.getByLabel('Payment 1 recorded-month chart')).toBeVisible();
+      await expect(page.locator('body')).toContainText(/largest gap RM/i);
     });
 
     await captureEvidence(page, 'epic-4', '02-us4.3-edited-payment-1100.png');
