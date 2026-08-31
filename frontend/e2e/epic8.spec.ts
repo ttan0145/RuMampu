@@ -199,7 +199,7 @@ test('US8.3 lets the user select an available interface language', async ({ page
   await expect(page.getByText('中文', { exact: true })).toBeVisible();
 
   await page.getByText('Bahasa Melayu', { exact: true }).click();
-  await expect(page.getByText('Utama', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('Rumah', { exact: true }).last()).toBeVisible();
   await expect(page.getByText(/^MS/)).toBeVisible();
 });
 
