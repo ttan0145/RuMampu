@@ -53,12 +53,12 @@ export function HouseScreen() {
             </View>
             <View style={{ gap: 6 }}>
               <BodyS muted>{t('th_ten')}</BodyS>
-              <NumInput value={h.years} onNum={n => up(s => { s.data.house.years = n || 1; })} />
+              <NumInput decimal={false} value={h.years} onNum={n => up(s => { s.data.house.years = Math.max(1, Math.trunc(n || 1)); })} />
             </View>
           </Card>
           <KV k={t('th_inst')}><Fig value={rm(inst)} p="calc" cls="h-l" /></KV>
           <BtnLine label={t('th_known')} onPress={() => up(s => {
-            s.data.house.knownPayment = Math.round(calc?.monthly_instalment ?? 0);
+            s.data.house.knownPayment = Math.round((calc?.monthly_instalment ?? 0) * 100) / 100;
           })} />
         </>
       ) : (
@@ -201,10 +201,10 @@ export function ResultScreen() {
   // 中文：US8.2 在这里仅负责“留存这次测试”这一层。Array.some() 会检查是否已有一条留存摘要
   // 与当前展示结果一致，并返回布尔值来决定按钮或已留存状态的显示。
   const kept = S.keptTests.some(test => (
-    test.pay === Math.round(cost)
+    test.pay === Math.round(cost * 100) / 100
     && test.s === s
     && test.n === n
-    && test.g === Math.round(g)
+    && test.g === Math.round(g * 100) / 100
   ));
 
   let lead: React.ReactNode;
@@ -282,12 +282,12 @@ export function ResultScreen() {
               // month count, tested month count, and largest gap; rounded money
               // values match what Your Record displays.
               // 中文：在状态更新内部再次检查，避免重复点击加入重复卡片。比较字段包括月供、短缺月份数、
-              // 测试月份数和最大缺口；金额先 Math.round()，与“记录档案”的展示保持一致。
+              // 测试月份数和最大缺口；金额保留两位小数，与“记录档案”的展示保持一致。
               const duplicate = x2.keptTests.some(test => (
-                test.pay === Math.round(cost)
+                test.pay === Math.round(cost * 100) / 100
                 && test.s === s
                 && test.n === n
-                && test.g === Math.round(g)
+                && test.g === Math.round(g * 100) / 100
               ));
               if (!duplicate) {
                 // EN: Iteration 1 stores only the summary fields Your Record
@@ -296,10 +296,10 @@ export function ResultScreen() {
                 // 中文：Iteration 1 只把“记录档案”需要的摘要字段放进前端会话状态，
                 // 不保存完整 HousingTestResult，也不是账号级永久存储。
                 x2.keptTests.push({
-                  pay: Math.round(cost),
+                  pay: Math.round(cost * 100) / 100,
                   s,
                   n,
-                  g: Math.round(g),
+                  g: Math.round(g * 100) / 100,
                 });
               }
             });

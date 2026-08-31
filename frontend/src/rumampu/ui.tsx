@@ -217,7 +217,7 @@ export function KV({ k, children }: { k: React.ReactNode; children: React.ReactN
 
 /* Numeric input that keeps a local string while typing but reports parsed values. */
 export function NumInput({
-  value, onNum, onCommit, style, min0 = true, alignRight, decimal, placeholder, accessibilityLabel,
+  value, onNum, onCommit, style, min0 = true, alignRight, decimal = true, placeholder, accessibilityLabel,
 }: {
   value: number | string;
   onNum: (n: number) => void;
@@ -229,11 +229,16 @@ export function NumInput({
   placeholder?: string;
   accessibilityLabel?: string;
 }) {
-  const [local, setLocal] = React.useState(String(value ?? ''));
+  const formatLocal = React.useCallback((v: number | string) => {
+    if (!decimal) return String(v ?? '');
+    const n = typeof v === 'number' ? v : Number(v);
+    return Number.isFinite(n) ? n.toFixed(2) : String(v ?? '');
+  }, [decimal]);
+  const [local, setLocal] = React.useState(formatLocal(value));
   const focused = React.useRef(false);
   React.useEffect(() => {
-    if (!focused.current) setLocal(String(value ?? ''));
-  }, [value]);
+    if (!focused.current) setLocal(formatLocal(value));
+  }, [value, formatLocal]);
   return (
     <TextInput
       style={[st.input, alignRight && { textAlign: 'right', width: 104, minHeight: 44 }, style as TextStyle]}
@@ -248,7 +253,7 @@ export function NumInput({
         let n = parseFloat(local);
         if (!isFinite(n)) n = 0;
         if (min0) n = Math.max(0, n);
-        setLocal(String(n));
+        setLocal(decimal ? n.toFixed(2) : String(Math.trunc(n)));
         onCommit?.(n);
       }}
       onChangeText={txt => {

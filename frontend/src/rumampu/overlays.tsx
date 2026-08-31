@@ -224,7 +224,7 @@ export function SheetHost() {
           {sheet === 'wcown' ? (
             <>
               <BodyS muted>{t('inc_amount')}</BodyS>
-              <SheetInput keyboardType="number-pad" value={ownAmt} onChangeText={setOwnAmt} />
+              <SheetInput keyboardType="numbers-and-punctuation" value={ownAmt} onChangeText={setOwnAmt} />
             </>
           ) : null}
           <Btn label={saving ? t('inc_saving') : t('add')} onPress={() => { void save(); }} />

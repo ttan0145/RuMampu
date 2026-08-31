@@ -19,12 +19,14 @@ export interface RecordSummary {
 
 export const EXP_FULL_DAYS = 20;
 
-export function nf(v: number): string { return Math.round(v).toLocaleString('en-MY') }
-export function rm(v: number): string { return 'RM ' + nf(v) }
-export function rmx(v: number): string {
-  const r = Math.round(v * 100) / 100;
-  return Number.isInteger(r) ? rm(r) : 'RM ' + r.toFixed(2);
+export function nf(v: number): string {
+  return Number(v || 0).toLocaleString('en-MY', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
+export function rm(v: number): string { return 'RM ' + nf(v) }
+export function rmx(v: number): string { return rm(v) }
 
 export function workCostTotal(data: AppData): number {
   return data.workCosts.reduce((a, c) => a + (+c.a || 0), 0);
