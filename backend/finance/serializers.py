@@ -174,6 +174,8 @@ class IncomeEntryCreateSerializer(serializers.Serializer):
     confirm_outlier = serializers.BooleanField(default=False)
 
     def validate_amount(self, value: Decimal) -> Decimal:
+        # EN: AC1.1.9 rejects non-positive income at the API boundary as well as in the UI.
+        # 中文：AC1.1.9 在 API 边界和界面两层都拒绝非正收入。
         if value <= 0:
             raise serializers.ValidationError("Income amount must be greater than zero.")
         return value

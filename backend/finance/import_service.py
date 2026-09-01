@@ -26,6 +26,10 @@ REQUIRED_HEADERS = {"amount", "date", "source"}
 
 
 def _row_errors(*, profile, amount_text: str, date_text: str, source_text: str):
+    """EN: Validate one US1.8 CSV row without promoting it to authoritative income.
+    中文：校验一条 US1.8 CSV 行，但不把它提升为权威收入记录。
+    """
+
     codes: list[str] = []
     messages: list[str] = []
     amount = None
@@ -68,6 +72,10 @@ def _row_errors(*, profile, amount_text: str, date_text: str, source_text: str):
 
 @transaction.atomic
 def preview_income_import(*, profile, uploaded_file) -> IncomeImportBatch:
+    """EN: Build the reviewable US1.8 preview; no IncomeEntry is created here.
+    中文：生成可复核的 US1.8 预览；此阶段不会创建 IncomeEntry。
+    """
+
     file_name = Path(uploaded_file.name or "").name
     if not file_name.lower().endswith(".csv"):
         raise ValidationError({"file": "Only UTF-8 CSV files are supported."})
@@ -119,6 +127,10 @@ def preview_income_import(*, profile, uploaded_file) -> IncomeImportBatch:
 
 @transaction.atomic
 def confirm_income_import(*, profile, batch_id: int) -> IncomeImportBatch:
+    """EN: Atomically promote recognised US1.8 rows into confirmed income facts.
+    中文：以原子事务把已识别的 US1.8 行提升为已确认收入事实。
+    """
+
     batch = profile.income_import_batches.select_for_update().filter(id=batch_id).first()
     if batch is None:
         from rest_framework.exceptions import NotFound

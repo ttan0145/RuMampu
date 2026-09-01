@@ -201,6 +201,10 @@ export function RecordScreen() {
   );
 }
 
+/**
+ * EN: US1.1 records amount, date, and source while preserving warning and provenance states.
+ * 中文：US1.1 录入金额、日期和来源，并保留警告与来源标识状态。
+ */
 export function IncomeScreen() {
   const { S, t, monthName, up, go, saveIncomeEntry, toast } = useApp();
   const d = S.incomeDraft;
@@ -209,12 +213,18 @@ export function IncomeScreen() {
   const save = async (keep: boolean) => {
     if (saving || S.incomeSync === 'loading') return;
     const a = +d.a || 0;
+    // EN: AC1.1.9 warns locally before the API independently rejects non-positive income.
+    // 中文：AC1.1.9 先在前端警告，API 仍会独立拒绝非正收入。
     if (a < 0) { up(s => { s.incomeDraft.flag = 'neg'; }); return; }
     if (!a) return;
+    // EN: AC1.1.2 validates the calendar date on both client and server boundaries.
+    // 中文：AC1.1.2 在客户端和服务端边界都校验日历日期。
     if (!isValidIsoDate(d.d)) {
       toast(t('inc_invalid_date'));
       return;
     }
+    // EN: Prototype mode mirrors AC1.1.10 locally because no backend can return the 409 warning.
+    // 中文：prototype 模式没有后端返回 409，因此在本地复刻 AC1.1.10 警告。
     const amts = S.data.income.map(e => e.a).sort((x, y) => x - y);
     const med = amts.length ? amts[Math.floor(amts.length / 2)] : a;
     if (!INCOME_API_ENABLED && !keep && amts.length >= 3 && a > med * 3) {
@@ -229,6 +239,8 @@ export function IncomeScreen() {
         sourceId: d.s,
         confirmOutlier: keep,
       });
+      // EN: The stable 409 code drives the AC1.1.10 Keep action, not English error text.
+      // 中文：AC1.1.10 的 Keep 操作由稳定的 409 错误码驱动，不依赖英文错误文案。
       if (result === 'outlier') {
         up(s => { s.incomeDraft.flag = 'outlier'; });
         return;
@@ -288,6 +300,8 @@ export function IncomeScreen() {
       </Card>
       <BtnLine label={t('inc_past')} onPress={() => up(s => { s.sheet = 'pastmonth'; })} />
       <BtnLine label={t('inc_import')} onPress={() => go('incomeimport')} />
+      {/* EN: AC1.1.7 lists saved entries; AC1.1.8 marks their amounts as user-provided data. */}
+      {/* 中文：AC1.1.7 列出已保存记录；AC1.1.8 把金额标识为用户提供的数据。 */}
       {S.data.income.length ? (
         <StackS>
           {[...S.data.income].reverse().map((e, i) => {
@@ -308,6 +322,10 @@ export function IncomeScreen() {
   );
 }
 
+/**
+ * EN: US1.3 edits separate work costs and displays calculated income after those costs.
+ * 中文：US1.3 分项编辑工作成本，并显示扣除工作成本后的计算收入。
+ */
 export function WorkcostsScreen() {
   const { S, t, up, saveWorkCostAmount, toast } = useApp();
   const agg = monthsAgg(S.data);
@@ -337,6 +355,10 @@ export function WorkcostsScreen() {
   );
 }
 
+/**
+ * EN: US1.4 keeps living, debt, and savings visually separate while displaying one calculated total.
+ * 中文：US1.4 在视觉上分开生活、债务和储蓄，同时显示一个计算总额。
+ */
 export function CommitScreen() {
   const { S, t, monthName, up, toast, saveCommitmentAmount } = useApp();
   const c = S.data.commitments;
@@ -397,6 +419,10 @@ export function CommitScreen() {
   );
 }
 
+/**
+ * EN: US2.1-US2.3 render Django's authoritative monthly pattern, statistics, and recorded minima.
+ * 中文：US2.1-US2.3 渲染 Django 的权威逐月形态、统计值与记录最低月份。
+ */
 export function PatternScreen() {
   const { S, t, monthName, go, refreshIncomePattern } = useApp();
   React.useEffect(() => {
@@ -489,6 +515,10 @@ export function PatternScreen() {
   );
 }
 
+/**
+ * EN: US2.4 collects a user answer, then displays only server-confirmed coverage facts.
+ * 中文：US2.4 收集用户答案，并且只展示服务端确认的覆盖事实。
+ */
 export function CoverageScreen() {
   const { S, t, monthName, refreshIncomeCoverage, saveIncomeCoverage, toast } = useApp();
   const confirmed = S.incomeCoverage;

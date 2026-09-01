@@ -49,7 +49,13 @@ DEFAULT_EXPENSE_CATEGORIES = (
     ("family", "Family"),
     ("other", "Other"),
 )
+
+
 def profile_for_request(request) -> GuestProfile:
+    """EN: Resolve the guest boundary used by all Epic 1 writes and Epic 2 reads.
+    中文：解析所有 Epic 1 写入与 Epic 2 读取共用的访客边界。
+    """
+
     client_id = request.headers.get("X-RuMampu-Client-ID", "").strip()
 
     if client_id:
@@ -78,6 +84,8 @@ def profile_for_request(request) -> GuestProfile:
     return profile
 
 
+# EN: Epic 1 default choices are created once per profile; custom choices remain profile-owned.
+# 中文：Epic 1 预设选项每个 profile 只初始化一次；自定义选项仍归该 profile 所有。
 def ensure_default_sources(profile: GuestProfile) -> None:
     for slug, name in DEFAULT_INCOME_SOURCES:
         IncomeSource.objects.get_or_create(
@@ -119,6 +127,11 @@ def ensure_default_expense_categories(profile: GuestProfile) -> None:
 
 
 def is_unusually_high(profile: GuestProfile, amount: Decimal) -> tuple[bool, Decimal | None]:
+    """EN: AC1.1.10 requires confirmation above 3x median after 3 manual entries.
+    中文：AC1.1.10 在至少 3 条手工记录后，对超过中位数 3 倍的金额要求确认。
+    """
+    # EN: Historical totals and imports do not participate in this manual-entry baseline.
+    # 中文：历史月总额和导入记录不参与这条手工录入基线。
     values = list(
         profile.income_entries.filter(
             entry_method=IncomeEntry.EntryMethod.MANUAL,
@@ -141,6 +154,9 @@ def create_income_entry(
     gross_amount: Decimal,
     entry_method: str,
 ) -> IncomeEntry:
+    """EN: Persist AC1.1.6/US1.2/US1.8 income in its authoritative FinancialPeriod.
+    中文：把 AC1.1.6/US1.2/US1.8 收入持久化到权威 FinancialPeriod。
+    """
     period_month = income_date.replace(day=1)
     period, _ = FinancialPeriod.objects.get_or_create(
         profile=profile,

@@ -19,6 +19,10 @@ def _money(value: Decimal) -> Decimal:
 
 
 def _history_depth(month_count: int) -> str:
+    """EN: Preserve limited-history states instead of imposing a minimum month count.
+    中文：保留有限历史状态，不强制最低记录月份数。
+    """
+
     if month_count == 0:
         return "empty"
     if month_count == 1:
@@ -29,6 +33,15 @@ def _history_depth(month_count: int) -> str:
 
 
 def build_income_pattern(profile: GuestProfile) -> dict:
+    """EN: Authoritative US2.1-US2.3 monthly usable-income and statistics calculation.
+    中文：US2.1-US2.3 的权威逐月可用收入与统计计算。
+
+    EN: The rule is gross income minus the current active monthly work-cost snapshot.
+    Lower-income months are tied recorded minima, never a fixed threshold or risk score.
+    中文：规则为总收入减当前有效月度工作成本快照；低收入月取并列记录最低值，
+    不使用固定阈值或风险评分。
+    """
+
     monthly_work_cost = (
         profile.work_cost_items.filter(is_active=True).aggregate(total=Sum("monthly_amount"))[
             "total"
@@ -110,6 +123,13 @@ def build_income_pattern(profile: GuestProfile) -> dict:
 
 
 def build_income_coverage(profile: GuestProfile) -> dict:
+    """EN: Evaluate US2.4 against recorded calendar months and the confirmed user answer.
+    中文：依据已记录日历月份和用户已确认答案评估 US2.4。
+
+    EN: Yes compares declared months; No/Not sure returns facts only and does not infer seasonality.
+    中文：Yes 比较用户声明月份；No/Not sure 只返回事实，不推断季节代表性。
+    """
+
     pattern = build_income_pattern(profile)
     coverage = IncomeCoverage.objects.filter(profile=profile).first()
     answer = None
@@ -163,6 +183,10 @@ def save_income_coverage(
     answer: str,
     slower_months: list[int],
 ) -> dict:
+    """EN: Atomically validate and persist the server-confirmed US2.4 answer.
+    中文：以原子事务校验并保存服务端确认的 US2.4 答案。
+    """
+
     persisted_months = sorted(slower_months) if answer == IncomeCoverage.Answer.YES else []
     candidate = IncomeCoverage(
         profile=profile,

@@ -15,3 +15,6 @@ output/playwright/test-results/
 output/playwright/*/report/
 output/playwright/*/test-results/
 .DS_Store
+
+# Local Windows launchers (not committed)
+run-dev.cmd

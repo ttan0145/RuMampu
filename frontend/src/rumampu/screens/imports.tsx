@@ -8,6 +8,10 @@ import { C, DISP_FONT } from '../theme';
 import { Badge, BodyS, Btn, BtnLine, Card, Display, NoteC, StackS } from '../ui';
 import { ScreenShell } from './shell';
 
+/**
+ * EN: US1.8 separates file selection/preview from confirmation, then refreshes authoritative income.
+ * 中文：US1.8 分开文件选择/预览与确认，确认后再刷新权威收入记录。
+ */
 export function ImportIncomeScreen() {
   const { t, go, refreshIncomeRecord } = useApp();
   const [batch, setBatch] = React.useState<ApiIncomeImportBatch | null>(null);

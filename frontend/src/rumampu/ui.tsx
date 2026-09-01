@@ -177,13 +177,17 @@ export function IcLab({ name, children }: { name: string; children: React.ReactN
 /* ---------- provenance ---------- */
 
 export function Prov({ p }: { p: string }) {
-  const { t, up } = useApp();
+  const { t } = useApp();
+  // EN: Provenance is a display-only label. Epic 1/2 require the value to be
+  // identified, but do not require an explanatory bottom sheet on press.
+  // 中文：数据来源仅作为展示标签。Epic 1/2 要求标识数值来源，但不要求点击后
+  // 弹出解释底部弹层。
   return (
-    <Pressable onPress={() => up(s => { s.sheet = 'prov:' + p; })} hitSlop={10} style={{ alignSelf: 'flex-start' }}>
+    <View style={{ alignSelf: 'flex-start' }}>
       <Text style={st.provTxt}>
         <Text style={{ fontSize: 9 }}>{PROV_G[p]}</Text> {t('prov_' + p).toUpperCase()}
       </Text>
-    </Pressable>
+    </View>
   );
 }
 

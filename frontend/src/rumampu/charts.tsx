@@ -59,6 +59,10 @@ function IncomeBar({
   );
 }
 
+/**
+ * EN: US2.1 visualises server-calculated usable income; bar height preserves zero and negative values.
+ * 中文：US2.1 可视化服务端计算的可用收入；柱高保留零值和负值差异。
+ */
 export function IncomePatternChart({
   months, monthName, accessibilityLabel,
 }: {

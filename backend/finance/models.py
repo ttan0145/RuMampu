@@ -7,6 +7,10 @@ from .validators import validate_slower_months
 
 
 class GuestProfile(models.Model):
+    """EN: Anonymous ownership boundary shared by Epic 1 records and Epic 2 analysis.
+    中文：Epic 1 财务记录与 Epic 2 分析共用的匿名数据所有权边界。
+    """
+
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     session_key = models.CharField(max_length=40, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -17,6 +21,10 @@ class GuestProfile(models.Model):
 
 
 class IncomeSource(models.Model):
+    """EN: Predefined or user-defined income source for US1.1.
+    中文：US1.1 使用的预设或用户自定义收入来源。
+    """
+
     profile = models.ForeignKey(
         GuestProfile,
         on_delete=models.CASCADE,
@@ -43,6 +51,10 @@ class IncomeSource(models.Model):
 
 
 class FinancialPeriod(models.Model):
+    """EN: One profile-owned month and its entry-vs-monthly-total recording basis (US1.1/US1.2).
+    中文：归属单一 profile 的月份及其逐笔或月总额记录口径（US1.1/US1.2）。
+    """
+
     class RecordBasis(models.TextChoices):
         ENTRY = "entry", "Individual entries"
         MONTHLY_TOTAL = "monthly_total", "Monthly total"
@@ -74,6 +86,10 @@ class FinancialPeriod(models.Model):
 
 
 class IncomeEntry(models.Model):
+    """EN: Confirmed manual, historical-total, or imported income fact for US1.1/US1.2/US1.8.
+    中文：US1.1/US1.2/US1.8 的已确认手工、历史月总额或导入收入事实。
+    """
+
     class EntryMethod(models.TextChoices):
         MANUAL = "manual", "Manual entry"
         HISTORICAL_TOTAL = "historical_total", "Historical monthly total"
@@ -121,6 +137,10 @@ class IncomeEntry(models.Model):
 
 
 class WorkCostItem(models.Model):
+    """EN: Monthly direct cost of earning income used by US1.3 and Epic 2 usable income.
+    中文：US1.3 记录的月度直接工作成本，也是 Epic 2 可用收入的扣除项。
+    """
+
     profile = models.ForeignKey(
         GuestProfile,
         on_delete=models.CASCADE,
@@ -149,6 +169,10 @@ class WorkCostItem(models.Model):
 
 
 class CommitmentItem(models.Model):
+    """EN: Separate living, debt, and savings commitments for US1.4.
+    中文：US1.4 分组记录的生活、债务与储蓄承诺。
+    """
+
     class CommitmentType(models.TextChoices):
         LIVING = "living", "Living cost"
         DEBT = "debt", "Debt payment"
@@ -182,6 +206,10 @@ class CommitmentItem(models.Model):
 
 
 class ExpenseCategory(models.Model):
+    """EN: Predefined or custom category shared by manual and receipt expenses (US1.5/US1.7).
+    中文：手工与收据支出共用的预设或自定义类别（US1.5/US1.7）。
+    """
+
     profile = models.ForeignKey(
         GuestProfile,
         on_delete=models.CASCADE,
@@ -208,6 +236,10 @@ class ExpenseCategory(models.Model):
 
 
 class ExpenseEntry(models.Model):
+    """EN: Confirmed dated expense fact displayed by US1.5-US1.7.
+    中文：US1.5-US1.7 录入和展示的已确认带日期支出事实。
+    """
+
     class EntryMethod(models.TextChoices):
         MANUAL = "manual", "Manual entry"
         RECEIPT = "receipt", "Receipt confirmed by user"
@@ -241,6 +273,10 @@ class ExpenseEntry(models.Model):
 
 
 class IncomeImportBatch(models.Model):
+    """EN: US1.8 preview/confirmation boundary; preview rows are not income facts yet.
+    中文：US1.8 的预览/确认边界；预览行尚未成为收入事实。
+    """
+
     class Status(models.TextChoices):
         PREVIEW = "preview", "Awaiting confirmation"
         CONFIRMED = "confirmed", "Confirmed"
@@ -267,6 +303,10 @@ class IncomeImportBatch(models.Model):
 
 
 class IncomeImportRow(models.Model):
+    """EN: One recognised or rejected CSV row retained for US1.8 user review.
+    中文：为 US1.8 用户复核保留的一条已识别或被拒绝 CSV 行。
+    """
+
     batch = models.ForeignKey(
         IncomeImportBatch,
         on_delete=models.CASCADE,
@@ -307,6 +347,10 @@ class IncomeImportRow(models.Model):
 
 
 class IncomeCoverage(models.Model):
+    """EN: Server-confirmed US2.4 answer and optional user-declared slower months.
+    中文：服务端确认的 US2.4 答案及可选的用户声明慢月份。
+    """
+
     class Answer(models.TextChoices):
         YES = "yes", "Yes"
         NO = "no", "No"

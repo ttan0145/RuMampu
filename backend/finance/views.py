@@ -34,7 +34,10 @@ from .serializers import (
 from .services import create_income_entry, is_unusually_high, profile_for_request
 
 
+# EN: Aggregate the profile-owned US1.1/US1.2 income record for the client.
+# 中文：为客户端汇总当前 profile 所有的 US1.1/US1.2 收入记录。
 class IncomeRecordView(APIView):
+
     @extend_schema(
         operation_id="income_record_retrieve",
         summary="Get the current guest's income record",
@@ -55,7 +58,10 @@ class IncomeRecordView(APIView):
         )
 
 
+# EN: List predefined sources and create profile-owned custom sources (AC1.1.3-1.1.5).
+# 中文：列出预设来源并创建 profile 自定义来源（AC1.1.3-1.1.5）。
 class IncomeSourceListCreateView(APIView):
+
     @extend_schema(
         operation_id="income_sources_list",
         summary="List active income sources",
@@ -92,7 +98,10 @@ class IncomeSourceListCreateView(APIView):
         return Response(IncomeSourceSerializer(source).data, status=status.HTTP_201_CREATED)
 
 
+# EN: US1.1 lists existing entries and creates validated/confirmed income.
+# 中文：US1.1 列出现有记录，并创建经过校验和确认的收入。
 class IncomeEntryListCreateView(APIView):
+
     @extend_schema(
         operation_id="income_entries_list",
         summary="List income entries",
@@ -160,7 +169,10 @@ class IncomeEntryListCreateView(APIView):
         return Response(IncomeEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
 
 
+# EN: List and extend the separate monthly work costs required by US1.3.
+# 中文：列出并扩展 US1.3 所需的独立月度工作成本。
 class WorkCostItemListCreateView(APIView):
+
     @extend_schema(
         operation_id="work_cost_items_list",
         summary="List active monthly work-cost items",
@@ -195,7 +207,10 @@ class WorkCostItemListCreateView(APIView):
         return Response(WorkCostItemSerializer(item).data, status=status.HTTP_201_CREATED)
 
 
+# EN: Persist an edited US1.3 work-cost amount within the current profile.
+# 中文：在当前 profile 内持久化编辑后的 US1.3 工作成本金额。
 class WorkCostItemDetailView(APIView):
+
     @extend_schema(
         operation_id="work_cost_items_update",
         summary="Update a monthly work-cost amount",
@@ -221,7 +236,10 @@ class WorkCostItemDetailView(APIView):
         return Response(WorkCostItemSerializer(item).data)
 
 
+# EN: Return the separated living, debt, and savings groups for US1.4.
+# 中文：返回 US1.4 分开的生活、债务与储蓄分组。
 class CommitmentItemListView(APIView):
+
     @extend_schema(
         operation_id="commitment_items_list",
         summary="List active monthly financial commitments",
@@ -234,7 +252,10 @@ class CommitmentItemListView(APIView):
         return Response(CommitmentItemSerializer(items, many=True).data)
 
 
+# EN: Persist one profile-owned US1.4 commitment amount.
+# 中文：持久化一项归当前 profile 所有的 US1.4 承诺金额。
 class CommitmentItemDetailView(APIView):
+
     @extend_schema(
         operation_id="commitment_items_update",
         summary="Update a monthly financial commitment amount",
@@ -260,7 +281,10 @@ class CommitmentItemDetailView(APIView):
         return Response(CommitmentItemSerializer(item).data)
 
 
+# EN: Serve predefined and custom categories used by US1.5 and US1.7.
+# 中文：提供 US1.5 与 US1.7 使用的预设和自定义支出类别。
 class ExpenseCategoryListCreateView(APIView):
+
     @extend_schema(
         operation_id="expense_categories_list",
         summary="List active expense categories",
@@ -297,7 +321,10 @@ class ExpenseCategoryListCreateView(APIView):
         )
 
 
+# EN: List US1.6 expenses and persist confirmed US1.5/US1.7 entries.
+# 中文：列出 US1.6 支出，并持久化已确认的 US1.5/US1.7 记录。
 class ExpenseEntryListCreateView(APIView):
+
     @extend_schema(
         operation_id="expense_entries_list",
         summary="List recorded daily expenses",
@@ -335,7 +362,10 @@ class ExpenseEntryListCreateView(APIView):
         return Response(ExpenseEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
 
 
+# EN: Create the unconfirmed, reviewable preview for US1.8.
+# 中文：为 US1.8 创建尚未确认且可复核的预览。
 class IncomeImportPreviewView(APIView):
+
     @extend_schema(
         operation_id="income_imports_preview",
         summary="Parse a CSV file into an unconfirmed income import preview",
@@ -357,7 +387,10 @@ class IncomeImportPreviewView(APIView):
         )
 
 
+# EN: Retrieve only the current profile's US1.8 preview batch.
+# 中文：只读取当前 profile 所有的 US1.8 预览批次。
 class IncomeImportDetailView(APIView):
+
     @extend_schema(
         operation_id="income_imports_retrieve",
         summary="Retrieve an income import preview",
@@ -374,7 +407,10 @@ class IncomeImportDetailView(APIView):
         return Response(IncomeImportBatchSerializer(batch).data)
 
 
+# EN: Confirm recognised US1.8 rows before they enter financial analysis.
+# 中文：在已识别 US1.8 行进入财务分析前完成确认。
 class IncomeImportConfirmView(APIView):
+
     @extend_schema(
         operation_id="income_imports_confirm",
         summary="Confirm recognised rows and add them to income history",

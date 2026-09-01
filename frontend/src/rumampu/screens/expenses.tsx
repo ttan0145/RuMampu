@@ -23,6 +23,10 @@ function useCatLabel() {
   };
 }
 
+/**
+ * EN: US1.6 summarises the latest recorded expense month and lists its individual entries.
+ * 中文：US1.6 汇总最近有记录的支出月份，并列出该月单笔记录。
+ */
 export function ExpensesScreen() {
   const { S, t, monthName, go, up } = useApp();
   const cats = useCatLabel();
@@ -84,6 +88,10 @@ export function ExpensesScreen() {
   );
 }
 
+/**
+ * EN: AC1.6.6 groups confirmed expenses by business month for the monthly summary.
+ * 中文：AC1.6.6 按业务月份汇总已确认支出，形成月度摘要。
+ */
 export function ExpMonthsScreen() {
   const { S, t, monthName, up } = useApp();
   const cats = useCatLabel();
@@ -209,6 +217,10 @@ export function ExLimitsScreen() {
   );
 }
 
+/**
+ * EN: US1.5 validates amount/date/category before adding a manual expense to the current record.
+ * 中文：US1.5 在把手工支出加入当前记录前校验金额、日期和类别。
+ */
 export function ExpAddScreen() {
   const { S, t, monthName, up, toast, backNav, saveExpenseEntry } = useApp();
   const d = S.expDraft;
@@ -277,13 +289,20 @@ export function ExpAddScreen() {
   );
 }
 
+/**
+ * EN: US1.7 keeps receipt-derived values editable and non-authoritative until explicit confirmation.
+ * 中文：US1.7 让收据识别值可编辑，并在显式确认前保持非权威状态。
+ */
 export function ExpScanScreen() {
   const { S, t, up, toast, monthName, saveExpenseEntry } = useApp();
   const st = S.scan.stage;
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<'amount' | 'date' | 'save' | 'image' | null>(null);
 
-  /* The mock read step: after 1.4s the "OCR" resolves to a sample receipt. */
+  /*
+   * EN: Iteration 1 simulates OCR, but the review/edit/confirm boundary is the real US1.7 behaviour.
+   * 中文：Iteration 1 模拟 OCR，但复核、编辑和确认边界才是 US1.7 的真实行为。
+   */
   React.useEffect(() => {
     if (S.route !== 'expscan' || st !== 'read') return;
     const timer = setTimeout(() => {

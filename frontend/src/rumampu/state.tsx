@@ -200,6 +200,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // EN: Bootstrap Epic 1 domains from one guest-owned backend record before Epic 2 analysis runs.
+  // 中文：在 Epic 2 分析启动前，从同一访客所有的后端记录加载 Epic 1 各数据域。
   React.useEffect(() => {
     if (!INCOME_API_ENABLED) return;
     let active = true;
@@ -379,6 +381,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [up]);
 
+  // EN: Epic 2 keeps one in-flight authoritative pattern request and ignores stale responses.
+  // 中文：Epic 2 只保留一个进行中的权威形态请求，并忽略过期响应。
   const refreshIncomePattern = useCallback((): Promise<void> => {
     if (!INCOME_API_ENABLED) return Promise.resolve();
     if (patternRefreshInFlight.current) return patternRefreshInFlight.current;
@@ -407,6 +411,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return request;
   }, [up]);
 
+  // EN: US2.4 reads the last server-confirmed answer without duplicating coverage rules in React.
+  // 中文：US2.4 读取服务端最后确认的答案，不在 React 中复制覆盖计算规则。
   const refreshIncomeCoverage = useCallback((): Promise<void> => {
     if (!INCOME_API_ENABLED) return Promise.resolve();
     if (coverageRefreshInFlight.current) return coverageRefreshInFlight.current;
@@ -435,6 +441,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return request;
   }, [up]);
 
+  // EN: US2.4 keeps a retryable draft on failure while confirmed results remain unchanged.
+  // 中文：US2.4 保存失败时保留可重试草稿，同时不覆盖已确认结果。
   const saveIncomeCoverage = useCallback(async (input: {
     answer: ApiCoverageAnswer;
     slowerMonths: number[];
@@ -470,6 +478,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     void refreshIncomeCoverage().catch(() => undefined);
   }, [S.coverageSync, S.incomeSync, refreshIncomeCoverage]);
 
+  /**
+   * EN: Persist US1.1/US1.2 income; return the stable 409 warning for AC1.1.10 confirmation.
+   * 中文：持久化 US1.1/US1.2 收入；把稳定的 409 警告交给 AC1.1.10 二次确认。
+   */
   const saveIncomeEntry = useCallback(async (input: SaveIncomeInput): Promise<'saved' | 'outlier'> => {
     if (!INCOME_API_ENABLED) {
       up(s => {
@@ -527,6 +539,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [up]);
 
+  // EN: US1.3 applies the server-confirmed work-cost value back to local display state.
+  // 中文：US1.3 把服务端确认后的工作成本值回写到本地展示状态。
   const saveWorkCostAmount = useCallback(async (id: string, amount: number): Promise<void> => {
     if (!INCOME_API_ENABLED) return;
     try {
@@ -562,6 +576,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [up]);
 
+  // EN: US1.4 updates only the matching commitment after Django confirms the write.
+  // 中文：US1.4 只在 Django 确认写入后更新对应承诺项。
   const saveCommitmentAmount = useCallback(async (id: string, amount: number): Promise<void> => {
     if (!INCOME_API_ENABLED) return;
     try {
@@ -606,6 +622,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [up]);
 
+  // EN: US1.5/US1.7 add only confirmed manual or receipt entries to displayed expenses.
+  // 中文：US1.5/US1.7 只把已确认的手工或收据记录加入展示支出。
   const saveExpenseEntry = useCallback(async (input: {
     amount: number;
     date: string;

@@ -228,6 +228,8 @@ export function fetchIncomeRecord(): Promise<ApiIncomeRecord> {
   return request<ApiIncomeRecord>('/income/record/');
 }
 
+// EN: Epic 2 receives Django-calculated pattern and coverage results through this API boundary.
+// 中文：Epic 2 通过此 API 边界接收 Django 计算的收入形态与覆盖结果。
 export function fetchIncomePattern(): Promise<ApiIncomePattern> {
   return request<ApiIncomePattern>('/income-pattern/');
 }
@@ -256,6 +258,10 @@ export function createIncomeSource(name: string): Promise<ApiIncomeSource> {
   });
 }
 
+/**
+ * EN: US1.1/US1.2 posts income facts; AC1.1.10 requires confirm_outlier for an accepted warning.
+ * 中文：US1.1/US1.2 提交收入事实；AC1.1.10 的警告只有在 confirm_outlier 后才接受。
+ */
 export function createIncomeEntry(input: {
   amount: number;
   date: string;
@@ -289,6 +295,8 @@ export function fetchWorkCosts(): Promise<ApiWorkCostItem[]> {
   return request<ApiWorkCostItem[]>('/work-costs/');
 }
 
+// EN: US1.3 work-cost writes stay behind the shared API adapter rather than screen-local fetch calls.
+// 中文：US1.3 工作成本写入统一经过 API adapter，不在页面中直接调用 fetch。
 export function createWorkCost(input: {
   name: string;
   monthlyAmount: number;
@@ -317,6 +325,8 @@ export function fetchCommitments(): Promise<ApiCommitmentItem[]> {
   return request<ApiCommitmentItem[]>('/commitments/');
 }
 
+// EN: US1.4 edits one server-owned commitment while Django retains grouping and validation.
+// 中文：US1.4 每次编辑一项服务端承诺，由 Django 保持分组与校验规则。
 export function updateCommitment(id: string, monthlyAmount: number): Promise<ApiCommitmentItem> {
   const itemId = Number.parseInt(id, 10);
   if (!Number.isFinite(itemId)) {
@@ -332,6 +342,8 @@ export function fetchExpenseCategories(): Promise<ApiExpenseCategory[]> {
   return request<ApiExpenseCategory[]>('/expense-categories/');
 }
 
+// EN: US1.5/US1.7 share the same persisted category and expense endpoints.
+// 中文：US1.5/US1.7 共用同一组持久化类别与支出端点。
 export function createExpenseCategory(name: string): Promise<ApiExpenseCategory> {
   return request<ApiExpenseCategory>('/expense-categories/', {
     method: 'POST',
@@ -374,6 +386,8 @@ export function previewIncomeImport(asset: {
   mimeType?: string | null;
   file?: File;
 }): Promise<ApiIncomeImportBatch> {
+  // EN: US1.8 uploads a preview only; confirmation is a separate explicit request below.
+  // 中文：US1.8 此处只上传并生成预览；确认是下面独立的显式请求。
   const form = new FormData();
   if (asset.file) {
     form.append('file', asset.file, asset.name);
