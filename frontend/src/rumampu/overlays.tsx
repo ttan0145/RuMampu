@@ -10,6 +10,7 @@ import { C, DISP_FONT } from './theme';
 import { Btn, BodyS, PROV_G } from './ui';
 import { Hero, Logo } from './svgs';
 import { DatePickerField } from './date-picker';
+import { isValidMoneyText } from './validation';
 
 /* ---------- bottom sheets ---------- */
 
@@ -99,7 +100,7 @@ export function SheetHost() {
   const [ownAmt, setOwnAmt] = React.useState('0');
   const [pastM, setPastM] = React.useState<string | null>(null);
   const [pastA, setPastA] = React.useState('');
-  const [pastError, setPastError] = React.useState<'invalid' | 'exists' | 'amount' | null>(null);
+  const [pastError, setPastError] = React.useState<'invalid' | 'exists' | 'amount' | 'cash' | null>(null);
   const [saving, setSaving] = React.useState(false);
   React.useEffect(() => {
     setOwnName('');
@@ -145,9 +146,11 @@ export function SheetHost() {
     const editId = sheet.startsWith('pastmonth:') ? sheet.slice('pastmonth:'.length) : null;
     const sel = pastM ?? suggestedPastMonth(S.data.income.map(entry => entry.d));
     const save = async () => {
-      const a = parseFloat(pastA) || 0;
       if (saving) return;
       if (!isValidPastMonth(sel)) { setPastError('invalid'); return; }
+      // Never let parseFloat turn a partially numeric value such as `200ggg` into 200.
+      if (!isValidMoneyText(pastA)) { setPastError('cash'); return; }
+      const a = Number(pastA.trim());
       if (a <= 0) { setPastError('amount'); return; }
       if (S.data.income.some(entry => entry.id !== editId && entry.d.slice(0, 7) === sel)) {
         setPastError('exists');
@@ -189,7 +192,7 @@ export function SheetHost() {
             onChange={value => { setPastM(value); setPastError(null); }}
           />
           <BodyS muted>{t('inc_amount')}</BodyS>
-          <SheetInput keyboardType="numbers-and-punctuation" value={pastA}
+          <SheetInput keyboardType="decimal-pad" inputMode="decimal" value={pastA}
             onChangeText={value => { setPastA(value); setPastError(null); }} />
           {pastError ? <BodyS>{t(`inc_past_${pastError}`)}</BodyS> : null}
           <Btn label={saving ? t('inc_saving') : (editId ? t('done') : t('add'))} onPress={() => { void save(); }} />

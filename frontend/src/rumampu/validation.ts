@@ -9,3 +9,7 @@ export function isValidIsoDate(value: string): boolean {
     && parsed.getUTCMonth() === month - 1
     && parsed.getUTCDate() === day;
 }
+
+export function isValidMoneyText(value: string): boolean {
+  return /^-?\d+(\.\d{1,2})?$/.test(value.trim());
+}
