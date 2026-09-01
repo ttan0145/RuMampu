@@ -153,6 +153,33 @@ class IncomeEntrySerializer(serializers.ModelSerializer):
         fields = ["id", "amount", "date", "source_id", "entry_method", "created_at"]
 
 
+class HistoricalIncomeEntryUpdateSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    date = serializers.DateField()
+
+    def validate_amount(self, value: Decimal) -> Decimal:
+        if value <= 0:
+            raise serializers.ValidationError("Income amount must be greater than zero.")
+        return value
+
+    def validate(self, attrs):
+        profile = self.context["profile"]
+        entry = self.context["entry"]
+        period_month = attrs["date"].replace(day=1)
+        current_month = timezone.localdate().replace(day=1)
+        if period_month >= current_month:
+            raise serializers.ValidationError(
+                {"date": "A historical monthly total must be for an earlier month."}
+            )
+        if profile.income_entries.exclude(id=entry.id).filter(
+            period__period_month=period_month
+        ).exists():
+            raise serializers.ValidationError(
+                {"date": "This month already contains income records."}
+            )
+        return attrs
+
+
 class IncomeRecordSerializer(serializers.Serializer):
     profile_id = serializers.UUIDField()
     recorded_month_count = serializers.IntegerField(min_value=0)

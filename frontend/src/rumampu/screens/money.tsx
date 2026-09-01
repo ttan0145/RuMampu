@@ -300,23 +300,75 @@ export function IncomeScreen() {
       </Card>
       <BtnLine label={t('inc_past')} onPress={() => up(s => { s.sheet = 'pastmonth'; })} />
       <BtnLine label={t('inc_import')} onPress={() => go('incomeimport')} />
-      {/* EN: AC1.1.7 lists saved entries; AC1.1.8 marks their amounts as user-provided data. */}
-      {/* 中文：AC1.1.7 列出已保存记录；AC1.1.8 把金额标识为用户提供的数据。 */}
+      {/* EN: Saved income is user-provided data, so provenance is shown once for the section instead of on every row. */}
+      {/* 中文：已保存收入都属于用户提供的数据，因此来源标识只在区块顶部显示一次，不在每行重复。 */}
       {S.data.income.length ? (
-        <StackS>
-          {[...S.data.income].reverse().map((e, i) => {
-            const src = S.data.sources.find(x => x.id === e.s);
-            const dd = +e.d.slice(8, 10) + ' ' + monthName(+e.d.slice(5, 7) - 1);
-            const label = e.method === 'historical_total'
-              ? `${monthName(+e.d.slice(5, 7) - 1)} ${e.d.slice(0, 4)} · ${t('inc_month_total')}`
-              : `${dd} · ${src ? (src.custom ? src.name : t(src.k || '')) : e.s}`;
-            return (
-              <KV key={i} k={label}>
-                <Fig value={rm(e.a)} p="user" cls="body-s" />
-              </KV>
-            );
-          })}
-        </StackS>
+        <View style={{ marginTop: 4 }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 8,
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '700', color: C.ink64, letterSpacing: 0.2 }}>
+              {t('inc_recorded')}
+            </Text>
+            <View
+              style={{
+                paddingHorizontal: 9,
+                paddingVertical: 4,
+                borderRadius: 999,
+                backgroundColor: C.card,
+              }}
+            >
+              <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.7, color: C.ink64 }}>
+                {t('prov_user').toUpperCase()}
+              </Text>
+            </View>
+          </View>
+
+          <View style={{ borderTopWidth: 1, borderTopColor: C.ink14 }}>
+            {[...S.data.income].reverse().map((e, i) => {
+              const src = S.data.sources.find(x => x.id === e.s);
+              const dd = +e.d.slice(8, 10) + ' ' + monthName(+e.d.slice(5, 7) - 1);
+              const label = e.method === 'historical_total'
+                ? `${monthName(+e.d.slice(5, 7) - 1)} ${e.d.slice(0, 4)} · ${t('inc_month_total')}`
+                : `${dd} · ${src ? (src.custom ? src.name : t(src.k || '')) : e.s}`;
+              const canEdit = e.method === 'historical_total' && Boolean(e.id);
+              return (
+                <View
+                  key={e.id || `${e.d}-${i}`}
+                  style={{
+                    minHeight: 58,
+                    paddingVertical: 10,
+                    borderBottomWidth: 1,
+                    borderBottomColor: C.ink14,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                  }}
+                >
+                  <Text style={{ flex: 1, minWidth: 0, fontSize: 15, lineHeight: 20, color: C.ink }}>
+                    {label}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: canEdit ? 14 : 0 }}>
+                    <Display cls="body-s">{rm(e.a)}</Display>
+                    {canEdit ? (
+                      <BtnLine
+                        label={t('edit')}
+                        style={{ fontSize: 13 }}
+                        onPress={() => up(state => { state.sheet = `pastmonth:${e.id}`; })}
+                      />
+                    ) : null}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
       ) : null}
     </ScreenShell>
   );

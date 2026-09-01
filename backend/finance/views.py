@@ -9,6 +9,7 @@ from .models import (
     ExpenseCategory,
     ExpenseEntry,
     IncomeImportBatch,
+    IncomeEntry,
     IncomeSource,
     WorkCostItem,
 )
@@ -22,6 +23,7 @@ from .serializers import (
     ExpenseEntrySerializer,
     IncomeEntryCreateSerializer,
     IncomeEntrySerializer,
+    HistoricalIncomeEntryUpdateSerializer,
     IncomeImportBatchSerializer,
     IncomeImportUploadSerializer,
     IncomeRecordSerializer,
@@ -31,7 +33,7 @@ from .serializers import (
     WorkCostItemSerializer,
     WorkCostItemUpdateSerializer,
 )
-from .services import create_income_entry, is_unusually_high, profile_for_request
+from .services import create_income_entry, is_unusually_high, profile_for_request, update_historical_income_entry
 
 
 # EN: Aggregate the profile-owned US1.1/US1.2 income record for the client.
@@ -167,6 +169,38 @@ class IncomeEntryListCreateView(APIView):
             entry_method=data["entry_method"],
         )
         return Response(IncomeEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+
+class HistoricalIncomeEntryDetailView(APIView):
+    @extend_schema(
+        operation_id="historical_income_entry_update",
+        summary="Update a historical monthly income total",
+        tags=["Income"],
+        request=HistoricalIncomeEntryUpdateSerializer,
+        responses={200: IncomeEntrySerializer, 400: ApiErrorSerializer, 404: ApiErrorSerializer},
+    )
+    def patch(self, request, entry_id: int):
+        from rest_framework.exceptions import NotFound
+
+        profile = profile_for_request(request)
+        entry = profile.income_entries.filter(
+            id=entry_id,
+            entry_method=IncomeEntry.EntryMethod.HISTORICAL_TOTAL,
+        ).first()
+        if entry is None:
+            raise NotFound("Historical income entry was not found for this profile.")
+
+        serializer = HistoricalIncomeEntryUpdateSerializer(
+            data=request.data,
+            context={"profile": profile, "entry": entry},
+        )
+        serializer.is_valid(raise_exception=True)
+        updated = update_historical_income_entry(
+            entry=entry,
+            income_date=serializer.validated_data["date"],
+            gross_amount=serializer.validated_data["amount"],
+        )
+        return Response(IncomeEntrySerializer(updated).data)
 
 
 # EN: List and extend the separate monthly work costs required by US1.3.

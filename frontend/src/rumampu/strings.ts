@@ -35,6 +35,7 @@ en: {
   money_pattern: 'Income pattern', money_coverage: 'Coverage check',
   net_lbl: 'Income after work costs', per_month: '/ month, average',
   inc_empty: 'Add last week’s earnings. That’s enough to start.',
+  inc_recorded: 'Recorded income',
   inc_amount: 'Amount (RM)', inc_date: 'Date', inc_source: 'Source', inc_add: 'Add income',
   inc_neg: 'An amount below zero can’t be saved.',
   inc_outlier: 'Well above your usual entries. Keep it?',
@@ -520,6 +521,7 @@ ms: {
   rs_kept: 'Ujian disimpan',
   rs_kept_session: 'Disimpan untuk sesi ni.',
   entry_saved_n: 'Catatan disimpan. Analisis sekarang guna {n} bulan.',
+  inc_recorded: 'Pendapatan direkodkan',
   inc_past: 'Tambah bulan lalu',
   inc_past_hint: 'Satu jumlah untuk bulan tu dah cukup.',
   inc_past_no_min: 'Tambah sejarah yang anda ada. Tak ada minimum 6 atau 12 bulan.',
@@ -775,6 +777,7 @@ zh: {
   // 中文：Epic 8 “留存这次测试”的操作与状态文案，显示在住房测试结果页。
   rs_keep: '留存这次测试', rs_keep_hint: '把这个结果加入记录档案，仅供本次会话查看。', rs_kept: '测试已留存', rs_kept_session: '仅在本次会话中留存。',
   entry_saved_n: '已记录。分析现在用上 {n} 个月。',
+  inc_recorded: '已记录收入',
   inc_past: '补记过去的月份',
   inc_past_hint: '那个月一个总数就够。',
   inc_past_no_min: '有多少历史就补多少，不要求至少 6 或 12 个月。',

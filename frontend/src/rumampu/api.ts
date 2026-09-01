@@ -286,6 +286,23 @@ export function createIncomeEntry(input: {
   });
 }
 
+export function updateHistoricalIncomeEntry(
+  id: string,
+  input: { amount: number; date: string },
+): Promise<ApiIncomeEntry> {
+  const entryId = Number.parseInt(id, 10);
+  if (!Number.isFinite(entryId)) {
+    return Promise.reject(new Error('The selected historical income entry is not available in the API record.'));
+  }
+  return request<ApiIncomeEntry>(`/income/entries/${entryId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      amount: input.amount.toFixed(2),
+      date: input.date,
+    }),
+  });
+}
+
 export function isOutlierConfirmation(error: unknown): boolean {
   if (!(error instanceof ApiError) || error.status !== 409) return false;
   return error.code === 'income_outlier_confirmation_required';

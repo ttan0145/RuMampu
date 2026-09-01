@@ -176,3 +176,39 @@ def create_income_entry(
         entry_method=entry_method,
         user_confirmed=True,
     )
+
+@transaction.atomic
+def update_historical_income_entry(
+    *,
+    entry: IncomeEntry,
+    income_date: date,
+    gross_amount: Decimal,
+) -> IncomeEntry:
+    """Update one historical monthly total without creating a duplicate record."""
+    if entry.entry_method != IncomeEntry.EntryMethod.HISTORICAL_TOTAL:
+        raise ValueError("Only historical monthly totals can be edited through this operation.")
+
+    old_period = entry.period
+    target_month = income_date.replace(day=1)
+    if old_period.period_month != target_month:
+        target_period, _ = FinancialPeriod.objects.get_or_create(
+            profile=entry.profile,
+            period_month=target_month,
+            defaults={"record_basis": FinancialPeriod.RecordBasis.MONTHLY_TOTAL},
+        )
+        if target_period.record_basis != FinancialPeriod.RecordBasis.MONTHLY_TOTAL:
+            target_period.record_basis = FinancialPeriod.RecordBasis.MONTHLY_TOTAL
+            target_period.save(update_fields=["record_basis"])
+        entry.period = target_period
+
+    entry.income_date = income_date
+    entry.gross_amount = gross_amount
+    entry.source = None
+    entry.user_confirmed = True
+    entry.save(update_fields=["period", "income_date", "gross_amount", "source", "user_confirmed"])
+
+    if old_period.id != entry.period_id and not old_period.income_entries.exists():
+        old_period.delete()
+
+    return entry
+

@@ -234,39 +234,79 @@ export function NumInput({
   accessibilityLabel?: string;
 }) {
   const formatLocal = React.useCallback((v: number | string) => String(v ?? ''), []);
+
   const [local, setLocal] = React.useState(formatLocal(value));
   const focused = React.useRef(false);
+
   React.useEffect(() => {
     if (!focused.current) setLocal(formatLocal(value));
   }, [value, formatLocal]);
+
   return (
     <TextInput
-      style={[st.input, alignRight && { textAlign: 'right', width: 104, minHeight: 44 }, style as TextStyle]}
+      style={[
+        st.input,
+        alignRight && { textAlign: 'right', width: 104, minHeight: 44 },
+        style as TextStyle,
+      ]}
       keyboardType={decimal ? 'decimal-pad' : 'number-pad'}
       value={local}
       placeholder={placeholder}
       accessibilityLabel={accessibilityLabel}
       placeholderTextColor={C.ink40}
-      onFocus={() => { focused.current = true; }}
+
+      onFocus={() => {
+        focused.current = true;
+      }}
+
       onBlur={() => {
         focused.current = false;
+
         let n = parseFloat(local);
+
         if (!isFinite(n)) n = 0;
         if (min0) n = Math.max(0, n);
+
         setLocal(decimal ? String(n) : String(Math.trunc(n)));
+
         onCommit?.(n);
       }}
+
       onChangeText={txt => {
-        setLocal(txt);
-        let n = parseFloat(txt);
+        let cleaned = txt;
+
+        if (decimal) {
+          cleaned = cleaned.replace(/[^0-9.]/g, '');
+
+          const firstDot = cleaned.indexOf('.');
+
+          if (firstDot !== -1) {
+            cleaned =
+              cleaned.slice(0, firstDot + 1) +
+              cleaned.slice(firstDot + 1).replace(/\./g, '');
+          }
+
+          const [whole, decimals] = cleaned.split('.');
+
+          if (decimals !== undefined) {
+            cleaned = `${whole}.${decimals.slice(0, 2)}`;
+          }
+        } else {
+          cleaned = cleaned.replace(/[^0-9]/g, '');
+        }
+
+        setLocal(cleaned);
+
+        let n = parseFloat(cleaned);
+
         if (!isFinite(n)) n = 0;
         if (min0) n = Math.max(0, n);
+
         onNum(n);
       }}
     />
   );
 }
-
 export function Field({ label, children, extra }: { label: string; children: React.ReactNode; extra?: React.ReactNode }) {
   return (
     <View style={{ gap: 6 }}>

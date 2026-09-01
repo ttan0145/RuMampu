@@ -20,6 +20,7 @@ import {
   INCOME_API_ENABLED,
   isOutlierConfirmation,
   updateIncomeCoverage as updateIncomeCoverageRequest,
+  updateHistoricalIncomeEntry as updateHistoricalIncomeEntryRequest,
   updateCommitment as updateCommitmentRequest,
   updateWorkCost as updateWorkCostRequest,
 } from './api';
@@ -149,6 +150,7 @@ export interface Ctx {
   goTab: (tab: Tab) => void;
   backNav: () => void;
   saveIncomeEntry: (input: SaveIncomeInput) => Promise<'saved' | 'outlier'>;
+  updateHistoricalIncomeEntry: (id: string, input: { amount: number; date: string }) => Promise<void>;
   saveIncomeSource: (name: string) => Promise<string>;
   refreshIncomeRecord: () => Promise<void>;
   refreshIncomePattern: () => Promise<void>;
@@ -218,6 +220,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             name: source.name,
           }));
           next.data.income = record.entries.map(entry => ({
+            id: String(entry.id),
             a: Number(entry.amount),
             d: entry.date,
             s: entry.source_id == null ? '' : String(entry.source_id),
@@ -362,6 +365,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           name: source.name,
         }));
         next.data.income = record.entries.map(entry => ({
+          id: String(entry.id),
           a: Number(entry.amount),
           d: entry.date,
           s: entry.source_id == null ? '' : String(entry.source_id),
@@ -486,6 +490,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!INCOME_API_ENABLED) {
       up(s => {
         s.data.income.push({
+          id: `local-${Date.now()}`,
           a: input.amount,
           d: input.date,
           s: input.sourceId || '',
@@ -499,6 +504,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const entry = await createIncomeEntryRequest(input);
       up(s => {
         s.data.income.push({
+          id: String(entry.id),
           a: Number(entry.amount),
           d: entry.date,
           s: entry.source_id == null ? '' : String(entry.source_id),
@@ -510,6 +516,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return 'saved';
     } catch (error) {
       if (isOutlierConfirmation(error)) return 'outlier';
+      up(s => { s.incomeSync = 'error'; });
+      throw error;
+    }
+  }, [up]);
+
+  const updateHistoricalIncomeEntry = useCallback(async (
+    id: string,
+    input: { amount: number; date: string },
+  ): Promise<void> => {
+    if (!INCOME_API_ENABLED) {
+      up(s => {
+        const existing = s.data.income.find(entry => entry.id === id && entry.method === 'historical_total');
+        if (!existing) throw new Error('Historical income entry was not found.');
+        existing.a = input.amount;
+        existing.d = input.date;
+        s.data.income.sort((x, y) => (x.d < y.d ? -1 : 1));
+      });
+      return;
+    }
+    try {
+      const entry = await updateHistoricalIncomeEntryRequest(id, input);
+      up(s => {
+        const existing = s.data.income.find(item => item.id === id);
+        if (!existing) return;
+        existing.a = Number(entry.amount);
+        existing.d = entry.date;
+        existing.s = entry.source_id == null ? '' : String(entry.source_id);
+        existing.method = entry.entry_method;
+        s.data.income.sort((x, y) => (x.d < y.d ? -1 : 1));
+        s.incomeSync = 'ready';
+        s.incomePatternSync = 'idle';
+        s.coverageSync = 'idle';
+      });
+    } catch (error) {
       up(s => { s.incomeSync = 'error'; });
       throw error;
     }
@@ -670,13 +710,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Ctx>(() => ({
     S, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
+    saveIncomeEntry, updateHistoricalIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, saveWorkCostAmount, saveCustomWorkCost,
     saveCommitmentAmount, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   }), [
     S, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
+    saveIncomeEntry, updateHistoricalIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, saveWorkCostAmount, saveCustomWorkCost,
     saveCommitmentAmount, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,

@@ -3,6 +3,7 @@
 
 export interface Source { id: string; k?: string; custom?: boolean; name?: string }
 export interface IncomeEntry {
+  id?: string;
   a: number;
   d: string;
   s: string;
