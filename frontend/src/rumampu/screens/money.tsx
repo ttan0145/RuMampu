@@ -223,11 +223,25 @@ export function IncomeScreen() {
       toast(t('inc_invalid_date'));
       return;
     }
-    // EN: Prototype mode mirrors AC1.1.10 locally because no backend can return the 409 warning.
-    // 中文：prototype 模式没有后端返回 409，因此在本地复刻 AC1.1.10 警告。
-    const amts = S.data.income.map(e => e.a).sort((x, y) => x - y);
-    const med = amts.length ? amts[Math.floor(amts.length / 2)] : a;
-    if (!INCOME_API_ENABLED && !keep && amts.length >= 3 && a > med * 3) {
+    // EN: Mirror AC1.1.10 on every client, including deployed web.
+    // This keeps Expo/native, prototype, and web behaviour consistent even when
+    // browser session/cookie handling means Django has not yet seen the same
+    // local income history. Django still performs its own validation as a
+    // second check when the API is enabled.
+    const amts = S.data.income
+      .map(e => e.a)
+      .filter(v => Number.isFinite(v) && v > 0)
+      .sort((x, y) => x - y);
+
+    const localMedian = (() => {
+      if (!amts.length) return a;
+      const middle = Math.floor(amts.length / 2);
+      return amts.length % 2 === 0
+        ? (amts[middle - 1] + amts[middle]) / 2
+        : amts[middle];
+    })();
+
+    if (!keep && amts.length >= 3 && a > localMedian * 3) {
       up(s => { s.incomeDraft.flag = 'outlier'; });
       return;
     }
