@@ -153,31 +153,63 @@ class IncomeEntrySerializer(serializers.ModelSerializer):
         fields = ["id", "amount", "date", "source_id", "entry_method", "created_at"]
 
 
-class HistoricalIncomeEntryUpdateSerializer(serializers.Serializer):
+class IncomeEntryUpdateSerializer(serializers.Serializer):
     amount = serializers.DecimalField(max_digits=12, decimal_places=2)
     date = serializers.DateField()
+    source_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
 
     def validate_amount(self, value: Decimal) -> Decimal:
         if value <= 0:
             raise serializers.ValidationError("Income amount must be greater than zero.")
         return value
 
+    def validate_source_id(self, value: int | None) -> int | None:
+        if value is None:
+            return value
+        profile = self.context["profile"]
+        if not profile.income_sources.filter(id=value, is_active=True).exists():
+            raise serializers.ValidationError("Income source was not found for this profile.")
+        return value
+
     def validate(self, attrs):
         profile = self.context["profile"]
         entry = self.context["entry"]
         period_month = attrs["date"].replace(day=1)
-        current_month = timezone.localdate().replace(day=1)
-        if period_month >= current_month:
-            raise serializers.ValidationError(
-                {"date": "A historical monthly total must be for an earlier month."}
-            )
-        if profile.income_entries.exclude(id=entry.id).filter(
-            period__period_month=period_month
-        ).exists():
-            raise serializers.ValidationError(
-                {"date": "This month already contains income records."}
-            )
-        return attrs
+
+        if entry.entry_method == IncomeEntry.EntryMethod.HISTORICAL_TOTAL:
+            current_month = timezone.localdate().replace(day=1)
+            if period_month >= current_month:
+                raise serializers.ValidationError(
+                    {"date": "A historical monthly total must be for an earlier month."}
+                )
+            if profile.income_entries.exclude(id=entry.id).filter(
+                period__period_month=period_month
+            ).exists():
+                raise serializers.ValidationError(
+                    {"date": "This month already contains income records."}
+                )
+            attrs["source_id"] = None
+            return attrs
+
+        if entry.entry_method == IncomeEntry.EntryMethod.MANUAL:
+            if not attrs.get("source_id"):
+                raise serializers.ValidationError(
+                    {"source_id": "An income source is required for a manual entry."}
+                )
+            if profile.financial_periods.filter(
+                period_month=period_month,
+                record_basis=FinancialPeriod.RecordBasis.MONTHLY_TOTAL,
+            ).exclude(id=entry.period_id).exists():
+                raise serializers.ValidationError(
+                    {"date": "This month is already represented by a historical monthly total."}
+                )
+            return attrs
+
+        raise serializers.ValidationError("This income entry type cannot be edited.")
+
+
+# Backwards-compatible alias for any older imports/tests.
+HistoricalIncomeEntryUpdateSerializer = IncomeEntryUpdateSerializer
 
 
 class IncomeRecordSerializer(serializers.Serializer):

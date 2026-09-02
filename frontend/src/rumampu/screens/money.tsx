@@ -336,7 +336,7 @@ export function IncomeScreen() {
               const label = e.method === 'historical_total'
                 ? `${monthName(+e.d.slice(5, 7) - 1)} ${e.d.slice(0, 4)} · ${t('inc_month_total')}`
                 : `${dd} · ${src ? (src.custom ? src.name : t(src.k || '')) : e.s}`;
-              const canEdit = e.method === 'historical_total' && Boolean(e.id);
+              const canEdit = (e.method === 'historical_total' || e.method === 'manual') && Boolean(e.id);
               return (
                 <View
                   key={e.id || `${e.d}-${i}`}
@@ -360,7 +360,7 @@ export function IncomeScreen() {
                       <BtnLine
                         label={t('edit')}
                         style={{ fontSize: 13 }}
-                        onPress={() => up(state => { state.sheet = `pastmonth:${e.id}`; })}
+                        onPress={() => up(state => { state.sheet = e.method === 'historical_total' ? `pastmonth:${e.id}` : `incomeedit:${e.id}`; })}
                       />
                     ) : null}
                   </View>

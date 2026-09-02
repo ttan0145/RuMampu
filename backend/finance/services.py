@@ -178,32 +178,42 @@ def create_income_entry(
     )
 
 @transaction.atomic
-def update_historical_income_entry(
+def update_income_entry(
     *,
     entry: IncomeEntry,
     income_date: date,
     gross_amount: Decimal,
+    source: IncomeSource | None = None,
 ) -> IncomeEntry:
-    """Update one historical monthly total without creating a duplicate record."""
-    if entry.entry_method != IncomeEntry.EntryMethod.HISTORICAL_TOTAL:
-        raise ValueError("Only historical monthly totals can be edited through this operation.")
+    """Update a manual or historical-total income entry and keep its FinancialPeriod consistent."""
+    if entry.entry_method not in (
+        IncomeEntry.EntryMethod.MANUAL,
+        IncomeEntry.EntryMethod.HISTORICAL_TOTAL,
+    ):
+        raise ValueError("This income entry type cannot be edited through this operation.")
 
     old_period = entry.period
     target_month = income_date.replace(day=1)
+    target_basis = (
+        FinancialPeriod.RecordBasis.MONTHLY_TOTAL
+        if entry.entry_method == IncomeEntry.EntryMethod.HISTORICAL_TOTAL
+        else FinancialPeriod.RecordBasis.ENTRY
+    )
+
     if old_period.period_month != target_month:
         target_period, _ = FinancialPeriod.objects.get_or_create(
             profile=entry.profile,
             period_month=target_month,
-            defaults={"record_basis": FinancialPeriod.RecordBasis.MONTHLY_TOTAL},
+            defaults={"record_basis": target_basis},
         )
-        if target_period.record_basis != FinancialPeriod.RecordBasis.MONTHLY_TOTAL:
-            target_period.record_basis = FinancialPeriod.RecordBasis.MONTHLY_TOTAL
+        if target_period.record_basis != target_basis:
+            target_period.record_basis = target_basis
             target_period.save(update_fields=["record_basis"])
         entry.period = target_period
 
     entry.income_date = income_date
     entry.gross_amount = gross_amount
-    entry.source = None
+    entry.source = None if entry.entry_method == IncomeEntry.EntryMethod.HISTORICAL_TOTAL else source
     entry.user_confirmed = True
     entry.save(update_fields=["period", "income_date", "gross_amount", "source", "user_confirmed"])
 
@@ -211,4 +221,21 @@ def update_historical_income_entry(
         old_period.delete()
 
     return entry
+
+
+def update_historical_income_entry(
+    *,
+    entry: IncomeEntry,
+    income_date: date,
+    gross_amount: Decimal,
+) -> IncomeEntry:
+    """Compatibility wrapper for older callers."""
+    if entry.entry_method != IncomeEntry.EntryMethod.HISTORICAL_TOTAL:
+        raise ValueError("Only historical monthly totals can be edited through this operation.")
+    return update_income_entry(
+        entry=entry,
+        income_date=income_date,
+        gross_amount=gross_amount,
+        source=None,
+    )
 

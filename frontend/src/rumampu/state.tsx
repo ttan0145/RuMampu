@@ -20,7 +20,7 @@ import {
   INCOME_API_ENABLED,
   isOutlierConfirmation,
   updateIncomeCoverage as updateIncomeCoverageRequest,
-  updateHistoricalIncomeEntry as updateHistoricalIncomeEntryRequest,
+  updateIncomeEntry as updateIncomeEntryRequest,
   updateCommitment as updateCommitmentRequest,
   updateWorkCost as updateWorkCostRequest,
 } from './api';
@@ -150,7 +150,7 @@ export interface Ctx {
   goTab: (tab: Tab) => void;
   backNav: () => void;
   saveIncomeEntry: (input: SaveIncomeInput) => Promise<'saved' | 'outlier'>;
-  updateHistoricalIncomeEntry: (id: string, input: { amount: number; date: string }) => Promise<void>;
+  updateIncomeEntry: (id: string, input: { amount: number; date: string; sourceId?: string }) => Promise<void>;
   saveIncomeSource: (name: string) => Promise<string>;
   refreshIncomeRecord: () => Promise<void>;
   refreshIncomePattern: () => Promise<void>;
@@ -521,22 +521,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [up]);
 
-  const updateHistoricalIncomeEntry = useCallback(async (
+  const updateIncomeEntry = useCallback(async (
     id: string,
-    input: { amount: number; date: string },
+    input: { amount: number; date: string; sourceId?: string },
   ): Promise<void> => {
     if (!INCOME_API_ENABLED) {
       up(s => {
-        const existing = s.data.income.find(entry => entry.id === id && entry.method === 'historical_total');
-        if (!existing) throw new Error('Historical income entry was not found.');
+        const existing = s.data.income.find(entry => entry.id === id);
+        if (!existing) throw new Error('Income entry was not found.');
         existing.a = input.amount;
         existing.d = input.date;
+        if (existing.method === 'manual' && input.sourceId) existing.s = input.sourceId;
         s.data.income.sort((x, y) => (x.d < y.d ? -1 : 1));
       });
       return;
     }
     try {
-      const entry = await updateHistoricalIncomeEntryRequest(id, input);
+      const entry = await updateIncomeEntryRequest(id, input);
       up(s => {
         const existing = s.data.income.find(item => item.id === id);
         if (!existing) return;
@@ -710,13 +711,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Ctx>(() => ({
     S, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, updateHistoricalIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
+    saveIncomeEntry, updateIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, saveWorkCostAmount, saveCustomWorkCost,
     saveCommitmentAmount, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   }), [
     S, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, updateHistoricalIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
+    saveIncomeEntry, updateIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, saveWorkCostAmount, saveCustomWorkCost,
     saveCommitmentAmount, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,

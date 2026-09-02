@@ -23,7 +23,7 @@ from .serializers import (
     ExpenseEntrySerializer,
     IncomeEntryCreateSerializer,
     IncomeEntrySerializer,
-    HistoricalIncomeEntryUpdateSerializer,
+    IncomeEntryUpdateSerializer,
     IncomeImportBatchSerializer,
     IncomeImportUploadSerializer,
     IncomeRecordSerializer,
@@ -33,7 +33,7 @@ from .serializers import (
     WorkCostItemSerializer,
     WorkCostItemUpdateSerializer,
 )
-from .services import create_income_entry, is_unusually_high, profile_for_request, update_historical_income_entry
+from .services import create_income_entry, is_unusually_high, profile_for_request, update_income_entry
 
 
 # EN: Aggregate the profile-owned US1.1/US1.2 income record for the client.
@@ -173,32 +173,34 @@ class IncomeEntryListCreateView(APIView):
 
 class HistoricalIncomeEntryDetailView(APIView):
     @extend_schema(
-        operation_id="historical_income_entry_update",
-        summary="Update a historical monthly income total",
+        operation_id="income_entry_update",
+        summary="Update a manual or historical monthly income entry",
         tags=["Income"],
-        request=HistoricalIncomeEntryUpdateSerializer,
+        request=IncomeEntryUpdateSerializer,
         responses={200: IncomeEntrySerializer, 400: ApiErrorSerializer, 404: ApiErrorSerializer},
     )
     def patch(self, request, entry_id: int):
         from rest_framework.exceptions import NotFound
 
         profile = profile_for_request(request)
-        entry = profile.income_entries.filter(
-            id=entry_id,
-            entry_method=IncomeEntry.EntryMethod.HISTORICAL_TOTAL,
-        ).first()
+        entry = profile.income_entries.filter(id=entry_id).first()
         if entry is None:
-            raise NotFound("Historical income entry was not found for this profile.")
+            raise NotFound("Income entry was not found for this profile.")
 
-        serializer = HistoricalIncomeEntryUpdateSerializer(
+        serializer = IncomeEntryUpdateSerializer(
             data=request.data,
             context={"profile": profile, "entry": entry},
         )
         serializer.is_valid(raise_exception=True)
-        updated = update_historical_income_entry(
+        source = None
+        source_id = serializer.validated_data.get("source_id")
+        if source_id is not None:
+            source = profile.income_sources.get(id=source_id, is_active=True)
+        updated = update_income_entry(
             entry=entry,
             income_date=serializer.validated_data["date"],
             gross_amount=serializer.validated_data["amount"],
+            source=source,
         )
         return Response(IncomeEntrySerializer(updated).data)
 

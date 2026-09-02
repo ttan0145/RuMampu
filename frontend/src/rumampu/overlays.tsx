@@ -90,7 +90,7 @@ function isValidPastMonth(value: string): boolean {
 
 export function SheetHost() {
   const {
-    S, t, up, monthName, saveIncomeEntry, updateHistoricalIncomeEntry, saveIncomeSource, saveCustomWorkCost,
+    S, t, up, monthName, saveIncomeEntry, updateIncomeEntry, saveIncomeSource, saveCustomWorkCost,
     saveExpenseCategory, toast,
   } = useApp();
   const sheet = S.sheet;
@@ -101,6 +101,10 @@ export function SheetHost() {
   const [pastM, setPastM] = React.useState<string | null>(null);
   const [pastA, setPastA] = React.useState('');
   const [pastError, setPastError] = React.useState<'invalid' | 'exists' | 'amount' | 'cash' | null>(null);
+  const [editAmount, setEditAmount] = React.useState('');
+  const [editDate, setEditDate] = React.useState('');
+  const [editSource, setEditSource] = React.useState('');
+  const [editError, setEditError] = React.useState<'amount' | 'date' | 'source' | null>(null);
   const [saving, setSaving] = React.useState(false);
   React.useEffect(() => {
     setOwnName('');
@@ -110,6 +114,12 @@ export function SheetHost() {
     const existing = editId ? S.data.income.find(entry => entry.id === editId && entry.method === 'historical_total') : null;
     setPastM(existing ? existing.d.slice(0, 7) : null);
     setPastA(existing ? String(existing.a) : '');
+    const manualEditId = sheet?.startsWith('incomeedit:') ? sheet.slice('incomeedit:'.length) : null;
+    const manualEntry = manualEditId ? S.data.income.find(entry => entry.id === manualEditId && entry.method === 'manual') : null;
+    setEditAmount(manualEntry ? String(manualEntry.a) : '');
+    setEditDate(manualEntry ? manualEntry.d : '');
+    setEditSource(manualEntry ? manualEntry.s : '');
+    setEditError(null);
   }, [sheet, S.data.income]);
 
   if (!sheet || sheet === 'shockcustom') return null;
@@ -142,6 +152,67 @@ export function SheetHost() {
     );
   }
 
+  if (sheet.startsWith('incomeedit:')) {
+    const editId = sheet.slice('incomeedit:'.length);
+    const save = async () => {
+      if (saving) return;
+      if (!isValidMoneyText(editAmount) || Number(editAmount.trim()) <= 0) { setEditError('amount'); return; }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(editDate)) { setEditError('date'); return; }
+      if (!editSource) { setEditError('source'); return; }
+      setSaving(true);
+      try {
+        await updateIncomeEntry(editId, {
+          amount: Number(editAmount.trim()),
+          date: editDate,
+          sourceId: editSource,
+        });
+        up(state => { state.sheet = null; });
+        toast(t('entry_saved_n', { n: monthsAgg(S.data).length }));
+      } catch {
+        toast(t('inc_save_failed'));
+      } finally {
+        setSaving(false);
+      }
+    };
+    return (
+      <SheetFrame onClose={close}>
+        <SheetH3>{t('edit')} {t('money_income')}</SheetH3>
+        <View style={{ gap: 8 }}>
+          <BodyS muted>{t('inc_amount')}</BodyS>
+          <SheetInput
+            keyboardType="decimal-pad"
+            inputMode="decimal"
+            value={editAmount}
+            onChangeText={value => { setEditAmount(value); setEditError(null); }}
+          />
+          <BodyS muted>{t('inc_date')}</BodyS>
+          <DatePickerField
+            value={editDate}
+            mode="date"
+            monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
+            maximumDate={new Date()}
+            onChange={value => { setEditDate(value); setEditError(null); }}
+          />
+          <BodyS muted>{t('inc_source')}</BodyS>
+          <View style={{ gap: 2 }}>
+            {S.data.sources.map(source => (
+              <Opt
+                key={source.id}
+                label={source.custom ? source.name || '' : t(source.k || '')}
+                on={editSource === source.id}
+                onPress={() => { setEditSource(source.id); setEditError(null); }}
+              />
+            ))}
+          </View>
+          {editError === 'amount' ? <BodyS>{t('inc_past_amount')}</BodyS> : null}
+          {editError === 'date' ? <BodyS>{t('inc_invalid_date')}</BodyS> : null}
+          {editError === 'source' ? <BodyS>{t('inc_source')}</BodyS> : null}
+          <Btn label={saving ? t('inc_saving') : t('done')} onPress={() => { void save(); }} />
+        </View>
+      </SheetFrame>
+    );
+  }
+
   if (sheet === 'pastmonth' || sheet.startsWith('pastmonth:')) {
     const editId = sheet.startsWith('pastmonth:') ? sheet.slice('pastmonth:'.length) : null;
     const sel = pastM ?? suggestedPastMonth(S.data.income.map(entry => entry.d));
@@ -159,7 +230,7 @@ export function SheetHost() {
       setSaving(true);
       try {
         if (editId) {
-          await updateHistoricalIncomeEntry(editId, { amount: a, date: sel + '-15' });
+          await updateIncomeEntry(editId, { amount: a, date: sel + '-15' });
         } else {
           await saveIncomeEntry({
             amount: a,

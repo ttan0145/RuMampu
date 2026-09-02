@@ -286,21 +286,30 @@ export function createIncomeEntry(input: {
   });
 }
 
-export function updateHistoricalIncomeEntry(
+export function updateIncomeEntry(
   id: string,
-  input: { amount: number; date: string },
+  input: { amount: number; date: string; sourceId?: string },
 ): Promise<ApiIncomeEntry> {
   const entryId = Number.parseInt(id, 10);
   if (!Number.isFinite(entryId)) {
-    return Promise.reject(new Error('The selected historical income entry is not available in the API record.'));
+    return Promise.reject(new Error('The selected income entry is not available in the API record.'));
   }
+  const sourceId = input.sourceId == null ? null : Number.parseInt(input.sourceId, 10);
   return request<ApiIncomeEntry>(`/income/entries/${entryId}/`, {
     method: 'PATCH',
     body: JSON.stringify({
       amount: input.amount.toFixed(2),
       date: input.date,
+      ...(sourceId === null || !Number.isFinite(sourceId) ? {} : { source_id: sourceId }),
     }),
   });
+}
+
+export function updateHistoricalIncomeEntry(
+  id: string,
+  input: { amount: number; date: string },
+): Promise<ApiIncomeEntry> {
+  return updateIncomeEntry(id, input);
 }
 
 export function isOutlierConfirmation(error: unknown): boolean {
