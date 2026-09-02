@@ -80,7 +80,7 @@ export interface AppState {
   exMonthOpen: number | null;
   shock: number;
   bought: boolean;
-  incomeDraft: { a: string; d: string; s: string; flag: 'neg' | 'outlier' | null };
+  incomeDraft: { a: string; d: string; s: string; flag: 'invalid' | 'neg' | 'outlier' | null };
   incomeSync: 'disabled' | 'loading' | 'ready' | 'error';
   workCostSync: 'disabled' | 'loading' | 'ready' | 'error';
   commitmentSync: 'disabled' | 'loading' | 'ready' | 'error';

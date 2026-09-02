@@ -15,7 +15,7 @@ import {
 import { C, DISP_FONT } from '../theme';
 import { Donut, DonutLegend, IncomePatternChart } from '../charts';
 import { ScreenShell } from './shell';
-import { isValidIsoDate } from '../validation';
+import { isValidIsoDate, isValidMoneyText } from '../validation';
 import { DatePickerField } from '../date-picker';
 
 export function MoneyScreen() {
@@ -212,7 +212,13 @@ export function IncomeScreen() {
 
   const save = async (keep: boolean) => {
     if (saving || S.incomeSync === 'loading') return;
-    const a = +d.a || 0;
+    // Use the same strict cash validation as Add a past month. This prevents
+    // partially numeric input such as `3ttttt` from silently becoming invalid/zero.
+    if (!isValidMoneyText(d.a)) {
+      up(s => { s.incomeDraft.flag = 'invalid'; });
+      return;
+    }
+    const a = Number(d.a.trim());
     // EN: AC1.1.9 warns locally before the API independently rejects non-positive income.
     // 中文：AC1.1.9 先在前端警告，API 仍会独立拒绝非正收入。
     if (a < 0) { up(s => { s.incomeDraft.flag = 'neg'; }); return; }
@@ -303,6 +309,7 @@ export function IncomeScreen() {
             <Chip label={t('src_own')} onPress={() => up(s => { s.sheet = 'srcown'; })} />
           </Chips>
         </View>
+        {d.flag === 'invalid' ? <NoteC><BodyS>{t('inc_invalid_amount')}</BodyS></NoteC> : null}
         {d.flag === 'neg' ? <NoteC><BodyS>{t('inc_neg')}</BodyS></NoteC> : null}
         {d.flag === 'outlier' ? (
           <NoteC>
