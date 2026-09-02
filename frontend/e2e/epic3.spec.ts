@@ -20,7 +20,7 @@ test.describe('Epic 3 — Housing Cost & Stress Test', { tag: '@epic3' }, () => 
       await expect(page.getByText(/12 months of income recorded/)).toBeVisible();
     });
 
-    await captureEvidence(page, 'epic-3', '01-pre-housing-check.png');
+    await captureEvidence(page, 'epic-3', 'setup-e3__recorded-history.png');
 
     await page.getByText('Test', { exact: true }).last().click();
 
@@ -54,7 +54,7 @@ test.describe('Epic 3 — Housing Cost & Stress Test', { tag: '@epic3' }, () => 
       await expect(page.getByText('RM 250,000.00', { exact: true })).toBeVisible();
     });
 
-    await captureEvidence(page, 'epic-3', '02-housing-input.png');
+    await captureEvidence(page, 'epic-3', 'ac3.1.1-6__housing-input.png');
 
     await page.getByText(/Total monthly cost/).last().click();
 
@@ -62,7 +62,7 @@ test.describe('Epic 3 — Housing Cost & Stress Test', { tag: '@epic3' }, () => 
       await expect(page.getByText('Total monthly cost', { exact: true })).toBeVisible();
     });
 
-    await captureEvidence(page, 'epic-3', '03-before-running-test.png');
+    await captureEvidence(page, 'epic-3', 'ac3.2.4-5__total-monthly-cost.png');
 
     await page.getByText(/Run the test/).last().click();
 
@@ -76,6 +76,6 @@ test.describe('Epic 3 — Housing Cost & Stress Test', { tag: '@epic3' }, () => 
       await expect(page.getByText('RM 742.37', { exact: true })).toBeVisible();
     });
 
-    await captureEvidence(page, 'epic-3', '04-historical-housing-result.png');
+    await captureEvidence(page, 'epic-3', 'ac3.3.1_ac3.4.1-6__historical-housing-result.png');
   });
 });
