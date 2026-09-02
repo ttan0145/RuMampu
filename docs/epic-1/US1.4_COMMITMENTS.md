@@ -13,7 +13,7 @@ Language: **English** | [Chinese (CN)](US1.4_COMMITMENTS.cn.md)
 | AC1.4.1 Record regular living costs | Passed | Commitments loads Rent, Food, Utilities, and Family support from the API and saves Rent as RM700. |
 | AC1.4.2 Record debt repayments | Passed | Debt repayments independently lists Motor loan and PTPTN and saves Motor loan as RM420. |
 | AC1.4.3 Record savings contributions | Passed | Savings lists Monthly savings and saves RM100. |
-| AC1.4.4 Separate commitment groups visually | Passed | Living costs, Debt repayments, and Savings use three titled visual sections; see the [reloaded commitments screen](../../output/playwright/us1.4/commitments-after-reload.png). |
+| AC1.4.4 Separate commitment groups visually | Passed | Living costs, Debt repayments, and Savings use three titled visual sections; see the [reloaded commitments screen](../../output/playwright/epic-1/evidence/ac1.4.1-6__commitments-after-reload.png). |
 | AC1.4.5 Show total commitments | Passed | The screen calculates `Total commitments RM 1,220` as RM700 + RM420 + RM100. |
 | AC1.4.6 Identify calculated total | Passed | The total carries a `CALCULATED` label while each input remains `YOUR DATA`. |
 

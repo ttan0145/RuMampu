@@ -15,7 +15,7 @@
 | AC1.3.3 Record different work costs separately | 通过 | 每项成本拥有独立资源、金额输入和 `YOUR DATA` 标记，更新一项不会覆盖其他项。 |
 | AC1.3.4 Add my own work cost | 通过 | 创建 `Equipment rental` 自定义项目并保存 RM200，刷新后仍作为第六项显示。 |
 | AC1.3.5 Show income after work costs | 通过 | 月收入 RM3,000 减去 RM700 工作成本后，页面显示 `Income after work costs RM 2,300`。 |
-| AC1.3.6 Identify calculated income | 通过 | 结果旁显示 `CALCULATED` 来源标记；见[刷新后的完整工作成本截图](../../output/playwright/us1.3/work-costs-after-reload.png)。 |
+| AC1.3.6 Identify calculated income | 通过 | 结果旁显示 `CALCULATED` 来源标记；见[刷新后的完整工作成本截图](../../output/playwright/epic-1/evidence/ac1.3.1-6__work-costs-after-reload.png)。 |
 
 ## 自动化与浏览器验收
 

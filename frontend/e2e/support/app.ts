@@ -42,11 +42,12 @@ export async function captureEvidence(
   page: Page,
   epic: string,
   filename: string,
+  options: { resetScroll?: boolean } = {},
 ): Promise<void> {
   if (process.env.UPDATE_EVIDENCE !== '1') return;
 
   const directory = path.resolve(__dirname, `../../../output/playwright/${epic}/evidence`);
   mkdirSync(directory, { recursive: true });
-  await resetScreenScroll(page);
+  if (options.resetScroll !== false) await resetScreenScroll(page);
   await page.screenshot({ path: path.join(directory, filename), fullPage: true });
 }

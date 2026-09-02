@@ -13,7 +13,7 @@
 | AC1.4.1 Record regular living costs | 通过 | Commitments 页面从 API 加载 Rent、Food、Utilities、Family support，并把 Rent 保存为 RM700。 |
 | AC1.4.2 Record debt repayments | 通过 | Debt repayments 分组独立显示 Motor loan 与 PTPTN，并把 Motor loan 保存为 RM420。 |
 | AC1.4.3 Record savings contributions | 通过 | Savings 分组显示 Monthly savings，并把金额保存为 RM100。 |
-| AC1.4.4 Separate commitment groups visually | 通过 | Living costs、Debt repayments、Savings 使用三个有标题的独立视觉分区；见[刷新后的承诺页面截图](../../output/playwright/us1.4/commitments-after-reload.png)。 |
+| AC1.4.4 Separate commitment groups visually | 通过 | Living costs、Debt repayments、Savings 使用三个有标题的独立视觉分区；见[刷新后的承诺页面截图](../../output/playwright/epic-1/evidence/ac1.4.1-6__commitments-after-reload.png)。 |
 | AC1.4.5 Show total commitments | 通过 | 页面将三组有效项目汇总为 `Total commitments RM 1,220`，计算为 RM700 + RM420 + RM100。 |
 | AC1.4.6 Identify calculated total | 通过 | 总额旁显示 `CALCULATED` 来源标记；各输入项仍显示 `YOUR DATA`。 |
 

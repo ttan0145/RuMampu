@@ -85,7 +85,7 @@ The measured browser round trip was approximately 114 ms and server loading appr
 1. Open Money and verify the latest month's two income sources and expense categories.
 2. Open Income pattern and verify 12 bars, mean/median/high/low, and visible slow months.
 
-After RM750 work costs, the authoritative Epic 2 results are average `4437.50`, median `4385.00`, highest `5870.00`, lowest `3160.00`, range `2710.00`, population standard deviation `699.16`, and recorded minimum month `2026-02`. See the current [Epic 2 income-pattern evidence](../../output/playwright/epic-2/evidence/01-income-pattern-12m.png); the older [Money overview](../../output/playwright/scenarios/gig-driver-12m/02-money-overview.png) is retained as Epic 1 evidence.
+After RM750 work costs, the authoritative Epic 2 results are average `4437.50`, median `4385.00`, highest `5870.00`, lowest `3160.00`, range `2710.00`, population standard deviation `699.16`, and recorded minimum month `2026-02`. See the current [Epic 2 income-pattern evidence](../../output/playwright/epic-2/evidence/ac2.1.1-3__income-month-chart.png); the older [Money overview](../../output/playwright/scenarios/gig-driver-12m/02-money-overview.png) is retained as Epic 1 evidence.
 
 ### Flow C: complete expense months
 

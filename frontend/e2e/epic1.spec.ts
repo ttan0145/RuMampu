@@ -130,7 +130,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
       await expect(page.getByText('Well above your usual entries. Keep it?', { exact: true })).toBeVisible();
       await expect(page.getByText('Keep', { exact: true })).toBeVisible();
     });
-    await captureEvidence(page, 'epic-1', '01-income-entry.png');
+    await captureEvidence(page, 'epic-1', 'ac1.1.1-10__income-entry-flow.png');
   });
 
   test('US1.2 — Add historical income', { tag: '@us1.2' }, async ({ page }) => {
@@ -159,7 +159,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
       await page.getByText('Add a past month', { exact: true }).click();
       await expect(page.getByText('Add whatever history you have. There is no 6 or 12 month minimum.', { exact: true })).toBeVisible();
     });
-    await captureEvidence(page, 'epic-1', '02-historical-income.png');
+    await captureEvidence(page, 'epic-1', 'ac1.2.1-4__historical-income-flow.png');
   });
 
   test('US1.3 — Record direct work-related costs', { tag: '@us1.3' }, async ({ page }) => {
@@ -196,7 +196,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
     await ac('AC1.3.6', 'Identify calculated income', async () => {
       await expect(page.getByText(/calculated/i).last()).toBeVisible();
     });
-    await captureEvidence(page, 'epic-1', '03-work-costs.png');
+    await captureEvidence(page, 'epic-1', 'ac1.3.1-6__work-costs.png');
   });
 
   test('US1.4 — Record regular financial commitments', { tag: '@us1.4' }, async ({ page }) => {
@@ -226,7 +226,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
     await ac('AC1.4.6', 'Identify total as calculated', async () => {
       await expect(page.getByText(/calculated/i).last()).toBeVisible();
     });
-    await captureEvidence(page, 'epic-1', '04-commitments.png');
+    await captureEvidence(page, 'epic-1', 'ac1.4.1-6__commitments.png');
   });
 
   test('US1.5 — Record daily expenses manually', { tag: '@us1.5' }, async ({ page }) => {
@@ -263,7 +263,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
       await expect(page.getByText(/25 Aug · Pet supplies/)).toBeVisible();
       await expect(page.getByText('RM 55.00', { exact: true }).first()).toBeVisible();
     });
-    await captureEvidence(page, 'epic-1', '05-manual-expense.png');
+    await captureEvidence(page, 'epic-1', 'ac1.5.1-6__manual-expense-flow.png');
   });
 
   test('US1.6 — Review recorded daily expenses', { tag: '@us1.6' }, async ({ page }) => {
@@ -295,7 +295,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
       await expect(page.getByText('Aug 2026', { exact: true })).toBeVisible();
       await expect(page.getByText('Jul 2026', { exact: true })).toBeVisible();
     });
-    await captureEvidence(page, 'epic-1', '06-expense-review.png');
+    await captureEvidence(page, 'epic-1', 'ac1.6.1-6__expense-review-flow.png');
   });
 
   test('US1.7 — Use a receipt as the starting point for an expense', { tag: '@us1.7' }, async ({ page }) => {
@@ -362,7 +362,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
         user_confirmed: true,
       });
     });
-    await captureEvidence(page, 'epic-1', '07-receipt-expense.png');
+    await captureEvidence(page, 'epic-1', 'ac1.7.1-10__receipt-expense-flow.png');
   });
 
   test('US1.8 — Import historical financial records', { tag: '@us1.8' }, async ({ page }) => {
@@ -405,6 +405,6 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
     await ac('AC1.8.6', 'Allow import with limited history', async () => {
       await expect(page.getByText(/This is two recorded months/)).toBeVisible();
     });
-    await captureEvidence(page, 'epic-1', '08-income-import.png');
+    await captureEvidence(page, 'epic-1', 'ac1.8.1-8__income-import-flow.png');
   });
 });

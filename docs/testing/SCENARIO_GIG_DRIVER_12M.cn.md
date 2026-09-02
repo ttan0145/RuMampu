@@ -85,7 +85,7 @@ Content-Type: application/json
 1. 进入 Money，核对最近月两个收入来源和支出分类。
 2. 进入 Income pattern，验证 12 个柱、平均/中位/最高/最低和淡月可见。
 
-扣除 RM750 工作成本后，Epic 2 权威结果为 average `4437.50`、median `4385.00`、highest `5870.00`、lowest `3160.00`、range `2710.00`、population standard deviation `699.16`，记录最低月为 `2026-02`。参见当前 [Epic 2 收入形态证据](../../output/playwright/epic-2/evidence/01-income-pattern-12m.png)；旧[汇总截图](../../output/playwright/scenarios/gig-driver-12m/02-money-overview.png)继续作为 Epic 1 证据保留。
+扣除 RM750 工作成本后，Epic 2 权威结果为 average `4437.50`、median `4385.00`、highest `5870.00`、lowest `3160.00`、range `2710.00`、population standard deviation `699.16`，记录最低月为 `2026-02`。参见当前 [Epic 2 收入形态证据](../../output/playwright/epic-2/evidence/ac2.1.1-3__income-month-chart.png)；旧[汇总截图](../../output/playwright/scenarios/gig-driver-12m/02-money-overview.png)继续作为 Epic 1 证据保留。
 
 ### Flow C：完整支出月份
 

@@ -10,9 +10,9 @@ Language: **English** | [Chinese (CN)](US1.2_HISTORICAL_INCOME.cn.md)
 
 | Acceptance criterion | Status | Implementation and acceptance evidence |
 |---|---|---|
-| AC1.2.1 Access past-month entry | Passed | Income provides `Add a past month`; the sheet accepts any valid past `YYYY-MM`, as shown in the [complete sheet with duplicate-month protection](../../output/playwright/us1.2/duplicate-month-warning.png). |
-| AC1.2.2 Enter a monthly total | Passed | A historical month needs one positive total. It is not split into transactions or assigned falsely to one source; see the [historical monthly total](../../output/playwright/us1.2/historical-month-entry.png). |
-| AC1.2.3 Include past income in analysis | Passed | After saving 2019-01, the home count changes from 0 to 1 and remains 1 after refresh in the same guest session; see the [one-month record](../../output/playwright/us1.2/one-month-record.png). The API also returns `recorded_month_count`. |
+| AC1.2.1 Access past-month entry | Passed | Income provides `Add a past month`; the sheet accepts any valid past `YYYY-MM`, as shown in the [complete sheet with duplicate-month protection](../../output/playwright/epic-1/evidence/ac1.2.1-2__duplicate-month-warning.png). |
+| AC1.2.2 Enter a monthly total | Passed | A historical month needs one positive total. It is not split into transactions or assigned falsely to one source; see the [historical monthly total](../../output/playwright/epic-1/evidence/ac1.2.2-3__historical-month-entry.png). |
+| AC1.2.3 Include past income in analysis | Passed | After saving 2019-01, the home count changes from 0 to 1 and remains 1 after refresh in the same guest session; see the [one-month record](../../output/playwright/epic-1/evidence/ac1.2.3-4__one-month-record.png). The API also returns `recorded_month_count`. |
 | AC1.2.4 Allow any available history | Passed | The UI states that six or twelve months are not required. The browser continued after adding one historical month, and automated tests accept the distant month 2019-01. |
 
 ## Automated and browser acceptance

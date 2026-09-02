@@ -10,9 +10,9 @@
 
 | Acceptance Criterion | 状态 | 实现与验收证据 |
 |---|---|---|
-| AC1.2.1 Access past-month entry | 通过 | Income 页面提供 `Add a past month` 入口；弹层可直接输入任意有效的历史 `YYYY-MM` 月份，见[重复月份保护截图中的完整弹层](../../output/playwright/us1.2/duplicate-month-warning.png)。 |
-| AC1.2.2 Enter a monthly total | 通过 | 历史月份只需一个大于零的整月总额，不要求拆成逐笔收入，也不伪装成某个收入来源；见[历史月总额截图](../../output/playwright/us1.2/historical-month-entry.png)。 |
-| AC1.2.3 Include past income in analysis | 通过 | 保存 2019-01 后，首页记录月数从 0 变为 1；刷新页面后同一访客会话仍显示 1 个月，见[单月记录截图](../../output/playwright/us1.2/one-month-record.png)。API record 同时返回 `recorded_month_count`。 |
+| AC1.2.1 Access past-month entry | 通过 | Income 页面提供 `Add a past month` 入口；弹层可直接输入任意有效的历史 `YYYY-MM` 月份，见[重复月份保护截图中的完整弹层](../../output/playwright/epic-1/evidence/ac1.2.1-2__duplicate-month-warning.png)。 |
+| AC1.2.2 Enter a monthly total | 通过 | 历史月份只需一个大于零的整月总额，不要求拆成逐笔收入，也不伪装成某个收入来源；见[历史月总额截图](../../output/playwright/epic-1/evidence/ac1.2.2-3__historical-month-entry.png)。 |
+| AC1.2.3 Include past income in analysis | 通过 | 保存 2019-01 后，首页记录月数从 0 变为 1；刷新页面后同一访客会话仍显示 1 个月，见[单月记录截图](../../output/playwright/epic-1/evidence/ac1.2.3-4__one-month-record.png)。API record 同时返回 `recorded_month_count`。 |
 | AC1.2.4 Allow any available history | 通过 | 界面明确说明不要求至少 6 或 12 个月；真实浏览器仅添加 1 个历史月份即可继续，自动化测试也接受 2019-01 这一远期历史月份。 |
 
 ## 自动化与浏览器验收

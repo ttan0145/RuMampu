@@ -15,7 +15,7 @@ Language: **English** | [Chinese (CN)](US1.3_WORK_COSTS.cn.md)
 | AC1.3.3 Record different work costs separately | Passed | Each cost is an independent resource and input with a `YOUR DATA` label; updating one never overwrites another. |
 | AC1.3.4 Add my own work cost | Passed | Created `Equipment rental` at RM200; it remained the sixth item after refresh. |
 | AC1.3.5 Show income after work costs | Passed | RM3,000 monthly income minus RM700 work costs displays `Income after work costs RM 2,300`. |
-| AC1.3.6 Identify calculated income | Passed | The result carries a `CALCULATED` provenance label; see the [reloaded Work costs screen](../../output/playwright/us1.3/work-costs-after-reload.png). |
+| AC1.3.6 Identify calculated income | Passed | The result carries a `CALCULATED` provenance label; see the [reloaded Work costs screen](../../output/playwright/epic-1/evidence/ac1.3.1-6__work-costs-after-reload.png). |
 
 ## Automated and browser acceptance
 

@@ -10,16 +10,16 @@ Language: **English** | [Chinese (CN)](US1.7_RECEIPT_STARTING_POINT.cn.md)
 
 | Acceptance criterion | Status | Implementation and acceptance evidence |
 |---|---|---|
-| AC1.7.1 Select a receipt image | Passed | Scan a receipt provides `Take a photo`, `Choose a photo`, and a deterministic sample-receipt entry for acceptance; see the [selection screen](../../output/playwright/us1.7/receipt-selection.png). |
-| AC1.7.2 Show receipt-reading state | Passed | Selecting the sample displays a shimmer and `Reading the receipt…`; Playwright captured the visible 1.4-second reading stage and [screenshot](../../output/playwright/us1.7/receipt-reading.png). |
+| AC1.7.1 Select a receipt image | Passed | Scan a receipt provides `Take a photo`, `Choose a photo`, and a deterministic sample-receipt entry for acceptance; see the [selection screen](../../output/playwright/epic-1/evidence/ac1.7.1_ac1.7.9__receipt-selection.png). |
+| AC1.7.2 Show receipt-reading state | Passed | Selecting the sample displays a shimmer and `Reading the receipt…`; Playwright captured the visible 1.4-second reading stage and [screenshot](../../output/playwright/epic-1/evidence/ac1.7.2__receipt-reading.png). |
 | AC1.7.3 Present values for confirmation | Passed | The completed preview shows merchant, date, total, and category and explicitly asks for review before saving. |
 | AC1.7.4 Display receipt-derived merchant | Passed | Shop carries `FROM RECEIPT`; the initial merchant is `Kedai Runcit Maju`. |
 | AC1.7.5 Display receipt-derived date | Passed | Date carries `FROM RECEIPT` and remains editable. |
 | AC1.7.6 Display receipt-derived total | Passed | Total (RM) carries `FROM RECEIPT` and remains editable. |
 | AC1.7.7 Choose an expense category | Passed | The review displays every API category; acceptance changed Groceries to Meals. |
-| AC1.7.8 Edit before saving | Passed | Merchant became `Kedai Maju edited`, date 2026-08-25, and total RM35.20; see the [edited review](../../output/playwright/us1.7/receipt-review-edited.png). |
+| AC1.7.8 Edit before saving | Passed | Merchant became `Kedai Maju edited`, date 2026-08-25, and total RM35.20; see the [edited review](../../output/playwright/epic-1/evidence/ac1.7.3-8__receipt-review-edited.png). |
 | AC1.7.9 Retake receipt | Passed | Retake returns to photo/file selection. At that point, the API still has zero expenses. |
-| AC1.7.10 Save the confirmed expense | Passed | Add saves `entry_method=receipt`, `merchant=Kedai Maju edited`, and `user_confirmed=true`. After refresh, 25 Aug · Meals · RM35.20 remains; see the [persisted expense](../../output/playwright/us1.7/confirmed-receipt-after-reload.png). |
+| AC1.7.10 Save the confirmed expense | Passed | Add saves `entry_method=receipt`, `merchant=Kedai Maju edited`, and `user_confirmed=true`. After refresh, 25 Aug · Meals · RM35.20 remains; see the [persisted expense](../../output/playwright/epic-1/evidence/ac1.7.10__confirmed-receipt-after-reload.png). |
 
 ## Automated and browser acceptance
 

@@ -14,12 +14,12 @@
 | AC1.1.2 Enter income date | 通过 | 表单接受 `YYYY-MM-DD` 日期；前后端均校验真实日历日期。 |
 | AC1.1.3 Select an income source | 通过 | 真实浏览器确认可选 E-hailing、Freelance、Part-time (fixed)，也可进入自定义来源流程。 |
 | AC1.1.4 Use multiple income sources | 通过 | 自动化测试确认不同记录分别保留日期、金额和来源；浏览器使用三个不同来源保存记录。 |
-| AC1.1.5 Add a custom income source | 通过 | 创建并使用 `Weekend market` 自定义来源；见[自定义来源记录截图](../../output/playwright/us1.1/custom-source-entry.png)。 |
+| AC1.1.5 Add a custom income source | 通过 | 创建并使用 `Weekend market` 自定义来源；见[自定义来源记录截图](../../output/playwright/epic-1/evidence/ac1.1.1-3_ac1.1.5-8__custom-source-entry.png)。 |
 | AC1.1.6 Save an income entry | 通过 | `POST /api/v1/income/entries/` 持久化有效记录；页面保存后刷新仍能读取同一访客会话的数据。 |
-| AC1.1.7 Display existing entries | 通过 | Income 页面显示全部已有记录的日期、来源和金额；见[保存并重载后的记录截图](../../output/playwright/us1.1/outlier-kept.png)。 |
+| AC1.1.7 Display existing entries | 通过 | Income 页面显示全部已有记录的日期、来源和金额；见[保存并重载后的记录截图](../../output/playwright/epic-1/evidence/ac1.1.4_ac1.1.6-8_ac1.1.10__outlier-kept.png)。 |
 | AC1.1.8 Identify user-entered values | 通过 | 所有手工录入值均显示 `YOUR DATA` 标记；上述两张记录截图均可见。 |
-| AC1.1.9 Prevent negative income entry | 通过 | 输入 `-10` 时显示警告且不保存；见[负数警告截图](../../output/playwright/us1.1/negative-warning.png)，API 同时拒绝非正数。 |
-| AC1.1.10 Warn about an unusually high income entry | 通过 | 以 RM100、RM120、RM140 建立基线后，RM1000 先返回确认要求；界面显示 Keep，确认后才保存。见[异常值警告截图](../../output/playwright/us1.1/outlier-warning.png)及[确认保存截图](../../output/playwright/us1.1/outlier-kept.png)。 |
+| AC1.1.9 Prevent negative income entry | 通过 | 输入 `-10` 时显示警告且不保存；见[负数警告截图](../../output/playwright/epic-1/evidence/ac1.1.9__negative-warning.png)，API 同时拒绝非正数。 |
+| AC1.1.10 Warn about an unusually high income entry | 通过 | 以 RM100、RM120、RM140 建立基线后，RM1000 先返回确认要求；界面显示 Keep，确认后才保存。见[异常值警告截图](../../output/playwright/epic-1/evidence/ac1.1.10__outlier-warning.png)及[确认保存截图](../../output/playwright/epic-1/evidence/ac1.1.4_ac1.1.6-8_ac1.1.10__outlier-kept.png)。 |
 
 ## 自动化与浏览器验收
 

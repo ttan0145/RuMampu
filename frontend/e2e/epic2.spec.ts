@@ -71,7 +71,7 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
       );
       expect(augustHeight).toBeGreaterThan(februaryHeight);
     });
-    await captureEvidence(page, 'epic-2', '01-income-pattern-12m.png');
+    await captureEvidence(page, 'epic-2', 'ac2.1.1-3__income-month-chart.png');
   });
 
   test('US2.2 — Understand typical and extreme income months', { tag: '@us2.2' }, async ({ page }) => {
@@ -97,6 +97,8 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
       await expect(page.getByText('RM 699.16', { exact: true })).toBeVisible();
     });
     await assertForbiddenConclusionsAbsent(page);
+    await page.getByText('Standard deviation', { exact: true }).scrollIntoViewIfNeeded();
+    await captureEvidence(page, 'epic-2', 'ac2.2.1-6__income-statistics.png');
   });
 
   test('US2.3 — Identify lower-income months', { tag: '@us2.3' }, async ({ page }) => {
@@ -110,6 +112,8 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
       await expect(page.getByText(/not a financial standard or a prediction/i)).toBeVisible();
       await assertForbiddenConclusionsAbsent(page);
     });
+    await page.getByText(/Lowest in your current record: Feb 2026/).scrollIntoViewIfNeeded();
+    await captureEvidence(page, 'epic-2', 'ac2.3.1-2__lower-income-month.png', { resetScroll: false });
   });
 
   test('US2.4 — Check whether history covers slower periods', { tag: '@us2.4' }, async ({ page }) => {
@@ -150,6 +154,7 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
       await openMoneyScreen(page, 'Coverage check');
       await expect(page.getByText('Not yet represented in your recorded income: Mar.', { exact: true })).toBeVisible();
     });
+    await captureEvidence(page, 'epic-2', 'ac2.4.1-6__coverage-months.png');
     await ac('AC2.4.7', 'Respond to No or Not sure', async () => {
       await page.getByRole('radio', { name: 'No', exact: true }).click();
       await page.getByRole('button', { name: 'Check coverage' }).click();
@@ -159,7 +164,7 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
       await expect(page.getByText(/These facts cannot confirm whether your usual slower periods are represented/)).toBeVisible();
     });
     await assertForbiddenConclusionsAbsent(page);
-    await captureEvidence(page, 'epic-2', '03-coverage-factual-observation.png');
+    await captureEvidence(page, 'epic-2', 'ac2.4.7__coverage-factual-observation.png');
   });
 
   test('TECH-E2-01 — limited history preserves zero and negative values', { tag: '@hardening' }, async ({ page }) => {
@@ -180,7 +185,7 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
     );
     expect(negativeHeight).toBeGreaterThan(zeroHeight);
     await assertForbiddenConclusionsAbsent(page);
-    await captureEvidence(page, 'epic-2', '05-limited-zero-negative.png');
+    await captureEvidence(page, 'epic-2', 'tech-e2-01__limited-zero-negative.png');
   });
 
   test('TECH-E2-02 — coverage waits for one authoritative initial response', { tag: '@hardening' }, async ({ page }) => {
@@ -233,7 +238,7 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
     await expect(page.getByText(/last server-confirmed answer/)).toBeVisible();
     await expect(page.getByText('Represented in your recorded income: Jan.', { exact: true })).toBeVisible();
     await expect(page.getByRole('radio', { name: 'No', exact: true })).toBeChecked();
-    await captureEvidence(page, 'epic-2', '06-coverage-save-failure.png');
+    await captureEvidence(page, 'epic-2', 'tech-e2-03__coverage-save-failure.png');
 
     await page.getByRole('button', { name: 'Check coverage' }).click();
     await expect(page.getByText(/Across 1 recorded months, usable income ranges from RM 1,000.00/)).toBeVisible();
@@ -258,6 +263,6 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
     await expect(page.getByText('Your income pattern starts with a recorded month.', { exact: true })).toBeVisible();
     await expect(page.getByText('Add income', { exact: true })).toBeVisible();
     await assertForbiddenConclusionsAbsent(page);
-    await captureEvidence(page, 'epic-2', '04-empty-pattern-after-retry.png');
+    await captureEvidence(page, 'epic-2', 'tech-e2-04__empty-pattern-after-retry.png');
   });
 });

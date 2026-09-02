@@ -10,13 +10,13 @@
 
 | Acceptance Criterion | 状态 | 实现与验收证据 |
 |---|---|---|
-| AC1.8.1 Access historical import | 通过 | Income 页面提供 `Import income from CSV` 入口，导入页通过系统文件选择器接收支持的 CSV；见[入口截图](../../output/playwright/us1.8/01-import-start.png)。 |
+| AC1.8.1 Access historical import | 通过 | Income 页面提供 `Import income from CSV` 入口，导入页通过系统文件选择器接收支持的 CSV；见[入口截图](../../output/playwright/epic-1/evidence/ac1.8.1__import-start.png)。 |
 | AC1.8.2 Import historical income records | 通过 | 后端读取 UTF-8 CSV，将识别结果保存为 preview 批次和逐行数据，供确认前审阅。 |
 | AC1.8.3 Preview imported records | 通过 | 预览完整显示金额、日期、收入来源和原始值；验收文件中 3 条有效记录均可逐条核对。 |
 | AC1.8.4 Confirm imported records | 通过 | 用户选择 `Confirm and add 3 records` 后，3 条有效行事务性创建为 `entry_method=import`，并显示确认结果。 |
-| AC1.8.5 Include imported periods in analysis | 通过 | 导入后 Income pattern 显示 May/Jun、平均 RM1,275；购房测试使用同样 2 个记录月并得到 `1 of 2` 的结果；见[收入形态截图](../../output/playwright/us1.8/03-income-pattern.png)与[住房测试截图](../../output/playwright/us1.8/04-housing-result.png)。 |
+| AC1.8.5 Include imported periods in analysis | 通过 | 导入后 Income pattern 显示 May/Jun、平均 RM1,275；购房测试使用同样 2 个记录月并得到 `1 of 2` 的结果；见[收入形态截图](../../output/playwright/epic-1/evidence/ac1.8.4-6__income-pattern.png)与[住房测试截图](../../output/playwright/epic-1/evidence/ac1.8.5__housing-result.png)。 |
 | AC1.8.6 Allow import with limited history | 通过 | 验收仅导入 2 个月，API 返回 `recorded_month_count=2` 并正常进入分析，没有 6 或 12 个月最低门槛。 |
-| AC1.8.7 Handle records that cannot be recognised | 通过 | 无效金额和无效日期分别显示对应行号、原始值和具体错误，不会静默写入；见[含错误行的预览截图](../../output/playwright/us1.8/02-preview-with-errors.png)。 |
+| AC1.8.7 Handle records that cannot be recognised | 通过 | 无效金额和无效日期分别显示对应行号、原始值和具体错误，不会静默写入；见[含错误行的预览截图](../../output/playwright/epic-1/evidence/ac1.8.2-3_ac1.8.7-8__preview-with-errors.png)。 |
 | AC1.8.8 Do not add imported records without confirmation | 通过 | Playwright 在预览完成、点击确认前读取当前 session 的收入档案，精确得到 `entries=0`、`recorded_month_count=0`。 |
 
 ## 文件和确认协议

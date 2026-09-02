@@ -11,11 +11,11 @@ Language: **English** | [Chinese (CN)](US1.6_EXPENSE_REVIEW.cn.md)
 | Acceptance criterion | Status | Implementation and acceptance evidence |
 |---|---|---|
 | AC1.6.1 Display current monthly spending | Passed | The latest recorded month is 2026-08. The page totals only RM18.40 and RM36.60 from August as `Aug so far · RM55`; the RM10 from 2026-07 is excluded. |
-| AC1.6.2 Display recorded days | Passed | The two August expenses occur on the 24th and 25th, so the page shows `2 days recorded`; see the [latest-month review](../../output/playwright/us1.6/latest-month-review.png). |
+| AC1.6.2 Display recorded days | Passed | The two August expenses occur on the 24th and 25th, so the page shows `2 days recorded`; see the [latest-month review](../../output/playwright/epic-1/evidence/ac1.6.1-5__latest-month-review.png). |
 | AC1.6.3 Display individual expenses | Passed | All latest-month entries appear newest first: 25 Aug · Meals · RM36.60 and 24 Aug · Groceries · RM18.40. |
 | AC1.6.4 Access manual expense entry | Passed | `Add expense` opens the manual screen with Amount, Category, and Date; Back returns to the review. |
 | AC1.6.5 Access receipt-entry flow | Passed | `Scan a receipt` opens the receipt flow and shows `Use a sample receipt`; Back returns to the review. |
-| AC1.6.6 Access monthly expense summary | Passed | `Monthly summary` shows Aug 2026 · RM55 · 2 days and Jul 2026 · RM10 · 1 day; see the [monthly summary](../../output/playwright/us1.6/monthly-summary.png). |
+| AC1.6.6 Access monthly expense summary | Passed | `Monthly summary` shows Aug 2026 · RM55 · 2 days and Jul 2026 · RM10 · 1 day; see the [monthly summary](../../output/playwright/epic-1/evidence/ac1.6.6__monthly-summary.png). |
 
 ## Automated and browser acceptance
 

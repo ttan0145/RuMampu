@@ -11,11 +11,11 @@
 | Acceptance Criterion | 状态 | 实现与验收证据 |
 |---|---|---|
 | AC1.6.1 Display current monthly spending | 通过 | 最新记录月份为 2026-08，页面只汇总该月 RM18.40 与 RM36.60，显示 `Aug so far · RM55`；2026-07 的 RM10 不混入当前月。 |
-| AC1.6.2 Display recorded days | 通过 | 两笔 8 月支出分别在 24 日、25 日，页面显示 `2 days recorded`；见[最新月份回顾截图](../../output/playwright/us1.6/latest-month-review.png)。 |
+| AC1.6.2 Display recorded days | 通过 | 两笔 8 月支出分别在 24 日、25 日，页面显示 `2 days recorded`；见[最新月份回顾截图](../../output/playwright/epic-1/evidence/ac1.6.1-5__latest-month-review.png)。 |
 | AC1.6.3 Display individual expenses | 通过 | 最新月份的全部相关条目按日期倒序展示：25 Aug · Meals · RM36.60 与 24 Aug · Groceries · RM18.40。 |
 | AC1.6.4 Access manual expense entry | 通过 | 选择 `Add expense` 后进入包含 Amount、Category、Date 的手动录入页面，再通过 Back 返回。 |
 | AC1.6.5 Access receipt-entry flow | 通过 | 选择 `Scan a receipt` 后进入收据预览流程，并显示 `Use a sample receipt` 起点，再通过 Back 返回。 |
-| AC1.6.6 Access monthly expense summary | 通过 | 选择 `Monthly summary` 后显示 Aug 2026 · RM55 · 2 days 与 Jul 2026 · RM10 · 1 day；见[月度汇总截图](../../output/playwright/us1.6/monthly-summary.png)。 |
+| AC1.6.6 Access monthly expense summary | 通过 | 选择 `Monthly summary` 后显示 Aug 2026 · RM55 · 2 days 与 Jul 2026 · RM10 · 1 day；见[月度汇总截图](../../output/playwright/epic-1/evidence/ac1.6.6__monthly-summary.png)。 |
 
 ## 自动化与浏览器验收
 
