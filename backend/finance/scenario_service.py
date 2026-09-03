@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from django.db import transaction
 
-from .models import ExpenseEntry, FinancialPeriod, IncomeEntry, IncomeSource
+from .models import ExpenseEntry, FinancialPeriod, IncomeEntry, IncomeSource, WorkCostEntry
 from .services import (
     ensure_default_commitments,
     ensure_default_expense_categories,
@@ -102,6 +102,7 @@ def _reset_epic1_finance(profile) -> None:
     profile.income_sources.all().delete()
     profile.expense_entries.all().delete()
     profile.expense_categories.all().delete()
+    profile.work_cost_entries.all().delete()
     profile.work_cost_items.all().delete()
     profile.commitment_items.all().delete()
 
@@ -119,8 +120,6 @@ def load_scenario(*, profile, scenario_id: str) -> dict:
     ensure_default_commitments(profile)
     ensure_default_expense_categories(profile)
 
-    for slug, amount in WORK_COST_AMOUNTS.items():
-        profile.work_cost_items.filter(slug=slug).update(monthly_amount=amount)
     for slug, amount in COMMITMENT_AMOUNTS.items():
         profile.commitment_items.filter(slug=slug).update(monthly_amount=amount)
 
@@ -137,9 +136,14 @@ def load_scenario(*, profile, scenario_id: str) -> dict:
 
     income_entries: list[IncomeEntry] = []
     expense_entries: list[ExpenseEntry] = []
+    work_cost_entries: list[WorkCostEntry] = []
     monthly_summary: list[dict] = []
     income_total = Decimal("0.00")
     expense_total = Decimal("0.00")
+    work_cost_total = Decimal("0.00")
+    work_cost_categories = {
+        item.slug: item for item in profile.work_cost_items.filter(slug__in=WORK_COST_AMOUNTS)
+    }
 
     for month_text, gross_text, condition, expense_values in SCENARIO_MONTHS:
         year, month = (int(part) for part in month_text.split("-"))
@@ -185,6 +189,16 @@ def load_scenario(*, profile, scenario_id: str) -> dict:
 
         income_total += gross
         expense_total += month_expense_total
+        for index, (slug, amount) in enumerate(WORK_COST_AMOUNTS.items(), start=1):
+            work_cost_entries.append(
+                WorkCostEntry(
+                    profile=profile,
+                    category=work_cost_categories[slug],
+                    cost_date=date(year, month, index),
+                    amount=amount,
+                )
+            )
+            work_cost_total += amount
         monthly_summary.append(
             {
                 "month": month_text,
@@ -197,6 +211,7 @@ def load_scenario(*, profile, scenario_id: str) -> dict:
 
     IncomeEntry.objects.bulk_create(income_entries)
     ExpenseEntry.objects.bulk_create(expense_entries)
+    WorkCostEntry.objects.bulk_create(work_cost_entries)
 
     return {
         "scenario_id": SCENARIO_ID,
@@ -207,7 +222,8 @@ def load_scenario(*, profile, scenario_id: str) -> dict:
         "expense_entry_count": len(expense_entries),
         "gross_income_total": f"{income_total:.2f}",
         "logged_expense_total": f"{expense_total:.2f}",
-        "work_cost_monthly": f"{sum(WORK_COST_AMOUNTS.values()):.2f}",
+        "work_cost_entry_count": len(work_cost_entries),
+        "work_cost_recorded_total": f"{work_cost_total:.2f}",
         "commitment_monthly_estimate": f"{sum(COMMITMENT_AMOUNTS.values()):.2f}",
         "first_month": SCENARIO_MONTHS[0][0],
         "last_month": SCENARIO_MONTHS[-1][0],

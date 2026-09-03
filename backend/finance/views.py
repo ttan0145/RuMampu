@@ -11,6 +11,7 @@ from .models import (
     IncomeImportBatch,
     IncomeEntry,
     IncomeSource,
+    WorkCostEntry,
     WorkCostItem,
 )
 from .serializers import (
@@ -31,9 +32,14 @@ from .serializers import (
     IncomeSourceSerializer,
     WorkCostItemCreateSerializer,
     WorkCostItemSerializer,
-    WorkCostItemUpdateSerializer,
+    WorkCostEntrySerializer,
+    WorkCostEntryWriteSerializer,
+    WorkCostMonthSummarySerializer,
+    WorkCostMonthQuerySerializer,
 )
+from .analysis_service import build_work_cost_month_summary
 from .services import create_income_entry, is_unusually_high, profile_for_request, update_income_entry
+from django.utils import timezone
 
 
 # EN: Aggregate the profile-owned US1.1/US1.2 income record for the client.
@@ -205,13 +211,13 @@ class HistoricalIncomeEntryDetailView(APIView):
         return Response(IncomeEntrySerializer(updated).data)
 
 
-# EN: List and extend the separate monthly work costs required by US1.3.
-# 中文：列出并扩展 US1.3 所需的独立月度工作成本。
+# EN: List and extend categories for separate, dated US1.3 work-cost entries.
+# 中文：列出并扩展 US1.3 独立带日期工作成本记录使用的类别。
 class WorkCostItemListCreateView(APIView):
 
     @extend_schema(
         operation_id="work_cost_items_list",
-        summary="List active monthly work-cost items",
+        summary="List active work-cost categories",
         tags=["Work costs"],
         responses={200: WorkCostItemSerializer(many=True)},
     )
@@ -222,7 +228,7 @@ class WorkCostItemListCreateView(APIView):
 
     @extend_schema(
         operation_id="work_cost_items_create",
-        summary="Create a custom monthly work-cost item",
+        summary="Create a custom work-cost category",
         tags=["Work costs"],
         request=WorkCostItemCreateSerializer,
         responses={201: WorkCostItemSerializer, 400: ApiErrorSerializer},
@@ -237,39 +243,102 @@ class WorkCostItemListCreateView(APIView):
         item = WorkCostItem.objects.create(
             profile=profile,
             name=serializer.validated_data["name"],
-            monthly_amount=serializer.validated_data["monthly_amount"],
             is_custom=True,
         )
         return Response(WorkCostItemSerializer(item).data, status=status.HTTP_201_CREATED)
 
 
-# EN: Persist an edited US1.3 work-cost amount within the current profile.
-# 中文：在当前 profile 内持久化编辑后的 US1.3 工作成本金额。
-class WorkCostItemDetailView(APIView):
+# EN: List and create the dated facts used by US1.3 monthly calculations.
+# 中文：列出和创建 US1.3 按月计算使用的带日期事实记录。
+class WorkCostEntryListCreateView(APIView):
 
     @extend_schema(
-        operation_id="work_cost_items_update",
-        summary="Update a monthly work-cost amount",
+        operation_id="work_cost_entries_list",
+        summary="List recorded work-cost entries",
         tags=["Work costs"],
-        request=WorkCostItemUpdateSerializer,
-        responses={
-            200: WorkCostItemSerializer,
-            400: ApiErrorSerializer,
-            404: ApiErrorSerializer,
-        },
+        responses={200: WorkCostEntrySerializer(many=True)},
     )
-    def patch(self, request, item_id: int):
+    def get(self, request):
         profile = profile_for_request(request)
-        item = profile.work_cost_items.filter(id=item_id, is_active=True).first()
-        if item is None:
+        entries = profile.work_cost_entries.select_related("category")
+        return Response(WorkCostEntrySerializer(entries, many=True).data)
+
+    @extend_schema(
+        operation_id="work_cost_entries_create",
+        summary="Create a dated work-cost entry",
+        tags=["Work costs"],
+        request=WorkCostEntryWriteSerializer,
+        responses={201: WorkCostEntrySerializer, 400: ApiErrorSerializer},
+    )
+    def post(self, request):
+        profile = profile_for_request(request)
+        serializer = WorkCostEntryWriteSerializer(data=request.data, context={"profile": profile})
+        serializer.is_valid(raise_exception=True)
+        entry = WorkCostEntry.objects.create(
+            profile=profile,
+            category=profile.work_cost_items.get(id=serializer.validated_data["category_id"]),
+            amount=serializer.validated_data["amount"],
+            cost_date=serializer.validated_data["date"],
+        )
+        return Response(WorkCostEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+
+class WorkCostEntryDetailView(APIView):
+    @extend_schema(
+        operation_id="work_cost_entries_update",
+        summary="Update one dated work-cost entry",
+        tags=["Work costs"],
+        request=WorkCostEntryWriteSerializer,
+        responses={200: WorkCostEntrySerializer, 400: ApiErrorSerializer, 404: ApiErrorSerializer},
+    )
+    def patch(self, request, entry_id: int):
+        profile = profile_for_request(request)
+        entry = profile.work_cost_entries.filter(id=entry_id).select_related("category").first()
+        if entry is None:
             from rest_framework.exceptions import NotFound
 
-            raise NotFound("Work-cost item was not found for this profile.")
-        serializer = WorkCostItemUpdateSerializer(data=request.data)
+            raise NotFound("Work-cost entry was not found for this profile.")
+        serializer = WorkCostEntryWriteSerializer(
+            data=request.data,
+            partial=True,
+            context={"profile": profile},
+        )
         serializer.is_valid(raise_exception=True)
-        item.monthly_amount = serializer.validated_data["monthly_amount"]
-        item.save(update_fields=["monthly_amount", "updated_at"])
-        return Response(WorkCostItemSerializer(item).data)
+        if "category_id" in serializer.validated_data:
+            entry.category = profile.work_cost_items.get(id=serializer.validated_data["category_id"])
+        if "amount" in serializer.validated_data:
+            entry.amount = serializer.validated_data["amount"]
+        if "date" in serializer.validated_data:
+            entry.cost_date = serializer.validated_data["date"]
+        entry.save()
+        return Response(WorkCostEntrySerializer(entry).data)
+
+
+class WorkCostMonthSummaryView(APIView):
+    @extend_schema(
+        operation_id="work_cost_month_summary",
+        summary="Calculate income after work costs for one recorded month",
+        tags=["Work costs"],
+        parameters=[WorkCostMonthQuerySerializer],
+        responses={200: WorkCostMonthSummarySerializer, 400: ApiErrorSerializer},
+    )
+    def get(self, request):
+        query = WorkCostMonthQuerySerializer(data=request.query_params.dict())
+        query.is_valid(raise_exception=True)
+        month_text = query.validated_data.get("month", timezone.localdate().strftime("%Y-%m"))
+        year, month_number = map(int, month_text.split("-"))
+        profile = profile_for_request(request)
+        payload = build_work_cost_month_summary(profile, year=year, month=month_number)
+        month_values = {
+            value.strftime("%Y-%m")
+            for value in profile.income_entries.values_list("income_date", flat=True)
+        } | {
+            value.strftime("%Y-%m")
+            for value in profile.work_cost_entries.values_list("cost_date", flat=True)
+        }
+        month_values.add(timezone.localdate().strftime("%Y-%m"))
+        payload["available_months"] = sorted(month_values, reverse=True)
+        return Response(WorkCostMonthSummarySerializer(payload).data)
 
 
 # EN: Return the separated living, debt, and savings groups for US1.4.

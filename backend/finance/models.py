@@ -137,8 +137,13 @@ class IncomeEntry(models.Model):
 
 
 class WorkCostItem(models.Model):
-    """EN: Monthly direct cost of earning income used by US1.3 and Epic 2 usable income.
-    中文：US1.3 记录的月度直接工作成本，也是 Epic 2 可用收入的扣除项。
+    """EN: A selectable work-cost category used by US1.3 dated records.
+    中文：US1.3 带日期工作成本记录可选择的类别。
+
+    ``monthly_amount`` is retained only to preserve legacy rows from the first
+    implementation. New calculations deliberately do not read it: a legacy
+    monthly value has no business date and must not be applied to every month.
+    ``WorkCostEntry`` is the source of truth for work-cost amounts.
     """
 
     profile = models.ForeignKey(
@@ -166,6 +171,39 @@ class WorkCostItem(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class WorkCostEntry(models.Model):
+    """EN: One confirmed, dated direct cost incurred while earning income.
+    中文：为赚取收入发生的一笔已确认、带日期的直接工作成本。
+    """
+
+    profile = models.ForeignKey(
+        GuestProfile,
+        on_delete=models.CASCADE,
+        related_name="work_cost_entries",
+    )
+    category = models.ForeignKey(
+        WorkCostItem,
+        on_delete=models.RESTRICT,
+        related_name="work_cost_entries",
+    )
+    cost_date = models.DateField()
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-cost_date", "-id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0),
+                name="work_cost_entry_amount_positive",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.cost_date}: {self.amount}"
 
 
 class CommitmentItem(models.Model):

@@ -11,6 +11,7 @@ from .models import (
     GuestProfile,
     IncomeCoverage,
     IncomeEntry,
+    WorkCostEntry,
 )
 from .analysis_service import save_income_coverage
 
@@ -42,6 +43,16 @@ class IncomeAnalysisTestMixin:
             entry_method=IncomeEntry.EntryMethod.MANUAL,
         )
 
+    def add_work_cost(self, month, amount, *, profile=None, day=1, category_slug="petrol"):
+        target_profile = profile or self.profile()
+        year, month_number = (int(part) for part in month.split("-"))
+        return WorkCostEntry.objects.create(
+            profile=target_profile,
+            category=target_profile.work_cost_items.get(slug=category_slug),
+            cost_date=date(year, month_number, day),
+            amount=Decimal(amount),
+        )
+
 
 class IncomePatternApiTests(IncomeAnalysisTestMixin, TestCase):
     def setUp(self):
@@ -57,8 +68,7 @@ class IncomePatternApiTests(IncomeAnalysisTestMixin, TestCase):
                 "recorded_month_count": 0,
                 "history_depth": "empty",
                 "provenance": "calculated_from_user_record",
-                "monthly_work_cost_total": "0.00",
-                "work_cost_basis": "current_active_monthly_snapshot",
+                "work_cost_basis": "recorded_entries_by_month",
                 "months": [],
                 "statistics": None,
                 "lower_income": {"basis": "recorded_minimum", "months": []},
@@ -77,16 +87,17 @@ class IncomePatternApiTests(IncomeAnalysisTestMixin, TestCase):
         self.assertFalse(payload["months"][0]["is_lowest_recorded"])
         self.assertEqual(payload["lower_income"]["months"], [])
 
-    def test_aggregates_sources_and_subtracts_current_work_cost_once_per_month(self):
+    def test_aggregates_sources_and_subtracts_only_that_months_work_cost_entries(self):
         profile = self.profile()
-        profile.work_cost_items.filter(slug="petrol").update(monthly_amount=Decimal("100"))
         self.add_income("2026-01", "1000.00", profile=profile, day=2)
         self.add_income("2026-01", "500.00", profile=profile, day=20, source_slug="freelance")
+        self.add_work_cost("2026-01", "100.00", profile=profile, day=12)
+        self.add_work_cost("2026-02", "250.00", profile=profile, day=12)
 
         payload = self.client.get(self.pattern_url).json()
 
         self.assertEqual(payload["recorded_month_count"], 1)
-        self.assertEqual(payload["monthly_work_cost_total"], "100.00")
+        self.assertEqual(payload["work_cost_basis"], "recorded_entries_by_month")
         self.assertEqual(payload["months"][0]["gross_income"], "1500.00")
         self.assertEqual(payload["months"][0]["work_costs"], "100.00")
         self.assertEqual(payload["months"][0]["usable_income"], "1400.00")
@@ -136,10 +147,8 @@ class IncomePatternApiTests(IncomeAnalysisTestMixin, TestCase):
 
     def test_zero_usable_income_is_preserved(self):
         profile = self.profile()
-        profile.work_cost_items.filter(slug="petrol").update(
-            monthly_amount=Decimal("100.00")
-        )
         self.add_income("2026-01", "100.00", profile=profile)
+        self.add_work_cost("2026-01", "100.00", profile=profile)
 
         payload = self.client.get(self.pattern_url).json()
 
@@ -187,8 +196,8 @@ class IncomePatternApiTests(IncomeAnalysisTestMixin, TestCase):
 
     def test_negative_usable_income_is_returned_as_a_fact(self):
         profile = self.profile()
-        profile.work_cost_items.filter(slug="petrol").update(monthly_amount=Decimal("150"))
         self.add_income("2026-01", "100.00", profile=profile)
+        self.add_work_cost("2026-01", "150.00", profile=profile)
 
         payload = self.client.get(self.pattern_url).json()
 

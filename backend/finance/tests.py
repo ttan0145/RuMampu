@@ -1,4 +1,6 @@
 from decimal import Decimal
+from datetime import date
+from unittest.mock import patch
 
 from django.test import Client, TestCase
 from django.utils import timezone
@@ -10,6 +12,7 @@ from .models import (
     FinancialPeriod,
     GuestProfile,
     IncomeEntry,
+    WorkCostEntry,
     WorkCostItem,
 )
 
@@ -309,6 +312,8 @@ class IncomeApiTests(TestCase):
 
 class WorkCostApiTests(TestCase):
     api_root = "/api/v1/work-costs/"
+    entries_url = "/api/v1/work-costs/entries/"
+    summary_url = "/api/v1/work-costs/summary/"
 
     def setUp(self):
         self.client = Client()
@@ -316,7 +321,7 @@ class WorkCostApiTests(TestCase):
     def list_items(self, client=None):
         return (client or self.client).get(self.api_root)
 
-    def test_lists_separate_default_work_cost_items_for_each_guest(self):
+    def test_lists_separate_default_work_cost_categories_for_each_guest(self):
         first = self.list_items()
         second = self.list_items(Client())
 
@@ -325,27 +330,14 @@ class WorkCostApiTests(TestCase):
             [item["slug"] for item in first.json()],
             ["petrol", "service", "platform", "data", "roadtax"],
         )
-        self.assertTrue(all(item["monthly_amount"] == "0.00" for item in first.json()))
+        self.assertTrue(all("monthly_amount" not in item for item in first.json()))
         self.assertEqual(second.status_code, 200)
         self.assertEqual(WorkCostItem.objects.count(), 10)
 
-    def test_updates_a_work_cost_amount(self):
-        item_id = self.list_items().json()[0]["id"]
-
-        response = self.client.patch(
-            f"{self.api_root}{item_id}/",
-            data={"monthly_amount": "480.50"},
-            content_type="application/json",
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["monthly_amount"], "480.50")
-        self.assertEqual(WorkCostItem.objects.get(id=item_id).monthly_amount, Decimal("480.50"))
-
-    def test_creates_a_custom_work_cost_as_a_separate_item(self):
+    def test_creates_a_custom_work_cost_category(self):
         response = self.client.post(
             self.api_root,
-            data={"name": "Equipment rental", "monthly_amount": "125.00"},
+            data={"name": "Equipment rental"},
             content_type="application/json",
         )
 
@@ -354,38 +346,189 @@ class WorkCostApiTests(TestCase):
         self.assertEqual(response.json()["name"], "Equipment rental")
         self.assertEqual(len(self.list_items().json()), 6)
 
-    def test_rejects_negative_or_duplicate_custom_work_costs(self):
-        negative = self.client.post(
-            self.api_root,
-            data={"name": "Equipment rental", "monthly_amount": "-1"},
-            content_type="application/json",
-        )
+    def test_rejects_duplicate_custom_work_cost_categories(self):
         first = self.client.post(
             self.api_root,
-            data={"name": "Equipment rental", "monthly_amount": "10"},
+            data={"name": "Equipment rental"},
             content_type="application/json",
         )
         duplicate = self.client.post(
             self.api_root,
-            data={"name": "equipment RENTAL", "monthly_amount": "20"},
+            data={"name": "equipment RENTAL"},
             content_type="application/json",
         )
 
-        self.assertEqual(negative.status_code, 400)
         self.assertEqual(first.status_code, 201)
         self.assertEqual(duplicate.status_code, 400)
 
-    def test_cannot_update_another_guests_work_cost(self):
-        other = Client()
-        other_item_id = self.list_items(other).json()[0]["id"]
-
-        response = self.client.patch(
-            f"{self.api_root}{other_item_id}/",
-            data={"monthly_amount": "50"},
+    def test_records_multiple_dated_costs_and_calculates_only_the_selected_month(self):
+        petrol_id = self.list_items().json()[0]["id"]
+        august = self.client.post(
+            self.entries_url,
+            data={"category_id": petrol_id, "amount": "120.00", "date": "2026-08-22"},
+            content_type="application/json",
+        )
+        second_august = self.client.post(
+            self.entries_url,
+            data={"category_id": petrol_id, "amount": "30.00", "date": "2026-08-23"},
+            content_type="application/json",
+        )
+        september = self.client.post(
+            self.entries_url,
+            data={"category_id": petrol_id, "amount": "70.00", "date": "2026-09-01"},
             content_type="application/json",
         )
 
+        self.assertEqual(august.status_code, 201)
+        self.assertEqual(second_august.status_code, 201)
+        self.assertEqual(september.status_code, 201)
+        self.assertEqual(self.client.get(self.entries_url).json()[0]["amount"], "70.00")
+        august_summary = self.client.get(f"{self.summary_url}?month=2026-08").json()
+        september_summary = self.client.get(f"{self.summary_url}?month=2026-09").json()
+        self.assertFalse(august_summary["income_recorded"])
+        self.assertEqual(august_summary["work_cost_total"], "150.00")
+        self.assertIsNone(august_summary["income_after_work_costs"])
+        self.assertEqual(september_summary["work_cost_total"], "70.00")
+        self.assertEqual(WorkCostEntry.objects.count(), 3)
+
+    def test_edits_only_the_selected_dated_entry_and_rejects_other_guests_entry(self):
+        other = Client()
+        other_category_id = self.list_items(other).json()[0]["id"]
+        other_entry = other.post(
+            self.entries_url,
+            data={"category_id": other_category_id, "amount": "50.00", "date": "2026-08-21"},
+            content_type="application/json",
+        ).json()
+
+        response = self.client.patch(
+            f"{self.entries_url}{other_entry['id']}/",
+            data={"amount": "50"},
+            content_type="application/json",
+        )
         self.assertEqual(response.status_code, 404)
+
+        petrol_id = self.list_items().json()[0]["id"]
+        entry = self.client.post(
+            self.entries_url,
+            data={"category_id": petrol_id, "amount": "50.00", "date": "2026-08-21"},
+            content_type="application/json",
+        ).json()
+        updated = self.client.patch(
+            f"{self.entries_url}{entry['id']}/",
+            data={"amount": "80.50", "date": "2026-09-01"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.json()["amount"], "80.50")
+        self.assertEqual(updated.json()["date"], "2026-09-01")
+
+    def test_rejects_invalid_entry_amount_category_date_and_month_filter(self):
+        petrol_id = self.list_items().json()[0]["id"]
+        for payload in (
+            {"category_id": petrol_id, "amount": "0", "date": "2026-08-21"},
+            {"category_id": petrol_id, "amount": "-1", "date": "2026-08-21"},
+            {"category_id": 999999, "amount": "10", "date": "2026-08-21"},
+        ):
+            with self.subTest(payload=payload):
+                self.assertEqual(
+                    self.client.post(self.entries_url, data=payload, content_type="application/json").status_code,
+                    400,
+                )
+        self.assertEqual(self.client.get(f"{self.summary_url}?month=August").status_code, 400)
+
+    def post_cost(self, category_id, amount, cost_date="2025-12-31", client=None):
+        return (client or self.client).post(self.entries_url, data={
+            "category_id": category_id, "amount": amount, "date": cost_date,
+        }, content_type="application/json")
+
+    def summary(self, month):
+        response = self.client.get(self.summary_url, {"month": month})
+        self.assertEqual(response.status_code, 200)
+        return response.json()
+
+    def test_month_query_requires_a_real_year_and_exact_ascii_format(self):
+        for month in ("", "0000-01", "2026-1", "2026-00", "2026-13", " 2026-01", "2026-01\n", "２０２６-01", "2026-01-01"):
+            with self.subTest(month=month):
+                response = self.client.get(self.summary_url, {"month": month})
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("month", response.json()["error"]["fields"])
+
+    @patch("finance.views.timezone.localdate", return_value=date(2027, 1, 1))
+    def test_default_month_uses_current_local_month_even_without_income(self, _today):
+        payload = self.client.get(self.summary_url).json()
+        self.assertEqual(payload["month"], "2027-01")
+        self.assertEqual(payload["available_months"], ["2027-01"])
+        self.assertIsNone(payload["income_after_work_costs"])
+
+    def test_edit_across_years_moves_only_one_entry_and_keeps_siblings(self):
+        category_id = self.list_items().json()[0]["id"]
+        first = self.post_cost(category_id, "10.10").json()
+        sibling = self.post_cost(category_id, "20.20").json()
+        self.post_cost(category_id, "30.30", "2026-01-01")
+        self.assertEqual(self.summary("2025-12")["work_cost_total"], "30.30")
+        response = self.client.patch(f"{self.entries_url}{first['id']}/", data={
+            "amount": "40.40", "date": "2026-01-01",
+        }, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.summary("2025-12")["work_cost_total"], "20.20")
+        self.assertEqual(self.summary("2026-01")["work_cost_total"], "70.70")
+        self.assertEqual(WorkCostEntry.objects.get(id=sibling["id"]).amount, Decimal("20.20"))
+        self.assertEqual(WorkCostEntry.objects.count(), 3)
+
+    def test_summary_distinguishes_no_income_no_cost_zero_and_negative_net(self):
+        category_id = self.list_items().json()[0]["id"]
+        self.post_cost(category_id, "100.00")
+        self.assertIsNone(self.summary("2025-12")["income_after_work_costs"])
+        record = self.client.get("/api/v1/income/record/").json()
+        income = self.client.post("/api/v1/income/entries/", data={
+            "source_id": record["sources"][0]["id"], "amount": "100.00", "date": "2025-12-31",
+        }, content_type="application/json")
+        self.assertEqual(income.status_code, 201)
+        self.assertEqual(self.summary("2025-12")["income_after_work_costs"], "0.00")
+        self.post_cost(category_id, "0.01")
+        self.assertEqual(self.summary("2025-12")["income_after_work_costs"], "-0.01")
+        updated = self.client.patch(f"/api/v1/income/entries/{income.json()['id']}/", data={
+            "amount": "120.00", "date": "2026-01-01", "source_id": record["sources"][0]["id"],
+        }, content_type="application/json")
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(self.summary("2026-01")["income_after_work_costs"], "120.00")
+        self.assertIsNone(self.summary("2025-12")["income_after_work_costs"])
+
+    def test_rejects_foreign_category_on_create_and_edit_without_mutation(self):
+        category_id = self.list_items().json()[0]["id"]
+        other = Client()
+        foreign = self.list_items(other).json()[0]["id"]
+        self.assertEqual(self.post_cost(foreign, "10").status_code, 400)
+        entry = self.post_cost(category_id, "10").json()
+        response = self.client.patch(f"{self.entries_url}{entry['id']}/", data={
+            "category_id": foreign, "amount": "500",
+        }, content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.summary("2025-12")["work_cost_total"], "10.00")
+        self.assertEqual(other.get(self.entries_url).json(), [])
+        self.assertNotIn("2025-12", other.get(self.summary_url).json()["available_months"])
+
+    def test_legacy_estimates_are_preserved_and_visible_but_not_deducted(self):
+        category_id = self.list_items().json()[0]["id"]
+        WorkCostItem.objects.filter(id=category_id).update(monthly_amount=Decimal("999.99"))
+        self.assertEqual(self.list_items().json()[0]["legacy_monthly_amount"], "999.99")
+        self.assertEqual(self.summary("2025-12")["work_cost_total"], "0.00")
+        self.post_cost(category_id, "10.00")
+        self.assertEqual(self.summary("2025-12")["work_cost_total"], "10.00")
+        self.assertEqual(WorkCostItem.objects.get(id=category_id).monthly_amount, Decimal("999.99"))
+
+    def test_rejects_precision_missing_fields_future_dates_and_empty_patch(self):
+        category_id = self.list_items().json()[0]["id"]
+        for amount in ("NaN", "Infinity", "0.001", "10000000000.00"):
+            with self.subTest(amount=amount):
+                self.assertEqual(self.post_cost(category_id, amount).status_code, 400)
+        self.assertEqual(self.post_cost(category_id, "10", "9999-12-31").status_code, 400)
+        self.assertEqual(self.post_cost(category_id, "10", "2025-02-29").status_code, 400)
+        self.assertEqual(self.client.post(self.entries_url, data={}, content_type="application/json").status_code, 400)
+        entry = self.post_cost(category_id, "10").json()
+        self.assertEqual(self.client.patch(f"{self.entries_url}{entry['id']}/", data={}, content_type="application/json").status_code, 400)
+        self.assertEqual(WorkCostEntry.objects.count(), 1)
 
 
 class CommitmentApiTests(TestCase):

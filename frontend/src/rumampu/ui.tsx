@@ -280,13 +280,14 @@ export function Field({ label, children, extra }: { label: string; children: Rea
 }
 
 export function TextField({
-  value, onChangeText, placeholder, keyboardType, inputMode,
+  value, onChangeText, placeholder, keyboardType, inputMode, accessibilityLabel,
 }: {
   value: string;
   onChangeText: (v: string) => void;
   placeholder?: string;
   keyboardType?: React.ComponentProps<typeof TextInput>['keyboardType'];
   inputMode?: React.ComponentProps<typeof TextInput>['inputMode'];
+  accessibilityLabel?: string;
 }) {
   return (
     <TextInput
@@ -297,6 +298,7 @@ export function TextField({
       placeholderTextColor={C.ink40}
       keyboardType={keyboardType}
       inputMode={inputMode}
+      accessibilityLabel={accessibilityLabel}
     />
   );
 }

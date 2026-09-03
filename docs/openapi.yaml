@@ -634,6 +634,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Explicit confirmation is required for an unusual amount.
+  /api/v1/income/entries/{entry_id}/:
+    patch:
+      operationId: income_entry_update
+      summary: Update a manual or historical monthly income entry
+      parameters:
+      - in: path
+        name: entry_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Income
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedIncomeEntryUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedIncomeEntryUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedIncomeEntryUpdateRequest'
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncomeEntry'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/income/record/:
     get:
       operationId: income_record_retrieve
@@ -701,7 +745,7 @@ paths:
   /api/v1/work-costs/:
     get:
       operationId: work_cost_items_list
-      summary: List active monthly work-cost items
+      summary: List active work-cost categories
       tags:
       - Work costs
       security:
@@ -717,7 +761,7 @@ paths:
           description: ''
     post:
       operationId: work_cost_items_create
-      summary: Create a custom monthly work-cost item
+      summary: Create a custom work-cost category
       tags:
       - Work costs
       requestBody:
@@ -747,13 +791,62 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
-  /api/v1/work-costs/{item_id}/:
+  /api/v1/work-costs/entries/:
+    get:
+      operationId: work_cost_entries_list
+      summary: List recorded work-cost entries
+      tags:
+      - Work costs
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkCostEntry'
+          description: ''
+    post:
+      operationId: work_cost_entries_create
+      summary: Create a dated work-cost entry
+      tags:
+      - Work costs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkCostEntryWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WorkCostEntryWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WorkCostEntryWriteRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkCostEntry'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/work-costs/entries/{entry_id}/:
     patch:
-      operationId: work_cost_items_update
-      summary: Update a monthly work-cost amount
+      operationId: work_cost_entries_update
+      summary: Update one dated work-cost entry
       parameters:
       - in: path
-        name: item_id
+        name: entry_id
         schema:
           type: integer
         required: true
@@ -763,13 +856,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedWorkCostItemUpdateRequest'
+              $ref: '#/components/schemas/PatchedWorkCostEntryWriteRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedWorkCostItemUpdateRequest'
+              $ref: '#/components/schemas/PatchedWorkCostEntryWriteRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedWorkCostItemUpdateRequest'
+              $ref: '#/components/schemas/PatchedWorkCostEntryWriteRequest'
       security:
       - {}
       responses:
@@ -777,7 +870,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorkCostItem'
+                $ref: '#/components/schemas/WorkCostEntry'
           description: ''
         '400':
           content:
@@ -786,6 +879,34 @@ paths:
                 $ref: '#/components/schemas/ApiError'
           description: ''
         '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+  /api/v1/work-costs/summary/:
+    get:
+      operationId: work_cost_month_summary
+      summary: Calculate income after work costs for one recorded month
+      parameters:
+      - in: query
+        name: month
+        schema:
+          type: string
+          minLength: 1
+          pattern: ^[0-9]{4}-(0[1-9]|1[0-2])$
+      tags:
+      - Work costs
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkCostMonthSummary'
+          description: ''
+        '400':
           content:
             application/json:
               schema:
@@ -1683,9 +1804,6 @@ components:
           $ref: '#/components/schemas/HistoryDepthEnum'
         provenance:
           $ref: '#/components/schemas/ProvenanceEnum'
-        monthly_work_cost_total:
-          type: string
-          format: decimal
         work_cost_basis:
           $ref: '#/components/schemas/WorkCostBasisEnum'
         months:
@@ -1701,7 +1819,6 @@ components:
       required:
       - history_depth
       - lower_income
-      - monthly_work_cost_total
       - months
       - provenance
       - recorded_month_count
@@ -1844,13 +1961,33 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/HousingCostRequest'
-    PatchedWorkCostItemUpdateRequest:
+    PatchedIncomeEntryUpdateRequest:
       type: object
       properties:
-        monthly_amount:
+        amount:
           type: string
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        date:
+          type: string
+          format: date
+        source_id:
+          type: integer
+          minimum: 1
+          nullable: true
+    PatchedWorkCostEntryWriteRequest:
+      type: object
+      properties:
+        category_id:
+          type: integer
+          minimum: 1
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        date:
+          type: string
+          format: date
     PreHousingCheckRequest:
       type: object
       description: |-
@@ -2090,9 +2227,61 @@ components:
         * `confirmed` - Confirmed
     WorkCostBasisEnum:
       enum:
-      - current_active_monthly_snapshot
+      - recorded_entries_by_month
       type: string
-      description: '* `current_active_monthly_snapshot` - current_active_monthly_snapshot'
+      description: '* `recorded_entries_by_month` - recorded_entries_by_month'
+    WorkCostEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        category_id:
+          type: integer
+          readOnly: true
+        category_name:
+          type: string
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        date:
+          type: string
+          format: date
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - category_id
+      - category_name
+      - created_at
+      - date
+      - id
+      - updated_at
+    WorkCostEntryWriteRequest:
+      type: object
+      properties:
+        category_id:
+          type: integer
+          minimum: 1
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        date:
+          type: string
+          format: date
+      required:
+      - amount
+      - category_id
+      - date
     WorkCostItem:
       type: object
       properties:
@@ -2109,23 +2298,19 @@ components:
         name:
           type: string
           maxLength: 120
-        monthly_amount:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
         is_custom:
           type: boolean
         is_active:
           type: boolean
-        updated_at:
+        legacy_monthly_amount:
           type: string
-          format: date-time
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
           readOnly: true
       required:
       - id
-      - monthly_amount
+      - legacy_monthly_amount
       - name
-      - updated_at
     WorkCostItemCreateRequest:
       type: object
       properties:
@@ -2133,10 +2318,35 @@ components:
           type: string
           minLength: 1
           maxLength: 120
-        monthly_amount:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
-          default: '0.00'
       required:
       - name
+    WorkCostMonthSummary:
+      type: object
+      properties:
+        month:
+          type: string
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
+        income_recorded:
+          type: boolean
+        gross_income:
+          type: string
+          format: decimal
+        work_cost_total:
+          type: string
+          format: decimal
+        income_after_work_costs:
+          type: string
+          format: decimal
+          nullable: true
+        available_months:
+          type: array
+          items:
+            type: string
+            pattern: ^\d{4}-(0[1-9]|1[0-2])$
+      required:
+      - available_months
+      - gross_income
+      - income_after_work_costs
+      - income_recorded
+      - month
+      - work_cost_total

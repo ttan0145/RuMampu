@@ -46,7 +46,7 @@ Language: **English** | [Chinese (CN)](EPIC_2_USER_STORIES_AND_ACCEPTANCE_CRITER
 
 ## Reconciled calculation boundaries
 
-- Usable income is monthly gross income minus the current active monthly work-cost total.
+- Usable income is each month's gross income minus the work-cost entries recorded in that same calendar month.
 - The response exposes average, median, highest, lowest, range, and population standard deviation. One or two recorded months remain visible with an explicit limited-history note.
 - Lower income means the tied recorded minimum when at least two months exist. It is not a prediction or financial standard.
 - Coverage compares user-declared slower calendar months with recorded calendar months. `No` and `Not sure` expose only the factual recorded range and cannot establish seasonal representativeness.

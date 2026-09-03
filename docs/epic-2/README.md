@@ -40,5 +40,5 @@ Stable browser evidence is produced under `output/playwright/epic-2/evidence/`. 
 ## Approved boundaries
 
 - Income prediction, trend recommendations, housing shortfall, risk scoring, offline synchronisation, and automatic retries remain out of scope.
-- The current active monthly work-cost snapshot applies to every recorded month until historical cost versioning has its own requirement.
+- Each recorded month uses only the dated work-cost entries recorded in that same month; a work-cost entry is never reused as a recurring deduction.
 - Only the explicit coverage answer is persisted; derived analysis is recalculated from source records.

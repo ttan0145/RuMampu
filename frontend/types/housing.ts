@@ -42,7 +42,7 @@ export interface PreHousingMonthResult {
 
 export interface PreHousingResult {
   provenance: 'calculated_from_user_record';
-  work_cost_basis: 'current_active_monthly_snapshot';
+  work_cost_basis: 'recorded_entries_by_month';
   has_existing_shortfall: boolean;
   tested_months: number;
   largest_existing_gap: number;

@@ -38,14 +38,32 @@ export interface ApiIncomeRecord {
   entries: ApiIncomeEntry[];
 }
 
-export interface ApiWorkCostItem {
+export interface ApiWorkCostCategory {
   id: number;
   slug: string;
   name: string;
-  monthly_amount: string;
   is_custom: boolean;
   is_active: boolean;
+  legacy_monthly_amount: string;
+}
+
+export interface ApiWorkCostEntry {
+  id: number;
+  category_id: number;
+  category_name: string;
+  amount: string;
+  date: string;
+  created_at: string;
   updated_at: string;
+}
+
+export interface ApiWorkCostMonthSummary {
+  month: string;
+  income_recorded: boolean;
+  gross_income: string;
+  work_cost_total: string;
+  income_after_work_costs: string | null;
+  available_months: string[];
 }
 
 export interface ApiCommitmentItem {
@@ -129,8 +147,7 @@ export interface ApiIncomePattern {
   recorded_month_count: number;
   history_depth: ApiHistoryDepth;
   provenance: 'calculated_from_user_record';
-  monthly_work_cost_total: string;
-  work_cost_basis: 'current_active_monthly_snapshot';
+  work_cost_basis: 'recorded_entries_by_month';
   months: ApiIncomePatternMonth[];
   statistics: ApiIncomePatternStatistics | null;
   lower_income: {
@@ -317,33 +334,57 @@ export function isOutlierConfirmation(error: unknown): boolean {
   return error.code === 'income_outlier_confirmation_required';
 }
 
-export function fetchWorkCosts(): Promise<ApiWorkCostItem[]> {
-  return request<ApiWorkCostItem[]>('/work-costs/');
+export function fetchWorkCostCategories(): Promise<ApiWorkCostCategory[]> {
+  return request<ApiWorkCostCategory[]>('/work-costs/');
 }
 
-// EN: US1.3 work-cost writes stay behind the shared API adapter rather than screen-local fetch calls.
-// 中文：US1.3 工作成本写入统一经过 API adapter，不在页面中直接调用 fetch。
-export function createWorkCost(input: {
-  name: string;
-  monthlyAmount: number;
-}): Promise<ApiWorkCostItem> {
-  return request<ApiWorkCostItem>('/work-costs/', {
+export function createWorkCostCategory(name: string): Promise<ApiWorkCostCategory> {
+  return request<ApiWorkCostCategory>('/work-costs/', {
     method: 'POST',
-    body: JSON.stringify({
-      name: input.name,
-      monthly_amount: input.monthlyAmount.toFixed(2),
-    }),
+    body: JSON.stringify({ name }),
   });
 }
 
-export function updateWorkCost(id: string, monthlyAmount: number): Promise<ApiWorkCostItem> {
-  const itemId = Number.parseInt(id, 10);
-  if (!Number.isFinite(itemId)) {
-    return Promise.reject(new Error('The selected work-cost item is not available in the API record.'));
+export function fetchWorkCostEntries(): Promise<ApiWorkCostEntry[]> {
+  return request<ApiWorkCostEntry[]>('/work-costs/entries/');
+}
+
+export function fetchWorkCostMonthSummary(month?: string): Promise<ApiWorkCostMonthSummary> {
+  const query = month ? `?month=${encodeURIComponent(month)}` : '';
+  return request<ApiWorkCostMonthSummary>(`/work-costs/summary/${query}`);
+}
+
+export function createWorkCostEntry(input: {
+  categoryId: string;
+  amount: number;
+  date: string;
+}): Promise<ApiWorkCostEntry> {
+  const categoryId = Number.parseInt(input.categoryId, 10);
+  if (!Number.isFinite(categoryId)) {
+    return Promise.reject(new Error('The selected work-cost category is not available in the API record.'));
   }
-  return request<ApiWorkCostItem>(`/work-costs/${itemId}/`, {
+  return request<ApiWorkCostEntry>('/work-costs/entries/', {
+    method: 'POST',
+    body: JSON.stringify({ category_id: categoryId, amount: input.amount.toFixed(2), date: input.date }),
+  });
+}
+
+export function updateWorkCostEntry(
+  id: string,
+  input: { categoryId?: string; amount?: number; date?: string },
+): Promise<ApiWorkCostEntry> {
+  const entryId = Number.parseInt(id, 10);
+  if (!Number.isFinite(entryId)) {
+    return Promise.reject(new Error('The selected work-cost entry is not available in the API record.'));
+  }
+  const categoryId = input.categoryId == null ? undefined : Number.parseInt(input.categoryId, 10);
+  return request<ApiWorkCostEntry>(`/work-costs/entries/${entryId}/`, {
     method: 'PATCH',
-    body: JSON.stringify({ monthly_amount: monthlyAmount.toFixed(2) }),
+    body: JSON.stringify({
+      ...(Number.isFinite(categoryId) ? { category_id: categoryId } : {}),
+      ...(input.amount == null ? {} : { amount: input.amount.toFixed(2) }),
+      ...(input.date == null ? {} : { date: input.date }),
+    }),
   });
 }
 

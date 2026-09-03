@@ -396,33 +396,195 @@ export function IncomeScreen() {
 }
 
 /**
- * EN: US1.3 edits separate work costs and displays calculated income after those costs.
- * 中文：US1.3 分项编辑工作成本，并显示扣除工作成本后的计算收入。
+ * EN: US1.3 records dated work costs and calculates only the selected month's result.
+ * 中文：US1.3 记录带日期工作成本，并只计算所选月份的结果。
  */
 export function WorkcostsScreen() {
-  const { S, t, up, saveWorkCostAmount, toast } = useApp();
-  const agg = monthsAgg(S.data);
-  const netAvg = agg.reduce((a, r) => a + r.net, 0) / Math.max(1, agg.length);
+  const { S, t, up, monthName, refreshWorkCosts, saveWorkCostEntry, updateWorkCostEntry, toast } = useApp();
+  const today = new Date();
+  const todayText = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const [categoryId, setCategoryId] = React.useState('');
+  const [amount, setAmount] = React.useState('');
+  const [costDate, setCostDate] = React.useState(todayText);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const [editCategoryId, setEditCategoryId] = React.useState('');
+  const [editAmount, setEditAmount] = React.useState('');
+  const [editDate, setEditDate] = React.useState(todayText);
+  const [saving, setSaving] = React.useState(false);
+  const summary = S.workCostSummary;
+  const savingRef = React.useRef(false);
+  const selectedMonth = S.workCostSelectedMonth;
+  const summaryReady = (S.workCostSync === 'ready' || S.workCostSync === 'disabled') && summary?.month === selectedMonth;
+  const [selectedYear, selectedMonthNumber] = selectedMonth.split('-').map(Number);
+  const selectedMonthLabel = `${monthName(Math.max(0, selectedMonthNumber - 1))} ${selectedYear}`;
+  const categoryLabel = (id: string) => {
+    const category = S.data.workCostCategories.find(item => item.id === id);
+    return category ? (category.custom ? category.name || '' : t(category.k || '')) : id;
+  };
+
+  React.useEffect(() => {
+    void refreshWorkCosts().catch(() => undefined);
+  }, [refreshWorkCosts]);
+
+  React.useEffect(() => {
+    if (!categoryId && S.data.workCostCategories[0]) setCategoryId(S.data.workCostCategories[0].id);
+  }, [categoryId, S.data.workCostCategories]);
+
+  const save = async () => {
+    if (savingRef.current) return;
+    if (!categoryId || !isValidMoneyText(amount) || Number(amount) <= 0 || !isValidIsoDate(costDate) || costDate > todayText) {
+      toast(t('wc_entry_invalid'), 'error');
+      return;
+    }
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      await saveWorkCostEntry({ categoryId, amount: Number(amount), date: costDate });
+      setAmount('');
+      setCostDate(todayText);
+      toast(t('saved'));
+    } catch {
+      toast(t('wc_save_failed'), 'error');
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+
+  const beginEdit = (entry: typeof S.data.workCostEntries[number]) => {
+    setEditingId(entry.id);
+    setEditCategoryId(entry.categoryId);
+    setEditAmount(String(entry.a));
+    setEditDate(entry.d);
+  };
+
+  const saveEdit = async () => {
+    if (!editingId || savingRef.current) return;
+    if (!editCategoryId || !isValidMoneyText(editAmount) || Number(editAmount) <= 0 || !isValidIsoDate(editDate) || editDate > todayText) {
+      toast(t('wc_entry_invalid'), 'error');
+      return;
+    }
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      await updateWorkCostEntry(editingId, {
+        categoryId: editCategoryId,
+        amount: Number(editAmount),
+        date: editDate,
+      });
+      setEditingId(null);
+      toast(t('saved'));
+    } catch {
+      toast(t('wc_save_failed'), 'error');
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+
   return (
     <ScreenShell back title={t('money_workcosts')}>
       {S.workCostSync === 'loading' ? <NoteC><BodyS>{t('wc_sync_loading')}</BodyS></NoteC> : null}
-      {S.workCostSync === 'error' ? <NoteC><BodyS>{t('wc_sync_error')}</BodyS></NoteC> : null}
+      {S.workCostSync === 'error' ? <NoteC>
+        <BodyS>{t('wc_sync_error')}</BodyS>
+        <BtnLine label={t('retry')} onPress={() => { void refreshWorkCosts().catch(() => undefined); }} />
+      </NoteC> : null}
+      {S.data.workCostCategories.some(item => (item.legacyMonthlyAmount || 0) > 0) ? <NoteC>
+        <BodyS>{t('wc_legacy_note')}</BodyS>
+        {S.data.workCostCategories.filter(item => (item.legacyMonthlyAmount || 0) > 0).map(item => (
+          <BodyS key={item.id}>{categoryLabel(item.id)} · {rm(item.legacyMonthlyAmount || 0)}</BodyS>
+        ))}
+      </NoteC> : null}
       <Card gap={8}>
-        <EditList
-          list={S.data.workCosts}
-          onNum={(i, n) => up(s => { s.data.workCosts[i].a = n; })}
-          onCommit={(i, n) => {
-            const id = S.data.workCosts[i]?.id;
-            if (!id) return;
-            void saveWorkCostAmount(id, n).catch(() => toast(t('wc_save_failed')));
+        <BodyS muted>{t('wc_month')}</BodyS>
+        <DatePickerField
+          value={selectedMonth}
+          mode="month"
+          monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
+          allowedMonths={summary?.available_months}
+          onChange={value => {
+            if (summary && !summary.available_months.includes(value)) {
+              toast(t('wc_month_unavailable'), 'error');
+              return;
+            }
+            void refreshWorkCosts(value).catch(() => toast(t('wc_sync_error'), 'error'));
           }}
         />
-        <BtnLine label={t('wc_own')} onPress={() => up(s => { s.sheet = 'wcown'; })} />
+        <BodyS muted>{t('wc_month_note', { m: selectedMonthLabel })}</BodyS>
+        {selectedMonth === todayText.slice(0, 7) ? <BodyS muted>{t('wc_so_far')}</BodyS> : null}
       </Card>
-      <Card>
+      <Card gap={10}>
+        <BodyS>{t('wc_add')}</BodyS>
+        <BodyS muted>{t('wc_category')}</BodyS>
+        <Chips>
+          {S.data.workCostCategories.map(category => (
+            <Chip key={category.id} label={category.custom ? category.name || '' : t(category.k || '')}
+              on={categoryId === category.id} onPress={() => setCategoryId(category.id)} />
+          ))}
+        </Chips>
+        <BtnLine label={t('wc_own')} onPress={() => up(s => { s.sheet = 'wcown'; })} />
+        <BodyS muted>{t('inc_amount')}</BodyS>
+        <TextField accessibilityLabel={t('wc_entry_amount')} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" inputMode="decimal" />
+        <BodyS muted>{t('inc_date')}</BodyS>
+        <DatePickerField
+          value={costDate}
+          mode="date"
+          monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
+          maximumDate={today}
+          onChange={setCostDate}
+        />
+        <Btn disabled={saving} label={saving ? t('inc_saving') : t('wc_add')} onPress={() => { void save(); }} />
+      </Card>
+      <Card gap={8}>
+        <View testID="work-cost-summary" style={{ gap: 8 }}>
         <BodyS muted>{t('net_lbl')}</BodyS>
-        <Fig value={rm(netAvg)} p="calc" cls="h-l" />
-        <BodyS muted>{t('per_month')} · {t('wc_note')}</BodyS>
+        {summaryReady && summary ? <>
+        <BodyS muted>{t('wc_cost_total', { costs: rm(Number(summary.work_cost_total)) })}</BodyS>
+        {Number(summary.work_cost_total) === 0 ? <BodyS muted>{t('wc_no_costs')}</BodyS> : null}
+        {summary?.income_recorded ? (
+          <>
+            <Fig value={rm(Number(summary.income_after_work_costs || 0))} p="calc" cls="h-l" />
+            <BodyS muted>{t('wc_income_formula', { income: rm(Number(summary.gross_income)), costs: rm(Number(summary.work_cost_total)) })}</BodyS>
+          </>
+        ) : (
+          <BodyS>{t('wc_no_income', { m: selectedMonthLabel })}</BodyS>
+        )}
+        </> : <BodyS>{t('wc_summary_unavailable')}</BodyS>}
+        <BodyS muted>{t('wc_note')}</BodyS>
+        </View>
+      </Card>
+      <Card gap={10}>
+        <BodyS>{t('wc_recorded')}</BodyS>
+        {summaryReady && S.data.workCostEntries.length === 0 ? <BodyS muted>{t('wc_empty')}</BodyS> : null}
+        {S.data.workCostEntries.map(entry => (
+          <View key={entry.id} testID={`work-cost-entry-${entry.id}`} style={{ gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <BodyS>{entry.d} · {categoryLabel(entry.categoryId)}</BodyS>
+                <Prov p="user" />
+              </View>
+              <Fig value={rm(entry.a)} p="user" />
+              <BtnLine label={t('edit')} onPress={() => beginEdit(entry)} style={{ fontSize: 13 }} />
+            </View>
+            {editingId === entry.id ? (
+              <View style={{ gap: 8 }}>
+                <BodyS muted>{t('wc_category')}</BodyS>
+                <Chips>{S.data.workCostCategories.map(category => (
+                  <Chip key={category.id} label={category.custom ? category.name || '' : t(category.k || '')}
+                    on={editCategoryId === category.id} onPress={() => setEditCategoryId(category.id)} />
+                ))}</Chips>
+                <BodyS muted>{t('inc_amount')}</BodyS>
+                <TextField accessibilityLabel={t('wc_edit_amount')} value={editAmount} onChangeText={setEditAmount} keyboardType="decimal-pad" inputMode="decimal" />
+                <BodyS muted>{t('inc_date')}</BodyS>
+                <DatePickerField value={editDate} mode="date" maximumDate={today}
+                  monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))} onChange={setEditDate} />
+                <Btn disabled={saving} label={saving ? t('inc_saving') : t('done')} onPress={() => { void saveEdit(); }} />
+                <BtnLine label={t('cancel')} onPress={() => setEditingId(null)} />
+              </View>
+            ) : null}
+            <Divider />
+          </View>
+        ))}
       </Card>
     </ScreenShell>
   );
@@ -581,7 +743,7 @@ export function PatternScreen() {
         <Divider />
         <KV k={t('pt_std')}><Fig value={formatApiMoney(stats.standard_deviation)} p="calc" /></KV>
       </StackS>
-      <BodyS muted>{t('pt_work_basis', { x: formatApiMoney(pattern.monthly_work_cost_total) })}</BodyS>
+      <BodyS muted>{t('pt_work_basis')}</BodyS>
       <BodyS muted>{t('pt_rule')}</BodyS>
       <BodyS>{lower.length ? t('pt_some', { m: lower.join(', ') }) : t('pt_none')}</BodyS>
     </ScreenShell>

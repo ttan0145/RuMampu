@@ -26,3 +26,7 @@ The first prototype calculated income patterns inside the frontend and included 
 - Current work-cost values are intentionally applied to all recorded months until a separate historical-cost requirement is approved.
 - Editing income or current work costs changes the next calculated response without data migration or snapshot cleanup.
 - Seasonal representativeness remains unknown unless it follows directly from a user's declaration and recorded calendar months.
+
+## Amendment — 2026-09-03
+
+The approved US1.3 implementation replaces the recurring snapshot rule in decision 2: subtract only saved work-cost entries whose business dates belong to the income month and year. Legacy monthly estimates are preserved and exposed read-only but excluded from calculations; no dates are invented. Historical wording above is retained as the decision record. This is a breaking change to the former v1 work-cost contract; versioning and production rollout remain release gates, not covered by local acceptance.

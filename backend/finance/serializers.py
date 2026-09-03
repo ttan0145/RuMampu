@@ -13,16 +13,18 @@ from .models import (
     IncomeImportRow,
     IncomeCoverage,
     IncomeSource,
+    WorkCostEntry,
     WorkCostItem,
 )
 
 
-def money_output_field() -> serializers.DecimalField:
+def money_output_field(*, allow_null: bool = False) -> serializers.DecimalField:
     """Derived totals can exceed the max_digits limit of a single stored entry."""
     return serializers.DecimalField(
         max_digits=None,
         decimal_places=2,
         coerce_to_string=True,
+        allow_null=allow_null,
     )
 
 
@@ -65,9 +67,8 @@ class IncomePatternResponseSerializer(serializers.Serializer):
         choices=("empty", "one_month", "two_months", "three_or_more")
     )
     provenance = serializers.ChoiceField(choices=("calculated_from_user_record",))
-    monthly_work_cost_total = money_output_field()
     work_cost_basis = serializers.ChoiceField(
-        choices=("current_active_monthly_snapshot",)
+        choices=("recorded_entries_by_month",)
     )
     months = IncomePatternMonthSerializer(many=True)
     statistics = IncomePatternStatisticsSerializer(allow_null=True)
@@ -280,10 +281,9 @@ class IncomeEntryCreateSerializer(serializers.Serializer):
 
 
 class WorkCostItemSerializer(serializers.ModelSerializer):
-    monthly_amount = serializers.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        coerce_to_string=True,
+    # Read-only legacy estimates are visible, but never treated as dated facts.
+    legacy_monthly_amount = serializers.DecimalField(
+        source="monthly_amount", max_digits=12, decimal_places=2, read_only=True,
     )
 
     class Meta:
@@ -292,21 +292,14 @@ class WorkCostItemSerializer(serializers.ModelSerializer):
             "id",
             "slug",
             "name",
-            "monthly_amount",
             "is_custom",
             "is_active",
-            "updated_at",
+            "legacy_monthly_amount",
         ]
 
 
 class WorkCostItemCreateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=120, trim_whitespace=True)
-    monthly_amount = serializers.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        min_value=Decimal("0"),
-        default=Decimal("0"),
-    )
 
     def validate_name(self, value: str) -> str:
         value = " ".join(value.split())
@@ -318,12 +311,64 @@ class WorkCostItemCreateSerializer(serializers.Serializer):
         return value
 
 
-class WorkCostItemUpdateSerializer(serializers.Serializer):
-    monthly_amount = serializers.DecimalField(
+class WorkCostEntrySerializer(serializers.ModelSerializer):
+    date = serializers.DateField(source="cost_date")
+    category_id = serializers.IntegerField(read_only=True)
+    category_name = serializers.CharField(source="category.name", read_only=True)
+    amount = serializers.DecimalField(
         max_digits=12,
         decimal_places=2,
-        min_value=Decimal("0"),
+        coerce_to_string=True,
     )
+
+    class Meta:
+        model = WorkCostEntry
+        fields = ["id", "category_id", "category_name", "amount", "date", "created_at", "updated_at"]
+
+
+class WorkCostEntryWriteSerializer(serializers.Serializer):
+    category_id = serializers.IntegerField(min_value=1)
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    date = serializers.DateField()
+
+    def validate_amount(self, value: Decimal) -> Decimal:
+        if value <= 0:
+            raise serializers.ValidationError("Work-cost amount must be greater than zero.")
+        return value
+
+    def validate_category_id(self, value: int) -> int:
+        profile = self.context["profile"]
+        if not profile.work_cost_items.filter(id=value, is_active=True).exists():
+            raise serializers.ValidationError("Work-cost category was not found for this profile.")
+        return value
+
+    def validate_date(self, value):
+        if value > timezone.localdate():
+            raise serializers.ValidationError("Work-cost date cannot be in the future.")
+        return value
+
+    def validate(self, attrs):
+        if self.partial and not attrs:
+            raise serializers.ValidationError("Provide at least one field to update.")
+        return attrs
+
+
+class WorkCostMonthQuerySerializer(serializers.Serializer):
+    month = serializers.RegexField(r"\A[0-9]{4}-(0[1-9]|1[0-2])\Z", required=False, trim_whitespace=False)
+
+    def validate_month(self, value):
+        if value.startswith("0000-"):
+            raise serializers.ValidationError("Year must be between 0001 and 9999.")
+        return value
+
+
+class WorkCostMonthSummarySerializer(serializers.Serializer):
+    month = serializers.RegexField(r"^\d{4}-(0[1-9]|1[0-2])$")
+    income_recorded = serializers.BooleanField()
+    gross_income = money_output_field()
+    work_cost_total = money_output_field()
+    income_after_work_costs = money_output_field(allow_null=True)
+    available_months = serializers.ListField(child=serializers.RegexField(r"^\d{4}-(0[1-9]|1[0-2])$"))
 
 
 class CommitmentItemSerializer(serializers.ModelSerializer):

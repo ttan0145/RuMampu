@@ -138,7 +138,7 @@ def pre_housing_check(profile: GuestProfile):
     worst = max(short_rows, key=lambda row: row['shortfall']) if short_rows else None
     return {
         'provenance': 'calculated_from_user_record',
-        'work_cost_basis': 'current_active_monthly_snapshot',
+        'work_cost_basis': 'recorded_entries_by_month',
         'has_existing_shortfall': bool(short_rows),
         'tested_months': len(rows),
         'largest_existing_gap': worst['shortfall'] if worst else Decimal('0.00'),

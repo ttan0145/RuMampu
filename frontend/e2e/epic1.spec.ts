@@ -3,6 +3,7 @@ import { e2eGet, e2ePost, test } from './support/fixtures';
 import path from 'node:path';
 import { ac } from './support/acceptance';
 import { API, captureEvidence, openApp, openMoneyScreen } from './support/app';
+import { currentWorkCostMonth, monthLabel, previousMonth, selectWorkCostMonth } from './support/work-costs';
 
 async function incomeSourceId(page: Page, slug = 'ehail'): Promise<number> {
   const response = await e2eGet(page, `${API}/income/record/`);
@@ -16,6 +17,20 @@ async function expenseCategoryId(page: Page, slug = 'groc'): Promise<number> {
   expect(response.ok()).toBeTruthy();
   const categories = await response.json();
   return categories.find((category: { slug: string }) => category.slug === slug).id;
+}
+
+async function workCostCategoryId(page: Page, slug = 'petrol'): Promise<number> {
+  const response = await e2eGet(page, `${API}/work-costs/`);
+  expect(response.ok()).toBeTruthy();
+  const categories = await response.json();
+  return categories.find((category: { slug: string }) => category.slug === slug).id;
+}
+
+async function addWorkCost(page: Page, amount: string, date: string, slug = 'petrol'): Promise<void> {
+  const response = await e2ePost(page, `${API}/work-costs/entries/`, {
+    data: { amount, date, category_id: await workCostCategoryId(page, slug) },
+  });
+  expect(response.status()).toBe(201);
 }
 
 async function addIncome(page: Page, amount: string, date: string, slug = 'ehail'): Promise<void> {
@@ -163,40 +178,76 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
   });
 
   test('US1.3 — Record direct work-related costs', { tag: '@us1.3' }, async ({ page }) => {
-    await addIncome(page, '3000.00', '2026-08-05');
+    const currentMonth = await currentWorkCostMonth(page);
+    const earlierMonth = previousMonth(currentMonth);
+    const costOnlyMonth = previousMonth(currentMonth, 2);
+    const entryDate = `${currentMonth}-01`;
+    await addIncome(page, '3000.00', `${earlierMonth}-01`);
+    await addIncome(page, '2000.00', entryDate);
+    await addWorkCost(page, '80.00', `${costOnlyMonth}-01`);
     await openApp(page);
     await openMoneyScreen(page, 'Work costs');
 
-    await ac('AC1.3.1', 'View work-cost categories', async () => {
+    await ac('AC1.3.1', 'Select a work-cost category', async () => {
       await expect(page.getByText('Petrol', { exact: true })).toBeVisible();
       await expect(page.getByText('Servicing', { exact: true })).toBeVisible();
       await expect(page.getByText('Platform fees', { exact: true })).toBeVisible();
+      await page.getByText('Platform fees', { exact: true }).click();
     });
-    await ac('AC1.3.2', 'Edit work-cost amounts', async () => {
-      await replaceValue(inputForRow(page, 'Petrol'), '500');
-      await expect(inputForRow(page, 'Petrol')).toHaveValue('500');
+    const amountInput = page.locator('input:visible').first();
+    await ac('AC1.3.2', 'Enter a work-cost amount', async () => {
+      await expect(page.getByText('Amount (RM)', { exact: true })).toBeVisible();
+      await amountInput.fill('200');
+      await expect(amountInput).toHaveValue('200');
     });
-    await ac('AC1.3.3', 'Record different work costs separately', async () => {
-      await replaceValue(inputForRow(page, 'Phone data'), '0');
-      await expect(inputForRow(page, 'Petrol')).toHaveValue('500');
-      await expect(inputForRow(page, 'Phone data')).toHaveValue('0');
+    await ac('AC1.3.3', 'Enter a work-cost date', async () => {
+      await chooseDay(page, 1);
+      await expect(page.getByLabel('Choose date')).toContainText(`1 ${monthLabel(currentMonth)}`);
     });
-    await ac('AC1.3.4', 'Add my own work cost', async () => {
-      await page.getByText('+ Your own cost', { exact: true }).click();
-      const inputs = page.getByRole('dialog').locator('input');
-      await inputs.nth(0).fill('Equipment rental');
-      await inputs.nth(1).fill('200');
+    await ac('AC1.3.4', 'Add a custom category', async () => {
+      await page.getByText('+ Your own category', { exact: true }).click();
+      await page.locator('input:visible').last().fill('Equipment rental');
       await page.getByRole('button', { name: 'Add', exact: true }).click();
       await expect(page.getByText('Equipment rental', { exact: true })).toBeVisible();
+      await page.getByText('Equipment rental', { exact: true }).click();
     });
-    await ac('AC1.3.5', 'Show income after work costs', async () => {
+    await ac('AC1.3.5', 'Save a work-cost entry', async () => {
+      await page.getByRole('button', { name: 'Add work cost', exact: true }).click();
+      await expect(page.getByText(`${entryDate} · Equipment rental`, { exact: true })).toBeVisible();
+      await openApp(page);
+      await openMoneyScreen(page, 'Work costs');
+      await expect(page.getByText(`${entryDate} · Equipment rental`, { exact: true })).toBeVisible();
+    });
+    await ac('AC1.3.6', 'Display recorded entries', async () => {
+      await expect(page.getByText(`${costOnlyMonth}-01 · Petrol`, { exact: true })).toBeVisible();
+      await expect(page.getByText('RM 200.00', { exact: true })).toBeVisible();
+    });
+    await ac('AC1.3.7', 'Edit a work-cost record', async () => {
+      const equipmentRecord = page.getByTestId(/^work-cost-entry-/).filter({ hasText: 'Equipment rental' });
+      await equipmentRecord.getByText('Edit', { exact: true }).click();
+      const editAmount = page.locator('input:visible').last();
+      await editAmount.fill('250');
+      await page.getByRole('button', { name: 'Done', exact: true }).click();
+      await expect(page.getByText('RM 250.00', { exact: true })).toBeVisible();
+    });
+    await ac('AC1.3.8', 'Apply work costs to the correct month', async () => {
+      const patternResponse = await e2eGet(page, `${API}/income-pattern/`);
+      expect(patternResponse.ok()).toBeTruthy();
+      const months = (await patternResponse.json()).months;
+      expect(months.find((month: { month: string }) => month.month === earlierMonth).work_costs).toBe('0.00');
+      expect(months.find((month: { month: string }) => month.month === currentMonth).work_costs).toBe('250.00');
+    });
+    await ac('AC1.3.9', 'Show income after work costs', async () => {
       await expect(page.getByText('Income after work costs', { exact: true })).toBeVisible();
-      await expect(page.getByText('RM 2,300.00', { exact: true })).toBeVisible();
+      await expect(page.getByText('RM 1,750.00', { exact: true })).toBeVisible();
+      await selectWorkCostMonth(page, costOnlyMonth);
+      await expect(page.getByText(`No income recorded for ${monthLabel(costOnlyMonth)}. Add income before RuMampu can calculate this figure.`, { exact: true })).toBeVisible();
     });
-    await ac('AC1.3.6', 'Identify calculated income', async () => {
-      await expect(page.getByText(/calculated/i).last()).toBeVisible();
+    await ac('AC1.3.10', 'Identify calculated income', async () => {
+      await selectWorkCostMonth(page, currentMonth);
+      await expect(page.getByTestId('work-cost-summary').getByText(/CALCULATED$/)).toBeVisible();
     });
-    await captureEvidence(page, 'epic-1', 'ac1.3.1-6__work-costs.png');
+    await captureEvidence(page, 'epic-1', 'ac1.3.1-10__work-costs.png');
   });
 
   test('US1.4 — Record regular financial commitments', { tag: '@us1.4' }, async ({ page }) => {

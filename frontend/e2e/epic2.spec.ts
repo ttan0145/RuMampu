@@ -1,5 +1,5 @@
 import { expect, Page } from '@playwright/test';
-import { e2eGet, e2ePatch, e2ePost, test } from './support/fixtures';
+import { e2eGet, e2ePost, test } from './support/fixtures';
 import { ac } from './support/acceptance';
 import { API, captureEvidence, openApp, openMoneyScreen } from './support/app';
 
@@ -21,15 +21,15 @@ async function addIncomeMonth(page: Page, date: string, amount: string): Promise
   expect(created.status()).toBe(201);
 }
 
-async function setPetrolWorkCost(page: Page, amount: string): Promise<void> {
+async function addPetrolWorkCost(page: Page, date: string, amount: string): Promise<void> {
   const response = await e2eGet(page, `${API}/work-costs/`);
   expect(response.ok()).toBeTruthy();
-  const items = await response.json();
-  const petrol = items.find((item: { slug: string }) => item.slug === 'petrol');
-  const updated = await e2ePatch(page, `${API}/work-costs/${petrol.id}/`, {
-    data: { monthly_amount: amount },
+  const categories = await response.json();
+  const petrol = categories.find((item: { slug: string }) => item.slug === 'petrol');
+  const created = await e2ePost(page, `${API}/work-costs/entries/`, {
+    data: { category_id: petrol.id, amount, date },
   });
-  expect(updated.ok()).toBeTruthy();
+  expect(created.status()).toBe(201);
 }
 
 async function assertForbiddenConclusionsAbsent(page: Page): Promise<void> {
@@ -170,7 +170,8 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
   test('TECH-E2-01 — limited history preserves zero and negative values', { tag: '@hardening' }, async ({ page }) => {
     await addIncomeMonth(page, '2026-01-05', '800.00');
     await addIncomeMonth(page, '2026-02-05', '400.00');
-    await setPetrolWorkCost(page, '800.00');
+    await addPetrolWorkCost(page, '2026-01-05', '800.00');
+    await addPetrolWorkCost(page, '2026-02-05', '800.00');
     await openApp(page);
     await openMoneyScreen(page, 'Income pattern');
 

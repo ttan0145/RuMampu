@@ -32,39 +32,77 @@ def _history_depth(month_count: int) -> str:
     return "three_or_more"
 
 
+def _month_totals(queryset, *, date_field: str, amount_field: str) -> dict[tuple[int, int], Decimal]:
+    """Return saved monetary facts grouped by their own business-date month."""
+
+    rows = queryset.values(f"{date_field}__year", f"{date_field}__month").annotate(
+        total=Sum(amount_field)
+    )
+    return {
+        (row[f"{date_field}__year"], row[f"{date_field}__month"]): row["total"]
+        or Decimal("0.00")
+        for row in rows
+    }
+
+
+def build_work_cost_month_summary(profile: GuestProfile, *, year: int, month: int) -> dict:
+    """EN: Calculate the selected calendar month's factual US1.3 summary.
+    中文：计算所选日历月的、仅基于事实记录的 US1.3 汇总。
+    """
+
+    gross_income = profile.income_entries.filter(
+        income_date__year=year,
+        income_date__month=month,
+    ).aggregate(total=Sum("gross_amount"))["total"]
+    work_costs = profile.work_cost_entries.filter(
+        cost_date__year=year,
+        cost_date__month=month,
+    ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+    income_recorded = gross_income is not None
+    gross = gross_income or Decimal("0.00")
+    return {
+        "month": f"{year:04d}-{month:02d}",
+        "income_recorded": income_recorded,
+        "gross_income": gross,
+        "work_cost_total": work_costs,
+        "income_after_work_costs": gross - work_costs if income_recorded else None,
+    }
+
+
 def build_income_pattern(profile: GuestProfile) -> dict:
     """EN: Authoritative US2.1-US2.3 monthly usable-income and statistics calculation.
     中文：US2.1-US2.3 的权威逐月可用收入与统计计算。
 
-    EN: The rule is gross income minus the current active monthly work-cost snapshot.
+    EN: The rule is each month's gross income minus that same month's saved
+    work-cost entries. A cost is never repeated into another month.
     Lower-income months are tied recorded minima, never a fixed threshold or risk score.
-    中文：规则为总收入减当前有效月度工作成本快照；低收入月取并列记录最低值，
+    中文：规则为每月总收入减去该月已保存的工作成本记录；成本不会重复扣到其他月份。
+    低收入月取并列记录最低值，
     不使用固定阈值或风险评分。
     """
 
-    monthly_work_cost = (
-        profile.work_cost_items.filter(is_active=True).aggregate(total=Sum("monthly_amount"))[
-            "total"
-        ]
-        or Decimal("0.00")
+    income_by_month = _month_totals(
+        profile.income_entries,
+        date_field="income_date",
+        amount_field="gross_amount",
     )
-    recorded = list(
-        profile.income_entries.values("period__period_month")
-        .annotate(gross_income=Sum("gross_amount"))
-        .order_by("period__period_month")
+    cost_by_month = _month_totals(
+        profile.work_cost_entries,
+        date_field="cost_date",
+        amount_field="amount",
     )
 
     rows: list[dict] = []
     usable_values: list[Decimal] = []
-    for item in recorded:
-        gross = item["gross_income"] or Decimal("0.00")
-        usable = gross - monthly_work_cost
+    for (year, month), gross in sorted(income_by_month.items()):
+        work_costs = cost_by_month.get((year, month), Decimal("0.00"))
+        usable = gross - work_costs
         usable_values.append(usable)
         rows.append(
             {
-                "month": item["period__period_month"].strftime("%Y-%m"),
+                "month": f"{year:04d}-{month:02d}",
                 "gross_income": gross,
-                "work_costs": monthly_work_cost,
+                "work_costs": work_costs,
                 "usable_income": usable,
                 "is_lowest_recorded": False,
             }
@@ -111,8 +149,7 @@ def build_income_pattern(profile: GuestProfile) -> dict:
         "recorded_month_count": count,
         "history_depth": _history_depth(count),
         "provenance": "calculated_from_user_record",
-        "monthly_work_cost_total": monthly_work_cost,
-        "work_cost_basis": "current_active_monthly_snapshot",
+        "work_cost_basis": "recorded_entries_by_month",
         "months": rows,
         "statistics": statistics_payload,
         "lower_income": {

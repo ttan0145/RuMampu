@@ -11,6 +11,7 @@ from .models import (
     IncomeImportBatch,
     IncomeImportRow,
     IncomeSource,
+    WorkCostEntry,
     WorkCostItem,
 )
 
@@ -21,6 +22,7 @@ admin.site.register(FinancialPeriod)
 admin.site.register(IncomeEntry)
 admin.site.register(IncomeCoverage)
 admin.site.register(WorkCostItem)
+admin.site.register(WorkCostEntry)
 admin.site.register(CommitmentItem)
 admin.site.register(ExpenseCategory)
 admin.site.register(ExpenseEntry)

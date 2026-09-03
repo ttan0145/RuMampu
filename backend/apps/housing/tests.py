@@ -4,7 +4,7 @@ from decimal import Decimal
 from django.db import IntegrityError, transaction
 from django.test import Client, TestCase
 
-from finance.models import FinancialPeriod, GuestProfile, IncomeEntry
+from finance.models import FinancialPeriod, GuestProfile, IncomeEntry, WorkCostEntry
 
 from .models import HousingScenario
 
@@ -39,6 +39,15 @@ class HousingApiTestMixin:
             income_date=date(year, month_number, 1),
             gross_amount=Decimal(amount),
             entry_method=IncomeEntry.EntryMethod.MANUAL,
+        )
+
+    def add_work_cost(self, profile, month, amount):
+        year, month_number = (int(part) for part in month.split("-"))
+        return WorkCostEntry.objects.create(
+            profile=profile,
+            category=profile.work_cost_items.get(slug="petrol"),
+            cost_date=date(year, month_number, 1),
+            amount=Decimal(amount),
         )
 
 
@@ -136,14 +145,13 @@ class PreHousingCheckApiTests(HousingApiTestMixin, TestCase):
 
     def test_pre_check_uses_the_authoritative_finance_record_not_client_values(self):
         profile = self.profile()
-        profile.work_cost_items.filter(slug="petrol").update(
-            monthly_amount=Decimal("100.00")
-        )
         profile.commitment_items.filter(slug="rent").update(
             monthly_amount=Decimal("900.00")
         )
         self.add_income(profile, "2026-01", "1000.00")
         self.add_income(profile, "2026-02", "800.00")
+        self.add_work_cost(profile, "2026-01", "100.00")
+        self.add_work_cost(profile, "2026-02", "100.00")
 
         response = self.client.post(
             self.pre_check_url,
@@ -159,7 +167,7 @@ class PreHousingCheckApiTests(HousingApiTestMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["provenance"], "calculated_from_user_record")
-        self.assertEqual(payload["work_cost_basis"], "current_active_monthly_snapshot")
+        self.assertEqual(payload["work_cost_basis"], "recorded_entries_by_month")
         self.assertEqual(payload["tested_months"], 2)
         self.assertTrue(payload["has_existing_shortfall"])
         self.assertEqual(payload["largest_existing_gap"], 200.0)

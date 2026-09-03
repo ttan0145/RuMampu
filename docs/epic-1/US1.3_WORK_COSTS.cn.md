@@ -2,33 +2,38 @@
 
 语言：**中文（CN）** | [English](US1.3_WORK_COSTS.md)
 
-- 验收日期：2026-08-25
-- 状态：完成（6/6 AC）
+- 验收日期：2026-09-03
+- 状态：本地实现与验收通过（10/10 AC）；不代表 LeanKit 关闭、IT2 排期或生产发布。
 - 需求来源：[US1.3 - Record direct work-related costs](../requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md#us13---record-direct-work-related-costs)
 
 ## 验收矩阵
 
 | Acceptance Criterion | 状态 | 实现与验收证据 |
 |---|---|---|
-| AC1.3.1 View work-cost categories | 通过 | Work costs 页面从 API 加载 Petrol、Servicing、Platform fees、Phone data、Road tax & insurance 五个默认项目。 |
-| AC1.3.2 Edit work-cost amounts | 通过 | 真实浏览器把 Petrol 改为 RM400、Servicing 改为 RM100；离开输入框时通过 `PATCH /api/v1/work-costs/{id}/` 持久化。 |
-| AC1.3.3 Record different work costs separately | 通过 | 每项成本拥有独立资源、金额输入和 `YOUR DATA` 标记，更新一项不会覆盖其他项。 |
-| AC1.3.4 Add my own work cost | 通过 | 创建 `Equipment rental` 自定义项目并保存 RM200，刷新后仍作为第六项显示。 |
-| AC1.3.5 Show income after work costs | 通过 | 月收入 RM3,000 减去 RM700 工作成本后，页面显示 `Income after work costs RM 2,300`。 |
-| AC1.3.6 Identify calculated income | 通过 | 结果旁显示 `CALCULATED` 来源标记；见[刷新后的完整工作成本截图](../../output/playwright/epic-1/evidence/ac1.3.1-6__work-costs-after-reload.png)。 |
+| AC1.3.1 Select a work-cost category | 通过 | 页面加载当前 profile 的默认与自定义类别；保存前必须选定一个类别。 |
+| AC1.3.2 Enter a work-cost amount | 通过 | 表单和 API 都要求金额大于 0。 |
+| AC1.3.3 Enter a work-cost date | 通过 | 表单提供日期选择器；API 保存 `date` 并拒绝未来日期。 |
+| AC1.3.4 Add a custom category | 通过 | `POST /api/v1/work-costs/` 新建唯一的自定义类别，不为它设置重复月金额。 |
+| AC1.3.5 Save a work-cost entry | 通过 | `POST /api/v1/work-costs/entries/` 追加一笔独立的类别、金额和日期记录。 |
+| AC1.3.6 Display recorded entries | 通过 | 页面列出每笔已保存记录的业务日期、类别、金额和用户数据来源。 |
+| AC1.3.7 Edit a work-cost record | 通过 | `PATCH /api/v1/work-costs/entries/{id}/` 只修改被选中的记录，并刷新受影响月份的结果。 |
+| AC1.3.8 Apply work costs to the correct month | 通过 | 财务服务按 `cost_date` 的年月分组，不会把一笔成本扣到其他月份。 |
+| AC1.3.9 Show income after work costs | 通过 | 所选月汇总为该月总收入减该月成本；无收入月份保留成本并明确净收入不可计算。 |
+| AC1.3.10 Identify calculated income | 通过 | 月净收入显示 `CALCULATED` 来源标记，并明确它使用所选月记录而非平均值。 |
 
 ## 自动化与浏览器验收
 
-- 后端 `finance` 测试：25 项通过；US1.3 新增覆盖默认项目、项目分离、金额更新、自定义项目、负数/重复拒绝、跨访客修改拒绝和 OpenAPI 路径。
-- 前端 TypeScript 类型检查通过。
-- Playwright 真实浏览器验收通过：编辑两个默认项目、增加一个自定义项目，并验证 RM3,000 − RM700 = RM2,300。
-- 刷新页面后，RM400、RM100、RM200、自定义名称和 RM2,300 计算结果全部保持。
-- 最终浏览器控制台没有产品错误；仅有 Expo Web 关于原生动画驱动不可用的开发环境提示。
-- 验收结束后清理本地浏览器验收数据，不把示例收入或成本留在开发数据库中。
+- 后端整套 `manage.py test`：106 项通过，新增 7 项工作成本边界回归，覆盖跨年编辑、空月份、日期/精度、访客隔离、零值/负值、旧金额保留。
+- 前端 TypeScript 与验收可追溯性检查通过；Epic 1 的 60 条 AC 均唯一映射。
+- `npm run test:e2e -- --reporter=line`：2026-09-03 在当前代码上完整运行，32 项全部通过（2.3 分钟），包含 Epic 1/2、既有住房/记录页回归和 4 项新增工作成本故障测试。
+- `e2e/epic1.spec.ts` 的 US1.3 流程按服务端当前月份生成相对日期，不再锁死 2026 年 9 月；验证保存后重新加载、单条编辑、同月扣除、仅成本月份以及 calculated 标记。
+
+验收技能将“编号唯一映射”与“实际验收通过”分开；本次完整浏览器回归才是新的运行证据。工程回归映射及剩余发布门槛见[批判性核查记录](US1.3_AUDIT_2026-09-03.cn.md)。
 
 ## 计算口径
 
-- 工作成本金额表示每月直接工作成本，允许为 0，不允许为负数。
-- 每个记录月份的 `income after work costs` 等于该月收入总额减去当前全部工作成本项目之和。
-- 多个月份页面显示这些月度结果的平均值，并明确标记为计算值；原始收入与工作成本仍各自保留为用户数据。
-- 当前故事不包含按收入来源或按月份保存不同成本版本；如产品需要历史成本变化，应另立带生效月份的需求。
+- 工作成本类别只是标签；只有带正金额和业务日期的单笔记录才是金额事实。
+- `YYYY-MM` 的 `Income after work costs` = 该月已记录总收入 − `cost_date` 落在同一 `YYYY-MM` 的全部记录。
+- 所选月没有收入时，RuMampu 不会替换为平均值或其他月份；它显示已记录成本，并说明净收入不可计算。
+- 为迁移安全而保留的旧 `WorkCostItem.monthly_amount` 不再参与计算，也不会被虚构成历史日期记录。
+- 非零旧金额通过只读 `legacy_monthly_amount` 展示为待核查旧估计，并提醒不要重复录入。生产迁移及旧版接口版本化仍是发布门槛；尚未部署。

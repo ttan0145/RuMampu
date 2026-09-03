@@ -5,9 +5,12 @@ import {
   ApiCoverageAnswer,
   ApiIncomeCoverage,
   ApiIncomePattern,
+  ApiWorkCostMonthSummary,
+  ApiWorkCostEntry,
   createExpense as createExpenseRequest,
   createExpenseCategory as createExpenseCategoryRequest,
-  createWorkCost as createWorkCostRequest,
+  createWorkCostCategory as createWorkCostCategoryRequest,
+  createWorkCostEntry as createWorkCostEntryRequest,
   createIncomeEntry as createIncomeEntryRequest,
   createIncomeSource as createIncomeSourceRequest,
   fetchCommitments,
@@ -16,13 +19,15 @@ import {
   fetchIncomeCoverage,
   fetchIncomePattern,
   fetchIncomeRecord,
-  fetchWorkCosts,
+  fetchWorkCostCategories,
+  fetchWorkCostEntries,
+  fetchWorkCostMonthSummary,
   INCOME_API_ENABLED,
   isOutlierConfirmation,
   updateIncomeCoverage as updateIncomeCoverageRequest,
   updateIncomeEntry as updateIncomeEntryRequest,
   updateCommitment as updateCommitmentRequest,
-  updateWorkCost as updateWorkCostRequest,
+  updateWorkCostEntry as updateWorkCostEntryRequest,
 } from './api';
 
 /* Central app state — mirrors the prototype's `S` object and navigation model. */
@@ -83,6 +88,8 @@ export interface AppState {
   incomeDraft: { a: string; d: string; s: string; flag: 'invalid' | 'neg' | 'outlier' | null };
   incomeSync: 'disabled' | 'loading' | 'ready' | 'error';
   workCostSync: 'disabled' | 'loading' | 'ready' | 'error';
+  workCostSelectedMonth: string;
+  workCostSummary: ApiWorkCostMonthSummary | null;
   commitmentSync: 'disabled' | 'loading' | 'ready' | 'error';
   expenseSync: 'disabled' | 'loading' | 'ready' | 'error';
   incomePattern: ApiIncomePattern | null;
@@ -94,10 +101,12 @@ export interface AppState {
 
 function initialState(): AppState {
   const data: AppData = JSON.parse(JSON.stringify(MOCK));
+  const currentMonth = currentMonthText();
   if (INCOME_API_ENABLED) {
     data.sources = [];
     data.income = [];
-    data.workCosts = [];
+    data.workCostCategories = [];
+    data.workCostEntries = [];
     data.commitments = { living: [], debts: [], savings: [] };
     data.expenseCats = [];
     data.expenses = [];
@@ -122,6 +131,8 @@ function initialState(): AppState {
     incomeDraft: { a: '', d: '2026-08-21', s: 'ehail', flag: null },
     incomeSync: INCOME_API_ENABLED ? 'loading' : 'disabled',
     workCostSync: INCOME_API_ENABLED ? 'loading' : 'disabled',
+    workCostSelectedMonth: currentMonth,
+    workCostSummary: INCOME_API_ENABLED ? null : localWorkCostSummary(data, currentMonth),
     commitmentSync: INCOME_API_ENABLED ? 'loading' : 'disabled',
     expenseSync: INCOME_API_ENABLED ? 'loading' : 'disabled',
     incomePattern: null,
@@ -129,6 +140,32 @@ function initialState(): AppState {
     incomePatternSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
     coverageSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
     sheet: null,
+  };
+}
+
+function currentMonthText(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function localWorkCostSummary(data: AppData, month: string): ApiWorkCostMonthSummary {
+  const income = data.income
+    .filter(entry => entry.d.slice(0, 7) === month)
+    .reduce((total, entry) => total + entry.a, 0);
+  const incomeRecorded = data.income.some(entry => entry.d.slice(0, 7) === month);
+  const workCosts = data.workCostEntries
+    .filter(entry => entry.d.slice(0, 7) === month)
+    .reduce((total, entry) => total + entry.a, 0);
+  const availableMonths = new Set<string>([currentMonthText()]);
+  data.income.forEach(entry => availableMonths.add(entry.d.slice(0, 7)));
+  data.workCostEntries.forEach(entry => availableMonths.add(entry.d.slice(0, 7)));
+  return {
+    month,
+    income_recorded: incomeRecorded,
+    gross_income: income.toFixed(2),
+    work_cost_total: workCosts.toFixed(2),
+    income_after_work_costs: incomeRecorded ? (income - workCosts).toFixed(2) : null,
+    available_months: [...availableMonths].sort().reverse(),
   };
 }
 
@@ -159,8 +196,10 @@ export interface Ctx {
     answer: ApiCoverageAnswer;
     slowerMonths: number[];
   }) => Promise<void>;
-  saveWorkCostAmount: (id: string, amount: number) => Promise<void>;
-  saveCustomWorkCost: (name: string, amount: number) => Promise<string>;
+  refreshWorkCosts: (month?: string) => Promise<void>;
+  saveWorkCostCategory: (name: string) => Promise<string>;
+  saveWorkCostEntry: (input: { categoryId: string; amount: number; date: string }) => Promise<void>;
+  updateWorkCostEntry: (id: string, input: { categoryId?: string; amount?: number; date?: string }) => Promise<void>;
   saveCommitmentAmount: (id: string, amount: number) => Promise<void>;
   saveExpenseCategory: (name: string) => Promise<string>;
   saveExpenseEntry: (input: {
@@ -181,6 +220,15 @@ function applyConfirmedCoverage(state: AppState, coverage: ApiIncomeCoverage): v
   state.incomeCoverage = coverage;
 }
 
+function applyConfirmedWorkCost(state: AppState, entry: ApiWorkCostEntry): void {
+  state.data.workCostEntries = state.data.workCostEntries.filter(item => item.id !== String(entry.id));
+  state.data.workCostEntries.push({
+    id: String(entry.id), categoryId: String(entry.category_id), categoryName: entry.category_name,
+    a: Number(entry.amount), d: entry.date,
+  });
+  state.data.workCostEntries.sort((a, b) => b.d.localeCompare(a.d) || Number(b.id) - Number(a.id));
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [S, setS] = useState<AppState>(initialState);
   const [toastMsg, setToastMsg] = useState<{
@@ -193,6 +241,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const patternRefreshInFlight = useRef<Promise<void> | null>(null);
   const coverageRequestVersion = useRef(0);
   const coverageRefreshInFlight = useRef<Promise<void> | null>(null);
+  const workCostRequestVersion = useRef(0);
+  const workCostMonth = useRef(S.workCostSelectedMonth);
+  const guestBootstrap = useRef<ReturnType<typeof fetchIncomeRecord> | null>(null);
+
+  const ensureGuest = useCallback(() => {
+    if (!guestBootstrap.current) {
+      const request = fetchIncomeRecord();
+      guestBootstrap.current = request;
+      void request.catch(() => {
+        if (guestBootstrap.current === request) guestBootstrap.current = null;
+      });
+    }
+    return guestBootstrap.current;
+  }, []);
 
   const up = useCallback((fn: (s: AppState) => void) => {
     setS(prev => {
@@ -209,7 +271,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let active = true;
     void (async () => {
       try {
-        const record = await fetchIncomeRecord();
+        const record = await ensureGuest();
         if (!active) return;
         setS(prev => {
           const next: AppState = JSON.parse(JSON.stringify(prev));
@@ -239,7 +301,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (active) {
           up(s => {
             s.incomeSync = 'error';
-            s.workCostSync = 'error';
             s.commitmentSync = 'error';
             s.expenseSync = 'error';
           });
@@ -248,21 +309,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const [workCosts, commitmentItems, expenseCategories, expenses] = await Promise.all([
-          fetchWorkCosts(),
+        const [commitmentItems, expenseCategories, expenses] = await Promise.all([
           fetchCommitments(),
           fetchExpenseCategories(),
           fetchExpenses(),
         ]);
         if (!active) return;
         up(s => {
-          s.data.workCosts = workCosts.map(item => ({
-            id: String(item.id),
-            k: item.slug ? `wc_${item.slug}` : undefined,
-            custom: item.is_custom,
-            name: item.name,
-            a: Number(item.monthly_amount),
-          }));
           const commitments: AppData['commitments'] = { living: [], debts: [], savings: [] };
           for (const item of commitmentItems) {
             const target = item.commitment_type === 'debt' ? commitments.debts
@@ -293,14 +346,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             || expenseCategories.find(category => String(category.id) === s.expDraft.c)
             || expenseCategories[0];
           if (selectedCategory) s.expDraft.c = String(selectedCategory.id);
-          s.workCostSync = 'ready';
           s.commitmentSync = 'ready';
           s.expenseSync = 'ready';
         });
       } catch {
         if (active) {
           up(s => {
-            s.workCostSync = 'error';
             s.commitmentSync = 'error';
             s.expenseSync = 'error';
           });
@@ -308,7 +359,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     })();
     return () => { active = false; };
-  }, [up]);
+  }, [ensureGuest, up]);
 
   const t = useCallback((k: string, vars?: Record<string, string | number>) => {
     const table = STRINGS[S.lang];
@@ -384,6 +435,74 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       throw error;
     }
   }, [up]);
+
+  // EN: US1.3 keeps category choices, dated entries, and the selected month's
+  // calculated result in one server-confirmed refresh.
+  // 中文：US1.3 将类别、带日期记录和所选月份的计算结果放在一次服务端确认刷新中。
+  const refreshWorkCosts = useCallback(async (month?: string): Promise<void> => {
+    const selectedMonth = month || workCostMonth.current;
+    workCostMonth.current = selectedMonth;
+    const version = ++workCostRequestVersion.current;
+    if (!INCOME_API_ENABLED) {
+      up(s => {
+        s.workCostSelectedMonth = selectedMonth;
+        s.workCostSummary = localWorkCostSummary(s.data, selectedMonth);
+      });
+      return;
+    }
+    up(s => { s.workCostSelectedMonth = selectedMonth; s.workCostSync = 'loading'; });
+    try {
+      // Native clients use cookies: establish one guest before parallel reads.
+      await ensureGuest();
+      if (version !== workCostRequestVersion.current) return;
+      const [categories, entries, summary] = await Promise.all([
+        fetchWorkCostCategories(),
+        fetchWorkCostEntries(),
+        fetchWorkCostMonthSummary(selectedMonth),
+      ]);
+      up(s => {
+        if (version !== workCostRequestVersion.current) return;
+        s.data.workCostCategories = categories.map(item => ({
+          id: String(item.id),
+          k: item.slug ? `wc_${item.slug}` : undefined,
+          custom: item.is_custom,
+          name: item.name,
+          legacyMonthlyAmount: Number(item.legacy_monthly_amount),
+        }));
+        s.data.workCostEntries = entries.map(entry => ({
+          id: String(entry.id),
+          categoryId: String(entry.category_id),
+          categoryName: entry.category_name,
+          a: Number(entry.amount),
+          d: entry.date,
+        }));
+        s.workCostSummary = summary;
+        s.workCostSelectedMonth = summary.month;
+        s.workCostSync = 'ready';
+      });
+    } catch (error) {
+      if (version !== workCostRequestVersion.current) return;
+      up(s => { if (version === workCostRequestVersion.current) s.workCostSync = 'error'; });
+      throw error;
+    }
+  }, [ensureGuest, up]);
+
+  // Work costs load independently: an expense/commitment failure must not hide them.
+  React.useEffect(() => {
+    void refreshWorkCosts().catch(() => undefined);
+    return () => { workCostRequestVersion.current += 1; };
+  }, [refreshWorkCosts]);
+
+  const refreshAfterMoneyWrite = useCallback(() => {
+    // Ignore any pre-write analyses; a successful write must not become a failed
+    // save just because its follow-up GET fails. The page offers a read-only retry.
+    patternRequestVersion.current += 1;
+    patternRefreshInFlight.current = null;
+    coverageRequestVersion.current += 1;
+    coverageRefreshInFlight.current = null;
+    up(s => { s.incomePatternSync = 'idle'; s.coverageSync = 'idle'; });
+    void refreshWorkCosts().catch(() => undefined);
+  }, [refreshWorkCosts, up]);
 
   // EN: Epic 2 keeps one in-flight authoritative pattern request and ignores stale responses.
   // 中文：Epic 2 只保留一个进行中的权威形态请求，并忽略过期响应。
@@ -497,6 +616,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           method: input.entryMethod || 'manual',
         });
         s.data.income.sort((x, y) => (x.d < y.d ? -1 : 1));
+        s.workCostSummary = localWorkCostSummary(s.data, s.workCostSelectedMonth);
       });
       return 'saved';
     }
@@ -513,13 +633,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         s.data.income.sort((x, y) => (x.d < y.d ? -1 : 1));
         s.incomeSync = 'ready';
       });
+      refreshAfterMoneyWrite();
       return 'saved';
     } catch (error) {
       if (isOutlierConfirmation(error)) return 'outlier';
       up(s => { s.incomeSync = 'error'; });
       throw error;
     }
-  }, [up]);
+  }, [refreshAfterMoneyWrite, up]);
 
   const updateIncomeEntry = useCallback(async (
     id: string,
@@ -533,6 +654,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         existing.d = input.date;
         if (existing.method === 'manual' && input.sourceId) existing.s = input.sourceId;
         s.data.income.sort((x, y) => (x.d < y.d ? -1 : 1));
+        s.workCostSummary = localWorkCostSummary(s.data, s.workCostSelectedMonth);
       });
       return;
     }
@@ -550,11 +672,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         s.incomePatternSync = 'idle';
         s.coverageSync = 'idle';
       });
+      refreshAfterMoneyWrite();
     } catch (error) {
       up(s => { s.incomeSync = 'error'; });
       throw error;
     }
-  }, [up]);
+  }, [refreshAfterMoneyWrite, up]);
 
   const saveIncomeSource = useCallback(async (name: string): Promise<string> => {
     if (!INCOME_API_ENABLED) {
@@ -580,42 +703,62 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [up]);
 
-  // EN: US1.3 applies the server-confirmed work-cost value back to local display state.
-  // 中文：US1.3 把服务端确认后的工作成本值回写到本地展示状态。
-  const saveWorkCostAmount = useCallback(async (id: string, amount: number): Promise<void> => {
-    if (!INCOME_API_ENABLED) return;
-    try {
-      const item = await updateWorkCostRequest(id, amount);
-      up(s => {
-        const existing = s.data.workCosts.find(cost => cost.id === id);
-        if (existing) existing.a = Number(item.monthly_amount);
-        s.workCostSync = 'ready';
-      });
-    } catch (error) {
-      up(s => { s.workCostSync = 'error'; });
-      throw error;
-    }
-  }, [up]);
-
-  const saveCustomWorkCost = useCallback(async (name: string, amount: number): Promise<string> => {
+  const saveWorkCostCategory = useCallback(async (name: string): Promise<string> => {
     if (!INCOME_API_ENABLED) {
       const id = `own${Date.now()}`;
-      up(s => { s.data.workCosts.push({ id, custom: true, name, a: amount }); });
+      up(s => { s.data.workCostCategories.push({ id, custom: true, name }); });
       return id;
     }
-    try {
-      const item = await createWorkCostRequest({ name, monthlyAmount: amount });
-      const id = String(item.id);
+    const item = await createWorkCostCategoryRequest(name);
+    const id = String(item.id);
+    up(s => { s.data.workCostCategories.push({ id, custom: true, name: item.name }); });
+    void refreshWorkCosts().catch(() => undefined);
+    return id;
+  }, [refreshWorkCosts, up]);
+
+  const saveWorkCostEntry = useCallback(async (input: {
+    categoryId: string;
+    amount: number;
+    date: string;
+  }): Promise<void> => {
+    if (!INCOME_API_ENABLED) {
       up(s => {
-        s.data.workCosts.push({ id, custom: true, name: item.name, a: Number(item.monthly_amount) });
-        s.workCostSync = 'ready';
+        const category = s.data.workCostCategories.find(item => item.id === input.categoryId);
+        s.data.workCostEntries.unshift({
+          id: `local-${Date.now()}`,
+          categoryId: input.categoryId,
+          categoryName: category?.custom ? category.name : undefined,
+          a: input.amount,
+          d: input.date,
+        });
+        s.workCostSummary = localWorkCostSummary(s.data, s.workCostSelectedMonth);
       });
-      return id;
-    } catch (error) {
-      up(s => { s.workCostSync = 'error'; });
-      throw error;
+      return;
     }
-  }, [up]);
+    const entry = await createWorkCostEntryRequest(input);
+    up(s => { applyConfirmedWorkCost(s, entry); });
+    refreshAfterMoneyWrite();
+  }, [refreshAfterMoneyWrite, up]);
+
+  const updateWorkCostEntry = useCallback(async (
+    id: string,
+    input: { categoryId?: string; amount?: number; date?: string },
+  ): Promise<void> => {
+    if (!INCOME_API_ENABLED) {
+      up(s => {
+        const entry = s.data.workCostEntries.find(item => item.id === id);
+        if (!entry) throw new Error('Work-cost entry was not found.');
+        if (input.categoryId) entry.categoryId = input.categoryId;
+        if (input.amount != null) entry.a = input.amount;
+        if (input.date) entry.d = input.date;
+        s.workCostSummary = localWorkCostSummary(s.data, s.workCostSelectedMonth);
+      });
+      return;
+    }
+    const entry = await updateWorkCostEntryRequest(id, input);
+    up(s => { applyConfirmedWorkCost(s, entry); });
+    refreshAfterMoneyWrite();
+  }, [refreshAfterMoneyWrite, up]);
 
   // EN: US1.4 updates only the matching commitment after Django confirms the write.
   // 中文：US1.4 只在 Django 确认写入后更新对应承诺项。
@@ -712,13 +855,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<Ctx>(() => ({
     S, up, t, monthName, go, goTab, backNav,
     saveIncomeEntry, updateIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
-    refreshIncomeCoverage, saveIncomeCoverage, saveWorkCostAmount, saveCustomWorkCost,
+    refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   }), [
     S, up, t, monthName, go, goTab, backNav,
     saveIncomeEntry, updateIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
-    refreshIncomeCoverage, saveIncomeCoverage, saveWorkCostAmount, saveCustomWorkCost,
+    refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   ]);

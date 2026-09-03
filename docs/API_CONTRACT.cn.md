@@ -74,9 +74,11 @@
 | POST | `/api/v1/income-imports/preview/` | 上传 CSV 并建立逐行预览，不创建收入记录 |
 | GET | `/api/v1/income-imports/{id}/` | 读取当前访客的导入批次与逐行结果 |
 | POST | `/api/v1/income-imports/{id}/confirm/` | 确认批次并创建已识别的历史收入记录 |
-| GET | `/api/v1/work-costs/` | 当前访客的有效工作成本项目 |
-| POST | `/api/v1/work-costs/` | 新建自定义工作成本项目 |
-| PATCH | `/api/v1/work-costs/{id}/` | 更新一个工作成本项目的月金额 |
+| GET | `/api/v1/work-costs/` | 当前访客的有效工作成本类别 |
+| POST | `/api/v1/work-costs/` | 新建自定义工作成本类别 |
+| GET、POST | `/api/v1/work-costs/entries/` | 读取或新建带日期的工作成本记录 |
+| PATCH | `/api/v1/work-costs/entries/{id}/` | 更新一笔带日期工作成本记录 |
+| GET | `/api/v1/work-costs/summary/?month=YYYY-MM` | 计算所选月份的工作成本事实汇总 |
 | GET | `/api/v1/commitments/` | 当前访客的有效财务承诺项目 |
 | PATCH | `/api/v1/commitments/{id}/` | 更新一个财务承诺项目的月金额 |
 | GET | `/api/v1/expense-categories/` | 当前访客的有效支出分类 |
@@ -141,26 +143,37 @@
 
 ## 5. 工作成本
 
-默认及自定义工作成本均作为独立资源返回。金额字段为 `monthly_amount`，沿用两位小数字符串约定；允许 `0.00`，不允许负数。默认项目通过稳定 `slug` 本地化，自定义项目使用用户提供的 `name`。
+默认及自定义工作成本类别均作为独立资源返回。默认类别通过稳定 `slug` 本地化，自定义类别使用用户提供的 `name`；类别本身不携带持续性的金额。
 
-新建自定义项目：
+只读字段 `legacy_monthly_amount` 保留旧版无日期估计供核查。界面对非零旧估计明确标注“不参与计算”并提示避免重复录入；不虚构日期，也不自动转换为逐笔记录。
 
-```json
-{
-  "name": "Equipment rental",
-  "monthly_amount": "200.00"
-}
-```
-
-修改金额：
+新建自定义类别：
 
 ```json
 {
-  "monthly_amount": "400.00"
+  "name": "Equipment rental"
 }
 ```
 
-当前成本金额代表月度成本。收入形态应用服务先聚合每个记录月的总收入，再只扣一次全部有效工作成本，并将结果标为计算值。
+新建带日期记录：
+
+```json
+{
+  "category_id": 1,
+  "amount": "200.00",
+  "date": "2026-09-02"
+}
+```
+
+`amount` 必须大于 0，`date` 不能是未来日期。即使类别和月份相同，多笔记录也会独立保留。`PATCH /api/v1/work-costs/entries/{id}/` 只更新目标记录的 `category_id`、`amount` 或 `date`。
+
+`GET /api/v1/work-costs/summary/?month=2026-09` 返回所选月、该月已记录总收入、该月工作成本总额，以及仅在该月有收入时返回的 `income_after_work_costs`。`available_months` 包含当前月以及有收入或工作成本记录的月份。计算为 `YYYY-MM` 的总收入减去 `cost_date` 同属该 `YYYY-MM` 的成本记录；不会把一笔记录变成重复月扣除，也不会跨月使用平均值。
+
+省略 `month` 使用服务端本地当前月。显式传入时必须是严格 ASCII `YYYY-MM`，年份 0001–9999、月份 01–12；空串、空白、未补零及年份 0000 均返回带字段错误的 400。无收入用 `null` 而非 0；计算得到的 0 和负数保留。加载中或刷新失败时，不得把旧结果标为新月份。
+
+POST/PATCH 已返回确认记录，即代表写入成功，后续 GET 失败不能再显示为保存失败。客户端应用确认记录、清空已提交草稿，提供只读刷新，不自动重试 POST。若 POST 响应本身丢失，v1 因尚无幂等键仍无法确认结果；手动重新录入前应先核对记录列表。
+
+发布门槛：当前工作区改变了旧版 v1 类别/月金额接口和分析口径，不是向后兼容的部署。面向既有客户端发布前，仍须按第 11 节完成接口版本化及迁移发布方案；本地测试通过不免除该要求。
 
 ## 6. 财务承诺
 
@@ -284,8 +297,7 @@
   "recorded_month_count": 2,
   "history_depth": "two_months",
   "provenance": "calculated_from_user_record",
-  "monthly_work_cost_total": "750.00",
-  "work_cost_basis": "current_active_monthly_snapshot",
+  "work_cost_basis": "recorded_entries_by_month",
   "months": [{
     "month": "2026-01",
     "gross_income": "4380.00",
@@ -337,12 +349,12 @@ API 不返回预测、稳定性、风险或固定阈值结论。
 {}
 ```
 
-后端读取当前 session 持有的收入记录、当前有效工作成本、当前有效承诺和已确认支出，并复用 Epic 2 的月份聚合与工作成本口径。旧版 v1 客户端仍可发送 `income`、`work_costs`、`commitments` 和 `expenses`；这些可选传输字段只为兼容而接收，不参与计算，客户端状态不能替换持久化事实。
+后端读取当前 session 持有的收入记录、带日期工作成本记录、当前有效承诺和已确认支出，并复用 Epic 2 的月份聚合与工作成本口径。旧版 v1 客户端仍可发送 `income`、`work_costs`、`commitments` 和 `expenses`；这些可选传输字段只为兼容而接收，不参与计算，客户端状态不能替换持久化事实。
 
 ```json
 {
   "provenance": "calculated_from_user_record",
-  "work_cost_basis": "current_active_monthly_snapshot",
+  "work_cost_basis": "recorded_entries_by_month",
   "has_existing_shortfall": true,
   "tested_months": 2,
   "largest_existing_gap": 200.0,

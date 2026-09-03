@@ -10,6 +10,8 @@ export interface IncomeEntry {
   method?: 'manual' | 'historical_total' | 'import';
 }
 export interface CostItem { id: string; k?: string; a: number; custom?: boolean; name?: string; dv?: boolean; p?: string }
+export interface WorkCostCategory { id: string; k?: string; custom?: boolean; name?: string; legacyMonthlyAmount?: number }
+export interface WorkCostEntry { id: string; categoryId: string; categoryName?: string; a: number; d: string }
 export interface Commitments { living: CostItem[]; debts: CostItem[]; savings: CostItem[] }
 export interface House { price: number; deposit: number; rate: number; years: number; knownPayment: number | null }
 export interface ExpenseCat { id: string; k?: string; custom?: boolean; name?: string }
@@ -25,7 +27,8 @@ export interface AfterMonth { y: number; m: number; inc: number; home: number }
 export interface AppData {
   sources: Source[];
   income: IncomeEntry[];
-  workCosts: CostItem[];
+  workCostCategories: WorkCostCategory[];
+  workCostEntries: WorkCostEntry[];
   commitments: Commitments;
   commitPresets: string[];
   house: House;
@@ -53,8 +56,13 @@ export const MOCK: AppData = {
     {a:500,d:'2026-06-01',s:'parttime'},{a:940,d:'2026-06-05',s:'ehail'},{a:1005,d:'2026-06-12',s:'ehail'},{a:850,d:'2026-06-12',s:'freelance'},{a:926,d:'2026-06-19',s:'ehail'},{a:960,d:'2026-06-26',s:'ehail'},
     {a:500,d:'2026-07-01',s:'parttime'},{a:1030,d:'2026-07-03',s:'ehail'},{a:1064,d:'2026-07-10',s:'ehail'},{a:890,d:'2026-07-17',s:'freelance'},{a:985,d:'2026-07-17',s:'ehail'},{a:1020,d:'2026-07-24',s:'ehail'}
   ],
-  workCosts: [
-    {id:'petrol',k:'wc_petrol',a:480},{id:'service',k:'wc_service',a:75},{id:'platform',k:'wc_platform',a:130},{id:'data',k:'wc_data',a:55},{id:'roadtax',k:'wc_roadtax',a:95}
+  workCostCategories: [
+    {id:'petrol',k:'wc_petrol'},{id:'service',k:'wc_service'},{id:'platform',k:'wc_platform'},{id:'data',k:'wc_data'},{id:'roadtax',k:'wc_roadtax'}
+  ],
+  workCostEntries: [
+    {id:'wc1',categoryId:'petrol',a:480,d:'2026-07-01'}, {id:'wc2',categoryId:'service',a:75,d:'2026-07-02'},
+    {id:'wc3',categoryId:'platform',a:130,d:'2026-07-03'}, {id:'wc4',categoryId:'data',a:55,d:'2026-07-04'},
+    {id:'wc5',categoryId:'roadtax',a:95,d:'2026-07-05'}
   ],
   commitments: {
     living: [{id:'rent',k:'cm_rent',a:700},{id:'food',k:'cm_food',a:900,dv:true},{id:'util',k:'cm_util',a:180},{id:'family',k:'cm_family',a:300,dv:true}],

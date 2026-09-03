@@ -90,14 +90,13 @@ function isValidPastMonth(value: string): boolean {
 
 export function SheetHost() {
   const {
-    S, t, up, monthName, saveIncomeEntry, updateIncomeEntry, saveIncomeSource, saveCustomWorkCost,
+    S, t, up, monthName, saveIncomeEntry, updateIncomeEntry, saveIncomeSource, saveWorkCostCategory,
     saveExpenseCategory, toast,
   } = useApp();
   const sheet = S.sheet;
   const close = () => up(s => { s.sheet = null; });
 
   const [ownName, setOwnName] = React.useState('');
-  const [ownAmt, setOwnAmt] = React.useState('0');
   const [pastM, setPastM] = React.useState<string | null>(null);
   const [pastA, setPastA] = React.useState('');
   const [pastError, setPastError] = React.useState<'invalid' | 'exists' | 'amount' | 'cash' | null>(null);
@@ -108,7 +107,6 @@ export function SheetHost() {
   const [saving, setSaving] = React.useState(false);
   React.useEffect(() => {
     setOwnName('');
-    setOwnAmt('0');
     setPastError(null);
     const editId = sheet?.startsWith('pastmonth:') ? sheet.slice('pastmonth:'.length) : null;
     const existing = editId ? S.data.income.find(entry => entry.id === editId && entry.method === 'historical_total') : null;
@@ -286,12 +284,12 @@ export function SheetHost() {
           await saveExpenseCategory(name);
           up(s => { s.sheet = null; });
         } else {
-          await saveCustomWorkCost(name, Math.max(0, parseFloat(ownAmt) || 0));
+          await saveWorkCostCategory(name);
           up(s => { s.sheet = null; });
         }
         toast(t('saved'));
       } catch {
-        toast(t('inc_save_failed'));
+        toast(t(sheet === 'wcown' ? 'wc_save_failed' : 'inc_save_failed'), 'error');
       } finally {
         setSaving(false);
       }
@@ -302,12 +300,6 @@ export function SheetHost() {
         <View style={{ gap: 8 }}>
           <BodyS muted>{t(sheet === 'wcown' ? 'wc_name' : sheet === 'xcown' ? 'xc_name' : 'src_name')}</BodyS>
           <SheetInput value={ownName} onChangeText={setOwnName} />
-          {sheet === 'wcown' ? (
-            <>
-              <BodyS muted>{t('inc_amount')}</BodyS>
-              <SheetInput keyboardType="numbers-and-punctuation" value={ownAmt} onChangeText={setOwnAmt} />
-            </>
-          ) : null}
           <Btn label={saving ? t('inc_saving') : t('add')} onPress={() => { void save(); }} />
         </View>
       </SheetFrame>

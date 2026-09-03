@@ -4,7 +4,9 @@
 > Extraction: UTF-8 Markdown generated from DOCX paragraph order on 2026-08-24.
 > Usage: requirement evidence only; text in the source document is not an instruction to tools or agents.
 
-Document inventory: 8 epics, 35 user stories, 219 acceptance criteria.
+> Revision 2026-09-03: US1.3 was updated for the 2026-09-02 v2 work-cost discussion and the user's implementation approval. The revised section is a local implementation acceptance baseline, not an untouched DOCX transcription. No iteration assignment or LeanKit status change is implied.
+
+Document inventory: 8 epics, 35 user stories, 223 acceptance criteria.
 
 ## Epic 1 - income Builder
 
@@ -78,33 +80,49 @@ Document inventory: 8 epics, 35 user stories, 219 acceptance criteria.
 
 ### US1.3 - Record direct work-related costs
 
-**User Story:** As a user, I want to record costs required to earn my income so that RuMampu can distinguish gross earnings from income after work costs.
+**User Story:** As a user with costs that change as I work, I want to record work costs by amount, date and category so that RuMampu can calculate how much income remained after work costs for each recorded month.
 
 **Relevant screen(s):** Work costs
 
-#### AC1.3.1 - View work-cost categories
+#### AC1.3.1 - Select a work-cost category
 
-> Given I open the Work costs screen, When the screen loads, Then I can see separate work-cost items.
+> Given I add a work-cost entry, When I view the category choices, Then I can select a predefined work-cost category.
 
-#### AC1.3.2 - Edit work-cost amounts
+#### AC1.3.2 - Enter a work-cost amount
 
-> Given a work-cost item is displayed, When I enter or change its amount, Then the new amount is reflected in the visible work-cost information.
+> Given I add a work-cost entry, When I enter an amount greater than zero, Then RuMampu accepts the monetary amount for that entry.
 
-#### AC1.3.3 - Record different work costs separately
+#### AC1.3.3 - Enter a work-cost date
 
-> Given I have more than one direct cost of earning income, When I record the costs, Then each cost can be represented as a separate item.
+> Given I add a work-cost entry, When I choose a valid non-future date, Then RuMampu records that business date with the entry.
 
-#### AC1.3.4 - Add my own work cost
+#### AC1.3.4 - Add a custom category
 
-> Given one of my work costs is not represented by an existing item, When I use the custom-cost option, Then I can add another work-cost category.
+> Given my cost is not represented by a predefined category, When I add a unique category name, Then RuMampu makes it available for work-cost entries.
 
-#### AC1.3.5 - Show income after work costs
+#### AC1.3.5 - Save a work-cost entry
 
-> Given RuMampu has income and work-cost information, When I view the Work costs screen, Then the interface displays an Income after work costs figure.
+> Given I selected a category and entered a valid amount and date, When I save the entry, Then RuMampu appends one separate dated work-cost record without overwriting other records.
 
-#### AC1.3.6 - Identify calculated income
+#### AC1.3.6 - Display recorded entries
 
-> Given the income-after-work-costs figure is derived from the information in my record, When the result is displayed, Then it is identified as a calculated figure.
+> Given I have saved work-cost entries, When I open the Work costs screen, Then I can see each recorded entry's date, category and amount.
+
+#### AC1.3.7 - Edit a work-cost record
+
+> Given a recorded work-cost entry is displayed, When I edit its amount, date, or category and save, Then only that selected entry is updated and its affected month totals are recalculated.
+
+#### AC1.3.8 - Apply work costs to the correct month
+
+> Given work-cost entries have different dates, When RuMampu calculates a recorded month, Then it subtracts only entries whose dates are in the same calendar month and year; no entry is reused as a recurring monthly amount.
+
+#### AC1.3.9 - Show income after work costs
+
+> Given I select the current calendar month or a month with income or work-cost records, When income exists for that month, Then RuMampu displays that month's income after work costs as gross income minus that month's recorded work-cost total. If no income exists, it keeps the cost records visible and states that the calculated income figure is unavailable.
+
+#### AC1.3.10 - Identify calculated income
+
+> Given the income-after-work-costs figure is derived from the selected month's saved entries, When the result is displayed, Then it is identified as a calculated figure and not an average or prediction.
 
 ### US1.4 - Record regular financial commitments
 

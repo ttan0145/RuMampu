@@ -140,7 +140,7 @@ class PreHousingWorstMonthSerializer(serializers.Serializer):
 
 class PreHousingCheckResultSerializer(serializers.Serializer):
     provenance = serializers.ChoiceField(choices=['calculated_from_user_record'])
-    work_cost_basis = serializers.ChoiceField(choices=['current_active_monthly_snapshot'])
+    work_cost_basis = serializers.ChoiceField(choices=['recorded_entries_by_month'])
     has_existing_shortfall = serializers.BooleanField()
     tested_months = serializers.IntegerField(min_value=0)
     largest_existing_gap = serializers.FloatField(min_value=0)

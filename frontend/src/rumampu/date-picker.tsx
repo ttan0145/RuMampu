@@ -10,6 +10,7 @@ type Props = {
   monthNames: string[];
   onChange: (value: string) => void;
   maximumDate?: Date;
+  allowedMonths?: string[];
 };
 
 function parseValue(value: string, mode: PickerMode): Date {
@@ -32,7 +33,7 @@ function isoMonth(year: number, month: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}`;
 }
 
-export function DatePickerField({ value, mode, monthNames, onChange, maximumDate }: Props) {
+export function DatePickerField({ value, mode, monthNames, onChange, maximumDate, allowedMonths }: Props) {
   const [open, setOpen] = React.useState(false);
   const parsed = parseValue(value, mode);
   const [viewYear, setViewYear] = React.useState(parsed.getFullYear());
@@ -50,6 +51,7 @@ export function DatePickerField({ value, mode, monthNames, onChange, maximumDate
 
   const max = maximumDate ?? new Date(9999, 11, 31);
   const canChooseMonth = (year: number, month: number) => {
+    if (allowedMonths && !allowedMonths.includes(isoMonth(year, month))) return false;
     const candidate = new Date(year, month + 1, 0, 23, 59, 59, 999);
     return candidate <= max || (year === max.getFullYear() && month === max.getMonth());
   };
@@ -85,9 +87,9 @@ export function DatePickerField({ value, mode, monthNames, onChange, maximumDate
             {mode === 'month' ? (
               <>
                 <View style={st.header}>
-                  <Pressable onPress={() => setViewYear(y => y - 1)} style={st.arrow}><Text style={st.arrowText}>‹</Text></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Previous year" onPress={() => setViewYear(y => Math.max(1, y - 1))} style={st.arrow}><Text style={st.arrowText}>‹</Text></Pressable>
                   <Text style={st.title}>{viewYear}</Text>
-                  <Pressable onPress={() => setViewYear(y => y + 1)} style={st.arrow}><Text style={st.arrowText}>›</Text></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Next year" onPress={() => setViewYear(y => Math.min(9999, y + 1))} style={st.arrow}><Text style={st.arrowText}>›</Text></Pressable>
                 </View>
                 <View style={st.monthGrid}>
                   {monthNames.map((name, month) => {
@@ -96,6 +98,9 @@ export function DatePickerField({ value, mode, monthNames, onChange, maximumDate
                     return (
                       <Pressable
                         key={`${viewYear}-${month}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${name} ${viewYear}`}
+                        accessibilityState={{ disabled: !enabled, selected }}
                         disabled={!enabled}
                         onPress={() => {
                           onChange(isoMonth(viewYear, month));

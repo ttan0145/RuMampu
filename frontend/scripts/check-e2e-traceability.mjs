@@ -8,7 +8,7 @@ const repositoryDirectory = path.dirname(frontendDirectory);
 const completedEpics = [
   {
     epic: 'Epic 1',
-    expected: 56,
+    expected: 60,
     requirements: 'docs/requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md',
     specification: 'frontend/e2e/epic1.spec.ts',
   },

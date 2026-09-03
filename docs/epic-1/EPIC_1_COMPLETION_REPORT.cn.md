@@ -2,8 +2,8 @@
 
 语言：**中文（CN）** | [English](EPIC_1_COMPLETION_REPORT.md)
 
-- 完成日期：2026-08-25
-- 结论：完成（8/8 User Stories，56/56 Acceptance Criteria）
+- 完成日期：2026-09-03
+- 结论：本地实现和回归通过（8/8 User Stories，60/60 AC）；不等同于看板关闭或发布批准。
 
 ## 交付总览
 
@@ -11,14 +11,14 @@
 |---|---:|---|---|
 | US1.1 Record income from different sources | 10 | 10/10 通过 | [验收记录](US1.1_RECORD_INCOME.cn.md) |
 | US1.2 Add historical income | 4 | 4/4 通过 | [验收记录](US1.2_HISTORICAL_INCOME.cn.md) |
-| US1.3 Record direct work-related costs | 6 | 6/6 通过 | [验收记录](US1.3_WORK_COSTS.cn.md) |
+| US1.3 Record direct work-related costs | 10 | 10/10 通过 | [验收记录](US1.3_WORK_COSTS.cn.md) |
 | US1.4 Record regular financial commitments | 6 | 6/6 通过 | [验收记录](US1.4_COMMITMENTS.cn.md) |
 | US1.5 Record daily expenses manually | 6 | 6/6 通过 | [验收记录](US1.5_MANUAL_EXPENSES.cn.md) |
 | US1.6 Review recorded daily expenses | 6 | 6/6 通过 | [验收记录](US1.6_EXPENSE_REVIEW.cn.md) |
 | US1.7 Use a receipt as the starting point | 10 | 10/10 通过 | [验收记录](US1.7_RECEIPT_STARTING_POINT.cn.md) |
 | US1.8 Import historical financial records | 8 | 8/8 通过 | [验收记录](US1.8_HISTORICAL_IMPORT.cn.md) |
 
-正式需求快照保存在 [Epic 1 US/AC Markdown](../requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)，验收总数与原始文档一致。
+需求快照保存在 [Epic 1 US/AC Markdown](../requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)。原始提取为 56 条；2026-09-03 的 US1.3 本地修订使当前基线变为 60 条，并非原始文档的未修改转录。
 
 ## 已形成的正式基线
 
@@ -30,15 +30,18 @@
 
 ## 最终质量证据
 
-- 后端 `finance` 自动化测试：58 项通过，其中 7 项覆盖开发专用场景契约、显式重置、确定性数量、重复装载、访客隔离、关闭保护和 OpenAPI 排除。
+- 2026-09-03 后端整套 `manage.py test`：106 项通过，包含新增 7 项工作成本边界回归。
 - `makemigrations --check --dry-run`：无模型/迁移漂移。
 - OpenAPI 生成与 `--validate`：通过。
 - 前端 `npm run typecheck`：通过。
-- US1.1–US1.8 均完成真实浏览器流程检查；US1.8 最终控制台为 0 错误、1 条 Expo Web 已知动画降级警告。
-- 数据库迁移覆盖 `0001` 至 `0008`；`0008` 修正收入来源限制关系，确保删除访客时可完整级联清理其收入与导入记录。
+- 2026-09-03 完整 `npm run test:e2e -- --reporter=line`：32 项全部通过（2.3 分钟），覆盖现有 Epic 1/2、住房及记录页与新增工作成本故障回归。编号唯一映射检查不能替代此运行结果。
+- 财务迁移覆盖 `0001` 至 `0010`；`0010` 新建工作成本逐笔记录，不为旧月度估计猜测业务日期。
 - Epic 1 完成后补充了[12 个月网约车司机仿真场景](../testing/SCENARIO_GIG_DRIVER_12M.cn.md)：约 114ms 建立 12 个月、60 笔收入和 240 笔支出，并由真实浏览器验证收入、支出、住房测试和 Epic 5 复用入口。
 
 ## 明确边界
+
+- 用户要求暂不更新 LeanKit；本轮未改卡片、未指定 IT2 排期、未提交/推送或部署。
+- 旧版 v1 接口存在破坏性变化，生产发布前须处理版本化和迁移；旧月度估计仅保留供核查。无幂等键时，POST 响应丢失仍须先核对记录，不能盲目重试。详见 [US1.3 核查](US1.3_AUDIT_2026-09-03.cn.md)。
 
 - 收据读取仍是 prototype 起点，不宣称生产级 OCR，也不上传或长期保存原图。
 - CSV 是当前唯一历史导入格式；XLSX、PDF、银行连接与自动列映射不在 Epic 1 AC 内。

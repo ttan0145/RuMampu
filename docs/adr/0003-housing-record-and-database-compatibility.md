@@ -25,3 +25,7 @@ US3.1–US3.3 and a Neon connection were added while Epic 1 and Epic 2 were esta
 - The migration preserves old rows but they require an explicit future ownership-recovery decision.
 - PostgreSQL compatibility is continuously tested without coupling CI to one hosted Neon database.
 - This decision hardens the existing Epic 3 integration; it does not declare all Epic 3 user stories complete or remove later client-side housing calculations.
+
+## Amendment — 2026-09-03
+
+Under the US1.3 change, the shared finance service now uses dated, same-month work-cost entries. Decision 3's work-cost input follows that service; ownership and database decisions are unchanged. See the dated amendment in ADR 0002 for legacy-data and release boundaries.

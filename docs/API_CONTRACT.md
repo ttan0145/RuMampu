@@ -74,9 +74,11 @@ After confirmation, the client retries the same data with `confirm_outlier: true
 | POST | `/api/v1/income-imports/preview/` | Upload CSV and create a row preview without income entries |
 | GET | `/api/v1/income-imports/{id}/` | Read the current guest's import batch and row results |
 | POST | `/api/v1/income-imports/{id}/confirm/` | Confirm a batch and create recognised historical entries |
-| GET | `/api/v1/work-costs/` | Current guest's active work-cost items |
-| POST | `/api/v1/work-costs/` | Create a custom work-cost item |
-| PATCH | `/api/v1/work-costs/{id}/` | Update one work cost's monthly amount |
+| GET | `/api/v1/work-costs/` | Current guest's active work-cost categories |
+| POST | `/api/v1/work-costs/` | Create a custom work-cost category |
+| GET, POST | `/api/v1/work-costs/entries/` | List or create dated work-cost entries |
+| PATCH | `/api/v1/work-costs/entries/{id}/` | Update one dated work-cost entry |
+| GET | `/api/v1/work-costs/summary/?month=YYYY-MM` | Calculate the selected month's factual work-cost summary |
 | GET | `/api/v1/commitments/` | Current guest's active financial commitments |
 | PATCH | `/api/v1/commitments/{id}/` | Update one commitment's monthly amount |
 | GET | `/api/v1/expense-categories/` | Current guest's active expense categories |
@@ -141,26 +143,37 @@ A historical monthly total must belong to a month before the current month. Each
 
 ## 5. Work costs
 
-Default and custom work costs are independent resources. `monthly_amount` follows the two-decimal string convention; `0.00` is allowed and negative values are not. The frontend localises defaults by stable `slug`; custom items use the user-provided `name`.
+Default and custom work-cost categories are independent resources. The frontend localises defaults by stable `slug`; custom categories use the user-provided `name`. Categories do not carry an ongoing monetary amount.
 
-Create a custom item:
+The read-only `legacy_monthly_amount` field preserves the former undated estimate for review. The UI labels positive legacy estimates as excluded, warns against duplicate re-entry, and never invents dates or automatically converts them into entries.
 
-```json
-{
-  "name": "Equipment rental",
-  "monthly_amount": "200.00"
-}
-```
-
-Update an amount:
+Create a custom category:
 
 ```json
 {
-  "monthly_amount": "400.00"
+  "name": "Equipment rental"
 }
 ```
 
-Current work-cost amounts represent monthly costs. The income-pattern application service subtracts all active work costs once from each recorded month's aggregated gross income and identifies the result as calculated.
+Create a dated entry:
+
+```json
+{
+  "category_id": 1,
+  "amount": "200.00",
+  "date": "2026-09-02"
+}
+```
+
+`amount` must be greater than zero and `date` cannot be in the future. Multiple entries with the same category and month remain separate facts. `PATCH /api/v1/work-costs/entries/{id}/` may change `category_id`, `amount`, or `date`; it updates only that entry. Guest isolation applies to categories and entries.
+
+`GET /api/v1/work-costs/summary/?month=2026-09` returns the selected month, its recorded gross income, its recorded work-cost total, and `income_after_work_costs` only when income exists for that month. It also returns `available_months`, containing the current month and months that have income or work-cost records. The calculation is `gross income for YYYY-MM − work-cost entries dated in the same YYYY-MM`; no entry becomes a recurring monthly deduction, and no cross-month average is substituted.
+
+Omitting `month` uses the server's current local calendar month. If supplied, it must be exact ASCII `YYYY-MM`, with year 0001–9999 and month 01–12; blank, whitespace, non-padded, and year-zero inputs return a field-level 400 error. No-income results use `null`, not zero; zero and negative calculated results are preserved. A client must not display an old result under a new month while loading or after a failed refresh.
+
+A confirmed POST/PATCH response is a successful write even if the follow-up GET fails. Apply the confirmed record, clear the submitted draft, and offer a GET-only refresh. Never retry POST automatically. A lost POST response is still ambiguous because v1 has no idempotency keys; reconcile the list before manually re-entering a payment.
+
+Release gate: this worktree changes the former v1 category/monthly-amount contract and the analysis basis. It is not a backward-compatible deployment. A versioned API/migration rollout is still required by section 11 before releasing to existing clients; local test success does not waive that gate.
 
 ## 6. Financial commitments
 
@@ -284,8 +297,7 @@ The client displays parsed amounts, dates, sources, and invalid rows before the 
   "recorded_month_count": 2,
   "history_depth": "two_months",
   "provenance": "calculated_from_user_record",
-  "monthly_work_cost_total": "750.00",
-  "work_cost_basis": "current_active_monthly_snapshot",
+  "work_cost_basis": "recorded_entries_by_month",
   "months": [{
     "month": "2026-01",
     "gross_income": "4380.00",
@@ -337,12 +349,12 @@ The authoritative pre-housing request is an empty JSON object:
 {}
 ```
 
-The backend reads the session-owned income entries, current active work costs, current active commitments, and confirmed expenses. It reuses the Epic 2 month aggregation and work-cost basis. Older v1 clients may still send `income`, `work_costs`, `commitments`, and `expenses`; those optional transport fields are accepted but ignored so client state cannot replace persisted facts.
+The backend reads the session-owned income entries, dated work-cost entries, current active commitments, and confirmed expenses. It reuses the Epic 2 month aggregation and work-cost basis. Older v1 clients may still send `income`, `work_costs`, `commitments`, and `expenses`; those optional transport fields are accepted but ignored so client state cannot replace persisted facts.
 
 ```json
 {
   "provenance": "calculated_from_user_record",
-  "work_cost_basis": "current_active_monthly_snapshot",
+  "work_cost_basis": "recorded_entries_by_month",
   "has_existing_shortfall": true,
   "tested_months": 2,
   "largest_existing_gap": 200.0,

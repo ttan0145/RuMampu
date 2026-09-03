@@ -9,7 +9,7 @@ from .models import (
     GuestProfile,
     IncomeEntry,
     IncomeSource,
-    WorkCostItem,
+    WorkCostEntry,
 )
 
 
@@ -54,7 +54,8 @@ class FinanceScenarioApiTests(TestCase):
         self.assertEqual(payload["expense_entry_count"], 240)
         self.assertEqual(payload["gross_income_total"], "62250.00")
         self.assertEqual(payload["logged_expense_total"], "14340.00")
-        self.assertEqual(payload["work_cost_monthly"], "750.00")
+        self.assertEqual(payload["work_cost_entry_count"], 60)
+        self.assertEqual(payload["work_cost_recorded_total"], "9000.00")
         self.assertEqual(payload["commitment_monthly_estimate"], "2230.00")
         self.assertEqual(payload["first_month"], "2025-08")
         self.assertEqual(payload["last_month"], "2026-07")
@@ -71,10 +72,7 @@ class FinanceScenarioApiTests(TestCase):
         self.assertTrue(
             IncomeSource.objects.filter(name="Food delivery", is_custom=True).exists()
         )
-        self.assertEqual(
-            sum(WorkCostItem.objects.values_list("monthly_amount", flat=True)),
-            Decimal("750.00"),
-        )
+        self.assertEqual(WorkCostEntry.objects.count(), 60)
         self.assertEqual(
             sum(CommitmentItem.objects.values_list("monthly_amount", flat=True)),
             Decimal("2230.00"),
