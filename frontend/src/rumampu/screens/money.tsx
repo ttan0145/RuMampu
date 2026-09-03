@@ -417,9 +417,9 @@ export function WorkcostsScreen() {
   const summaryReady = (S.workCostSync === 'ready' || S.workCostSync === 'disabled') && summary?.month === selectedMonth;
   const [selectedYear, selectedMonthNumber] = selectedMonth.split('-').map(Number);
   const selectedMonthLabel = `${monthName(Math.max(0, selectedMonthNumber - 1))} ${selectedYear}`;
-  const categoryLabel = (id: string) => {
+  const categoryLabel = (id: string, recordedName?: string) => {
     const category = S.data.workCostCategories.find(item => item.id === id);
-    return category ? (category.custom ? category.name || '' : t(category.k || '')) : id;
+    return category ? (category.custom ? category.name || '' : t(category.k || '')) : recordedName || id;
   };
 
   React.useEffect(() => {
@@ -560,7 +560,7 @@ export function WorkcostsScreen() {
           <View key={entry.id} testID={`work-cost-entry-${entry.id}`} style={{ gap: 6 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <View style={{ flex: 1, gap: 2 }}>
-                <BodyS>{entry.d} · {categoryLabel(entry.categoryId)}</BodyS>
+                <BodyS>{entry.d} · {categoryLabel(entry.categoryId, entry.categoryName)}</BodyS>
                 <Prov p="user" />
               </View>
               <Fig value={rm(entry.a)} p="user" />

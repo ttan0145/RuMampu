@@ -37,3 +37,26 @@ The acceptance skill separates identifier coverage from actual acceptance. The f
 - If the selected month has no income, RuMampu does not substitute an average or another month. It displays the recorded costs and says the calculated income is unavailable.
 - Legacy `WorkCostItem.monthly_amount` values remain stored for migration safety but are not read by calculation services; no historical dates are fabricated from them.
 - Positive legacy values are exposed through read-only `legacy_monthly_amount` as excluded estimates, with a duplicate-entry warning. Production migration and versioning of the changed v1 contract remain release gates; nothing was deployed.
+
+## 2026-09-03 follow-up: production incident and partial-load recovery
+
+This follow-up updates the historical release-status note above. The deployed backend initially returned HTTP 500 with `relation "finance_workcostentry" does not exist` for work-cost entries, monthly summaries, income analysis, and the housing pre-check. The category endpoint still returned HTTP 200. This was a missing production schema dependency, amplified by the frontend waiting for all three work-cost reads before displaying any categories or entries.
+
+Timzz subsequently reported applying `finance.0010_work_cost_entry`. A fresh production probe then received HTTP 200 from the category, entry, selected-month summary, income-pattern, and housing pre-check endpoints. The probe used an isolated guest and did not save financial entries or housing scenarios. This confirms recovery of these endpoints, not a complete production browser/write-path acceptance. No production migration was performed by Codex in this follow-up.
+
+The separate local bug fix now publishes successful category and entry reads independently, including responses arriving after another read fails. Every update retains the latest-request guard. The calculated summary remains unavailable until the complete current refresh succeeds; failures must not imply zero costs or missing income. If category loading fails, confirmed records use their API-provided category names rather than bare IDs. Retry keeps the draft and does not submit another entry.
+
+| Existing AC | Additional engineering regression | Result / remaining gap |
+|---|---|---|
+| AC1.3.1 | TECH-WC-05: categories arriving after failed entry/summary reads remain selectable | Passed locally; production delivery of the frontend fix is still pending. |
+| AC1.3.6 | TECH-WC-06/07: loaded entries remain visible when the summary or category endpoint fails | Passed locally; records retain their saved category names. |
+| AC1.3.9, AC1.3.10 | TECH-WC-05/06/07 plus the existing US1.3 acceptance flow | Passed locally; no unavailable result is presented as a confirmed zero or net figure. |
+
+- Red/green evidence: TECH-WC-05 first failed on the unchanged application because `Petrol` was absent, then passed after the fix.
+- Fresh validation: 106 backend tests passed; no migration drift; frontend TypeScript passed; Epic 1 60/60 and Epic 2 18/18 AC identifiers remain mapped exactly once.
+- Full local browser suite: **35/35 passed (2.4 minutes)** using Chromium and SQLite, including existing Epic 3/4 housing flows and three new partial-load regressions. No new PostgreSQL CI or real-device acceptance is claimed.
+- Scope: bug recovery only. No font, colour, layout, editing-flow, delete-action, or requirement changes. Existing AC3.2.5 and AC3.3.1 describe the affected housing behaviour; handing over migration execution does not create new Epic 3 ACs.
+- A subsequent real-browser check on `https://rumampu-frontend.vercel.app/` used a new, initially empty guest without request mocks. It verified category loading, zero-amount rejection, adding two costs in one category, editing one record, moving it to the previous month, and reload persistence. With RM 3,000 income, the remaining current-month cost of RM 25 produced RM 2,975 net income in both Work costs and Income pattern. A cost-only prior month did not fabricate income.
+- The same live session completed housing tests at RM 1,230 and RM 3,030 total monthly cost. The latter correctly reported one short month and an RM 55 gap against RM 2,975 net income. Synthetic records remain in that isolated visitor: one income, two work-cost entries, and one housing scenario. No existing user's records were changed.
+- Live normal-path recovery does not prove the new partial-failure fix has deployed; the fault-injection regressions above ran locally. One Result/Back navigation loop was observed; Home → Re-test the house worked. Navigation investigation, production Debug settings, and any UI redesign remain separate work.
+- This follow-up is included with the frontend bug-fix delivery. LeanKit and formal ACs were not changed; pushing a commit alone does not verify its production deployment.

@@ -436,9 +436,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [up]);
 
-  // EN: US1.3 keeps category choices, dated entries, and the selected month's
-  // calculated result in one server-confirmed refresh.
-  // 中文：US1.3 将类别、带日期记录和所选月份的计算结果放在一次服务端确认刷新中。
+  // EN: Successful category/entry reads remain visible when another read fails.
+  // Only publish the calculated result after the whole refresh is confirmed.
+  // 中文：其他读取失败时仍展示成功加载的类别/记录；整次刷新成功后才展示计算结果。
   const refreshWorkCosts = useCallback(async (month?: string): Promise<void> => {
     const selectedMonth = month || workCostMonth.current;
     workCostMonth.current = selectedMonth;
@@ -455,27 +455,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Native clients use cookies: establish one guest before parallel reads.
       await ensureGuest();
       if (version !== workCostRequestVersion.current) return;
-      const [categories, entries, summary] = await Promise.all([
-        fetchWorkCostCategories(),
-        fetchWorkCostEntries(),
+      const categoriesRequest = fetchWorkCostCategories().then(categories => {
+        up(s => {
+          if (version !== workCostRequestVersion.current) return;
+          s.data.workCostCategories = categories.map(item => ({
+            id: String(item.id),
+            k: item.slug ? `wc_${item.slug}` : undefined,
+            custom: item.is_custom,
+            name: item.name,
+            legacyMonthlyAmount: Number(item.legacy_monthly_amount),
+          }));
+        });
+      });
+      const entriesRequest = fetchWorkCostEntries().then(entries => {
+        up(s => {
+          if (version !== workCostRequestVersion.current) return;
+          s.data.workCostEntries = entries.map(entry => ({
+            id: String(entry.id),
+            categoryId: String(entry.category_id),
+            categoryName: entry.category_name,
+            a: Number(entry.amount),
+            d: entry.date,
+          }));
+        });
+      });
+      const [, , summary] = await Promise.all([
+        categoriesRequest,
+        entriesRequest,
         fetchWorkCostMonthSummary(selectedMonth),
       ]);
       up(s => {
         if (version !== workCostRequestVersion.current) return;
-        s.data.workCostCategories = categories.map(item => ({
-          id: String(item.id),
-          k: item.slug ? `wc_${item.slug}` : undefined,
-          custom: item.is_custom,
-          name: item.name,
-          legacyMonthlyAmount: Number(item.legacy_monthly_amount),
-        }));
-        s.data.workCostEntries = entries.map(entry => ({
-          id: String(entry.id),
-          categoryId: String(entry.category_id),
-          categoryName: entry.category_name,
-          a: Number(entry.amount),
-          d: entry.date,
-        }));
         s.workCostSummary = summary;
         s.workCostSelectedMonth = summary.month;
         s.workCostSync = 'ready';
