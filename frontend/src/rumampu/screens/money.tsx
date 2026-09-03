@@ -489,12 +489,6 @@ export function WorkcostsScreen() {
         <BodyS>{t('wc_sync_error')}</BodyS>
         <BtnLine label={t('retry')} onPress={() => { void refreshWorkCosts().catch(() => undefined); }} />
       </NoteC> : null}
-      {S.data.workCostCategories.some(item => (item.legacyMonthlyAmount || 0) > 0) ? <NoteC>
-        <BodyS>{t('wc_legacy_note')}</BodyS>
-        {S.data.workCostCategories.filter(item => (item.legacyMonthlyAmount || 0) > 0).map(item => (
-          <BodyS key={item.id}>{categoryLabel(item.id)} · {rm(item.legacyMonthlyAmount || 0)}</BodyS>
-        ))}
-      </NoteC> : null}
       <Card gap={8}>
         <BodyS muted>{t('wc_month')}</BodyS>
         <DatePickerField

@@ -145,7 +145,7 @@ A historical monthly total must belong to a month before the current month. Each
 
 Default and custom work-cost categories are independent resources. The frontend localises defaults by stable `slug`; custom categories use the user-provided `name`. Categories do not carry an ongoing monetary amount.
 
-The read-only `legacy_monthly_amount` field preserves the former undated estimate for review. The UI labels positive legacy estimates as excluded, warns against duplicate re-entry, and never invents dates or automatically converts them into entries.
+The read-only `legacy_monthly_amount` field continues to preserve the former undated estimate for review. Following the user-approved UI adjustment, the Work costs screen no longer displays the legacy notice or amounts. These values remain excluded from calculations and are never automatically converted into dated entries.
 
 Create a custom category:
 

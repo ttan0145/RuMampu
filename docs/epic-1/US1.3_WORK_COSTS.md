@@ -36,7 +36,7 @@ The acceptance skill separates identifier coverage from actual acceptance. The f
 - `Income after work costs` for `YYYY-MM` is that month's recorded gross income minus entries whose `cost_date` is in the same `YYYY-MM`.
 - If the selected month has no income, RuMampu does not substitute an average or another month. It displays the recorded costs and says the calculated income is unavailable.
 - Legacy `WorkCostItem.monthly_amount` values remain stored for migration safety but are not read by calculation services; no historical dates are fabricated from them.
-- Positive legacy values are exposed through read-only `legacy_monthly_amount` as excluded estimates, with a duplicate-entry warning. Production migration and versioning of the changed v1 contract remain release gates; nothing was deployed.
+- Legacy values remain preserved in the database and read-only `legacy_monthly_amount` API field, excluded from calculations and never converted automatically into dated entries. On 2026-09-03, the user requested removal of the previous-monthly-estimates notice and legacy amount list from Work costs. This presentation decision supersedes the earlier audit recommendation to show the notice; historical data is neither cleared nor migrated.
 
 ## 2026-09-03 follow-up: production incident and partial-load recovery
 
