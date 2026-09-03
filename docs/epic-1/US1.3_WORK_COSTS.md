@@ -15,7 +15,7 @@ Language: **English** | [Chinese (CN)](US1.3_WORK_COSTS.cn.md)
 | AC1.3.3 Enter a work-cost date | Passed | The form uses a date picker; the API stores `date` and rejects future dates. |
 | AC1.3.4 Add a custom category | Passed | `POST /api/v1/work-costs/` adds a unique custom category without assigning a recurring amount. |
 | AC1.3.5 Save a work-cost entry | Passed | `POST /api/v1/work-costs/entries/` appends one separate category, amount, and date record. |
-| AC1.3.6 Display recorded entries | Passed | The screen lists every saved record with business date, category, amount, and user-data provenance. |
+| AC1.3.6 Display recorded entries | Passed | The screen lists every saved record with business date, category, and amount. Rows omit repeated YOUR DATA labels; the net-income result retains CALCULATED. Amount and edit controls can wrap together on narrow screens. |
 | AC1.3.7 Edit a work-cost record | Passed | `PATCH /api/v1/work-costs/entries/{id}/` changes only the selected entry and refreshes affected monthly results. |
 | AC1.3.8 Apply work costs to the correct month | Passed | The finance service groups costs by `cost_date` month/year and never applies an entry to another month. |
 | AC1.3.9 Show income after work costs | Passed | The selected-month summary calculates gross income minus that month's costs; a no-income month keeps costs visible and marks the net figure unavailable. |

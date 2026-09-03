@@ -15,7 +15,7 @@
 | AC1.3.3 Enter a work-cost date | 通过 | 表单提供日期选择器；API 保存 `date` 并拒绝未来日期。 |
 | AC1.3.4 Add a custom category | 通过 | `POST /api/v1/work-costs/` 新建唯一的自定义类别，不为它设置重复月金额。 |
 | AC1.3.5 Save a work-cost entry | 通过 | `POST /api/v1/work-costs/entries/` 追加一笔独立的类别、金额和日期记录。 |
-| AC1.3.6 Display recorded entries | 通过 | 页面列出每笔已保存记录的业务日期、类别、金额和用户数据来源。 |
+| AC1.3.6 Display recorded entries | 通过 | 页面列出每笔已保存记录的业务日期、类别和金额；记录行不重复显示 YOUR DATA，净收入仍以 CALCULATED 标明计算来源。窄屏下金额和编辑入口可整体换行。 |
 | AC1.3.7 Edit a work-cost record | 通过 | `PATCH /api/v1/work-costs/entries/{id}/` 只修改被选中的记录，并刷新受影响月份的结果。 |
 | AC1.3.8 Apply work costs to the correct month | 通过 | 财务服务按 `cost_date` 的年月分组，不会把一笔成本扣到其他月份。 |
 | AC1.3.9 Show income after work costs | 通过 | 所选月汇总为该月总收入减该月成本；无收入月份保留成本并明确净收入不可计算。 |

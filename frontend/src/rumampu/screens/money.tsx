@@ -558,13 +558,15 @@ export function WorkcostsScreen() {
         {summaryReady && S.data.workCostEntries.length === 0 ? <BodyS muted>{t('wc_empty')}</BodyS> : null}
         {S.data.workCostEntries.map(entry => (
           <View key={entry.id} testID={`work-cost-entry-${entry.id}`} style={{ gap: 6 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{ flex: 1, gap: 2 }}>
+            {/* 中文：记录列表展示原始条目；来源标记留给上方需要区分的计算结果。窄屏允许金额与编辑整体换行。 */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 4, minHeight: 44 }}>
+              <View style={{ flexGrow: 1, flexBasis: 120, minWidth: 0 }}>
                 <BodyS>{entry.d} · {categoryLabel(entry.categoryId, entry.categoryName)}</BodyS>
-                <Prov p="user" />
               </View>
-              <Fig value={rm(entry.a)} p="user" />
-              <BtnLine label={t('edit')} onPress={() => beginEdit(entry)} style={{ fontSize: 13 }} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginLeft: 'auto', maxWidth: '100%' }}>
+                <Display style={{ fontSize: 16, lineHeight: 22, flexShrink: 1 }}>{rm(entry.a)}</Display>
+                <BtnLine label={t('edit')} onPress={() => beginEdit(entry)} style={{ fontSize: 13 }} />
+              </View>
             </View>
             {editingId === entry.id ? (
               <View style={{ gap: 8 }}>
