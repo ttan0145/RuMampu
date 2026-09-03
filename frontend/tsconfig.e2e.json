@@ -4,6 +4,6 @@
     "noEmit": true,
     "types": ["node", "@playwright/test"]
   },
-  "include": ["playwright.config.ts", "e2e/**/*.ts"],
+  "include": ["playwright.config.ts", "playwright.live.config.ts", "e2e/**/*.ts", "live-e2e/**/*.ts"],
   "exclude": []
 }

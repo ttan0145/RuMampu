@@ -42,7 +42,9 @@
     "test:e2e:epic3": "playwright test e2e/epic3.spec.ts",
     "test:e2e:epic4": "playwright test e2e/epic4.spec.ts",
     "test:e2e:epic8": "playwright test e2e/epic8.spec.ts",
-    "test:e2e:housing": "playwright test e2e/housing-integration.spec.ts"
+    "test:e2e:housing": "playwright test e2e/housing-integration.spec.ts",
+    "test:live": "node scripts/run-live-tests.mjs",
+    "test:live:report": "playwright show-report ../output/playwright/live/report"
   },
   "private": true
 }

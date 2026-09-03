@@ -12,5 +12,5 @@
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ],
-  "exclude": ["e2e", "playwright.config.ts"]
+  "exclude": ["e2e", "live-e2e", "playwright.config.ts", "playwright.live.config.ts"]
 }
