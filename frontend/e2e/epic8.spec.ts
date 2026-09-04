@@ -89,14 +89,14 @@ test('US8.1 summarises mixed dated income and expenses without using array order
   await openRecord(page);
 
   // EN: These locators assert the visible summary: distinct months, entry count,
-  // latest business date, and current-session copy.
-  // 中文：这些 locator 验证可见摘要：去重月份数、记录条数、最新业务日期，以及当前会话说明。
+  // latest business date, and browser/device account-scope copy.
+  // 中文：这些 locator 验证可见摘要：去重月份数、记录条数、最新业务日期，以及浏览器/设备与账号范围说明。
   await expect(page.getByText('Financial record', { exact: true })).toBeVisible();
   await expect(page.getByLabel('3 months recorded')).toBeVisible();
   await expect(page.getByLabel('4 financial entries')).toBeVisible();
   await expect(page.getByText('Latest entry', { exact: true })).toBeVisible();
   await expect(page.getByText('5 Mar 2026', { exact: true })).toBeVisible();
-  await expect(page.getByText(/not saved to a RuMampu account/)).toBeVisible();
+  await expect(page.getByText('Your record is linked to this browser/device, not an account. Avoid using shared devices.', { exact: true })).toBeVisible();
   await captureEvidence(page, 'epic-8', '01-record-mixed-summary.png');
 });
 
@@ -136,7 +136,7 @@ test('US8.1 handles an empty current record without an invalid latest date', asy
   await expect(page.getByText('No test kept yet', { exact: true })).toBeVisible();
   await expect(page.getByText('Run a housing test and keep the result here for this session.', { exact: true })).toBeVisible();
   await expect(page.getByText('Go to Test', { exact: true })).toBeVisible();
-  await expect(page.getByText(/not saved to a RuMampu account/)).toBeVisible();
+  await expect(page.getByText('Your record is linked to this browser/device, not an account. Avoid using shared devices.', { exact: true })).toBeVisible();
   await captureEvidence(page, 'epic-8', '02-record-empty-state.png');
 });
 
@@ -205,10 +205,10 @@ test('US8.3 lets the user select an available interface language', async ({ page
 });
 
 // EN: US8.4 / AC8.4.1-AC8.4.6. This checks bottom navigation and Back behaviour.
-// The Prepare assertion below is intentionally left unchanged in this documentation
-// pass, even though it uses detailed Epic 5 content as a navigation proxy.
-// 中文：US8.4 / AC8.4.1-AC8.4.6。这里检查底部导航和返回行为。本轮只加文档注释，
-// 所以下面的 Prepare 断言保持不变，尽管它用 Epic 5 的详细内容作为导航代理。
+// The Prepare assertion uses the current Coming Soon state, not detailed Epic 5
+// preparation content.
+// 中文：US8.4 / AC8.4.1-AC8.4.6。这里检查底部导航和返回行为。
+// Prepare 断言使用当前 Coming Soon 状态，不检查 Epic 5 的具体准备内容。
 test('US8.4 exposes the four main areas and returns with Back', async ({ page }) => {
   await openApp(page);
 
@@ -236,14 +236,11 @@ test('US8.4 exposes the four main areas and returns with Back', async ({ page })
   await expect(page.getByText('The house', { exact: true })).toBeVisible();
 
   await page.getByText('Prepare', { exact: true }).last().click();
-  // EN: Epic 8 owns navigation to Prepare, but detailed Prepare features such
-  // as "Upfront cash" belong to Epic 5. This assertion is a current navigation
-  // proxy and should be reviewed separately if Prepare is intentionally Coming Soon.
-  // 中文：Epic 8 负责导航到 Prepare，但 “Upfront cash” 等具体准备功能属于 Epic 5。
-  // 这个断言目前只是导航代理；如果当前范围有意显示 Coming Soon，应单独 review。
-  await expect(
-    page.getByText('Prepare', { exact: true }).last()
-  ).toBeVisible();
+  // EN: Epic 8 owns navigation to Prepare. The visible Coming Soon state proves
+  // the area opened without asserting Epic 5's detailed preparation features.
+  // 中文：Epic 8 负责导航到 Prepare。可见的 Coming Soon 状态证明区域已打开，
+  // 不断言 Epic 5 的具体准备功能。
+  await expect(page.getByText('COMING SOON', { exact: true })).toBeVisible();
 
   await page.getByText('Home', { exact: true }).last().click();
   await expect(page.getByText('RuMampu', { exact: true })).toBeVisible();
