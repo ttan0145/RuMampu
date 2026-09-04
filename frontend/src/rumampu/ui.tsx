@@ -243,6 +243,7 @@ export function NumInput({
     <TextInput
       style={[st.input, alignRight && { textAlign: 'right', width: 104, minHeight: 44 }, style as TextStyle]}
       keyboardType={decimal ? 'decimal-pad' : 'number-pad'}
+      inputMode={decimal ? 'decimal' : 'numeric'}
       value={local}
       placeholder={placeholder}
       accessibilityLabel={accessibilityLabel}

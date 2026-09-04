@@ -633,6 +633,7 @@ export function CommitScreen() {
         <Card key={sec} gap={8}>
           <BodyS muted>{t(sec === 'living' ? 'cm_living' : sec === 'debts' ? 'cm_debts' : 'cm_savings')}</BodyS>
           <EditList
+            decimal
             list={c[sec]}
             showProvenance={false}
             onNum={(i, n) => up(s => { s.data.commitments[sec][i].a = n; })}

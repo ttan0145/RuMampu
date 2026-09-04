@@ -31,6 +31,8 @@ Language: **English** | [Chinese (CN)](US1.4_COMMITMENTS.cn.md)
 
 The Commitments screen no longer repeats `YOUR DATA` beneath every editable item. This changes presentation only: each amount is still persisted as guest-owned source data, while `Total commitments` retains `CALCULATED` because it is derived from the items. `TECH-CM-01` protects that distinction in a real browser.
 
+Commitment inputs now request a decimal keyboard on mobile and retain decimal values rather than truncating them on blur. `TECH-CM-02` enters RM700.55, verifies the confirmed API amount and total, reloads the app, and verifies the decimal value remains visible.
+
 ## Data convention and boundaries
 
 - A commitment amount represents its current monthly amount. Zero is allowed; negative amounts are not.

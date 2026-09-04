@@ -181,7 +181,7 @@ POST/PATCH 已返回确认记录，即代表写入成功，后续 GET 失败不�
 
 ## 6. 财务承诺
 
-默认承诺项目按 `commitment_type` 分为 `living`、`debt` 和 `savings`。每项金额使用 `monthly_amount`，允许 `0.00`，不允许负数；稳定 `slug` 用于前端本地化。
+默认承诺项目按 `commitment_type` 分为 `living`、`debt` 和 `savings`。每项金额使用 `monthly_amount`，最多接受两位小数，允许 `0.00`，不允许负数；稳定 `slug` 用于前端本地化。
 
 响应项目示例：
 

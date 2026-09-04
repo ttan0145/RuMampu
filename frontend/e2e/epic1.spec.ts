@@ -289,6 +289,29 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
     await expect(page.getByText(/CALCULATED$/)).toBeVisible();
   });
 
+  test('TECH-CM-02 — mobile commitment inputs accept and persist decimal amounts', { tag: ['@us1.4', '@hardening'] }, async ({ page }) => {
+    await openApp(page);
+    await openMoneyScreen(page, 'Commitments');
+    const rent = inputForRow(page, 'Rent');
+
+    await expect(rent).toHaveAttribute('inputmode', 'decimal');
+    const updated = page.waitForResponse(response => (
+      response.request().method() === 'PATCH'
+      && /\/commitments\/\d+\/$/.test(response.url())
+    ));
+    await rent.fill('700.55');
+    await rent.press('Tab');
+    const response = await updated;
+    expect(response.status()).toBe(200);
+    expect((await response.json()).monthly_amount).toBe('700.55');
+    await expect(page.getByText('RM 700.55', { exact: true })).toBeVisible();
+
+    await openApp(page);
+    await openMoneyScreen(page, 'Commitments');
+    await expect(inputForRow(page, 'Rent')).toHaveValue('700.55');
+    await expect(page.getByText('RM 700.55', { exact: true })).toBeVisible();
+  });
+
   test('US1.5 — Record daily expenses manually', { tag: '@us1.5' }, async ({ page }) => {
     await openApp(page);
     await openMoneyScreen(page, 'Daily expenses');

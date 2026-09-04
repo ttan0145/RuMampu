@@ -6,6 +6,7 @@ Language: **English** | [Chinese (CN)](CHANGELOG.cn.md)
 
 - Removed a legacy Work costs notice and duplicated row provenance that returned in the income-deletion commit; restored the responsive row layout.
 - Removed repeated `YOUR DATA` labels from editable Commitment rows while retaining `CALCULATED` on the derived total.
+- Enabled decimal keyboards and decimal-value persistence for Commitment amounts on mobile.
 - Added an end-to-end regression for deleting the last monthly income while preserving dated work costs and recalculating the month as having no income.
 - Added API coverage for ownership isolation, repeated deletion, empty-period cleanup, sibling preservation, and work-cost preservation; regenerated OpenAPI with the DELETE operation.
 

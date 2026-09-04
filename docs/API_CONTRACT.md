@@ -181,7 +181,7 @@ Release gate: this worktree changes the former v1 category/monthly-amount contra
 
 ## 6. Financial commitments
 
-Default commitments are grouped by `commitment_type`: `living`, `debt`, or `savings`. Each item uses `monthly_amount`, allows `0.00`, and rejects negative values. Stable `slug` values support frontend localisation.
+Default commitments are grouped by `commitment_type`: `living`, `debt`, or `savings`. Each item uses `monthly_amount`, accepts up to two decimal places, allows `0.00`, and rejects negative values. Stable `slug` values support frontend localisation.
 
 Example response item:
 
