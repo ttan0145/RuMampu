@@ -13,6 +13,7 @@ import {
   createWorkCostEntry as createWorkCostEntryRequest,
   createIncomeEntry as createIncomeEntryRequest,
   createIncomeSource as createIncomeSourceRequest,
+  deleteIncomeEntry as deleteIncomeEntryRequest,
   fetchCommitments,
   fetchExpenseCategories,
   fetchExpenses,
@@ -188,6 +189,7 @@ export interface Ctx {
   backNav: () => void;
   saveIncomeEntry: (input: SaveIncomeInput) => Promise<'saved' | 'outlier'>;
   updateIncomeEntry: (id: string, input: { amount: number; date: string; sourceId?: string }) => Promise<void>;
+  deleteIncomeEntry: (id: string) => Promise<void>;
   saveIncomeSource: (name: string) => Promise<string>;
   refreshIncomeRecord: () => Promise<void>;
   refreshIncomePattern: () => Promise<void>;
@@ -689,6 +691,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshAfterMoneyWrite, up]);
 
+  const deleteIncomeEntry = useCallback(async (id: string): Promise<void> => {
+    if (!INCOME_API_ENABLED) {
+      up(s => {
+        s.data.income = s.data.income.filter(entry => entry.id !== id);
+        s.workCostSummary = localWorkCostSummary(s.data, s.workCostSelectedMonth);
+        s.incomePatternSync = 'idle';
+        s.coverageSync = 'idle';
+      });
+      return;
+    }
+    try {
+      await deleteIncomeEntryRequest(id);
+      up(s => {
+        s.data.income = s.data.income.filter(entry => entry.id !== id);
+        s.incomeSync = 'ready';
+        s.incomePatternSync = 'idle';
+        s.coverageSync = 'idle';
+      });
+      refreshAfterMoneyWrite();
+    } catch (error) {
+      up(s => { s.incomeSync = 'error'; });
+      throw error;
+    }
+  }, [refreshAfterMoneyWrite, up]);
+
   const saveIncomeSource = useCallback(async (name: string): Promise<string> => {
     if (!INCOME_API_ENABLED) {
       const id = `own${Date.now()}`;
@@ -864,13 +891,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Ctx>(() => ({
     S, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, updateIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
+    saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   }), [
     S, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, updateIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
+    saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,

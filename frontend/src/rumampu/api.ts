@@ -228,7 +228,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init?.headers,
     },
   });
-  const payload = await response.json().catch(() => null);
+  const payload = response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok) {
     const details = apiErrorDetails(payload);
     throw new ApiError(
@@ -327,6 +327,14 @@ export function updateHistoricalIncomeEntry(
   input: { amount: number; date: string },
 ): Promise<ApiIncomeEntry> {
   return updateIncomeEntry(id, input);
+}
+
+export function deleteIncomeEntry(id: string): Promise<void> {
+  const entryId = Number.parseInt(id, 10);
+  if (!Number.isFinite(entryId)) {
+    return Promise.reject(new Error('The selected income entry is not available in the API record.'));
+  }
+  return request<void>(`/income/entries/${entryId}/`, { method: 'DELETE' });
 }
 
 export function isOutlierConfirmation(error: unknown): boolean {

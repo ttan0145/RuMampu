@@ -160,8 +160,8 @@ class IncomeEntryUpdateSerializer(serializers.Serializer):
     source_id = serializers.IntegerField(min_value=1, required=False, allow_null=True)
 
     def validate_amount(self, value: Decimal) -> Decimal:
-        if value <= 0:
-            raise serializers.ValidationError("Income amount must be greater than zero.")
+        if value < 0:
+            raise serializers.ValidationError("Income amount cannot be negative.")
         return value
 
     def validate_source_id(self, value: int | None) -> int | None:
@@ -234,10 +234,9 @@ class IncomeEntryCreateSerializer(serializers.Serializer):
     confirm_outlier = serializers.BooleanField(default=False)
 
     def validate_amount(self, value: Decimal) -> Decimal:
-        # EN: AC1.1.9 rejects non-positive income at the API boundary as well as in the UI.
-        # 中文：AC1.1.9 在 API 边界和界面两层都拒绝非正收入。
-        if value <= 0:
-            raise serializers.ValidationError("Income amount must be greater than zero.")
+        # Zero is a valid recorded income amount; only negative income is invalid.
+        if value < 0:
+            raise serializers.ValidationError("Income amount cannot be negative.")
         return value
 
     def validate_source_id(self, value: int | None) -> int | None:

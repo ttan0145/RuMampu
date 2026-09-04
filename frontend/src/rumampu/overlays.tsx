@@ -154,7 +154,7 @@ export function SheetHost() {
     const editId = sheet.slice('incomeedit:'.length);
     const save = async () => {
       if (saving) return;
-      if (!isValidMoneyText(editAmount) || Number(editAmount.trim()) <= 0) { setEditError('amount'); return; }
+      if (!isValidMoneyText(editAmount) || Number(editAmount.trim()) < 0) { setEditError('amount'); return; }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(editDate)) { setEditError('date'); return; }
       if (!editSource) { setEditError('source'); return; }
       setSaving(true);
@@ -220,7 +220,7 @@ export function SheetHost() {
       // Never let parseFloat turn a partially numeric value such as `200ggg` into 200.
       if (!isValidMoneyText(pastA)) { setPastError('cash'); return; }
       const a = Number(pastA.trim());
-      if (a <= 0) { setPastError('amount'); return; }
+      if (a < 0) { setPastError('amount'); return; }
       if (S.data.income.some(entry => entry.id !== editId && entry.d.slice(0, 7) === sel)) {
         setPastError('exists');
         return;

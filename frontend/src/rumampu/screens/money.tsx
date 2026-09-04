@@ -206,7 +206,7 @@ export function RecordScreen() {
  * 中文：US1.1 录入金额、日期和来源，并保留警告与来源标识状态。
  */
 export function IncomeScreen() {
-  const { S, t, monthName, up, go, saveIncomeEntry, toast } = useApp();
+  const { S, t, monthName, up, go, saveIncomeEntry, deleteIncomeEntry, toast } = useApp();
   const d = S.incomeDraft;
   const [saving, setSaving] = React.useState(false);
 
@@ -219,10 +219,9 @@ export function IncomeScreen() {
       return;
     }
     const a = Number(d.a.trim());
-    // EN: AC1.1.9 warns locally before the API independently rejects non-positive income.
-    // 中文：AC1.1.9 先在前端警告，API 仍会独立拒绝非正收入。
+    // Zero income is valid; only negative amounts are rejected.
+    // RM0 can represent a genuine no-income day or month.
     if (a < 0) { up(s => { s.incomeDraft.flag = 'neg'; }); return; }
-    if (!a) return;
     // EN: AC1.1.2 validates the calendar date on both client and server boundaries.
     // 中文：AC1.1.2 在客户端和服务端边界都校验日历日期。
     if (!isValidIsoDate(d.d)) {
@@ -375,14 +374,23 @@ export function IncomeScreen() {
                   <Text style={{ flex: 1, minWidth: 0, fontSize: 15, lineHeight: 20, color: C.ink }}>
                     {label}
                   </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: canEdit ? 14 : 0 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: canEdit ? 12 : 0 }}>
                     <Display cls="body-s">{rm(e.a)}</Display>
                     {canEdit ? (
-                      <BtnLine
-                        label={t('edit')}
-                        style={{ fontSize: 13 }}
-                        onPress={() => up(state => { state.sheet = e.method === 'historical_total' ? `pastmonth:${e.id}` : `incomeedit:${e.id}`; })}
-                      />
+                      <>
+                        <BtnLine
+                          label={t('edit')}
+                          style={{ fontSize: 13 }}
+                          onPress={() => up(state => { state.sheet = e.method === 'historical_total' ? `pastmonth:${e.id}` : `incomeedit:${e.id}`; })}
+                        />
+                        <BtnLine
+                          label={t('remove')}
+                          style={{ fontSize: 13 }}
+                          onPress={() => {
+                            void deleteIncomeEntry(e.id!).catch(() => toast(t('inc_save_failed'), 'error'));
+                          }}
+                        />
+                      </>
                     ) : null}
                   </View>
                 </View>
@@ -489,6 +497,12 @@ export function WorkcostsScreen() {
         <BodyS>{t('wc_sync_error')}</BodyS>
         <BtnLine label={t('retry')} onPress={() => { void refreshWorkCosts().catch(() => undefined); }} />
       </NoteC> : null}
+      {S.data.workCostCategories.some(item => (item.legacyMonthlyAmount || 0) > 0) ? <NoteC>
+        <BodyS>{t('wc_legacy_note')}</BodyS>
+        {S.data.workCostCategories.filter(item => (item.legacyMonthlyAmount || 0) > 0).map(item => (
+          <BodyS key={item.id}>{categoryLabel(item.id)} · {rm(item.legacyMonthlyAmount || 0)}</BodyS>
+        ))}
+      </NoteC> : null}
       <Card gap={8}>
         <BodyS muted>{t('wc_month')}</BodyS>
         <DatePickerField
@@ -552,15 +566,13 @@ export function WorkcostsScreen() {
         {summaryReady && S.data.workCostEntries.length === 0 ? <BodyS muted>{t('wc_empty')}</BodyS> : null}
         {S.data.workCostEntries.map(entry => (
           <View key={entry.id} testID={`work-cost-entry-${entry.id}`} style={{ gap: 6 }}>
-            {/* 中文：记录列表展示原始条目；来源标记留给上方需要区分的计算结果。窄屏允许金额与编辑整体换行。 */}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 4, minHeight: 44 }}>
-              <View style={{ flexGrow: 1, flexBasis: 120, minWidth: 0 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ flex: 1, gap: 2 }}>
                 <BodyS>{entry.d} · {categoryLabel(entry.categoryId, entry.categoryName)}</BodyS>
+                <Prov p="user" />
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginLeft: 'auto', maxWidth: '100%' }}>
-                <Display style={{ fontSize: 16, lineHeight: 22, flexShrink: 1 }}>{rm(entry.a)}</Display>
-                <BtnLine label={t('edit')} onPress={() => beginEdit(entry)} style={{ fontSize: 13 }} />
-              </View>
+              <Fig value={rm(entry.a)} p="user" />
+              <BtnLine label={t('edit')} onPress={() => beginEdit(entry)} style={{ fontSize: 13 }} />
             </View>
             {editingId === entry.id ? (
               <View style={{ gap: 8 }}>

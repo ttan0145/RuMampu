@@ -210,6 +210,26 @@ class HistoricalIncomeEntryDetailView(APIView):
         )
         return Response(IncomeEntrySerializer(updated).data)
 
+    @extend_schema(
+        operation_id="income_entry_delete",
+        summary="Delete an income entry",
+        tags=["Income"],
+        responses={204: None, 404: ApiErrorSerializer},
+    )
+    def delete(self, request, entry_id: int):
+        from rest_framework.exceptions import NotFound
+
+        profile = profile_for_request(request)
+        entry = profile.income_entries.filter(id=entry_id).select_related("period").first()
+        if entry is None:
+            raise NotFound("Income entry was not found for this profile.")
+
+        period = entry.period
+        entry.delete()
+        if not period.income_entries.exists():
+            period.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 # EN: List and extend categories for separate, dated US1.3 work-cost entries.
 # 中文：列出并扩展 US1.3 独立带日期工作成本记录使用的类别。
