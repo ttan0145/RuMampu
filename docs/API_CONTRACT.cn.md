@@ -71,6 +71,8 @@
 | POST | `/api/v1/income/sources/` | 新建自定义收入来源 |
 | GET | `/api/v1/income/entries/` | 收入明细 |
 | POST | `/api/v1/income/entries/` | 新建收入或历史月总额 |
+| PATCH | `/api/v1/income/entries/{id}/` | 更新一笔收入或历史月总额记录 |
+| DELETE | `/api/v1/income/entries/{id}/` | 删除当前访客的一笔收入记录 |
 | POST | `/api/v1/income-imports/preview/` | 上传 CSV 并建立逐行预览，不创建收入记录 |
 | GET | `/api/v1/income-imports/{id}/` | 读取当前访客的导入批次与逐行结果 |
 | POST | `/api/v1/income-imports/{id}/confirm/` | 确认批次并创建已识别的历史收入记录 |
@@ -140,6 +142,8 @@
 ```
 
 历史月总额必须属于当前月份之前的月份。同一月份只允许一种收入记录口径：不能把整月总额与逐笔收入混合，同一月份也不能重复保存两条整月总额。客户端可让用户输入月份，发送时使用该月内的约定日期；分析和 `recorded_month_count` 均按年月归集。
+
+`DELETE /api/v1/income/entries/{id}/` 只删除当前访客选中的一笔记录并返回 `204`；记录不存在或属于其他访客时返回 `404`。如果删掉的是该月最后一笔收入，同时清理空的财务月份，但保留同月带日期的工作成本记录。工作成本、收入形态和覆盖页面随后必须基于更新后的记录刷新。
 
 ## 5. 工作成本
 

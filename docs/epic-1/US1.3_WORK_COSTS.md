@@ -60,3 +60,9 @@ The separate local bug fix now publishes successful category and entry reads ind
 - The same live session completed housing tests at RM 1,230 and RM 3,030 total monthly cost. The latter correctly reported one short month and an RM 55 gap against RM 2,975 net income. Synthetic records remain in that isolated visitor: one income, two work-cost entries, and one housing scenario. No existing user's records were changed.
 - Live normal-path recovery does not prove the new partial-failure fix has deployed; the fault-injection regressions above ran locally. One Result/Back navigation loop was observed; Home → Re-test the house worked. Navigation investigation, production Debug settings, and any UI redesign remain separate work.
 - This follow-up is included with the frontend bug-fix delivery. LeanKit and formal ACs were not changed; pushing a commit alone does not verify its production deployment.
+
+## 2026-09-04 follow-up: income-deletion regression
+
+The income-deletion commit `f054241` was based on the prior UI fix but restored an older Work costs fragment. It reintroduced both the retired legacy-estimate notice and the duplicated per-row `YOUR DATA` labels while the translation key remained deleted, which rendered `[wc_legacy_note]`. Deleting income refreshes Work costs and exposed the restored fragment; deletion did not create the legacy value.
+
+The repaired frontend removes the restored fragment again and keeps the responsive recorded-row layout. `TECH-WC-08` now executes the reported path: create income and a dated work cost in one month, delete that month's last income, reopen Work costs, and verify that the cost remains, net income is unavailable, and neither retired legacy text nor row-level `YOUR DATA` appears. Two API tests cover guest isolation, repeated deletion, empty-period cleanup, sibling-entry retention, and work-cost preservation.

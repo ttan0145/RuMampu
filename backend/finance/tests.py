@@ -261,6 +261,49 @@ class IncomeApiTests(TestCase):
         self.assertEqual(first.status_code, 201)
         self.assertEqual(duplicate.status_code, 400)
 
+    def test_delete_income_is_isolated_cleans_empty_period_and_preserves_work_cost(self):
+        income = self.create_entry("1000.00", date="2026-09-01")
+        self.assertEqual(income.status_code, 201)
+        entry_id = income.json()["id"]
+        period_id = IncomeEntry.objects.get(id=entry_id).period_id
+        category_id = self.client.get("/api/v1/work-costs/").json()[0]["id"]
+        work_cost = self.client.post(
+            "/api/v1/work-costs/entries/",
+            data={"category_id": category_id, "amount": "50.00", "date": "2026-09-01"},
+            content_type="application/json",
+        )
+        self.assertEqual(work_cost.status_code, 201)
+
+        other = Client()
+        self.assertEqual(other.delete(f"{self.api_root}/entries/{entry_id}/").status_code, 404)
+        self.assertTrue(IncomeEntry.objects.filter(id=entry_id).exists())
+
+        deleted = self.client.delete(f"{self.api_root}/entries/{entry_id}/")
+        self.assertEqual(deleted.status_code, 204)
+        self.assertFalse(IncomeEntry.objects.filter(id=entry_id).exists())
+        self.assertFalse(FinancialPeriod.objects.filter(id=period_id).exists())
+        self.assertEqual(WorkCostEntry.objects.count(), 1)
+
+        summary = self.client.get("/api/v1/work-costs/summary/?month=2026-09").json()
+        self.assertFalse(summary["income_recorded"])
+        self.assertEqual(summary["work_cost_total"], "50.00")
+        self.assertIsNone(summary["income_after_work_costs"])
+        self.assertEqual(self.client.delete(f"{self.api_root}/entries/{entry_id}/").status_code, 404)
+
+    def test_delete_one_income_keeps_its_month_when_sibling_entries_remain(self):
+        first = self.create_entry("100.00", date="2026-09-01")
+        second = self.create_entry("200.00", date="2026-09-02")
+        period_id = IncomeEntry.objects.get(id=first.json()["id"]).period_id
+
+        deleted = self.client.delete(f"{self.api_root}/entries/{first.json()['id']}/")
+
+        self.assertEqual(deleted.status_code, 204)
+        self.assertTrue(FinancialPeriod.objects.filter(id=period_id).exists())
+        self.assertEqual(
+            [(entry["id"], entry["amount"]) for entry in self.record().json()["entries"]],
+            [(second.json()["id"], "200.00")],
+        )
+
     def test_custom_source_rejects_case_insensitive_duplicate(self):
         first = self.client.post(
             f"{self.api_root}/sources/",
@@ -297,6 +340,8 @@ class IncomeApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         paths = response.json()["paths"]
         self.assertIn("/api/v1/income/entries/", paths)
+        self.assertIn("/api/v1/income/entries/{entry_id}/", paths)
+        self.assertIn("delete", paths["/api/v1/income/entries/{entry_id}/"])
         self.assertIn("/api/v1/work-costs/", paths)
         self.assertIn("/api/v1/commitments/", paths)
         self.assertIn("/api/v1/expense-categories/", paths)

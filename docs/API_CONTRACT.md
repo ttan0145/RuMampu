@@ -71,6 +71,8 @@ After confirmation, the client retries the same data with `confirm_outlier: true
 | POST | `/api/v1/income/sources/` | Create a custom income source |
 | GET | `/api/v1/income/entries/` | Income entries |
 | POST | `/api/v1/income/entries/` | Create itemised income or a historical monthly total |
+| PATCH | `/api/v1/income/entries/{id}/` | Update one itemised or historical income entry |
+| DELETE | `/api/v1/income/entries/{id}/` | Delete one current-guest income entry |
 | POST | `/api/v1/income-imports/preview/` | Upload CSV and create a row preview without income entries |
 | GET | `/api/v1/income-imports/{id}/` | Read the current guest's import batch and row results |
 | POST | `/api/v1/income-imports/{id}/confirm/` | Confirm a batch and create recognised historical entries |
@@ -140,6 +142,8 @@ Historical monthly-total example:
 ```
 
 A historical monthly total must belong to a month before the current month. Each month uses one income-recording convention: a whole-month total cannot be mixed with itemised income, and two monthly totals cannot be saved for the same month. A client may ask for `YYYY-MM` and send an agreed date inside that month; analysis and `recorded_month_count` group by year and month.
+
+`DELETE /api/v1/income/entries/{id}/` removes only the current guest's selected entry and returns `204`; a missing or other-guest entry returns `404`. If it was the month's last income entry, the now-empty financial period is removed while dated work-cost entries remain. Work-cost, income-pattern, and coverage views must then refresh from the updated record.
 
 ## 5. Work costs
 

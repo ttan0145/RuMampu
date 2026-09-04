@@ -2,6 +2,12 @@
 
 Language: **English** | [Chinese (CN)](CHANGELOG.cn.md)
 
+## 2026-09-04 — Income deletion and Work costs regression protection
+
+- Removed a legacy Work costs notice and duplicated row provenance that returned in the income-deletion commit; restored the responsive row layout.
+- Added an end-to-end regression for deleting the last monthly income while preserving dated work costs and recalculating the month as having no income.
+- Added API coverage for ownership isolation, repeated deletion, empty-period cleanup, sibling preservation, and work-cost preservation; regenerated OpenAPI with the DELETE operation.
+
 ## 2026-08-28 — I1 backend-authoritative housing calculations
 
 Status: complete and verified for main delivery

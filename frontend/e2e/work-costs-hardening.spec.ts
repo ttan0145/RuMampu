@@ -216,4 +216,32 @@ test.describe('US1.3 engineering regression', { tag: ['@us1.3', '@hardening'] },
     await expect(rows(page).getByText(`${month}-01 · Petrol`, { exact: true })).toBeVisible();
     await expect(summary(page).getByText('RM 990.00', { exact: true })).toBeVisible();
   });
+
+  test('TECH-WC-08 — deleting the last monthly income keeps costs without restoring retired labels', async ({ page }) => {
+    const month = await currentWorkCostMonth(page);
+    await seedIncome(page, month);
+    await seedWorkCost(page, month);
+    await openCosts(page);
+    await expect(summary(page).getByText('RM 990.00', { exact: true })).toBeVisible();
+
+    await openMoneyScreen(page, 'Income');
+    const deleted = page.waitForResponse(response => (
+      response.request().method() === 'DELETE'
+      && /\/income\/entries\/\d+\/$/.test(response.url())
+    ));
+    await page.getByText('Remove', { exact: true }).click();
+    expect((await deleted).status()).toBe(204);
+    await expect(page.getByText('RM 1,000.00', { exact: true })).toHaveCount(0);
+
+    await openMoneyScreen(page, 'Work costs');
+    await expect(page.getByText('[wc_legacy_note]', { exact: true })).toHaveCount(0);
+    await expect(page.getByText(/Previous monthly estimates/)).toHaveCount(0);
+    await expect(page.getByText('Petrol · RM 50.00', { exact: true })).toHaveCount(0);
+
+    await expect(summary(page).getByText(`No income recorded for ${monthLabel(month)}. Add income before RuMampu can calculate this figure.`, { exact: true })).toBeVisible();
+    await expect(summary(page).getByText('RM 10.00 recorded work costs for this month.', { exact: true })).toBeVisible();
+    await expect(rows(page)).toHaveCount(1);
+    await expect(rows(page).getByText('RM 10.00', { exact: true })).toBeVisible();
+    await expect(rows(page).getByText(/YOUR DATA/)).toHaveCount(0);
+  });
 });

@@ -678,6 +678,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+    delete:
+      operationId: income_entry_delete
+      summary: Delete an income entry
+      parameters:
+      - in: path
+        name: entry_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Income
+      security:
+      - {}
+      responses:
+        '204':
+          description: No response body
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/income/record/:
     get:
       operationId: income_record_retrieve
