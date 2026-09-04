@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, Text, View, type DimensionValue } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useApp } from '../state';
 import {
@@ -14,6 +14,9 @@ import { HBar, Shimmer } from '../charts';
 import { ScreenShell } from './shell';
 import { isValidIsoDate } from '../validation';
 import { DatePickerField } from '../date-picker';
+
+const SHOW_SPENDING_LIMITS = false;
+const SHOW_EXPENSE_COMPLETENESS = false;
 
 function useCatLabel() {
   const { S, t } = useApp();
@@ -57,7 +60,9 @@ export function ExpensesScreen() {
       <View>
         <Fig value={rm(cur.total)} p="user" cls="h-xl" />
         <BodyS muted>{ex.length
-          ? `${t('ex_sofar', { m: curName })} · ${t(cur.days.size === 1 ? 'ex_days_one' : 'ex_days', { d: cur.days.size })}`
+          ? SHOW_EXPENSE_COMPLETENESS
+            ? `${t('ex_sofar', { m: curName })} · ${t(cur.days.size === 1 ? 'ex_days_one' : 'ex_days', { d: cur.days.size })}`
+            : t('ex_sofar', { m: curName })
           : t('ex_empty')}</BodyS>
       </View>
       <Btn label={t('ex_add')} onPress={() => go('expadd')} />
@@ -82,8 +87,10 @@ export function ExpensesScreen() {
       <BtnLine label={t('ex_bycat')} onPress={() => up(s => { s.exCatOpen = !s.exCatOpen; })} />
       {bycat}
       <BtnQuiet onPress={() => go('expmonths')}><IcLab name="calsum"><P>{t('ex_monthly')}</P></IcLab></BtnQuiet>
-      <BtnQuiet onPress={() => go('exlimits')}><IcLab name="gauge"><P>{t('ex_limits')}</P></IcLab></BtnQuiet>
-      <BodyS muted>{t('ex_rule')}</BodyS>
+      {SHOW_SPENDING_LIMITS ? (
+        <BtnQuiet onPress={() => go('exlimits')}><IcLab name="gauge"><P>{t('ex_limits')}</P></IcLab></BtnQuiet>
+      ) : null}
+      {SHOW_EXPENSE_COMPLETENESS ? <BodyS muted>{t('ex_rule')}</BodyS> : null}
     </ScreenShell>
   );
 }
@@ -98,19 +105,24 @@ export function ExpMonthsScreen() {
   const em = [...expByMonth(S.data).entries()];
   const asc = [...em].sort((a, b) => a[0] - b[0]);
   const max = Math.max(...em.map(([, v]) => v.total), 1);
-  const incomeKeys = new Set(monthsAgg(S.data).map(r => r.y * 12 + r.m));
+  const incomeKeys = SHOW_EXPENSE_COMPLETENESS
+    ? new Set(monthsAgg(S.data).map(r => r.y * 12 + r.m))
+    : new Set<number>();
 
   const chart = (
     <View style={{ paddingTop: 8, paddingRight: 6, paddingBottom: 4, paddingLeft: 2 }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 14, height: 96 }}>
         {asc.map(([k, v]) => {
           const h = Math.max(6, v.total / max * 100);
-          const full = v.days.size >= EXP_FULL_DAYS;
+          const barHeight = `${h}%` as DimensionValue;
           return (
             <View key={k} style={{ flex: 1, maxWidth: 48, height: '100%', justifyContent: 'flex-end' }}>
-              <View style={full
-                ? { height: `${h}%`, backgroundColor: C.ink, borderTopLeftRadius: 3, borderTopRightRadius: 3 }
-                : { height: `${h}%`, borderWidth: 1.5, borderStyle: 'dashed', borderColor: C.caution, borderTopLeftRadius: 3, borderTopRightRadius: 3 }} />
+              <View style={[
+                { height: barHeight, borderTopLeftRadius: 3, borderTopRightRadius: 3 },
+                SHOW_EXPENSE_COMPLETENESS && v.days.size < EXP_FULL_DAYS
+                  ? { borderWidth: 1.5, borderStyle: 'dashed', borderColor: C.caution }
+                  : { backgroundColor: C.ink },
+              ]} />
             </View>
           );
         })}
@@ -128,7 +140,6 @@ export function ExpMonthsScreen() {
 
   const rows = [...em].sort((a, b) => b[0] - a[0]).map(([k, v]) => {
     const y = Math.floor(k / 12), m = k % 12;
-    const full = v.days.size >= EXP_FULL_DAYS;
     const open = S.exMonthOpen === k;
     let detail: React.ReactNode = null;
     if (open) {
@@ -147,11 +158,13 @@ export function ExpMonthsScreen() {
           <Text style={{ fontSize: 16, color: C.ink }}>{open ? '−' : '+'}</Text>
         </Pressable>
         <View style={{ gap: 6, alignItems: 'flex-start' }}>
-          {full ? (
-            <BodyS muted>{t('ex_full') + (incomeKeys.has(k) ? ' · ' + t('ex_used') : '')}</BodyS>
-          ) : (
-            <FromR label={t(v.days.size === 1 ? 'ex_partial_one' : 'ex_partial', { d: v.days.size })} />
-          )}
+          {SHOW_EXPENSE_COMPLETENESS ? (
+            v.days.size >= EXP_FULL_DAYS ? (
+              <BodyS muted>{t('ex_full') + (incomeKeys.has(k) ? ' · ' + t('ex_used') : '')}</BodyS>
+            ) : (
+              <FromR label={t(v.days.size === 1 ? 'ex_partial_one' : 'ex_partial', { d: v.days.size })} />
+            )
+          ) : null}
           <Fig value={rm(v.total)} p="user" />
         </View>
         {detail}
@@ -163,7 +176,7 @@ export function ExpMonthsScreen() {
     <ScreenShell back title={t('ex_monthly')}>
       {chart}
       {rows}
-      <BodyS muted>{t('ex_rule')}</BodyS>
+      {SHOW_EXPENSE_COMPLETENESS ? <BodyS muted>{t('ex_rule')}</BodyS> : null}
     </ScreenShell>
   );
 }
