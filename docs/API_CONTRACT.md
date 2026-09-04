@@ -205,7 +205,7 @@ Update an amount:
 }
 ```
 
-The client sums all current active items and labels total commitments as calculated; the source items remain user data. v1 does not expose custom-commitment creation or retain historical versions of commitment amounts.
+The client sums all current active items and labels total commitments as calculated. The editable source fields remain guest-owned user data, but the UI does not repeat a provenance label beneath every input. v1 does not expose custom-commitment creation or retain historical versions of commitment amounts.
 
 ## 7. Daily expenses
 

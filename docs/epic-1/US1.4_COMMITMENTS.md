@@ -15,7 +15,7 @@ Language: **English** | [Chinese (CN)](US1.4_COMMITMENTS.cn.md)
 | AC1.4.3 Record savings contributions | Passed | Savings lists Monthly savings and saves RM100. |
 | AC1.4.4 Separate commitment groups visually | Passed | Living costs, Debt repayments, and Savings use three titled visual sections; see the [reloaded commitments screen](../../output/playwright/epic-1/evidence/ac1.4.1-6__commitments-after-reload.png). |
 | AC1.4.5 Show total commitments | Passed | The screen calculates `Total commitments RM 1,220` as RM700 + RM420 + RM100. |
-| AC1.4.6 Identify calculated total | Passed | The total carries a `CALCULATED` label while each input remains `YOUR DATA`. |
+| AC1.4.6 Identify calculated total | Passed | The total carries a `CALCULATED` label. Editable source fields are already self-evident controls, so they do not repeat a `YOUR DATA` label on every row. |
 
 ## Automated and browser acceptance
 
@@ -26,6 +26,10 @@ Language: **English** | [Chinese (CN)](US1.4_COMMITMENTS.cn.md)
 - The final browser console had no product errors; only Expo Web's development animation-driver warning appeared.
 - Acceptance fixed an initial-request race: the frontend now establishes a session cookie through the income-profile request before loading work costs and commitments in parallel.
 - Local acceptance data was cleaned after verification.
+
+## 2026-09-04 follow-up: provenance cleanup
+
+The Commitments screen no longer repeats `YOUR DATA` beneath every editable item. This changes presentation only: each amount is still persisted as guest-owned source data, while `Total commitments` retains `CALCULATED` because it is derived from the items. `TECH-CM-01` protects that distinction in a real browser.
 
 ## Data convention and boundaries
 

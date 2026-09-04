@@ -15,7 +15,7 @@
 | AC1.4.3 Record savings contributions | 通过 | Savings 分组显示 Monthly savings，并把金额保存为 RM100。 |
 | AC1.4.4 Separate commitment groups visually | 通过 | Living costs、Debt repayments、Savings 使用三个有标题的独立视觉分区；见[刷新后的承诺页面截图](../../output/playwright/epic-1/evidence/ac1.4.1-6__commitments-after-reload.png)。 |
 | AC1.4.5 Show total commitments | 通过 | 页面将三组有效项目汇总为 `Total commitments RM 1,220`，计算为 RM700 + RM420 + RM100。 |
-| AC1.4.6 Identify calculated total | 通过 | 总额旁显示 `CALCULATED` 来源标记；各输入项仍显示 `YOUR DATA`。 |
+| AC1.4.6 Identify calculated total | 通过 | 总额旁显示 `CALCULATED` 来源标记。各来源项已经是明确的可编辑输入框，因此不在每行重复显示 `YOUR DATA`。 |
 
 ## 自动化与浏览器验收
 
@@ -26,6 +26,10 @@
 - 最终浏览器控制台没有产品错误；仅有 Expo Web 关于原生动画驱动不可用的开发环境提示。
 - 验收过程中修复了首次并发请求可能创建多个访客会话的竞态：前端先完成收入档案请求以建立 session Cookie，再并行加载工作成本与承诺。
 - 验收结束后清理本地浏览器验收数据，不把示例承诺留在开发数据库中。
+
+## 2026-09-04 补充：来源标记清理
+
+Commitments 页面不再在每一个可编辑项目下重复显示 `YOUR DATA`。本次只调整展示语义：各金额仍是按访客保存的来源数据；`Total commitments` 是由这些项目求和得到，因此继续显示 `CALCULATED`。真实浏览器回归 `TECH-CM-01` 会固定这一区分。
 
 ## 数据口径与边界
 

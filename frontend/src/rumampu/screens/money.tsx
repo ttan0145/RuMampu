@@ -634,6 +634,7 @@ export function CommitScreen() {
           <BodyS muted>{t(sec === 'living' ? 'cm_living' : sec === 'debts' ? 'cm_debts' : 'cm_savings')}</BodyS>
           <EditList
             list={c[sec]}
+            showProvenance={false}
             onNum={(i, n) => up(s => { s.data.commitments[sec][i].a = n; })}
             onCommit={(i, n) => {
               const id = S.data.commitments[sec][i]?.id;

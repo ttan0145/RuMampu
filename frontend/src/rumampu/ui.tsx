@@ -332,12 +332,13 @@ export function EditRow({
 }
 
 export function EditList({
-  list, onNum, onCommit, decimal = false,
+  list, onNum, onCommit, decimal = false, showProvenance = true,
 }: {
   list: EditItem[];
   onNum: (i: number, n: number) => void;
   onCommit?: (i: number, n: number) => void;
   decimal?: boolean;
+  showProvenance?: boolean;
 }) {
   const { t } = useApp();
   return (
@@ -346,7 +347,7 @@ export function EditList({
         <EditRow
           key={c.id + i}
           label={c.custom ? (c.name || '') : t(c.k || '')}
-          p={c.p || 'user'}
+          p={showProvenance ? (c.p || 'user') : undefined}
           description={c.description}
           value={+c.a || 0}
           onNum={n => onNum(i, n)}

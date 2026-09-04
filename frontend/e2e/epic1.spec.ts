@@ -280,6 +280,15 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
     await captureEvidence(page, 'epic-1', 'ac1.4.1-6__commitments.png');
   });
 
+  test('TECH-CM-01 — editable commitments omit repeated provenance while the total stays calculated', { tag: ['@us1.4', '@hardening'] }, async ({ page }) => {
+    await openApp(page);
+    await openMoneyScreen(page, 'Commitments');
+
+    await expect(page.getByText(/YOUR DATA/)).toHaveCount(0);
+    await expect(page.getByText('Total commitments', { exact: true })).toBeVisible();
+    await expect(page.getByText(/CALCULATED$/)).toBeVisible();
+  });
+
   test('US1.5 — Record daily expenses manually', { tag: '@us1.5' }, async ({ page }) => {
     await openApp(page);
     await openMoneyScreen(page, 'Daily expenses');
