@@ -285,7 +285,7 @@ export function IncomeScreen() {
       <Card gap={8}>
         <View style={{ gap: 6 }}>
           <BodyS muted>{t('inc_amount')}</BodyS>
-          <TextField value={d.a} keyboardType="numbers-and-punctuation"
+          <TextField value={d.a} keyboardType="decimal-pad" inputMode="decimal"
             onChangeText={v => up(s => { s.incomeDraft.a = v; s.incomeDraft.flag = null; })} />
         </View>
         <View style={{ gap: 6 }}>

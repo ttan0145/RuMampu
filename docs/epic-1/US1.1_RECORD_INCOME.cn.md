@@ -10,7 +10,7 @@
 
 | Acceptance Criterion | 状态 | 实现与验收证据 |
 |---|---|---|
-| AC1.1.1 Enter income amount | 通过 | Income 表单提供 RM 金额输入；真实浏览器完成录入和保存。 |
+| AC1.1.1 Enter income amount | 通过 | Income 表单提供 RM 金额输入，手机端请求小数键盘，并在保存与展示过程中保留小数金额。 |
 | AC1.1.2 Enter income date | 通过 | 表单接受 `YYYY-MM-DD` 日期；前后端均校验真实日历日期。 |
 | AC1.1.3 Select an income source | 通过 | 真实浏览器确认可选 E-hailing、Freelance、Part-time (fixed)，也可进入自定义来源流程。 |
 | AC1.1.4 Use multiple income sources | 通过 | 自动化测试确认不同记录分别保留日期、金额和来源；浏览器使用三个不同来源保存记录。 |

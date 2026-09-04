@@ -10,7 +10,7 @@
 
 | Acceptance Criterion | 状态 | 实现与验收证据 |
 |---|---|---|
-| AC1.5.1 Enter an expense amount | 通过 | Add expense 表单显示 `Amount (RM)` 输入框；空金额提交会显示必须大于零的提示，API 同样拒绝零和负数。 |
+| AC1.5.1 Enter an expense amount | 通过 | Add expense 表单显示 `Amount (RM)` 输入框并在手机端请求小数键盘；浏览器确认小数金额在保存和展示时保持不变，空值、零和负数仍不可保存。 |
 | AC1.5.2 Select an expense category | 通过 | 分类以可选择的 Chip 呈现；真实浏览器分别选择 Groceries 与新建的 Pet supplies 保存支出。 |
 | AC1.5.3 Use predefined categories | 通过 | API 为每个访客建立 Meals、Groceries、Tolls & parking、Family、Other 五个预设分类；见[刷新后的表单截图](../../output/playwright/epic-1/evidence/ac1.5.1-5__add-expense-form-after-reload.png)。 |
 | AC1.5.4 Add a custom category | 通过 | 通过 `+ Your own category` 新建 `Pet supplies`，自动成为当前分类；刷新后该分类仍显示。 |

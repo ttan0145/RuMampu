@@ -10,7 +10,7 @@ Language: **English** | [Chinese (CN)](US1.5_MANUAL_EXPENSES.cn.md)
 
 | Acceptance criterion | Status | Implementation and acceptance evidence |
 |---|---|---|
-| AC1.5.1 Enter an expense amount | Passed | Add expense provides `Amount (RM)`. An empty submission shows a positive-amount message, and the API rejects zero and negative values. |
+| AC1.5.1 Enter an expense amount | Passed | Add expense provides `Amount (RM)` and requests a decimal keyboard on mobile. A browser preserves a decimal amount through saving and display; empty, zero, and negative amounts remain invalid. |
 | AC1.5.2 Select an expense category | Passed | Categories are selectable chips. A real browser saved expenses under Groceries and the new Pet supplies category. |
 | AC1.5.3 Use predefined categories | Passed | The API creates Meals, Groceries, Tolls & parking, Family, and Other for each guest; see the [form after reload](../../output/playwright/epic-1/evidence/ac1.5.1-5__add-expense-form-after-reload.png). |
 | AC1.5.4 Add a custom category | Passed | `+ Your own category` creates `Pet supplies`, selects it immediately, and keeps it after refresh. |

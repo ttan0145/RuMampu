@@ -86,6 +86,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
     await ac('AC1.1.1', 'Enter income amount', async () => {
       await expect(page.getByText('Amount (RM)', { exact: true })).toBeVisible();
       await expect(amountInput).toBeVisible();
+      await expect(amountInput).toHaveAttribute('inputmode', 'decimal');
     });
     await ac('AC1.1.2', 'Enter income date', async () => {
       await expect(page.getByText('Date', { exact: true })).toBeVisible();
@@ -111,7 +112,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
       await expect(page.getByText('An amount below zero can’t be saved.', { exact: true })).toBeVisible();
     });
 
-    await amountInput.fill('100');
+    await amountInput.fill('100.55');
     await chooseDay(page, 1);
     await page.getByText('E-hailing', { exact: true }).click();
     await ac('AC1.1.6', 'Save an income entry', async () => {
@@ -128,7 +129,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
     });
     await ac('AC1.1.7', 'Display existing entries', async () => {
       await expect(page.getByText('RM 120.00', { exact: true })).toBeVisible();
-      await expect(page.getByText('RM 100.00', { exact: true })).toBeVisible();
+      await expect(page.getByText('RM 100.55', { exact: true })).toBeVisible();
     });
     await ac('AC1.1.8', 'Identify user-entered values', async () => {
       await expect(page.getByText(/your data/i).first()).toBeVisible();
@@ -320,7 +321,8 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
 
     await ac('AC1.5.1', 'Enter an expense amount', async () => {
       await expect(page.getByText('Amount (RM)', { exact: true })).toBeVisible();
-      await amountInput.fill('55');
+      await expect(amountInput).toHaveAttribute('inputmode', 'decimal');
+      await amountInput.fill('55.45');
     });
     await ac('AC1.5.2', 'Select an expense category', async () => {
       await expect(page.getByText('Category', { exact: true })).toBeVisible();
@@ -344,7 +346,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
     await ac('AC1.5.6', 'Add the expense', async () => {
       await page.getByRole('button', { name: 'Add expense', exact: true }).click();
       await expect(page.getByText(/25 Aug · Pet supplies/)).toBeVisible();
-      await expect(page.getByText('RM 55.00', { exact: true }).first()).toBeVisible();
+      await expect(page.getByText('RM 55.45', { exact: true }).first()).toBeVisible();
     });
     await captureEvidence(page, 'epic-1', 'ac1.5.1-6__manual-expense-flow.png');
   });

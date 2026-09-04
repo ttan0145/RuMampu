@@ -259,7 +259,7 @@ export function ExpAddScreen() {
       <Card gap={8}>
         <View style={{ gap: 6 }}>
           <BodyS muted>{t('inc_amount')}</BodyS>
-          <TextField value={d.a} keyboardType="numbers-and-punctuation"
+          <TextField value={d.a} keyboardType="decimal-pad" inputMode="decimal"
             onChangeText={v => { setError(null); up(s => { s.expDraft.a = v; }); }} />
         </View>
         <View style={{ gap: 6 }}>

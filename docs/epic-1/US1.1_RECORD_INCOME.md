@@ -10,7 +10,7 @@ Language: **English** | [Chinese (CN)](US1.1_RECORD_INCOME.cn.md)
 
 | Acceptance criterion | Status | Implementation and acceptance evidence |
 |---|---|---|
-| AC1.1.1 Enter income amount | Passed | The Income form provides an RM amount field; a real browser entered and saved an amount. |
+| AC1.1.1 Enter income amount | Passed | The Income form provides an RM amount field, requests a decimal keyboard on mobile, and preserves a decimal amount through saving and display. |
 | AC1.1.2 Enter income date | Passed | The form accepts `YYYY-MM-DD`; frontend and backend both validate real calendar dates. |
 | AC1.1.3 Select an income source | Passed | A real browser selected E-hailing, Freelance, and Part-time (fixed) and could enter the custom-source flow. |
 | AC1.1.4 Use multiple income sources | Passed | Automated tests retain date, amount, and source per record; the browser saved entries using three sources. |

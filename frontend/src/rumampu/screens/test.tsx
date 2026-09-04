@@ -492,6 +492,7 @@ export function ShockScreen() {
             value={customPct}
             accessibilityLabel="Custom income shock percentage"
             keyboardType="decimal-pad"
+            inputMode="decimal"
             placeholder="e.g. 15"
             placeholderTextColor={C.ink40}
             onChangeText={setCustomPct}

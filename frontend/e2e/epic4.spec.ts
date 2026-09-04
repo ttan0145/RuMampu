@@ -200,9 +200,10 @@ test.describe('Epic 4 — Cash-Flow Forecast & Adjustment Planner', { tag: '@epi
       await custom.click();
       const customInput = page.getByLabel('Custom income shock percentage');
       await expect(customInput).toBeVisible();
-      await customInput.fill('15');
+      await expect(customInput).toHaveAttribute('inputmode', 'decimal');
+      await customInput.fill('15.5');
       await page.getByRole('button', { name: 'Done', exact: true }).click();
-      await expect(page.getByLabel('Income shock 15% result')).toBeVisible();
+      await expect(page.getByLabel('Income shock 15.5% result')).toBeVisible();
     });
 
     await ac('AC4.4.8', 'Identify income shock as hypothetical', async () => {
