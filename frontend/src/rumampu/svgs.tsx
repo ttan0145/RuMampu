@@ -279,11 +279,21 @@ const ICONS: Record<string, string> = {
   eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
   calday: '<rect x="3" y="4.5" width="18" height="17" rx="2"/><path d="M16 2.5v4M8 2.5v4M3 10.5h18"/><circle cx="12" cy="15.5" r="1.6"/>',
   swap: '<path d="M17 3.5l4 4-4 4"/><path d="M21 7.5H8"/><path d="M7 12.5l-4 4 4 4"/><path d="M3 16.5h13"/>',
+  chat: '<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-3.4-.7L3.5 20.5l1.2-4.2A8.5 8.5 0 1 1 21 11.5z"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/>',
 };
 
 export type IconName = keyof typeof ICONS & string;
 
-export function Ico({ name, size = 22 }: { name: string; size?: number }) {
-  const xml = `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${C.ink}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
+/* v22 assistant robot face — verbatim from the prototype's aibtn markup. */
+export function RobotIco({ size = 26, color = '#fff', arms = true }: { size?: number; color?: string; arms?: boolean }) {
+  const armPaths = arms
+    ? '<path d="M5.6 10.3H4.4a1 1 0 0 0-1 1v1.4a1 1 0 0 0 1 1h1.2M18.4 10.3h1.2a1 1 0 0 1 1 1v1.4a1 1 0 0 1-1 1h-1.2"/><path d="M9.5 19.6h5"/>'
+    : '';
+  const xml = `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="${color}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="4.2" r="1.1" fill="${color}" stroke="none"/><path d="M12 5.4v1.4"/><rect x="5.6" y="6.8" width="12.8" height="9.6" rx="4.2"/><circle cx="9.7" cy="11.3" r="1.25" fill="${color}" stroke="none"/><circle cx="14.3" cy="11.3" r="1.25" fill="${color}" stroke="none"/><path d="M9.6 14c.7.65 1.5 1 2.4 1s1.7-.35 2.4-1"/>${armPaths}</svg>`;
+  return <SvgXml xml={xml} width={size} height={size} />;
+}
+
+export function Ico({ name, size = 22, color }: { name: string; size?: number; color?: string }) {
+  const xml = `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color || C.ink}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
   return <SvgXml xml={xml} width={size} height={size} />;
 }

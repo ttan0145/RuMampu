@@ -13,7 +13,7 @@ export interface CostItem { id: string; k?: string; a: number; custom?: boolean;
 export interface WorkCostCategory { id: string; k?: string; custom?: boolean; name?: string; legacyMonthlyAmount?: number }
 export interface WorkCostEntry { id: string; categoryId: string; categoryName?: string; a: number; d: string }
 export interface Commitments { living: CostItem[]; debts: CostItem[]; savings: CostItem[] }
-export interface House { price: number; deposit: number; rate: number; years: number; knownPayment: number | null }
+export interface House { price: number | null; deposit: number; rate: number; years: number; knownPayment: number | null }
 export interface ExpenseCat { id: string; k?: string; custom?: boolean; name?: string }
 export interface ExpenseEntry {
   a: number;
@@ -70,7 +70,8 @@ export const MOCK: AppData = {
     savings: [{id:'save',k:'cm_save',a:100}]
   },
   commitPresets: ['rent','food','util','motor','ptptn','family','save'],
-  house: { price: 250000, deposit: 0, rate: 4.3, years: 35, knownPayment: null },
+  /* v22: no price prefill — the user types their own figure before running the test. */
+  house: { price: null, deposit: 0, rate: 4.3, years: 35, knownPayment: null },
   homeCosts: [
     {id:'maint',k:'hc_maint',a:150},{id:'insure',k:'hc_insure',a:55},{id:'assess',k:'hc_assess',a:20},{id:'quit',k:'hc_quit',a:5},{id:'parking',k:'hc_parking',a:0},{id:'other',k:'hc_other',a:0}
   ],

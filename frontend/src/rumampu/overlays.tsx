@@ -1,20 +1,26 @@
 import React from 'react';
 import {
-  Animated, Easing, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions,
+  Animated, Easing, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SvgXml } from 'react-native-svg';
 import { TAB_OF, Tab, useApp } from './state';
 import { STRINGS, Lang } from './strings';
-import { monthsAgg } from './calc';
-import { C, DISP_FONT } from './theme';
-import { Btn, BodyS, PROV_G } from './ui';
-import { Hero, Logo } from './svgs';
+import { monthsAgg, rm } from './calc';
+import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from './theme';
+import { Btn, BtnLine, BodyS, EditList, NumInput, PROV_G } from './ui';
+import { Ico, Logo } from './svgs';
+import { Ruma } from './ruma-view';
+import { IsoHouse, IsoIsland } from './isosvg';
+import { ISO_TIERS, villagePlay } from './village';
 import { DatePickerField } from './date-picker';
 import { isValidMoneyText } from './validation';
 
 /* ---------- bottom sheets ---------- */
 
-function SheetFrame({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+function SheetFrame({ children, onClose, scroll = false }: {
+  children: React.ReactNode; onClose: () => void; scroll?: boolean;
+}) {
   const insets = useSafeAreaInsets();
   return (
     <Modal transparent animationType="none" visible onRequestClose={onClose}>
@@ -25,6 +31,7 @@ function SheetFrame({ children, onClose }: { children: React.ReactNode; onClose:
         <View style={[
           sheetSt.sheet,
           { paddingBottom: 20 + insets.bottom },
+          scroll && { maxHeight: '92%' },
           Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null,
         ]}>
           {children}
@@ -34,17 +41,51 @@ function SheetFrame({ children, onClose }: { children: React.ReactNode; onClose:
   );
 }
 
+/* peekSheet — Ruma peeks over the top edge of the sheet. */
+function PeekSheet({ pose, title, body, onClose, doneLabel }: {
+  pose: string; title: string; body: string; onClose: () => void; doneLabel: string;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal transparent animationType="none" visible onRequestClose={onClose}>
+      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
+        </Pressable>
+        <View style={{ alignItems: 'center', marginBottom: -30, zIndex: 2 }}>
+          <Ruma w={96} pose={pose} float={false} />
+        </View>
+        <View style={[
+          sheetSt.sheet, { paddingBottom: 20 + insets.bottom, paddingTop: 34 },
+          Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null,
+        ]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <SheetH3 noMargin>{title}</SheetH3>
+            <Pressable onPress={onClose} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10 }}>
+              <Text style={{ fontSize: 18, color: C.ink }}>✕</Text>
+            </Pressable>
+          </View>
+          <BodyS style={{ marginTop: 4 }}>{body}</BodyS>
+          <View style={{ marginTop: 16 }}>
+            <Btn label={doneLabel} onPress={onClose} />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function Opt({ label, on, onPress }: { label: string; on?: boolean; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={[sheetSt.opt, on && { backgroundColor: C.card }]}>
-      <Text style={{ fontSize: 17, color: C.ink, fontWeight: on ? '600' : '400' }}>{label}</Text>
+      <Text style={{ fontFamily: BODY_FONT, fontSize: 17, color: C.ink, fontWeight: on ? '600' : '400' }}>{label}</Text>
       {on ? <Text style={{ fontSize: 17, color: C.brand }}>✓</Text> : null}
     </Pressable>
   );
 }
 
-function SheetH3({ children }: { children: React.ReactNode }) {
-  return <Text style={{ fontFamily: DISP_FONT, fontSize: 19, color: C.ink, marginBottom: 12 }}>{children}</Text>;
+function SheetH3({ children, noMargin }: { children: React.ReactNode; noMargin?: boolean }) {
+  return <Text style={{ fontFamily: DISP_FONT, fontSize: 19, color: C.ink, marginBottom: noMargin ? 0 : 12 }}>{children}</Text>;
 }
 
 function SheetInput(props: React.ComponentProps<typeof TextInput>) {
@@ -88,10 +129,217 @@ function isValidPastMonth(value: string): boolean {
   return year * 12 + month - 1 < now.getFullYear() * 12 + now.getMonth();
 }
 
+/* ---------- the quick (+) speed-dial ---------- */
+
+const QK_IN_ICO = 'banknote';
+const QK_OUT_ICO = 'receipt';
+
+function QuickMenu() {
+  const { S, t, up, go } = useApp();
+  const insets = useSafeAreaInsets();
+  if (S.sheet !== 'quick' && S.sheet !== 'quick2') return null;
+  const close = () => up(s => { s.sheet = null; });
+
+  const spGo = (kind: 'in' | 'out') => {
+    up(s => {
+      s.sheet = null;
+      if (kind === 'in') { s.incMode = 'scan'; s.incScan = { stage: 'pick', rows: [] }; }
+      else { s.exMode = 'scan'; s.scan = { stage: 'pick' }; }
+    });
+    go(kind === 'in' ? 'income' : 'expenses');
+  };
+
+  const item = (label: string, icon: React.ReactNode, onPress: () => void, delay: number) => (
+    <QItem key={label} label={label} icon={icon} onPress={onPress} delay={delay} />
+  );
+
+  return (
+    <View style={[StyleSheet.absoluteFill, { zIndex: 44 }]} pointerEvents="box-none">
+      <Pressable style={StyleSheet.absoluteFill} onPress={close}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
+      </Pressable>
+      <View style={{
+        position: 'absolute', left: 0, right: 0, bottom: 96 + insets.bottom,
+        alignItems: 'center', gap: 10,
+      }}>
+        {S.sheet === 'quick2' ? [
+          item(t('qk_income'), <QIo dir="in" />, () => spGo('in'), 100),
+          item(t('qk_expense'), <QIo dir="out" />, () => spGo('out'), 50),
+        ] : [
+          item(t('qk_income'), <Ico name={QK_IN_ICO} size={22} />, () => {
+            up(s => { s.sheet = null; s.incMode = 'type'; });
+            go('income');
+          }, 100),
+          item(t('qk_expense'), <Ico name={QK_OUT_ICO} size={22} />, () => {
+            up(s => { s.sheet = null; s.exMode = 'type'; });
+            go('expenses');
+          }, 50),
+          item(t('qk_scan'), <Ico name="camera" size={22} />, () => up(s => { s.sheet = 'quick2'; }), 0),
+        ]}
+      </View>
+    </View>
+  );
+}
+
+function QIo({ dir }: { dir: 'in' | 'out' }) {
+  return (
+    <View style={{
+      width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+      backgroundColor: dir === 'in' ? '#E4EFEC' : '#FBE6DA',
+    }}>
+      <Text style={{ fontWeight: '700', fontSize: 14, color: dir === 'in' ? '#2E6B6F' : '#B54F2B' }}>
+        {dir === 'in' ? '↑' : '↓'}
+      </Text>
+    </View>
+  );
+}
+
+function QItem({ label, icon, onPress, delay }: { label: string; icon: React.ReactNode; onPress: () => void; delay: number }) {
+  const anim = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    Animated.timing(anim, { toValue: 1, duration: 250, delay, easing: Easing.out(Easing.ease), useNativeDriver: true }).start();
+  }, [anim, delay]);
+  return (
+    <Animated.View style={{
+      opacity: anim,
+      transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }],
+    }}>
+      <Pressable onPress={onPress} style={sheetSt.qitem}>
+        {icon}
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 14.5, color: C.ink }}>{label}</Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+/* ---------- the saving village sheet ---------- */
+
+function VillageFlash() {
+  const { t, up } = useApp();
+  React.useEffect(() => {
+    const timer = setTimeout(() => up(s => { if (s.sheet === 'vflash') s.sheet = 'village'; }), 1100);
+    return () => clearTimeout(timer);
+  }, [up]);
+  return (
+    <Modal transparent animationType="none" visible onRequestClose={() => up(s => { s.sheet = 'village'; })}>
+      <Pressable style={{ flex: 1, backgroundColor: '#255A5E', alignItems: 'center', justifyContent: 'center', padding: 40 }}
+        onPress={() => up(s => { s.sheet = 'village'; })}>
+        <Text style={{
+          fontFamily: DISP_FONT, fontSize: 40, lineHeight: 46, letterSpacing: 1.6, color: '#fff',
+          textTransform: 'uppercase', textAlign: 'center',
+        }}>{t('vl_start')}</Text>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function VStat({ label, value, hi, gain }: { label: string; value: number; hi?: boolean; gain?: number }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: hi ? C.brand : C.ink, borderRadius: 12, paddingVertical: 6, paddingHorizontal: 8, alignItems: 'center' }}>
+      <Text style={{ fontFamily: BODY_FONT, fontSize: 10, letterSpacing: 0.8, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' }}>{label}</Text>
+      <Text style={{ fontFamily: DISP_FONT, fontSize: 18, lineHeight: 22, color: '#fff', fontVariant: ['tabular-nums'] }}>{value}</Text>
+      {gain ? (
+        <Text style={{ position: 'absolute', right: 8, top: -4, fontFamily: DISP_FONT, fontSize: 14, color: '#2E9E4E' }}>+{gain}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+function VillageSheet() {
+  const { S, t, up } = useApp();
+  const { width } = useWindowDimensions();
+  const v = S.village || { cells: new Array(16).fill(0), pop: [], score: 0, best: 0, moves: 0, gain: 0, built: 0, msg: '' };
+  const close = () => up(s => { s.sheet = null; });
+  const play = (dir: 'l' | 'r' | 'u' | 'd') => up(s => { villagePlay(s, dir, tier => t('vl_built', { t: t('vl_t' + tier) })); });
+
+  const pan = React.useRef(PanResponder.create({
+    onMoveShouldSetPanResponder: (_e, g) => Math.max(Math.abs(g.dx), Math.abs(g.dy)) > 18,
+    onPanResponderRelease: (_e, g) => {
+      if (Math.max(Math.abs(g.dx), Math.abs(g.dy)) < 24) return;
+      const dir = Math.abs(g.dx) > Math.abs(g.dy) ? (g.dx > 0 ? 'r' : 'l') : (g.dy > 0 ? 'd' : 'u');
+      play(dir);
+    },
+  })).current;
+
+  const n = v.cells.filter(Boolean).length;
+  const best = Math.max(0, ...v.cells);
+  const stats = `${t('vl_builtn', { b: v.built })} · ${t('vl_onplot', { n })}${best ? ' · ' + t('vl_best', { t: t('vl_t' + best) }) : ''}`;
+  const isleW = Math.min(width, 390) - 60;
+
+  return (
+    <SheetFrame onClose={close} scroll>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <View style={{ flex: 1 }}>
+          <SheetH3 noMargin>{t('vl_title')}</SheetH3>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+            <BodyS muted>{t('vl_short')}</BodyS>
+            <Pressable onPress={() => up(s => { s.vHelp = !s.vHelp; })} style={[sheetSt.vinfo, S.vHelp && { backgroundColor: C.ink, borderColor: C.ink }]}>
+              <Text style={{ fontFamily: DISP_FONT, fontSize: 11, color: S.vHelp ? '#fff' : C.ink64 }}>i</Text>
+            </Pressable>
+          </View>
+        </View>
+        <Pressable onPress={close} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10, marginTop: -8 }}>
+          <Text style={{ fontSize: 18, color: C.ink }}>✕</Text>
+        </Pressable>
+      </View>
+      {S.vHelp ? (
+        <View style={sheetSt.vhelp}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 13, color: C.ink }}>{t('vl_how')}</Text>
+          {[1, 2, 3, 4, 5].map(i => (
+            <BodyS key={i} style={{ marginTop: 3 }}>{i}. {t('vl_s' + i)}</BodyS>
+          ))}
+        </View>
+      ) : null}
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+        <VStat label={t('vl_score')} value={v.score} gain={v.gain || undefined} />
+        <VStat label={t('vl_bestscore')} value={v.best} hi />
+        <VStat label={t('vl_moves')} value={v.moves} />
+      </View>
+      <View {...pan.panHandlers} style={sheetSt.vscene}>
+        <View style={{ position: 'absolute', right: 18, top: 10 }}>
+          <SvgXml xml={'<svg viewBox="0 0 40 40" width="34" height="34" xmlns="http://www.w3.org/2000/svg"><circle cx="20" cy="20" r="11" fill="#FEC844"/></svg>'} width={34} height={34} />
+        </View>
+        <View style={{ position: 'absolute', left: 14, top: 12, opacity: 0.95 }}>
+          <SvgXml xml={'<svg viewBox="0 0 64 32" width="70" height="35" fill="#fff" xmlns="http://www.w3.org/2000/svg"><ellipse cx="18" cy="22" rx="14" ry="9"/><ellipse cx="34" cy="16" rx="16" ry="12"/><ellipse cx="49" cy="22" rx="12" ry="8"/></svg>'} width={70} height={35} />
+        </View>
+        <View style={{ position: 'absolute', left: 16, bottom: 18, zIndex: 2 }}>
+          <Ruma w={64} pose="happy" float={false} />
+        </View>
+        <View style={{ alignItems: 'center', marginTop: 16 }}>
+          <IsoIsland cells={v.cells} width={isleW} />
+        </View>
+      </View>
+      <Text style={{
+        fontFamily: DISP_FONT, minHeight: 18, textAlign: 'center', color: C.confirm,
+        fontSize: 13, marginTop: 6,
+      }}>{v.msg || ''}</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 4 }}>
+        {([['l', '←'], ['u', '↑'], ['d', '↓'], ['r', '→']] as const).map(([d, a]) => (
+          <Pressable key={d} onPress={() => play(d)} style={sheetSt.varrow}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: C.ink }}>{a}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <BodyS muted style={{ marginTop: 8 }}>{stats}</BodyS>
+      <View style={{ flexDirection: 'row', marginTop: 8 }}>
+        {ISO_TIERS.map((id, i) => (
+          <View key={id} style={{ flex: 1, alignItems: 'center' }}>
+            <IsoHouse tier={id} size={42} />
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 10.5, color: C.ink }}>{t('vl_t' + (i + 1))}</Text>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 10.5, color: C.ink64 }}>{Math.pow(2, i + 1)} pt</Text>
+          </View>
+        ))}
+      </View>
+    </SheetFrame>
+  );
+}
+
+/* ---------- sheet host ---------- */
+
 export function SheetHost() {
   const {
-    S, t, up, monthName, saveIncomeEntry, updateIncomeEntry, saveIncomeSource, saveWorkCostCategory,
-    saveExpenseCategory, toast,
+    S, t, up, monthName, saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource,
+    saveWorkCostCategory, saveExpenseCategory, toast,
   } = useApp();
   const sheet = S.sheet;
   const close = () => up(s => { s.sheet = null; });
@@ -105,6 +353,9 @@ export function SheetHost() {
   const [editSource, setEditSource] = React.useState('');
   const [editError, setEditError] = React.useState<'amount' | 'date' | 'source' | null>(null);
   const [saving, setSaving] = React.useState(false);
+  const [limitA, setLimitA] = React.useState('');
+  const [svName, setSvName] = React.useState('');
+  const [svPay, setSvPay] = React.useState('');
   React.useEffect(() => {
     setOwnName('');
     setPastError(null);
@@ -118,7 +369,15 @@ export function SheetHost() {
     setEditDate(manualEntry ? manualEntry.d : '');
     setEditSource(manualEntry ? manualEntry.s : '');
     setEditError(null);
-  }, [sheet, S.data.income]);
+    if (sheet === 'exlimit') setLimitA(S.data.expenseLimits.total ? String(S.data.expenseLimits.total) : '');
+    if (sheet === 'savename') setSvName(S.svDraft || '');
+    if (sheet === 'svedit') {
+      const k = S.keptTests[S.svIdx];
+      setSvName(k?.name || '');
+      setSvPay(k ? String(k.pay) : '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheet]);
 
   if (!sheet || sheet === 'shockcustom') return null;
 
@@ -145,6 +404,164 @@ export function SheetHost() {
         <BodyS>{t('provf_' + p)}</BodyS>
         <View style={{ marginTop: 16 }}>
           <Btn label={t('done')} onPress={close} />
+        </View>
+      </SheetFrame>
+    );
+  }
+
+  /* v22 peek sheets — Ruma leans over the top edge. */
+  if (sheet === 'plinfo') return <PeekSheet pose="happy" title={t('pl_title')} body={t('pl_note')} onClose={close} doneLabel={t('done')} />;
+  if (sheet === 'potadd') return <PeekSheet pose="count" title={t('sp_add_t')} body={t('sp_add_b')} onClose={close} doneLabel={t('done')} />;
+  if (sheet === 'mailhow') return <PeekSheet pose="happy" title={t('mh_title')} body={t('mh_body')} onClose={close} doneLabel={t('done')} />;
+
+  if (sheet === 'quick' || sheet === 'quick2') return <QuickMenu />;
+  if (sheet === 'vflash') return <VillageFlash />;
+  if (sheet === 'village') return <VillageSheet />;
+
+  /* v22: name your own job during get-to-know. */
+  if (sheet === 'kjobown') {
+    const save = () => {
+      const name = ownName.trim();
+      if (!name) return;
+      up(s => {
+        const id = 'own' + Date.now();
+        s.ownJobs.push({ id, name });
+        s.jobs.push(id);
+        s.sheet = null;
+      });
+    };
+    return (
+      <SheetFrame onClose={close}>
+        <SheetH3>{t('k_own')}</SheetH3>
+        <View style={{ gap: 8 }}>
+          <BodyS muted>{t('k_own_h')}</BodyS>
+          <SheetInput value={ownName} onChangeText={setOwnName} />
+          <Btn label={t('add')} onPress={save} />
+        </View>
+      </SheetFrame>
+    );
+  }
+
+  /* v22: loan assumptions behind the instalment row. */
+  if (sheet === 'loan') {
+    const h = S.data.house;
+    return (
+      <SheetFrame onClose={close}>
+        <SheetH3>{t('tx_loan_t')}</SheetH3>
+        <View style={{ gap: 8 }}>
+          <BodyS muted>{t('th_rate')}</BodyS>
+          <NumInput decimal value={h.rate} onNum={n => up(s => { s.data.house.rate = n; })} />
+          <BodyS muted>{t('th_ten')}</BodyS>
+          <NumInput decimal={false} value={h.years}
+            onNum={n => up(s => { s.data.house.years = Math.max(1, Math.trunc(n || 1)); })} />
+          <Btn label={t('done')} onPress={close} />
+        </View>
+      </SheetFrame>
+    );
+  }
+
+  /* v22: other monthly home costs behind the "other costs" row. */
+  if (sheet === 'hcosts') {
+    return (
+      <SheetFrame onClose={close} scroll>
+        <SheetH3>{t('tx_costs_t')}</SheetH3>
+        <View style={{ gap: 8 }}>
+          <BodyS muted>{t('tx_costs_h')}</BodyS>
+          <EditList
+            decimal
+            list={S.data.homeCosts.map(c => ({ ...c, p: 'assume' }))}
+            onNum={(i, n) => up(s => { s.data.homeCosts[i].a = n; })}
+          />
+          <Btn label={t('done')} onPress={close} />
+        </View>
+      </SheetFrame>
+    );
+  }
+
+  /* v22: monthly spending limit. */
+  if (sheet === 'exlimit') {
+    const save = () => {
+      const v = Math.max(0, parseFloat(limitA) || 0);
+      up(s => { s.data.expenseLimits.total = v; s.sheet = null; });
+      toast(t('ex_limit_saved'));
+    };
+    return (
+      <SheetFrame onClose={close}>
+        <SheetH3>{t('ex_limit_title')}</SheetH3>
+        <View style={{ gap: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink64 }}>RM</Text>
+            <View style={{ flex: 1 }}>
+              <SheetInput keyboardType="number-pad" inputMode="numeric" value={limitA} onChangeText={setLimitA} placeholder="1500" />
+            </View>
+          </View>
+          <BodyS muted>{t('ex_limit_hint')}</BodyS>
+          <Btn label={t('xe_save')} onPress={save} />
+        </View>
+      </SheetFrame>
+    );
+  }
+
+  /* v22: name a kept test. */
+  if (sheet === 'savename') {
+    return (
+      <SheetFrame onClose={close}>
+        <SheetH3>{t('sv_name_t')}</SheetH3>
+        <View style={{ gap: 8 }}>
+          <BodyS muted>{t('sv_name_l')}</BodyS>
+          <SheetInput value={svName} onChangeText={setSvName} autoFocus selectTextOnFocus />
+          <Btn label={t('rx_keep')} onPress={() => {
+            up(s => {
+              const name = (svName || s.svDraft || '').trim();
+              const pend = s.keptTests[s.keptTests.length - 1];
+              if (pend) pend.name = name || pend.name;
+              s.sheet = null;
+              s.stack = ['househome'];
+              s.route = 'savedtests';
+            });
+            toast(t('sv_kept_where'));
+          }} />
+        </View>
+      </SheetFrame>
+    );
+  }
+
+  /* v22: edit / delete a kept test. */
+  if (sheet === 'svedit' && S.keptTests[S.svIdx]) {
+    const k = S.keptTests[S.svIdx];
+    return (
+      <SheetFrame onClose={close}>
+        <SheetH3>{t('sv_edit_t')}</SheetH3>
+        <View style={{ gap: 8 }}>
+          <BodyS muted>{t('sv_name_l')}</BodyS>
+          <SheetInput value={svName} onChangeText={setSvName} />
+          <BodyS muted>{t('sv_pay_l')}</BodyS>
+          <SheetInput keyboardType="number-pad" inputMode="numeric" value={svPay} onChangeText={setSvPay} />
+          <BodyS muted>
+            {t('cp_short', { s: k.s, n: k.n })}{k.g ? ' · ' + t('gap_lbl') + ' ' + rm(k.g) : ''}
+          </BodyS>
+          <Btn label={t('done')} onPress={() => {
+            up(s => {
+              const kk = s.keptTests[s.svIdx];
+              if (kk) {
+                kk.name = svName.trim() || kk.name;
+                kk.pay = Math.max(0, Math.round(parseFloat(svPay) || kk.pay));
+              }
+              s.sheet = null;
+            });
+          }} />
+          <View style={{ alignItems: 'center' }}>
+            <BtnLine
+              label={S.svDelArm ? t('sv_del2') : t('sv_del')}
+              style={{ color: C.short, textDecorationColor: C.short, fontSize: 13.5 }}
+              onPress={() => up(s => {
+                if (!s.svDelArm) { s.svDelArm = true; return; }
+                s.keptTests.splice(s.svIdx, 1);
+                s.svDelArm = false;
+                s.sheet = null;
+              })}
+            />
+          </View>
         </View>
       </SheetFrame>
     );
@@ -206,6 +623,14 @@ export function SheetHost() {
           {editError === 'date' ? <BodyS>{t('inc_invalid_date')}</BodyS> : null}
           {editError === 'source' ? <BodyS>{t('inc_source')}</BodyS> : null}
           <Btn label={saving ? t('inc_saving') : t('done')} onPress={() => { void save(); }} />
+          <View style={{ alignItems: 'center' }}>
+            <BtnLine label={t('ie_del')} style={{ color: C.short, textDecorationColor: C.short, fontSize: 13.5 }}
+              onPress={() => {
+                void deleteIncomeEntry(editId)
+                  .then(() => { up(s => { s.sheet = null; }); toast(t('ie_deleted')); })
+                  .catch(() => toast(t('inc_save_failed'), 'error'));
+              }} />
+          </View>
         </View>
       </SheetFrame>
     );
@@ -313,82 +738,37 @@ const sheetSt = StyleSheet.create({
   sheet: {
     backgroundColor: C.paper,
     borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    padding: 20, maxHeight: '70%',
+    padding: 20, maxHeight: '80%',
   },
   opt: {
     minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     borderRadius: 12, paddingHorizontal: 12,
   },
+  qitem: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff',
+    borderRadius: 24, paddingHorizontal: 16, width: 200, minHeight: 46,
+    shadowColor: 'rgba(31,44,45,1)', shadowOpacity: 0.22, shadowRadius: 20, shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  vinfo: {
+    width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: C.ink40,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  vhelp: {
+    backgroundColor: '#F3F8F5', borderWidth: 1.5, borderColor: '#D5E3D9', borderRadius: 14,
+    paddingVertical: 10, paddingHorizontal: 14, marginTop: 10,
+  },
+  vscene: {
+    marginTop: 10, borderRadius: 18, overflow: 'hidden', backgroundColor: '#E2F1EE',
+    paddingTop: 26, paddingHorizontal: 6, paddingBottom: 4, minHeight: 230,
+  },
+  varrow: {
+    width: 46, height: 40, borderRadius: 12, backgroundColor: '#fff',
+    borderWidth: 1.5, borderColor: C.ink14, alignItems: 'center', justifyContent: 'center',
+  },
 });
 
-/* ---------- onboarding + splash ---------- */
-
-export function Onboarding() {
-  const { S, t, up } = useApp();
-  const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const i = S.onboard;
-  const cards = ['ob1', 'ob2', 'ob3'];
-
-  const anim = React.useRef(new Animated.Value(0)).current;
-  React.useEffect(() => {
-    anim.setValue(0);
-    Animated.timing(anim, { toValue: 1, duration: 400, easing: Easing.out(Easing.ease), useNativeDriver: true }).start();
-  }, [i, anim]);
-
-  const heroW = Math.min(330, width - 48);
-
-  return (
-    <View style={[StyleSheet.absoluteFill, {
-      backgroundColor: C.paper, zIndex: 50,
-      paddingTop: 24 + insets.top, paddingHorizontal: 24, paddingBottom: 24 + insets.bottom,
-    }]}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Pressable
-          style={{
-            minHeight: 44, paddingHorizontal: 10, justifyContent: 'center',
-            borderWidth: 1.5, borderColor: C.ink14, borderRadius: 10,
-          }}
-          onPress={() => up(s => { s.sheet = 'lang'; })}
-        >
-          <Text style={{ fontFamily: DISP_FONT, fontSize: 13, letterSpacing: 0.8, color: C.ink }}>
-            {S.lang.toUpperCase()} ▾
-          </Text>
-        </Pressable>
-        <Pressable
-          style={{ minWidth: 64, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
-          onPress={() => up(s => { s.onboarded = true; })}
-        >
-          <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink }}>{t('ob_skip')}</Text>
-        </Pressable>
-      </View>
-      <Animated.View style={{
-        flex: 1, alignItems: 'center', paddingTop: 6, gap: 14,
-        opacity: anim,
-        transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
-      }}>
-        <Hero index={i} width={heroW} />
-        <BodyS muted style={{ marginTop: 2, textAlign: 'center' }}>{t('ob_slogan')}</BodyS>
-        <Text style={{
-          fontFamily: DISP_FONT, fontSize: 19, lineHeight: 26, color: C.ink,
-          marginTop: 14, maxWidth: 300, minHeight: 120, textAlign: 'center',
-        }}>{t(cards[i])}</Text>
-      </Animated.View>
-      <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 20 }}>
-        {cards.map((_, j) => (
-          <View key={j} style={{
-            width: 8, height: 8, borderRadius: 4,
-            backgroundColor: j === i ? C.brand : C.ink14,
-          }} />
-        ))}
-      </View>
-      <Btn
-        label={i < 2 ? t('ob_next') : t('ob_start')}
-        onPress={() => up(s => { if (s.onboard < 2) s.onboard++; else s.onboarded = true; })}
-      />
-    </View>
-  );
-}
+/* ---------- splash ---------- */
 
 export function Splash() {
   const { S, t, up } = useApp();
@@ -413,7 +793,7 @@ export function Splash() {
     }).start();
     Animated.timing(wm, { toValue: 1, duration: 500, delay: 500, easing: Easing.out(Easing.ease), useNativeDriver: true }).start();
     Animated.timing(slg, { toValue: 1, duration: 500, delay: 720, easing: Easing.out(Easing.ease), useNativeDriver: true }).start();
-    const timer = setTimeout(end, 1800);
+    const timer = setTimeout(end, 3000);
     return () => clearTimeout(timer);
   }, [mark, wm, slg, end]);
 
@@ -469,48 +849,92 @@ export function ToastView() {
       <Text style={{ color: toastMsg.tone === 'error' ? C.short : C.confirm, fontSize: 18 }}>
         {toastMsg.tone === 'error' ? '!' : '✓'}
       </Text>
-      <Text style={{ color: C.paper, fontSize: 15, flexShrink: 1 }}>{toastMsg.msg}</Text>
+      <Text style={{ color: C.paper, fontSize: 15, flexShrink: 1, fontFamily: BODY_FONT }}>{toastMsg.msg}</Text>
     </Animated.View>
   );
 }
 
-/* ---------- tab bar ---------- */
+/* ---------- tab bar with the centre FAB ---------- */
 
-const TABS: [string, string, string][] = [
-  ['home', '⌂', 'tab_home'], ['money', '◔', 'tab_money'], ['test', '≟', 'tab_test'], ['prepare', '☰', 'tab_prepare'],
-];
+const TAB_ICO: Record<string, string> = {
+  home: '<path d="M4 11.5 12 5l8 6.5"/><path d="M6 10.5V19h12v-8.5"/>',
+  money: '<rect x="3.5" y="6.5" width="17" height="12" rx="2.5"/><path d="M15 12.5h5.5v3H15a1.5 1.5 0 0 1 0-3z"/>',
+  test: '<rect x="5" y="4.5" width="14" height="16" rx="2"/><path d="M9 4.5V3h6v1.5"/><path d="m9 13 2 2 4-4.5"/>',
+  profile: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="10" r="2.8"/><path d="M6.5 18c1.2-2.4 3.2-3.5 5.5-3.5s4.3 1.1 5.5 3.5"/>',
+};
 
-// EN: Epic 8 uses the shared TabBar to satisfy AC8.4 bottom navigation across
-// Home, Money, Test, and Prepare; the component itself is shared app infrastructure.
-// 中文：Epic 8 使用共享 TabBar 满足 AC8.4 中 Home、Money、Test、Prepare 的底部导航；组件本身属于共享基础设施。
+function tabIcoXml(id: string, on: boolean): string {
+  const color = on ? C.ink : 'rgba(60,81,82,0.64)';
+  return `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="${color}" stroke-width="${on ? 2.5 : 1.9}" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">${TAB_ICO[id]}</svg>`;
+}
+
+// EN: Epic 8 uses the shared TabBar to satisfy AC8.4 bottom navigation; v22
+// adds the centre + FAB whose speed-dial adds income / expense / scan quickly.
+// 中文：Epic 8 使用共享 TabBar 满足 AC8.4 底部导航；v22 增加中间的 + 悬浮按钮，
+// 其快捷菜单可快速记录收入 / 支出 / 扫描。
 export function TabBar() {
-  const { S, t, goTab } = useApp();
+  const { S, t, up, goTab } = useApp();
   const insets = useSafeAreaInsets();
   const active = TAB_OF[S.route] || 'home';
+  const quickOpen = S.sheet === 'quick';
+  const quickBack = S.sheet === 'quick2';
+
+  const tabBtn = (id: Tab, k: string) => {
+    const on = active === id;
+    return (
+      <Pressable
+        key={id}
+        onPress={() => goTab(id)}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: on }}
+        style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 4 }}
+      >
+        <SvgXml xml={tabIcoXml(id, on)} width={24} height={24} />
+        <Text style={{
+          fontFamily: DISP_FONT, fontSize: 11.5, letterSpacing: 0.23,
+          color: on ? C.ink : C.ink64,
+        }}>{t(k)}</Text>
+      </Pressable>
+    );
+  };
+
   return (
     <View style={{
-      flexDirection: 'row', borderTopWidth: 1.5, borderTopColor: C.ink14,
-      backgroundColor: C.paper, paddingBottom: insets.bottom,
+      flexDirection: 'row', alignItems: 'flex-end',
+      backgroundColor: C.paper, paddingTop: 6, paddingHorizontal: 4,
+      paddingBottom: 6 + insets.bottom,
+      shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.1, shadowRadius: 22, shadowOffset: { width: 0, height: -8 },
+      elevation: 12, zIndex: 46,
     }}>
-      {TABS.map(([id, ico, k]) => {
-        const on = active === id;
-        return (
-          <Pressable
-            key={id}
-            onPress={() => goTab(id as Tab)}
-            style={{
-              flex: 1, minHeight: 60, alignItems: 'center', justifyContent: 'center', gap: 3,
-              borderTopWidth: 3, borderTopColor: on ? C.brand : 'transparent',
-            }}
-          >
-            <Text style={{ fontSize: 18, lineHeight: 20, color: on ? C.brand : C.ink64 }}>{ico}</Text>
-            <Text style={{
-              fontFamily: DISP_FONT, fontSize: 12, letterSpacing: 0.5,
-              color: on ? C.brand : C.ink64,
-            }}>{t(k)}</Text>
-          </Pressable>
-        );
-      })}
+      {tabBtn('home', 'tab_home')}
+      {tabBtn('money', 'tab_money')}
+      <View style={{ flex: 1, alignItems: 'center', alignSelf: 'stretch', justifyContent: 'flex-end' }}>
+        <Pressable
+          onPress={() => up(s => { s.sheet = s.sheet === 'quick2' ? 'quick' : (s.sheet === 'quick' ? null : 'quick'); })}
+          accessibilityLabel={t('qk_title')}
+          style={({ pressed }) => [{
+            width: 60, height: 60, borderRadius: 30,
+            backgroundColor: quickOpen || quickBack ? C.ink : C.brand,
+            marginTop: -30, marginBottom: 8, borderWidth: 4, borderColor: C.paper,
+            alignItems: 'center', justifyContent: 'center',
+            shadowColor: quickOpen || quickBack ? 'rgba(31,44,45,1)' : 'rgba(74,145,149,1)',
+            shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 8 },
+            elevation: 8,
+          }, pressed && { transform: [{ translateY: 2 }] }]}
+        >
+          <SvgXml
+            xml={`<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">${quickBack ? '<path d="M19 12H5M12 5l-7 7 7 7"/>' : '<path d="M12 5v14M5 12h14"/>'}</svg>`}
+            width={26} height={26}
+            style={quickOpen ? { transform: [{ rotate: '45deg' }] } : undefined}
+          />
+        </Pressable>
+      </View>
+      {tabBtn('test', 'tab_test')}
+      {tabBtn('profile', 'tab_profile')}
     </View>
   );
 }
+
+/* ---------- header language / assistant buttons live in ui.Hdr ---------- */
+
+export const FONT_SEMI = SEMI_FONT;

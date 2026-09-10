@@ -34,35 +34,73 @@ import {
 /* Central app state — mirrors the prototype's `S` object and navigation model. */
 
 export type Route =
-  | 'home' | 'money' | 'income' | 'incomeimport' | 'workcosts' | 'commit' | 'pattern' | 'coverage' | 'record'
+  | 'home' | 'plan' | 'money' | 'income' | 'incomeimport' | 'workcosts' | 'commit' | 'pattern' | 'coverage' | 'record'
   | 'expenses' | 'expadd' | 'expscan' | 'expmonths' | 'exlimits'
   | 'house' | 'homecost' | 'precheck' | 'result' | 'range' | 'compare' | 'shock'
+  | 'househome' | 'savedtests' | 'profile'
   // EN: Epic 7 preview routes are registered for future Iteration 3 work; this
   // does not make them an Iteration 1 implementation.
   // 中文：Epic 7 预览路由为未来 Iteration 3 工作保留；这不代表它们是 Iteration 1 实现。
   | 'prepare' | 'upfront' | 'buffer' | 'docs' | 'pv_switch' | 'pv_month' | 'pv_compare';
 
-export type Tab = 'home' | 'money' | 'test' | 'prepare';
+/* v22 tab model: home / money / test (house) / profile, FAB in the middle. */
+export type Tab = 'home' | 'money' | 'test' | 'profile';
 
 export const TAB_OF: Record<Route, Tab> = {
-  home: 'home',
+  home: 'home', househome: 'test', savedtests: 'test',
   money: 'money', income: 'money', incomeimport: 'money', workcosts: 'money', commit: 'money', pattern: 'money',
   coverage: 'money', record: 'money', expenses: 'money', expadd: 'money', expscan: 'money',
   expmonths: 'money', exlimits: 'money',
   house: 'test', homecost: 'test', precheck: 'test', result: 'test', range: 'test',
   compare: 'test', shock: 'test',
-  prepare: 'prepare', upfront: 'prepare', buffer: 'prepare', docs: 'prepare',
-  pv_switch: 'prepare', pv_month: 'prepare', pv_compare: 'prepare',
+  plan: 'money', profile: 'profile', prepare: 'test', upfront: 'test', buffer: 'money', docs: 'test',
+  pv_switch: 'test', pv_month: 'test', pv_compare: 'test',
 };
 
 // EN: US8.2 stores the compact kept-test summary used by Your Record during the
 // current frontend session: payment, short months, tested months, and largest gap.
 // 中文：US8.2 在当前前端会话中保存“记录档案”需要的留存测试摘要：月供、短缺月份、测试月份和最大缺口。
-export interface KeptTest { pay: number; s: number; n: number; g: number }
+export interface KeptTest { name?: string; pay: number; s: number; n: number; g: number }
+
+/* v22 saving plan: the month's target split into uneven daily amounts. */
+export interface PlanState {
+  key: string; target: number; n: number; amounts: number[]; done: boolean[]; seed: number;
+}
+
+/* v22 saving village: a 4x4 merge board (2048-style) that grows with the plan. */
+export interface VillageState {
+  cells: number[]; pop: number[]; score: number; best: number; moves: number; gain: number; built: number;
+  msg?: string;
+}
+
+export type EntryPer = 'day' | 'week' | 'month';
+export type EntryMode = 'type' | 'scan' | 'csv';
+export type AuthMode = 'login' | 'signup' | 'forgot' | 'checkmail';
+
+export interface IncScanRow { a: number; d: string; s: string; low?: boolean; on: boolean }
+export interface IncScanState { stage: 'pick' | 'reading' | 'confirm'; rows: IncScanRow[] }
+export interface CsvMapState {
+  stage: 'pick' | 'map' | 'done';
+  err?: string;
+  headers?: string[];
+  rows?: string[][];
+  map?: { d: number; a: number; desc: number };
+  /* income: source id or 'desc'; expenses: category id or 'desc' */
+  cat?: string;
+  src?: string;
+  added?: number; skipped?: number; from?: string; to?: string;
+}
+export interface EntryEdit { i: number; a: number | string; d: string; s?: string; c?: string; per: EntryPer }
 export interface ScanState {
   stage: 'pick' | 'read' | 'confirm';
   thumb?: string | null;
   vals?: { m: string; d: string; a: number | string; c: string };
+  /* Which fields actually came from the receipt (AC6.1.10 — unread fields must
+     not be presented as extracted values). Absent means all fields did. */
+  src?: { m: boolean; d: boolean; a: boolean };
+  /* The category id the AI suggested (AC6.1.4 — labelled as an AI suggestion
+     while it remains the selected category). */
+  aiC?: string;
 }
 
 export interface AppState {
@@ -72,6 +110,38 @@ export interface AppState {
   onboard: number;
   onboarded: boolean;
   splash: boolean;
+  /* v22 entry flow: language → meet Ruma → auth, then the get-to-know pages. */
+  wstep: number;
+  authMode: AuthMode;
+  acctMade: boolean;
+  fgMail: string;
+  guest: boolean;
+  knew: boolean;
+  kstep: number;
+  jobs: string[];
+  ownJobs: { id: string; name: string }[];
+  lastMonth: string;
+  /* v22 saving plan + village game. */
+  plan: PlanState | null;
+  village: VillageState | null;
+  vHelp: boolean;
+  /* v22 misc UI state. */
+  moView: 'tiles' | 'list';
+  houseTab: 'test' | 'prep';
+  tryPay: number | null;
+  tryCust: boolean;
+  depMode: 'other' | null;
+  incPick: boolean;
+  incMode: EntryMode;
+  incScan: IncScanState;
+  incCsv: CsvMapState;
+  incEdit: EntryEdit | null;
+  exMode: EntryMode;
+  exCsv: CsvMapState;
+  exEdit: EntryEdit | null;
+  svIdx: number;
+  svDraft: string;
+  svDelArm: boolean;
   data: AppData;
   testRan: boolean;
   howOpen: boolean;
@@ -80,13 +150,13 @@ export interface AppState {
   dcOpen: boolean;
   docsChecked: string[];
   keptTests: KeptTest[];
-  expDraft: { a: string; c: string; d: string };
+  expDraft: { a: string; c: string; d: string; per: EntryPer };
   scan: ScanState;
   exCatOpen: boolean;
   exMonthOpen: number | null;
   shock: number;
   bought: boolean;
-  incomeDraft: { a: string; d: string; s: string; flag: 'invalid' | 'neg' | 'outlier' | null };
+  incomeDraft: { a: string; d: string; s: string; flag: 'invalid' | 'neg' | 'outlier' | null; per: EntryPer };
   incomeSync: 'disabled' | 'loading' | 'ready' | 'error';
   workCostSync: 'disabled' | 'loading' | 'ready' | 'error';
   workCostSelectedMonth: string;
@@ -98,6 +168,9 @@ export interface AppState {
   incomePatternSync: 'disabled' | 'idle' | 'loading' | 'ready' | 'error';
   coverageSync: 'disabled' | 'idle' | 'loading' | 'ready' | 'saving' | 'error';
   sheet: string | null;
+  /* US6.2 assistant: sheet visibility + per-session conversation history. */
+  assistantOpen: boolean;
+  assistantMsgs: { role: 'user' | 'assistant'; content: string }[];
 }
 
 function initialState(): AppState {
@@ -112,11 +185,20 @@ function initialState(): AppState {
     data.expenseCats = [];
     data.expenses = [];
   }
+  const today = todayIso();
   return {
     lang: 'en',
     route: 'home',
     stack: [],
     onboard: 0, onboarded: false, splash: true,
+    wstep: 0, authMode: 'login', acctMade: false, fgMail: '', guest: false,
+    knew: false, kstep: 0, jobs: ['taxi'], ownJobs: [], lastMonth: '',
+    plan: null, village: null, vHelp: false,
+    moView: 'tiles', houseTab: 'test',
+    tryPay: null, tryCust: false, depMode: null,
+    incPick: false, incMode: 'type', incScan: { stage: 'pick', rows: [] }, incCsv: { stage: 'pick' }, incEdit: null,
+    exMode: 'type', exCsv: { stage: 'pick' }, exEdit: null,
+    svIdx: 0, svDraft: '', svDelArm: false,
     data,
     testRan: false,
     howOpen: false, rgHowOpen: false, tcOpen: false, dcOpen: false,
@@ -124,12 +206,12 @@ function initialState(): AppState {
     // Iteration 1 current-session scope instead of account-level saved history.
     // 中文：每次 AppProvider 生命周期开始时 keptTests 为空，符合 Iteration 1 当前会话范围，而不是账号级历史保存。
     docsChecked: [], keptTests: [],
-    expDraft: { a: '', c: 'meals', d: '2026-08-23' },
+    expDraft: { a: '', c: 'meals', d: today, per: 'day' },
     scan: { stage: 'pick' },
     exCatOpen: false, exMonthOpen: null,
     shock: 0,
     bought: false,
-    incomeDraft: { a: '', d: '2026-08-21', s: 'ehail', flag: null },
+    incomeDraft: { a: '', d: today, s: 'ehail', flag: null, per: 'day' },
     incomeSync: INCOME_API_ENABLED ? 'loading' : 'disabled',
     workCostSync: INCOME_API_ENABLED ? 'loading' : 'disabled',
     workCostSelectedMonth: currentMonth,
@@ -141,12 +223,25 @@ function initialState(): AppState {
     incomePatternSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
     coverageSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
     sheet: null,
+    assistantOpen: false,
+    assistantMsgs: [],
   };
 }
 
 function currentMonthText(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+export function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export function lastMonthIso(): string {
+  const d = new Date();
+  const lm = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+  return `${lm.getFullYear()}-${String(lm.getMonth() + 1).padStart(2, '0')}-01`;
 }
 
 function localWorkCostSummary(data: AppData, month: string): ApiWorkCostMonthSummary {
@@ -383,7 +478,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const goTab = useCallback((tab: Tab) => {
     up(s => {
       s.stack = [];
-      if (tab === 'test') s.route = s.testRan ? 'result' : 'house';
+      if (tab === 'test') s.route = 'househome';
       else s.route = tab;
     });
   }, [up]);
@@ -396,10 +491,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const prev = s.stack.pop();
       if (prev) { s.route = prev; return; }
       const tab = TAB_OF[s.route] || 'home';
-      const root: Route = (tab === 'test') ? (s.testRan ? 'result' : 'house') : tab;
+      const root: Route = (tab === 'test') ? 'househome' : tab;
       const target: Tab = s.route === root ? 'home' : tab;
       s.stack = [];
-      if (target === 'test') s.route = s.testRan ? 'result' : 'house';
+      if (target === 'test') s.route = 'househome';
       else s.route = target;
     });
   }, [up]);

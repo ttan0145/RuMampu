@@ -2,21 +2,26 @@ import React from 'react';
 import {
   Pressable, StyleSheet, Text, TextInput, TextStyle, View, ViewStyle,
 } from 'react-native';
-import { C, DISP_FONT } from './theme';
-import { Ico, Logo } from './svgs';
+import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from './theme';
+import { Ico, RobotIco } from './svgs';
+import { RumaAvatar } from './ruma-view';
 import { useApp } from './state';
+import { ASSISTANT_UI_ENABLED } from './assistant';
 
 /* UI primitives — each maps 1:1 to a CSS class in the prototype. */
 
 export const PROV_G: Record<string, string> = { user: '●', official: '○', calc: '▸', assume: '▩' };
+
+/* Header shortforms per language — Bahasa Melayu reads BM in Malaysia. */
+export const LANG_SHORT: Record<string, string> = { en: 'EN', ms: 'BM', zh: 'ZH' };
 
 /* ---------- text ---------- */
 
 type Cls = 'h-xl' | 'h-l' | 'h-m' | 'body-s';
 
 const CLS_STYLE: Record<Cls, TextStyle> = {
-  'h-xl': { fontSize: 40, lineHeight: 44, letterSpacing: -0.4 },
-  'h-l': { fontSize: 26, lineHeight: 32 },
+  'h-xl': { fontSize: 26, lineHeight: 32, letterSpacing: -0.26 },
+  'h-l': { fontSize: 22, lineHeight: 28 },
   'h-m': { fontSize: 19, lineHeight: 26 },
   'body-s': { fontSize: 13, lineHeight: 18 },
 };
@@ -30,12 +35,14 @@ export function Display({ cls = 'h-m', children, style }: { cls?: Cls; children:
 }
 
 export function P({ children, style }: { children: React.ReactNode; style?: TextStyle }) {
-  return <Text style={[{ fontSize: 16, lineHeight: 24, color: C.ink }, style]}>{children}</Text>;
+  return <Text style={[{ fontFamily: BODY_FONT, fontSize: 16, lineHeight: 24, color: C.ink }, style]}>{children}</Text>;
 }
 
-export function BodyS({ muted, children, style }: { muted?: boolean; children: React.ReactNode; style?: TextStyle }) {
+export function BodyS({ muted, children, style, numberOfLines }: {
+  muted?: boolean; children: React.ReactNode; style?: TextStyle; numberOfLines?: number;
+}) {
   return (
-    <Text style={[{ fontSize: 13, lineHeight: 18, color: muted ? C.ink64 : C.ink }, style]}>{children}</Text>
+    <Text numberOfLines={numberOfLines} style={[{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: muted ? C.ink64 : C.ink }, style]}>{children}</Text>
   );
 }
 
@@ -69,8 +76,40 @@ export function NoteC({ children }: { children: React.ReactNode }) {
 
 /* ---------- header ---------- */
 
-export function Hdr({ back, title, brand }: { back?: boolean; title?: string; brand?: boolean }) {
+/* v22 header. Tab roots share the greeting header (Ruma avatar + time-of-day
+   greeting + eyebrow tab label); pushed screens keep the back arrow, the title
+   and a small robot button that opens Ask RuMampu. Language selection moved to
+   Profile › Language (US8.3), so the header no longer carries a lang button. */
+export function Hdr({ back, title, brand, greet, right }: {
+  back?: boolean; title?: string; brand?: boolean; greet?: boolean; right?: React.ReactNode;
+}) {
   const { t, S, backNav, up } = useApp();
+
+  if (brand || greet) {
+    const h = new Date().getHours();
+    const g = t(h < 12 ? 'hd_morning' : h < 18 ? 'hd_afternoon' : 'hd_evening');
+    return (
+      <View>
+        <View style={[st.hdr, { paddingBottom: title ? 2 : 10 }]}>
+          <RumaAvatar size={44} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 16, color: C.ink64 }}>{g}</Text>
+            <Text numberOfLines={1} style={{ fontFamily: DISP_FONT, fontSize: 19, lineHeight: 22, color: C.ink }}>
+              {S.guest ? t('hd_guest') : t('hd_welcome')}
+            </Text>
+          </View>
+          {right}
+        </View>
+        {title ? (
+          <Text style={{
+            fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.99, textTransform: 'uppercase',
+            color: C.ink64, paddingHorizontal: 20, paddingBottom: 8,
+          }}>{title}</Text>
+        ) : null}
+      </View>
+    );
+  }
+
   return (
     <View style={st.hdr}>
       {back ? (
@@ -78,23 +117,21 @@ export function Hdr({ back, title, brand }: { back?: boolean; title?: string; br
           <Text style={{ fontSize: 20, color: C.ink }}>←</Text>
         </Pressable>
       ) : null}
-      {brand ? (
-        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9 }}>
-          <Logo size={28} />
-          <Text style={{ fontFamily: DISP_FONT, fontSize: 21, color: C.ink, letterSpacing: 0.2 }}>RuMampu</Text>
-        </View>
-      ) : (
-        <Text style={{ flex: 1, fontFamily: DISP_FONT, fontSize: 19, color: C.ink, fontVariant: ['tabular-nums'] }}>
-          {title || ''}
-        </Text>
-      )}
-      {/* EN: US8.3 uses this Header control to open language selection; the rest of Header remains shared UI. */}
-      {/* 中文：US8.3 使用这个 Header 控件打开语言选择；Header 其他部分仍是共享 UI。 */}
-      <Pressable style={st.langbtn} onPress={() => up(s => { s.sheet = 'lang'; })} accessibilityLabel={t('lang_pick')}>
-        <Text style={{ fontFamily: DISP_FONT, fontSize: 13, letterSpacing: 0.8, color: C.ink }}>
-          {S.lang.toUpperCase()} ▾
-        </Text>
-      </Pressable>
+      <Text style={{ flex: 1, fontFamily: DISP_FONT, fontSize: 19, color: C.ink, fontVariant: ['tabular-nums'] }}>
+        {title || ''}
+      </Text>
+      {right}
+      {/* US6.2: every pushed screen keeps the small assistant entry (AC6.2.15);
+          hidden together with the rest of the assistant UI for now. */}
+      {ASSISTANT_UI_ENABLED ? (
+        <Pressable
+          style={st.aibtnSmall}
+          onPress={() => up(s => { s.assistantOpen = true; })}
+          accessibilityLabel={t('ai_title')}
+        >
+          <RobotIco size={17} arms={false} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -392,9 +429,11 @@ const st = StyleSheet.create({
     paddingHorizontal: 20,
   },
   iconbtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
-  langbtn: {
-    minHeight: 44, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 4,
-    borderWidth: 1.5, borderColor: C.ink14, borderRadius: 10,
+  aibtnSmall: {
+    width: 32, height: 32, borderRadius: 10, backgroundColor: C.brand,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: 'rgba(74,145,149,1)', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   card: { backgroundColor: C.card, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: C.ink14 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },

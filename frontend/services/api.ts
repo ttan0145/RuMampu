@@ -11,6 +11,12 @@ function getClientId(): string | null {
     return null;
   }
 
+  // In Playwright runs the browser app and the tests' request seeding must
+  // share one guest profile, so identity stays on the shared session cookie.
+  if (process.env.EXPO_PUBLIC_E2E === '1') {
+    return null;
+  }
+
   const storageKey = 'rumampu_client_id';
   let clientId = window.localStorage.getItem(storageKey);
 

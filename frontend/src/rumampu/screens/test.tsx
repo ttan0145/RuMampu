@@ -9,97 +9,326 @@ import {
   getHousingScenario, getHousingTestResult, getPreHousingResult,
   setHousingScenario, setHousingTestResult, setPreHousingResult,
 } from '../../../services/housingSession';
-import { Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SvgXml } from 'react-native-svg';
 import { useApp } from '../state';
-import { nf, rm } from '../calc';
+import { monthsAgg, nf, rm } from '../calc';
 import { unrepresentedCoverageMonths } from '../money';
 import {
-  BodyS, Btn, BtnLine, BtnQuiet, Card, Chip, Chips, Display, Divider, EditList,
-  Fig, FigRow, IcLab, KV, NoteC, NumInput, P, Prov,
+  BodyS, Btn, BtnLine, Card, Chip, Chips, Display, Divider, EditList,
+  Fig, FigRow, KV, NoteC, NumInput, P, Prov,
 } from '../ui';
-import { C, DISP_FONT } from '../theme';
+import { Ico } from '../svgs';
+import { Ruma } from '../ruma-view';
+import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { Band, Waterline } from '../charts';
 import { ScreenShell } from './shell';
+import { PrepareBody } from './prepare';
 import { useHousingCalculation } from '../useHousingCalculation';
 import { ApiError } from '../../../services/api';
 
-export function HouseScreen() {
-  const { S, t, up, go } = useApp();
+/* v22 house test — the friendly two-card flow: an intro with Ruma, then one
+   txcard with price, deposit chips, instalment/other-cost rows and the Run
+   button. All figures stay backend-authoritative via useHousingCalculation
+   and the housing service. */
+
+function extrasTotal(data: { homeCosts: { a: number }[] }): number {
+  return data.homeCosts.reduce((a, c) => a + (+c.a || 0), 0);
+}
+
+function useRunTest() {
+  const { S, t, up, go, toast } = useApp();
+  const [running, setRunning] = React.useState(false);
+  const run = () => {
+    const h = S.data.house;
+    if (h.knownPayment == null && !((h.price || 0) > 0)) {
+      toast(t('tx_need_price'), 'error');
+      return;
+    }
+    setRunning(true);
+    void (async () => {
+      try {
+        const currentScenario = getHousingScenario();
+        const scenarioRequest = currentScenario
+          ? updateHousingScenario(currentScenario.id, S.data).catch(error => {
+              // A scenario ID can become stale after switching between the
+              // local backend and the deployed backend. Recreate it once.
+              if (error instanceof ApiError && error.status === 404) {
+                setHousingScenario(null);
+                return createHousingScenario(S.data);
+              }
+              throw error;
+            })
+          : createHousingScenario(S.data);
+        const [preHousing, scenario] = await Promise.all([
+          runPreHousingCheck(),
+          scenarioRequest,
+        ]);
+        setHousingScenario(scenario);
+        const housingTest = await runHousingTest(scenario.id);
+        setPreHousingResult(preHousing);
+        setHousingTestResult(housingTest);
+        up(state => {
+          state.testRan = true;
+          state.tryPay = null;
+          state.shock = 0;
+          state.howOpen = false;
+          state.rgHowOpen = false;
+        });
+        go(preHousing.has_existing_shortfall ? 'precheck' : 'result');
+      } catch {
+        toast(t('housing_run_failed'), 'error');
+      } finally {
+        setRunning(false);
+      }
+    })();
+  };
+  return { run, running };
+}
+
+function TxRow({ label, sub, prov, value, editLabel, onEdit, total }: {
+  label: string; sub?: string; prov?: string; value: string;
+  editLabel?: string; onEdit?: () => void; total?: boolean;
+}) {
+  return (
+    <View style={[tx.txrow, total && { borderTopWidth: 2, borderTopColor: C.ink, marginTop: 12 }]}>
+      <View style={{ flexShrink: 1 }}>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 13.5, color: total ? C.ink : C.ink64, fontWeight: total ? '600' : '400' }}>{label}</Text>
+        {sub ? <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, color: C.ink40 }}>{sub}</Text> : null}
+        {prov ? <View style={{ marginTop: 3 }}><Prov p={prov} /></View> : null}
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: total ? 19 : 16, color: C.ink, fontVariant: ['tabular-nums'] }}>{value}</Text>
+        {onEdit && editLabel ? (
+          <Pressable onPress={onEdit} hitSlop={8}>
+            <Text style={{ fontFamily: SEMI_FONT, fontSize: 12, color: '#2E6B6F', textDecorationLine: 'underline' }}>{editLabel}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+export function HouseBody() {
+  const { S, t, up } = useApp();
   const h = S.data.house;
   const calc = useHousingCalculation(S.data);
-  const inst = calc?.monthly_instalment ?? 0;
+  const { run, running } = useRunTest();
+  const inst = h.knownPayment != null ? +h.knownPayment : (calc?.monthly_instalment ?? 0);
+  const extras = extrasTotal(S.data);
   const known = h.knownPayment != null;
+  const n = monthsAgg(S.data).length;
+  /* The context pill mirrors the prototype's local carryRange(): the quietest
+     and the median month's leftover. Presentation only — the test itself stays
+     backend-authoritative. */
+  const cr = (() => {
+    const s = monthsAgg(S.data).map(r => r.surplus).sort((a, b) => a - b);
+    if (!s.length) return null;
+    const lo = s[0];
+    const hi = (s.length % 2) ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
+    return { lo, hi };
+  })();
+
+  const price = h.price;
+  const pct = price ? Math.round(h.deposit / price * 100) : 0;
+  const [priceTxt, setPriceTxt] = React.useState(price != null ? String(price) : '');
+  const depOther = S.depMode === 'other' || ![0, 10, 20].includes(pct);
+
+  const depChip = (p: number) => (
+    <Pressable key={p}
+      onPress={() => up(s => {
+        s.depMode = null;
+        const pr = s.data.house.price || 0;
+        s.data.house.deposit = Math.round(pr * p / 100);
+      })}
+      style={[tx.depchip, (S.depMode !== 'other' && pct === p) && tx.depchipOn]}>
+      <Text style={{ fontFamily: SEMI_FONT, fontSize: 13, color: (S.depMode !== 'other' && pct === p) ? '#fff' : C.ink }}>{p}%</Text>
+    </Pressable>
+  );
+
+  const intro = (
+    <View style={tx.txintro}>
+      <Ruma w={84} pose="count" float={false} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 17, lineHeight: 22, color: C.ink }}>{t('tx_intro_t')}</Text>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: C.ink, marginTop: 4 }}>{t('tx_intro', { n })}</Text>
+        {cr ? (
+          <View style={tx.txctx}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#E0A800' }} />
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 12, color: C.ink, flexShrink: 1 }}>
+              {t('tx_ctx', { lo: rm(Math.max(0, cr.lo)), hi: rm(cr.hi) })}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={{ gap: 16 }}>
+      {intro}
+      <View style={tx.txcard}>
+        {!known ? (
+          <>
+            <Text style={tx.lbl}>{t('tx_house')}</Text>
+            <BodyS muted>{t('tx_price')}</BodyS>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+              <Text style={{ fontFamily: DISP_FONT, fontSize: 18, color: C.ink64 }}>RM</Text>
+              <TextInput
+                value={priceTxt}
+                onChangeText={v => {
+                  setPriceTxt(v);
+                  const nn = parseFloat(v);
+                  up(s => { s.data.house.price = isFinite(nn) && nn > 0 ? nn : null; });
+                }}
+                keyboardType="number-pad"
+                inputMode="numeric"
+                placeholder={t('tx_price_ph')}
+                placeholderTextColor={C.ink40}
+                style={tx.txamt}
+              />
+            </View>
+            <BodyS muted style={{ marginTop: 12 }}>{t('tx_dep')} · {rm(h.deposit)}</BodyS>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8, alignItems: 'center' }}>
+              {[0, 10, 20].map(depChip)}
+              <Pressable onPress={() => up(s => { s.depMode = 'other'; })}
+                style={[tx.depchip, depOther && tx.depchipOn]}>
+                <Text style={{ fontFamily: SEMI_FONT, fontSize: 13, color: depOther ? '#fff' : C.ink }}>{t('tx_dep_other')}</Text>
+              </Pressable>
+              {depOther ? (
+                <NumInput value={h.deposit} decimal={false}
+                  onNum={nn => up(s => { s.data.house.deposit = Math.max(0, nn); })}
+                  style={{ width: 110, minHeight: 32, fontSize: 13, paddingHorizontal: 10, borderRadius: 16 }}
+                  accessibilityLabel={t('tx_dep')} />
+              ) : null}
+            </View>
+            <TxRow label={t('tx_inst')} sub={t('tx_loan', { r: h.rate, y: h.years })} prov="assume"
+              value={rm(inst)} editLabel={t('edit')} onEdit={() => up(s => { s.sheet = 'loan'; })} />
+            <TxRow label={t('tx_other')} prov="assume"
+              value={rm(extras)} editLabel={t('edit')} onEdit={() => up(s => { s.sheet = 'hcosts'; })} />
+            <TxRow total label={t('tx_total')} value={rm(inst + extras)} />
+            <View style={{ marginTop: 14 }}>
+              <Btn disabled={running} label={running ? t('housing_running') : t('tx_run')} onPress={run} />
+            </View>
+            <View style={{ alignItems: 'center', marginTop: 6 }}>
+              <BtnLine label={t('tx_known')} style={{ fontSize: 13 }}
+                onPress={() => up(s => { s.data.house.knownPayment = Math.round(calc?.monthly_instalment ?? 0); })} />
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={tx.lbl}>{t('tx_known_lbl')}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+              <Text style={{ fontFamily: DISP_FONT, fontSize: 18, color: C.ink64 }}>RM</Text>
+              <TextInput
+                value={String(+(h.knownPayment || 0) || '')}
+                onChangeText={v => up(s => { s.data.house.knownPayment = parseFloat(v) || 0; })}
+                keyboardType="number-pad"
+                inputMode="numeric"
+                placeholder="0"
+                placeholderTextColor={C.ink40}
+                style={tx.txamt}
+              />
+            </View>
+            <TxRow label={t('tx_other')} prov="assume"
+              value={rm(extras)} editLabel={t('edit')} onEdit={() => up(s => { s.sheet = 'hcosts'; })} />
+            <TxRow total label={t('tx_total')} value={rm(inst + extras)} />
+            <View style={{ marginTop: 14 }}>
+              <Btn disabled={running} label={running ? t('housing_running') : t('tx_run')} onPress={run} />
+            </View>
+            <View style={{ alignItems: 'center', marginTop: 6 }}>
+              <BtnLine label={t('tx_back_price')} style={{ fontSize: 13 }}
+                onPress={() => up(s => { s.data.house.knownPayment = null; })} />
+            </View>
+          </>
+        )}
+      </View>
+    </View>
+  );
+}
+
+/* v22 House tab home: saved-tests chip, test / prepare segments. */
+export function HousehomeScreen() {
+  const { S, t, up, go } = useApp();
+  const tab = S.houseTab || 'test';
+  return (
+    <ScreenShell greet title={t('tab_test')} right={
+      <Pressable onPress={() => go('savedtests')} style={tx.savedchip} accessibilityLabel={t('sv_title')}>
+        <SvgXml xml={`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="${C.ink}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M6.5 3.5h11V21L12 17l-5.5 4z"/></svg>`} width={13} height={13} />
+        <Text style={{ fontFamily: SEMI_FONT, fontSize: 12, color: C.ink }}>{t('sv_title')}</Text>
+        {S.keptTests.length ? (
+          <View style={tx.savedchipN}><Text style={{ fontFamily: DISP_FONT, fontSize: 10, color: '#fff' }}>{S.keptTests.length}</Text></View>
+        ) : null}
+      </Pressable>
+    }>
+      <View style={tx.inseg}>
+        {([['test', 'hh_test'], ['prep', 'hh_prep']] as const).map(([v, k]) => (
+          <Pressable key={v} onPress={() => up(s => { s.houseTab = v; })}
+            style={[tx.insegBtn, tab === v && tx.insegBtnOn]}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 13, color: tab === v ? C.ink : C.ink64 }}>{t(k)}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {tab === 'prep' ? <PrepareBody /> : <HouseBody />}
+    </ScreenShell>
+  );
+}
+
+export function HouseScreen() {
+  const { t } = useApp();
   return (
     <ScreenShell back title={t('th_title')}>
-      {!known ? (
-        <>
-          <Card gap={8}>
-            <View style={{ gap: 6 }}>
-              <BodyS muted>{t('th_price')}</BodyS>
-              <NumInput value={h.price} onNum={n => up(s => { s.data.house.price = n; })} />
-            </View>
-            <View style={{ gap: 6 }}>
-              <BodyS muted>{t('th_dep')}</BodyS>
-              <NumInput value={h.deposit} onNum={n => up(s => { s.data.house.deposit = Math.max(0, n); })} />
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <BodyS muted>{t('th_dep0')}</BodyS>
-              <Prov p="official" />
-            </View>
-            <KV k={t('th_fin')}><Fig value={rm(calc?.financing_amount ?? 0)} p="calc" /></KV>
-            <View style={{ gap: 6 }}>
-              <BodyS muted>{t('th_rate')}</BodyS>
-              <NumInput decimal value={h.rate} onNum={n => up(s => { s.data.house.rate = n; })} />
-            </View>
-            <View style={{ gap: 6 }}>
-              <BodyS muted>{t('th_ten')}</BodyS>
-              <NumInput decimal={false} value={h.years} onNum={n => up(s => { s.data.house.years = Math.max(1, Math.trunc(n || 1)); })} />
-            </View>
-          </Card>
-          <KV k={t('th_inst')}><Fig value={rm(inst)} p="calc" cls="h-l" /></KV>
-          <BtnLine label={t('th_known')} onPress={() => up(s => {
-            s.data.house.knownPayment = Math.round((calc?.monthly_instalment ?? 0) * 100) / 100;
-          })} />
-        </>
-      ) : (
-        <>
-          <Card gap={8}>
-            <View style={{ gap: 6 }}>
-              <BodyS muted>{t('th_knownamt')}</BodyS>
-              <NumInput value={+(h.knownPayment || 0)} onNum={n => up(s => { s.data.house.knownPayment = n; })} />
-            </View>
-            <FigRow p="user" />
-          </Card>
-          <BtnLine label={t('cancel')} onPress={() => up(s => { s.data.house.knownPayment = null; })} />
-        </>
+      <HouseBody />
+    </ScreenShell>
+  );
+}
+
+/* v22 saved tests list. */
+export function SavedtestsScreen() {
+  const { S, t, up } = useApp();
+  return (
+    <ScreenShell back title={t('sv_title')}>
+      {S.keptTests.length ? S.keptTests.map((k, i) => (
+        <Pressable key={i} onPress={() => up(s => { s.svIdx = i; s.svDelArm = false; s.sheet = 'svedit'; })}
+          style={tx.txcard}>
+          {k.name ? <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: C.ink, marginBottom: 4 }}>{k.name}</Text> : null}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 15, color: C.ink }}>
+              <Text style={{ fontFamily: DISP_FONT }}>{rm(k.pay)}</Text> {t('mo_permo')}
+            </Text>
+            <Fig value={t('cp_short', { s: k.s, n: k.n })} p="calc" cls="body-s" />
+          </View>
+          <BodyS muted style={{ marginTop: 4 }}>
+            {k.g ? `${t('gap_lbl')} ${rm(k.g)} · ` : ''}{t('edit')} →
+          </BodyS>
+        </Pressable>
+      )) : (
+        <Card><BodyS muted>{t('sv_none')}</BodyS></Card>
       )}
-      <Btn label={t('th_next') + ' →'} onPress={() => go('homecost')} />
     </ScreenShell>
   );
 }
 
 export function HomecostScreen() {
-  const { S, t, up, go, toast } = useApp();
+  const { S, t, up } = useApp();
   const calc = useHousingCalculation(S.data);
-  const [running, setRunning] = React.useState(false);
+  const { run, running } = useRunTest();
   const inst = calc?.monthly_instalment ?? 0;
   const total = calc?.total_monthly_cost ?? 0;
   return (
     <ScreenShell back title={t('tc_title')}>
       <Fig value={rm(total)} p="calc" cls="h-xl" />
       <BodyS muted>{t('tc_point')}</BodyS>
-      <BtnQuiet arrow={false} onPress={() => up(s => { s.tcOpen = !s.tcOpen; })}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <P>{t('tc_break')}</P>
-          <Text style={{ fontSize: 16, color: C.ink }}>{S.tcOpen ? '−' : '+'}</Text>
-        </View>
-      </BtnQuiet>
+      <Pressable onPress={() => up(s => { s.tcOpen = !s.tcOpen; })} style={tx.btnQuiet}>
+        <P>{t('tc_break')}</P>
+        <Text style={{ fontSize: 16, color: C.ink }}>{S.tcOpen ? '−' : '+'}</Text>
+      </Pressable>
       {S.tcOpen ? (
         <Card gap={8}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ fontSize: 15, color: C.ink }}>{t('tc_inst')}</Text>
-              <Text style={{ fontSize: 13, lineHeight: 18, color: C.ink64 }}>{t('tc_inst_desc')}</Text>
+              <Text style={{ fontFamily: BODY_FONT, fontSize: 15, color: C.ink }}>{t('tc_inst')}</Text>
+              <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: C.ink64 }}>{t('tc_inst_desc')}</Text>
             </View>
             <Text style={{ fontSize: 18, fontFamily: DISP_FONT, color: C.ink }}>{rm(inst)}</Text>
           </View>
@@ -114,43 +343,7 @@ export function HomecostScreen() {
           />
         </Card>
       ) : null}
-      <Btn label={t(running ? 'housing_running' : 'tc_run') + (running ? '' : ' →')} disabled={running} onPress={() => {
-        setRunning(true);
-        void (async () => {
-          try {
-            const currentScenario = getHousingScenario();
-            const scenarioRequest = currentScenario
-              ? updateHousingScenario(currentScenario.id, S.data).catch(error => {
-                  // A scenario ID can become stale after switching between the
-                  // local backend and the deployed backend. Recreate it once.
-                  if (error instanceof ApiError && error.status === 404) {
-                    setHousingScenario(null);
-                    return createHousingScenario(S.data);
-                  }
-                  throw error;
-                })
-              : createHousingScenario(S.data);
-            const [preHousing, scenario] = await Promise.all([
-              runPreHousingCheck(),
-              scenarioRequest,
-            ]);
-            setHousingScenario(scenario);
-            const housingTest = await runHousingTest(scenario.id);
-            setPreHousingResult(preHousing);
-            setHousingTestResult(housingTest);
-            up(state => {
-              state.testRan = true;
-              state.howOpen = false;
-              state.rgHowOpen = false;
-            });
-            go(preHousing.has_existing_shortfall ? 'precheck' : 'result');
-          } catch {
-            toast(t('housing_run_failed'), 'error');
-          } finally {
-            setRunning(false);
-          }
-        })();
-      }} />
+      <Btn label={t(running ? 'housing_running' : 'tc_run') + (running ? '' : ' →')} disabled={running} onPress={run} />
     </ScreenShell>
   );
 }
@@ -159,7 +352,7 @@ export function PrecheckScreen() {
   const { t, monthName, goTab, up } = useApp();
   const result = getPreHousingResult();
   React.useEffect(() => {
-    up(state => { state.stack = ['homecost']; });
+    up(state => { state.stack = ['househome']; });
   }, [up]);
   const worst = result?.worst_month;
   const monthIndex = worst ? worst.month - 1 : 0;
@@ -177,11 +370,38 @@ export function PrecheckScreen() {
 export function ResultScreen() {
   const { S, t, monthName, up, go } = useApp();
   React.useEffect(() => {
-    up(state => { state.stack = ['homecost']; });
+    up(state => { state.stack = ['househome']; });
   }, [up]);
 
-  const result = getHousingTestResult();
-  if (!result) return <ScreenShell back title={t('rs_title')}><View /></ScreenShell>;
+  const base = getHousingTestResult();
+  const scenarioId = getHousingScenario()?.id ?? base?.scenario_id;
+  const shock = S.shock;
+  const [shocked, setShocked] = React.useState<typeof base>(null);
+  const [tryResult, setTryResult] = React.useState<typeof base>(null);
+  const [customPay, setCustomPay] = React.useState('');
+
+  /* Re-run the same scenario with the drop applied (backend-authoritative). */
+  React.useEffect(() => {
+    if (!scenarioId || !shock) { setShocked(null); return; }
+    let active = true;
+    void runHousingTest(scenarioId, undefined, shock)
+      .then(next => { if (active) setShocked(next); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [scenarioId, shock]);
+
+  /* The "try a payment" comparison, under the same drop. */
+  React.useEffect(() => {
+    if (!scenarioId || S.tryPay == null) { setTryResult(null); return; }
+    let active = true;
+    void runHousingTest(scenarioId, S.tryPay, shock || undefined)
+      .then(next => { if (active) setTryResult(next); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [scenarioId, S.tryPay, shock]);
+
+  if (!base) return <ScreenShell back title={t('rs_title')}><View /></ScreenShell>;
+  const result = (shock && shocked) ? shocked : base;
 
   const cost = result.tested_home_cost;
   const rows = result.months.map(r => ({
@@ -193,51 +413,154 @@ export function ResultScreen() {
   const n = result.tested_months;
   const s = result.short_month_count;
   const g = result.largest_gap;
+  const shortNames = result.months.filter(r => r.is_short).map(r => monthName(r.month - 1)).join(', ');
   const un = unrepresentedCoverageMonths(S.incomeCoverage);
+  const state = s === 0 ? 'ok' : (s <= n / 2 ? 'warn' : 'bad');
 
-  // EN: US8.2 only owns the "keep this test" layer here. Array.some() checks
-  // whether one kept summary already matches the current displayed result and
-  // returns a boolean for the before/after Keep This Test UI.
-  // 中文：US8.2 在这里仅负责“留存这次测试”这一层。Array.some() 会检查是否已有一条留存摘要
-  // 与当前展示结果一致，并返回布尔值来决定按钮或已留存状态的显示。
-  const kept = S.keptTests.some(test => (
-    test.pay === Math.round(cost * 100) / 100
-    && test.s === s
-    && test.n === n
-    && test.g === Math.round(g * 100) / 100
-  ));
+  const verdict = (
+    <View style={[tx.rxv, state === 'ok' ? tx.rxvOk : state === 'warn' ? tx.rxvWarn : tx.rxvBad]}>
+      <Ruma w={72} pose={state === 'ok' ? 'happy' : state === 'warn' ? 'count' : 'oops'} float={false} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 18, lineHeight: 23, color: C.ink }}>
+          {s ? t('rx_warn_t', { s, n }) : t('rx_ok_t', { n })}
+        </Text>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: C.ink, marginTop: 4 }}>
+          {s
+            ? (state === 'bad'
+              ? t('rx_bad', { c: rm(cost), g: rm(g) })
+              : t('rx_warn', { months: shortNames, c: rm(cost), g: rm(g) }))
+            : t('rx_ok', { c: rm(cost) })}
+        </Text>
+      </View>
+    </View>
+  );
 
-  let lead: React.ReactNode;
-  const headline = s ? t('headline', { s, n }) : t('headline_zero', { n });
-  if (un.length) {
-    lead = (
-      <>
-        <NoteC><Display cls="h-l">{t('rs_limit_slow', { m: un.map(monthName).join(', ') })}</Display></NoteC>
-        <Display cls="h-m">{headline}</Display>
-        <FigRow p="calc" />
-      </>
-    );
-  } else if (n < 4) {
-    lead = (
-      <>
-        <NoteC><Display cls="h-l">{t('rs_limit_thin', { n })}</Display></NoteC>
-        <Display cls="h-m">{headline}</Display>
-        <FigRow p="calc" />
-      </>
-    );
-  } else {
-    lead = (
-      <>
-        <Display cls="h-xl">{headline}</Display>
-        <FigRow p="calc" />
-      </>
-    );
-  }
+  const caveat = un.length
+    ? <NoteC><BodyS>{t('rs_limit_slow', { m: un.map(monthName).join(', ') })}</BodyS></NoteC>
+    : n < 4 ? <NoteC><BodyS>{t('rs_limit_thin', { n })}</BodyS></NoteC> : null;
+
+  const legend = (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 8 }}>
+      {([[t('rx_leg_bar'), C.ink, 12], [t('rx_leg_line'), C.brand, 3], [t('rx_leg_gap'), C.short, 12]] as [string, string, number][]).map(([lbl, col, hh]) => (
+        <View key={lbl} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={{ width: hh === 3 ? 16 : 12, height: hh, borderRadius: hh === 3 ? 2 : 3, backgroundColor: col }} />
+          <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, color: C.ink64 }}>{lbl}</Text>
+        </View>
+      ))}
+    </View>
+  );
+
+  const shockChips = (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 8 }}>
+      <BodyS muted>{t('rx_drop')}</BodyS>
+      <View style={{ flexDirection: 'row', gap: 6 }}>
+        {[0, 10, 20].map(v => (
+          <Pressable key={v} onPress={() => up(x => { x.shock = v; })}
+            style={[tx.rxchip, shock === v && tx.rxchipOn]}>
+            <Text style={{ fontFamily: SEMI_FONT, fontSize: 13, color: shock === v ? '#fff' : C.ink }}>{v ? `−${v}%` : '0%'}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+
+  /* the payment every recorded month could carry, under the same drop */
+  const lo = rows.length ? Math.max(0, Math.floor(Math.min(...rows.map(r => r.surplus)))) : 0;
+  const tRows = (tryResult?.months ?? []).map(r => ({
+    m: r.month - 1, surplus: r.available_for_home, short: r.is_short, gap: r.total_shortfall,
+  }));
+  const tryCard = rows.length ? (
+    <View style={tx.rxtry}>
+      <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink }}>{t('rx_try_t')}</Text>
+      <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: C.ink, marginTop: 4 }}>
+        {cost > lo ? t('rx_try', { p: rm(lo) }) : t('rx_try_ok')}
+      </Text>
+      {cost > lo ? (
+        <View style={{ marginTop: 10 }}>
+          <Btn label={t('rx_try_btn', { p: rm(lo) })} onPress={() => up(x => { x.tryPay = lo; })} />
+        </View>
+      ) : null}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+        {[1000, 1200, 1400].map(v => (
+          <Pressable key={v} onPress={() => up(x => { x.tryPay = v; })}
+            style={[tx.rxchip, { backgroundColor: '#fff' }, S.tryPay === v && tx.rxchipOn]}>
+            <Text style={{ fontFamily: SEMI_FONT, fontSize: 13, color: S.tryPay === v ? '#fff' : C.ink }}>{rm(v)}</Text>
+          </Pressable>
+        ))}
+        <Pressable onPress={() => up(x => { x.tryCust = !x.tryCust; })}
+          style={[tx.rxchip, { backgroundColor: '#fff' }, S.tryCust && tx.rxchipOn]}>
+          <Text style={{ fontFamily: SEMI_FONT, fontSize: 13, color: S.tryCust ? '#fff' : C.ink }}>{t('rx_custom')}</Text>
+        </Pressable>
+      </View>
+      {S.tryCust ? (
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'center' }}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink64 }}>RM</Text>
+          <TextInput
+            value={customPay}
+            onChangeText={setCustomPay}
+            keyboardType="number-pad"
+            inputMode="numeric"
+            placeholder="1100"
+            placeholderTextColor={C.ink40}
+            style={{
+              flex: 1, minHeight: 42, backgroundColor: '#fff', borderWidth: 1.5, borderColor: C.ink40,
+              borderRadius: 12, paddingHorizontal: 12, fontSize: 16, color: C.ink,
+            }}
+          />
+          <Pressable onPress={() => {
+            const v = parseFloat(customPay) || 0;
+            if (v > 0) up(x => { x.tryPay = Math.round(v); });
+          }} style={[tx.rxchipOn, { minHeight: 42, borderRadius: 12, paddingHorizontal: 18, justifyContent: 'center' }]}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 14, color: '#fff' }}>{t('rx_try_go')}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {S.tryPay != null && tryResult ? (
+        <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(60,81,82,0.12)' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+            <Text style={{ fontFamily: SEMI_FONT, fontSize: 13, color: '#2E6B6F' }}>
+              {t('rx_trying', { p: rm(S.tryPay), c: rm(cost) })}
+            </Text>
+            <BtnLine label={t('rx_use_home')} style={{ fontSize: 12.5 }} onPress={() => up(x => { x.tryPay = null; })} />
+          </View>
+          <Waterline rows={tRows} cost={S.tryPay} lineLabel monthName={monthName} />
+          <BodyS muted style={{ marginTop: 6 }}>
+            {t('rx_tryres', { s: tryResult.short_month_count, n: tryResult.tested_months, p: rm(S.tryPay) })}
+          </BodyS>
+        </View>
+      ) : null}
+    </View>
+  ) : null;
+
+  const keepTest = () => {
+    up(x2 => {
+      const h = x2.data.house;
+      x2.svDraft = (h.knownPayment == null && (h.price || 0) > 0)
+        ? rm(h.price || 0)
+        : `${rm(Math.round(cost))} ${t('mo_permo')}`;
+      const duplicate = x2.keptTests.some(test => (
+        test.pay === Math.round(cost)
+        && test.s === s && test.n === n
+      ));
+      if (!duplicate) {
+        // EN: Iteration 1 stores only the summary fields Your Record needs in
+        // frontend session state, not a persistent account copy of the result.
+        // 中文：Iteration 1 只把“记录档案”需要的摘要字段放进前端会话状态。
+        x2.keptTests.push({ pay: Math.round(cost), s, n, g: Math.round(g) });
+      }
+      x2.sheet = 'savename';
+    });
+  };
 
   return (
     <ScreenShell back title={t('rs_title')}>
-      {lead}
-      {s ? <KV k={t('gap_lbl')}><Fig value={rm(g)} p="calc" /></KV> : null}
+      {verdict}
+      {caveat}
+      <View style={tx.txcard}>
+        <Waterline rows={rows} cost={cost} lineLabel prov="calc" monthName={monthName} />
+        {legend}
+        {shockChips}
+      </View>
       {s ? (
         <Card gap={8}>
           <Display cls="h-m">{t('rs_shortfall_breakdown')}</Display>
@@ -250,74 +573,29 @@ export function ResultScreen() {
           <BodyS muted>{t('rs_shortfall_breakdown_note')}</BodyS>
         </Card>
       ) : null}
-      <Waterline rows={rows} cost={cost} lineLabel prov="calc" monthName={monthName} />
-      <BtnLine label={t('rs_how')} onPress={() => up(x2 => { x2.howOpen = !x2.howOpen; })} />
-      {S.howOpen ? <Card><BodyS>{t('rs_how_body', { c: nf(cost) })}</BodyS></Card> : null}
-      {kept ? (
-        // EN: AC8.2.2/AC8.2.5 show the kept status after saving and repeat the
-        // session-only scope instead of implying permanent account storage.
-        // 中文：AC8.2.2/AC8.2.5 在保存后显示已留存状态，并再次说明仅限本次会话，不暗示永久账号存储。
-        <View style={{
-          gap: 4,
-          padding: 14,
-          borderRadius: 14,
-          borderWidth: 1,
-          borderColor: C.ink14,
-          backgroundColor: C.card,
-        }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ color: C.confirm, fontSize: 18, lineHeight: 20 }}>✓</Text>
-            <Display cls="h-m" style={{ fontSize: 17, lineHeight: 23 }}>{t('rs_kept')}</Display>
-          </View>
-          <BodyS muted>{t('rs_kept_session')}</BodyS>
+      {tryCard}
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <View style={{ flex: 1 }}>
+          <Btn label={t('rx_keep')} onPress={keepTest} />
         </View>
-      ) : (
-        <BtnQuiet
-          arrow={false}
-          style={{ backgroundColor: C.paper, borderColor: C.brand }}
-          onPress={() => {
-            up(x2 => {
-              // EN: Re-check inside the state update so repeated taps cannot add
-              // duplicates. The compared fields are the monthly payment, short
-              // month count, tested month count, and largest gap; rounded money
-              // values match what Your Record displays.
-              // 中文：在状态更新内部再次检查，避免重复点击加入重复卡片。比较字段包括月供、短缺月份数、
-              // 测试月份数和最大缺口；金额保留两位小数，与“记录档案”的展示保持一致。
-              const duplicate = x2.keptTests.some(test => (
-                test.pay === Math.round(cost * 100) / 100
-                && test.s === s
-                && test.n === n
-                && test.g === Math.round(g * 100) / 100
-              ));
-              if (!duplicate) {
-                // EN: Iteration 1 stores only the summary fields Your Record
-                // needs in frontend session state, not a persistent account copy
-                // of the whole HousingTestResult.
-                // 中文：Iteration 1 只把“记录档案”需要的摘要字段放进前端会话状态，
-                // 不保存完整 HousingTestResult，也不是账号级永久存储。
-                x2.keptTests.push({
-                  pay: Math.round(cost * 100) / 100,
-                  s,
-                  n,
-                  g: Math.round(g * 100) / 100,
-                });
-              }
-            });
-          }}
-        >
-          <IcLab name="book">
-            <View style={{ gap: 2 }}>
-              <P>{t('rs_keep')}</P>
-              <BodyS muted>{t('rs_keep_hint')}</BodyS>
-            </View>
-          </IcLab>
-        </BtnQuiet>
-      )}
-      <View style={{ gap: 8 }}>
-        <BtnQuiet onPress={() => go('range')}><IcLab name="band"><P>{t('rs_range')}</P></IcLab></BtnQuiet>
-        <BtnQuiet onPress={() => go('compare')}><IcLab name="columns"><P>{t('rs_compare')}</P></IcLab></BtnQuiet>
-        <BtnQuiet onPress={() => go('shock')}><IcLab name="trend"><P>{t('rs_shock')}</P></IcLab></BtnQuiet>
+        <Pressable onPress={() => go('house')} style={[tx.btnQuiet, { flex: 1, justifyContent: 'center' }]}>
+          <P>{t('rx_change')}</P>
+        </Pressable>
       </View>
+      <View style={{ flexDirection: 'row', gap: 12 }}>
+        <Pressable onPress={() => go('range')} style={tx.hubtile}>
+          <View style={tx.hubIc}><Ico name="band" size={22} color="#fff" /></View>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 15, lineHeight: 20, color: C.ink }}>{t('rs_range')}</Text>
+          <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 15, color: C.ink64 }}>{t('rg_tile_d')}</Text>
+        </Pressable>
+        <Pressable onPress={() => go('compare')} style={tx.hubtile}>
+          <View style={tx.hubIc}><Ico name="swap" size={22} color="#fff" /></View>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 15, lineHeight: 20, color: C.ink }}>{t('cp_tile')}</Text>
+          <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 15, color: C.ink64 }}>{t('cp_tile_d')}</Text>
+        </Pressable>
+      </View>
+      <BtnLine label={t('rx_how')} onPress={() => up(x2 => { x2.howOpen = !x2.howOpen; })} />
+      {S.howOpen ? <Card><BodyS>{t('rs_how_body', { c: nf(cost) })}</BodyS></Card> : null}
     </ScreenShell>
   );
 }
@@ -379,6 +657,7 @@ export function CompareScreen() {
       })
       .catch(() => undefined);
     return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentsKey, scenarioId]);
 
   return (
@@ -534,3 +813,76 @@ export function ShockScreen() {
     </ScreenShell>
   );
 }
+
+const tx = StyleSheet.create({
+  txintro: {
+    backgroundColor: '#D3E7E5', borderRadius: 20, paddingVertical: 14, paddingHorizontal: 16,
+    flexDirection: 'row', gap: 12, alignItems: 'center',
+  },
+  txctx: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fff',
+    borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12, marginTop: 8, alignSelf: 'flex-start',
+  },
+  txcard: {
+    backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E3EAE8', borderRadius: 20,
+    paddingVertical: 14, paddingHorizontal: 16,
+    shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.06, shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  lbl: { fontFamily: DISP_FONT, fontSize: 15, color: C.ink, marginBottom: 10 },
+  txamt: {
+    flex: 1, minWidth: 0, fontFamily: DISP_FONT, fontSize: 30, lineHeight: 36, color: C.ink, padding: 0,
+  },
+  depchip: {
+    minHeight: 32, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1.5, borderColor: C.ink14,
+    backgroundColor: C.card, alignItems: 'center', justifyContent: 'center',
+  },
+  depchipOn: { backgroundColor: C.ink, borderColor: C.ink },
+  txrow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+    minHeight: 44, borderTopWidth: 1, borderTopColor: C.ink14, marginTop: 10, paddingTop: 8,
+  },
+  inseg: {
+    flexDirection: 'row', backgroundColor: '#EEF3F2', borderRadius: 14, padding: 4, gap: 4, marginTop: 2,
+  },
+  insegBtn: { flex: 1, minHeight: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  insegBtnOn: {
+    backgroundColor: '#fff',
+    shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  savedchip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.card,
+    borderWidth: 1.5, borderColor: 'rgba(60,81,82,0.1)', borderRadius: 999,
+    paddingVertical: 5, paddingHorizontal: 9, minHeight: 30,
+  },
+  savedchipN: {
+    backgroundColor: C.brand, borderRadius: 999, minWidth: 16, height: 16,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5,
+  },
+  rxv: {
+    borderRadius: 20, paddingVertical: 14, paddingHorizontal: 16,
+    flexDirection: 'row', gap: 12, alignItems: 'center', borderWidth: 1.5,
+  },
+  rxvOk: { backgroundColor: '#E6F5EA', borderColor: '#B9E0C4' },
+  rxvWarn: { backgroundColor: '#FFF4DE', borderColor: '#F2D58C' },
+  rxvBad: { backgroundColor: '#FDE7E0', borderColor: '#F4C0AF' },
+  rxchip: {
+    minHeight: 34, paddingHorizontal: 12, borderRadius: 17, borderWidth: 1.5, borderColor: C.ink14,
+    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center',
+  },
+  rxchipOn: { backgroundColor: C.brand, borderColor: C.brand },
+  rxtry: { backgroundColor: '#D3E7E5', borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16 },
+  btnQuiet: {
+    minHeight: 52, backgroundColor: C.card, borderWidth: 1, borderColor: C.ink14, borderRadius: 14,
+    paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+  },
+  hubtile: {
+    flex: 1, minHeight: 100, backgroundColor: C.card, borderRadius: 18,
+    paddingVertical: 16, paddingHorizontal: 14, gap: 6,
+  },
+  hubIc: {
+    width: 40, height: 40, borderRadius: 12, backgroundColor: C.brand,
+    alignItems: 'center', justifyContent: 'center',
+  },
+});

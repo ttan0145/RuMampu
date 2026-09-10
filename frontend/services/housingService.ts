@@ -12,7 +12,7 @@ function roundRate(value: number): number {
 
 function scenarioPayload(data: AppData): HousingScenarioPayload {
   return {
-    property_price: roundMoney(data.house.price),
+    property_price: roundMoney(data.house.price ?? 0),
     deposit: roundMoney(data.house.deposit),
     financing_rate: roundRate(data.house.rate),
     tenure_years: data.house.years,

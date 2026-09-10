@@ -1,98 +1,280 @@
 import React from 'react';
-import { Text, View } from 'react-native';
-import { useApp } from '../state';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Route, useApp } from '../state';
 import { MOCK } from '../mock';
 import { ApiCoverageAnswer, INCOME_API_ENABLED } from '../api';
 import { formatApiMoney } from '../money';
 import {
-  actualMonths, commitTotal, expByMonth, expCatTotals, latestExpMonth,
-  monthsAgg, nf, recordSummary, rm,
+  actualMonths, commitTotal, expByMonth, monthsAgg, nf, recordSummary, rm, workCostTotal,
 } from '../calc';
 import {
-  BodyS, Btn, BtnLine, BtnQuiet, Card, Chip, Chips, Display, Divider, EditList,
-  Fig, FigRow, IcLab, KV, NoteC, NumInput, P, Prov, StackS, TextField,
+  Badge, BodyS, Btn, BtnLine, BtnQuiet, Card, Chip, Chips, Display, Divider, EditList,
+  Fig, IcLab, KV, NoteC, P, Prov, StackS, TextField,
 } from '../ui';
-import { C, DISP_FONT } from '../theme';
-import { Donut, DonutLegend, IncomePatternChart } from '../charts';
+import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
+import { SvgXml } from 'react-native-svg';
+import { Ico } from '../svgs';
+import { SrcIcon } from '../icons';
+import { Ruma } from '../ruma-view';
+import {
+  Drop, InCard, InChip, InDay, InHero, InLbl, InRow, InSec, InSeg, MockStmt, PerSeg,
+} from '../incard';
+import { IncomePatternChart } from '../charts';
 import { ScreenShell } from './shell';
 import { isValidIsoDate, isValidMoneyText } from '../validation';
 import { DatePickerField } from '../date-picker';
 
-export function MoneyScreen() {
-  const { S, t, monthName, go } = useApp();
-  const agg = monthsAgg(S.data);
-  const netAvg = agg.reduce((a, r) => a + r.net, 0) / Math.max(1, agg.length);
-  const ek = latestExpMonth(S.data);
+/* v22 money tab: this-month hero, quiet vs usual band, six-month trend,
+   fixed-cost tiles, spending pace, grouped links. */
 
-  let donuts: React.ReactNode = null;
-  if (ek != null) {
-    const spend = [...expCatTotals(S.data, ek).entries()].sort((a, b) => b[1] - a[1])
-      .map(([c, v]) => ({ label: catLabel(S, t, c), v }));
-    const lastInc = agg[agg.length - 1];
-    const srcTot = new Map<string, number>();
-    for (const e of S.data.income) {
-      const k = (+e.d.slice(0, 4)) * 12 + (+e.d.slice(5, 7) - 1);
-      if (!lastInc || k !== lastInc.y * 12 + lastInc.m) continue;
-      const sourceKey = e.method === 'historical_total' ? '__monthly_total__' : e.s;
-      srcTot.set(sourceKey, (srcTot.get(sourceKey) || 0) + (+e.a || 0));
-    }
-    const srcLabel = (id: string) => {
-      if (id === '__monthly_total__') return t('inc_month_total');
-      const x = S.data.sources.find(z => z.id === id);
-      return x ? (x.custom ? x.name || '' : t(x.k || '')) : id;
-    };
-    const inc = [...srcTot.entries()].sort((a, b) => b[1] - a[1]).map(([id, v]) => ({ label: srcLabel(id), v }));
-    const spendTotal = spend.reduce((a, x) => a + x.v, 0);
-    const incTotal = inc.reduce((a, x) => a + x.v, 0);
-    const sect = (title: string, slices: { label: string; v: number }[], total: number) => (
-      <>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <BodyS muted>{title}</BodyS>
+function monthKeyOf(d: string): number { return (+d.slice(0, 4)) * 12 + (+d.slice(5, 7) - 1); }
+
+export function MoneyScreen() {
+  const { S, t, monthName, up, go } = useApp();
+  const now = new Date();
+  const thisKey = now.getFullYear() * 12 + now.getMonth();
+  /* month shown: the current month if it has income, else the latest month with income */
+  const ikeys = new Set(S.data.income.map(e => monthKeyOf(e.d)));
+  const mk = ikeys.has(thisKey) ? thisKey : (ikeys.size ? Math.max(...ikeys) : thisKey);
+  const inSum = S.data.income.filter(e => monthKeyOf(e.d) === mk).reduce((a, e) => a + (+e.a || 0), 0);
+  const outSum = S.data.expenses.filter(e => monthKeyOf(e.d) === mk).reduce((a, e) => a + (+e.a || 0), 0);
+
+  const rows = monthsAgg(S.data);
+
+  /* quiet vs usual: min and median surplus across recorded months */
+  let quiet: React.ReactNode = null;
+  if (rows.length >= 2) {
+    const s = rows.map(r => r.surplus).sort((a, b) => a - b);
+    const lo = s[0], med = s[Math.floor(s.length / 2)], hi = s[s.length - 1];
+    const span = Math.max(1, hi - Math.min(lo, 0));
+    const pos = (v: number) => Math.round((v - Math.min(lo, 0)) / span * 100);
+    quiet = (
+      <View style={mo.card}>
+        <View style={mo.rowBetween}>
+          <Text style={mo.ttl3}>{t('mo_quiet')}</Text>
           <Prov p="calc" />
         </View>
-        <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
-          <Donut slices={slices} centerLabel={rm(total)} />
-          <View style={{ flex: 1, minWidth: 0 }}><DonutLegend slices={slices} /></View>
+        <View style={mo.band}>
+          <SvgXml
+            xml={'<svg width="100%" height="12" viewBox="0 0 100 12" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#F4D27A"/><stop offset="0.55" stop-color="#BFE2D8"/><stop offset="1" stop-color="#5CACB0"/></linearGradient></defs><rect width="100" height="12" rx="6" fill="url(#mb)"/></svg>'}
+            width="100%" height={12}
+            style={{ position: 'absolute', left: 0, right: 0, top: 0 }}
+          />
+          <View style={[mo.bandLbl, { left: `${pos(lo)}%`, bottom: 26 }]}>
+            <Text style={mo.bandLblTxt}>{t('mo_quietest')}</Text>
+            <Text style={mo.bandLblVal}>{rm(Math.max(0, lo))}</Text>
+          </View>
+          <View style={[mo.bandDot, { left: `${pos(lo)}%`, backgroundColor: '#E0A800' }]} />
+          <View style={[mo.bandDot, { left: `${pos(med)}%`, backgroundColor: '#3F7A7E' }]} />
+          <View style={[mo.bandLbl, { left: `${pos(med)}%`, top: 26 }]}>
+            <Text style={mo.bandLblTxt}>{t('mo_usual')}</Text>
+            <Text style={mo.bandLblVal}>{rm(med)}</Text>
+          </View>
         </View>
-      </>
-    );
-    donuts = (
-      <Card gap={8}>
-        {sect(t('hb_spend', { m: monthName(ek % 12) }), spend, spendTotal)}
-        <Divider />
-        {sect(t('hb_income', { m: lastInc ? monthName(lastInc.m) : '' }), inc, incTotal)}
-      </Card>
+        <BodyS muted>{t('mo_quiet_note')}</BodyS>
+        <BodyS style={{ marginTop: 6 }}>{t('mo_quiet_ask')}</BodyS>
+        <BtnLine label={t('money_coverage') + ' →'} style={{ fontSize: 13 }} onPress={() => go('coverage')} />
+      </View>
     );
   }
 
-  const rows: [string, string, string][] = [
-    ['income', 'money_income', 'banknote'], ['workcosts', 'money_workcosts', 'wrench'],
-    ['commit', 'money_commit', 'calendar'], ['expenses', 'money_expenses', 'receipt'],
-    ['pattern', 'money_pattern', 'bars'], ['coverage', 'money_coverage', 'search'],
-    ['record', 'money_record', 'book'],
-  ];
+  /* six-month trend, quietest two tinted */
+  const last6 = rows.slice(-6);
+  const mx = Math.max(1, ...last6.map(r => r.net));
+  const qset = new Set(last6.slice().sort((a, b) => a.surplus - b.surplus).slice(0, 2).map(r => r.y * 12 + r.m));
+  const trend = last6.length ? (
+    <Pressable onPress={() => go('pattern')} style={mo.card}>
+      <View style={mo.rowBetween}>
+        <Text style={mo.ttl3}>{t('mo_trend', { n: last6.length })}</Text>
+        <Text style={{ color: C.ink }}>→</Text>
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, height: 110, marginTop: 12 }}>
+        {last6.map(r => (
+          <View key={r.y * 12 + r.m} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+            <Text style={mo.barVal}>{nf(r.net)}</Text>
+            <View style={{
+              width: '100%', minHeight: 4, borderTopLeftRadius: 6, borderTopRightRadius: 6,
+              borderBottomLeftRadius: 3, borderBottomRightRadius: 3,
+              height: `${Math.max(4, Math.round(r.net / mx * 78))}%`,
+              backgroundColor: qset.has(r.y * 12 + r.m) ? '#F4D27A' : C.ink,
+            }} />
+            <Text style={mo.barLbl}>{monthName(r.m).toUpperCase()}</Text>
+          </View>
+        ))}
+      </View>
+    </Pressable>
+  ) : null;
+
+  /* fixed costs */
+  const tiles = (
+    <View style={{ flexDirection: 'row', gap: 10 }}>
+      <Pressable onPress={() => go('commit')} style={mo.motile}>
+        <View style={mo.motileIc}><Ico name="calendar" size={18} /></View>
+        <BodyS muted style={{ fontSize: 12 }}>{t('money_commit')}</BodyS>
+        <Text style={mo.motileVal}>{rm(commitTotal(S.data))}</Text>
+        <Text style={mo.motileEm}>{t('mo_permo')}</Text>
+      </Pressable>
+      <Pressable onPress={() => go('workcosts')} style={mo.motile}>
+        <View style={mo.motileIc}><Ico name="wrench" size={18} /></View>
+        <BodyS muted style={{ fontSize: 12 }}>{t('money_workcosts')}</BodyS>
+        <Text style={mo.motileVal}>{rm(workCostTotal(S.data))}</Text>
+        <Text style={mo.motileEm}>{t('mo_permo')}</Text>
+      </Pressable>
+    </View>
+  );
+
+  /* spending pace against the limit */
+  const lim = +S.data.expenseLimits.total || 0;
+  const dim = new Date(Math.floor(mk / 12), mk % 12 + 1, 0).getDate();
+  const day = mk === thisKey ? now.getDate() : dim;
+  const pct = lim ? Math.min(100, Math.round(outSum / lim * 100)) : 0;
+  const paceColor = pct >= 100 ? C.short : pct > Math.round(day / dim * 100) + 10 ? '#E0A800' : C.brand;
+  const pace = (
+    <Pressable onPress={() => go('exlimits')} style={mo.card}>
+      <View style={mo.rowBetween}>
+        <Text style={mo.ttl3}>{t('mo_pace')}</Text>
+        <Text style={{ color: C.ink }}>→</Text>
+      </View>
+      <View style={{ height: 10, borderRadius: 5, backgroundColor: C.ink14, overflow: 'hidden', marginTop: 10 }}>
+        <View style={{ width: `${pct}%`, height: '100%', borderRadius: 5, backgroundColor: paceColor }} />
+      </View>
+      <BodyS muted style={{ marginTop: 6 }}>
+        {lim ? t('mo_pace_note', { v: rm(outSum), l: rm(lim), d: day, n: dim }) : t('mo_nolimit')}
+      </BodyS>
+    </Pressable>
+  );
+
+  /* grouped links */
+  const tilesView = S.moView !== 'list';
+  const group = (key: string, items: [Route, string, string][]) => (
+    <View key={key}>
+      <Text style={mo.eyebrow}>{t(key)}</Text>
+      {tilesView ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+          {items.map(([r, k, ic]) => (
+            <Pressable key={r} onPress={() => go(r)} style={mo.hubtile}>
+              <View style={mo.hubIc}><Ico name={ic} size={22} color="#fff" /></View>
+              <Text style={{ fontFamily: DISP_FONT, fontSize: 15, lineHeight: 20, color: C.ink }}>{t(k)}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        <View style={[mo.card, { paddingVertical: 2, paddingHorizontal: 12 }]}>
+          {items.map(([r, k, ic], i) => (
+            <Pressable key={r} onPress={() => go(r)}
+              style={[mo.morow, i > 0 && { borderTopWidth: 1, borderTopColor: C.ink14 }]}>
+              <IcLab name={ic}><P style={{ fontSize: 15 }}>{t(k)}</P></IcLab>
+              <Text style={{ color: C.ink }}>→</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </View>
+  );
 
   return (
-    <ScreenShell title={t('tab_money')}>
-      <Card>
-        <BodyS muted>{t('net_lbl')}</BodyS>
-        <Fig value={rm(netAvg)} p="calc" cls="h-l" />
-        <BodyS muted>{t('per_month')}</BodyS>
-      </Card>
-      {donuts}
-      {rows.map(([r, k, ic]) => (
-        <BtnQuiet key={r} onPress={() => go(r as never)}>
-          <IcLab name={ic}><P>{t(k)}</P></IcLab>
-        </BtnQuiet>
-      ))}
+    <ScreenShell greet title={t('tab_money')}>
+      <View style={mo.hero}>
+        <View style={mo.rowBetween}>
+          <Text style={[mo.ttl3, { color: '#fff' }]}>{t('mo_sofar', { m: monthName(mk % 12) })}</Text>
+          <Text style={mo.heroProv}>● {t('prov_user').toUpperCase()}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', marginTop: 10 }}>
+          {([[t('mo_in'), inSum, '#fff'], [t('mo_out'), outSum, '#fff'], [t('mo_left'), inSum - outSum, '#FEC844']] as [string, number, string][]).map(([lbl, v, col], i) => (
+            <View key={lbl} style={[{ flex: 1, minWidth: 0 }, i > 0 && { borderLeftWidth: 1.5, borderLeftColor: 'rgba(255,255,255,0.2)', paddingLeft: 12 }]}>
+              <Text style={mo.heroSmall}>{lbl.toUpperCase()}</Text>
+              <Text style={[mo.heroVal, { color: col }]} numberOfLines={1}>{rm(v)}</Text>
+            </View>
+          ))}
+        </View>
+        <Text style={mo.heroNote}>{t('mo_fixed')}</Text>
+      </View>
+      {quiet}
+      {trend}
+      {tiles}
+      {pace}
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+        <View style={mo.viewTgl}>
+          {([['tiles', 'mo_view_t'], ['list', 'mo_view_l']] as const).map(([v, k]) => (
+            <Pressable key={v} onPress={() => up(s => { s.moView = v; })}
+              style={[mo.viewTglBtn, (S.moView || 'tiles') === v && { backgroundColor: C.ink }]}>
+              <Text style={{ fontFamily: SEMI_FONT, fontSize: 12, color: (S.moView || 'tiles') === v ? '#fff' : C.ink64 }}>{t(k)}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+      {group('mo_rec', [['income', 'money_income', 'banknote'], ['expenses', 'money_expenses', 'receipt']])}
+      {group('mo_setup', [['workcosts', 'money_workcosts', 'wrench'], ['commit', 'money_commit', 'calendar'], ['exlimits', 'ex_limits', 'gauge']])}
+      {group('mo_savings', [['plan', 'pl_title', 'calday'], ['buffer', 'pr_buffer', 'ring']])}
+      {group('mo_insights', [['pattern', 'money_pattern', 'bars'], ['coverage', 'money_coverage', 'search'], ['record', 'money_record', 'book']])}
     </ScreenShell>
   );
 }
 
-function catLabel(S: ReturnType<typeof useApp>['S'], t: (k: string) => string, id: string): string {
-  const c = S.data.expenseCats.find(x => x.id === id);
-  return c ? (c.custom ? c.name || '' : t(c.k || '')) : id;
-}
+const mo = StyleSheet.create({
+  hero: {
+    backgroundColor: '#25494D', borderRadius: 18, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12,
+    overflow: 'hidden',
+  },
+  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  ttl3: { fontFamily: DISP_FONT, fontSize: 15, color: C.ink },
+  heroProv: { fontFamily: BODY_FONT, fontSize: 11, letterSpacing: 0.88, color: 'rgba(255,255,255,0.95)', fontWeight: '600' },
+  heroSmall: { fontFamily: BODY_FONT, fontSize: 11, letterSpacing: 0.66, color: 'rgba(255,255,255,0.7)' },
+  heroVal: { fontFamily: DISP_FONT, fontSize: 19, lineHeight: 24, marginTop: 2, fontVariant: ['tabular-nums'] },
+  heroNote: { fontFamily: BODY_FONT, fontSize: 12, lineHeight: 16, color: 'rgba(255,255,255,0.92)', marginTop: 10 },
+  card: {
+    backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E3EAE8', borderRadius: 18,
+    paddingVertical: 14, paddingHorizontal: 16,
+    shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.06, shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  band: {
+    position: 'relative', height: 12, borderRadius: 6,
+    marginTop: 26, marginBottom: 34, marginHorizontal: 8,
+  },
+  bandDot: {
+    position: 'absolute', top: -2, width: 16, height: 16, borderRadius: 8, borderWidth: 3, borderColor: '#fff',
+    marginLeft: -8,
+    shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  bandLbl: { position: 'absolute', marginLeft: -30, width: 60, alignItems: 'center' },
+  bandLblTxt: { fontFamily: BODY_FONT, fontSize: 11, lineHeight: 13, color: C.ink64 },
+  bandLblVal: { fontFamily: DISP_FONT, fontSize: 13, color: C.ink, fontVariant: ['tabular-nums'] },
+  barVal: { fontFamily: DISP_FONT, fontSize: 10.5, color: C.ink, marginBottom: 3, fontVariant: ['tabular-nums'] },
+  barLbl: { fontFamily: BODY_FONT, fontSize: 10.5, color: C.ink64, marginTop: 5, letterSpacing: 0.3 },
+  motile: {
+    flex: 1, backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E3EAE8', borderRadius: 16,
+    paddingVertical: 12, paddingHorizontal: 14, gap: 2, minWidth: 0,
+  },
+  motileIc: {
+    width: 32, height: 32, borderRadius: 10, backgroundColor: '#E4EFEC',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 6,
+  },
+  motileVal: { fontFamily: DISP_FONT, fontSize: 17, color: C.ink, fontVariant: ['tabular-nums'] },
+  motileEm: { fontFamily: BODY_FONT, fontSize: 11, color: C.ink64 },
+  viewTgl: {
+    flexDirection: 'row', backgroundColor: C.card, borderWidth: 1.5, borderColor: C.ink14,
+    borderRadius: 12, padding: 3, gap: 3, maxWidth: 170,
+  },
+  viewTglBtn: { flex: 1, minHeight: 30, paddingHorizontal: 12, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  eyebrow: {
+    fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.99, textTransform: 'uppercase',
+    color: C.ink64, marginBottom: 6,
+  },
+  hubtile: {
+    width: '47%', flexGrow: 1, minHeight: 92, backgroundColor: C.card, borderRadius: 18,
+    paddingVertical: 16, paddingHorizontal: 14, gap: 8,
+  },
+  hubIc: {
+    width: 40, height: 40, borderRadius: 12, backgroundColor: C.brand,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  morow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    minHeight: 44, paddingHorizontal: 4,
+  },
+});
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return <Display cls="h-m" style={{ fontSize: 17, lineHeight: 23 }}>{children}</Display>;
@@ -201,12 +383,154 @@ export function RecordScreen() {
   );
 }
 
+/* v22 income scan (preview): a simulated earnings-screen read that fills a
+   reviewable checklist; every kept row is saved through the real API. */
+function IncomeScanBody() {
+  const { S, t, up, monthName, saveIncomeEntry, toast } = useApp();
+  const sc = S.incScan;
+  const [amts, setAmts] = React.useState<Record<number, string>>({});
+  const [adding, setAdding] = React.useState(false);
+
+  const startScan = () => {
+    up(s => { s.incScan = { stage: 'reading', rows: [] }; });
+    setTimeout(() => {
+      up(s => {
+        if (s.incMode !== 'scan' || s.incScan.stage !== 'reading') return;
+        const now = new Date();
+        const d = (k: number) => {
+          const x = new Date(now.getFullYear(), now.getMonth(), now.getDate() - k);
+          return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+        };
+        const src = (text: string) => {
+          const hit = s.data.sources.find(x => x.k === 'src_ehail' || x.id === 'ehail');
+          const pand = s.data.sources.find(x => x.k === 'src_deliv' || x.id === 'deliv');
+          return text === 'foodpanda' && pand ? pand.id : (hit ? hit.id : s.incomeDraft.s);
+        };
+        s.incScan = {
+          stage: 'confirm',
+          rows: [
+            { on: true, d: d(1), s: src('grab'), a: 96, low: false },
+            { on: true, d: d(2), s: src('grab'), a: 112, low: false },
+            { on: true, d: d(3), s: src('foodpanda'), a: 64, low: true },
+            { on: true, d: d(4), s: src('grab'), a: 88, low: false },
+            { on: true, d: d(6), s: src('grab'), a: 130, low: false },
+          ],
+        };
+      });
+    }, 1500);
+  };
+
+  const srcName = (id: string) => {
+    const x = S.data.sources.find(z => z.id === id);
+    return x ? (x.custom ? x.name || '' : t(x.k || '')) : id;
+  };
+
+  if (sc.stage === 'reading') {
+    return (
+      <InSec last>
+        <MockStmt />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 }}>
+          <Ruma w={56} pose="count" float={false} />
+          <BodyS muted>{t('sc_reading')}</BodyS>
+        </View>
+      </InSec>
+    );
+  }
+
+  if (sc.stage === 'confirm') {
+    const n = sc.rows.filter(r => r.on).length;
+    const addAll = async () => {
+      if (adding) return;
+      setAdding(true);
+      let added = 0;
+      try {
+        for (let i = 0; i < sc.rows.length; i++) {
+          const r = sc.rows[i];
+          const a = amts[i] != null ? (parseFloat(amts[i]) || 0) : r.a;
+          if (!r.on || !(a > 0)) continue;
+          await saveIncomeEntry({ amount: a, date: r.d, sourceId: r.s, confirmOutlier: true });
+          added++;
+        }
+        up(s => { s.incScan = { stage: 'pick', rows: [] }; s.incMode = 'type'; });
+        toast(t('sc_added', { n: added }));
+      } catch {
+        toast(t('inc_save_failed'), 'error');
+      } finally {
+        setAdding(false);
+      }
+    };
+    return (
+      <InSec last>
+        <BodyS muted>{t('sc_found', { n: sc.rows.length })}</BodyS>
+        {sc.rows.map((r, i) => (
+          <View key={i} style={{
+            flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48,
+            borderTopWidth: i ? 1 : 0, borderTopColor: C.ink14, paddingVertical: 4,
+          }}>
+            <Pressable
+              onPress={() => up(s => { const row = s.incScan.rows[i]; if (row) row.on = !row.on; })}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: r.on }}
+              style={{
+                width: 22, height: 22, borderRadius: 5, borderWidth: 1.8,
+                borderColor: r.on ? C.brand : C.ink40,
+                backgroundColor: r.on ? C.brand : 'transparent',
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+              {r.on ? <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>✓</Text> : null}
+            </Pressable>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ fontFamily: BODY_FONT, fontSize: 14, color: C.ink }} numberOfLines={1}>{srcName(r.s)}</Text>
+              <Text style={{ fontFamily: BODY_FONT, fontSize: 12, lineHeight: 15, color: r.low ? '#B7791F' : C.ink64 }}>
+                {+r.d.slice(8, 10)} {monthName(+r.d.slice(5, 7) - 1)}{r.low ? ' · ' + t('sc_low') : ''}
+              </Text>
+            </View>
+            {/* .scrow input — fixed 96px, right-aligned, so the label keeps its room. */}
+            <TextInput
+              value={amts[i] != null ? amts[i] : String(r.a)}
+              onChangeText={v => setAmts(prev => ({ ...prev, [i]: v }))}
+              keyboardType="number-pad"
+              inputMode="numeric"
+              accessibilityLabel={t('inc_amount')}
+              placeholderTextColor={C.ink40}
+              style={{
+                width: 96, minHeight: 40, backgroundColor: C.paper,
+                borderWidth: 1.5, borderColor: C.ink40, borderRadius: 12,
+                paddingHorizontal: 10, fontSize: 15, color: C.ink, textAlign: 'right',
+                fontVariant: ['tabular-nums'],
+              }}
+            />
+          </View>
+        ))}
+        <View style={{ marginTop: 12 }}>
+          <Btn disabled={adding} label={adding ? t('inc_saving') : t('sc_add', { n })} onPress={() => { void addAll(); }} />
+        </View>
+        <View style={{ alignItems: 'center', marginTop: 4 }}>
+          <BtnLine label={t('cancel')} style={{ fontSize: 13.5 }}
+            onPress={() => up(s => { s.incScan = { stage: 'pick', rows: [] }; })} />
+        </View>
+      </InSec>
+    );
+  }
+
+  return (
+    <InSec last>
+      <Drop icon="scan" title={t('sc_pick')} hint={t('sc_hint')} onPress={startScan}
+        badge={<Badge label={t('ex_preview')} />} />
+      <View style={{ alignItems: 'center', marginTop: 8 }}>
+        <BtnLine label={t('sc_sample')} style={{ fontSize: 13.5 }} onPress={startScan} />
+      </View>
+    </InSec>
+  );
+}
+
 /**
  * EN: US1.1 records amount, date, and source while preserving warning and provenance states.
+ * v22 restyles this into the entry-card anatomy (hero amount, day strip, source chips).
  * 中文：US1.1 录入金额、日期和来源，并保留警告与来源标识状态。
  */
 export function IncomeScreen() {
-  const { S, t, monthName, up, go, saveIncomeEntry, deleteIncomeEntry, toast } = useApp();
+  const { S, t, monthName, up, go, saveIncomeEntry, toast } = useApp();
   const d = S.incomeDraft;
   const [saving, setSaving] = React.useState(false);
 
@@ -256,6 +580,8 @@ export function IncomeScreen() {
         amount: a,
         date: d.d,
         sourceId: d.s,
+        /* v22: the "for a month" segment is the US1.2 whole-month total. */
+        entryMethod: (d.per || 'day') === 'month' ? 'historical_total' : 'manual',
         confirmOutlier: keep,
       });
       // EN: The stable 409 code drives the AC1.1.10 Keep action, not English error text.
@@ -266,7 +592,7 @@ export function IncomeScreen() {
       }
       let months = 0;
       up(s => {
-        s.incomeDraft = { a: '', d: d.d, s: d.s, flag: null };
+        s.incomeDraft = { a: '', d: d.d, s: d.s, flag: null, per: d.per || 'day' };
         months = monthsAgg(s.data).length;
       });
       toast(t('entry_saved_n', { n: months }));
@@ -277,19 +603,61 @@ export function IncomeScreen() {
     }
   };
 
-  return (
-    <ScreenShell back title={t('money_income')}>
-      {S.incomeSync === 'loading' ? <NoteC><BodyS>{t('inc_sync_loading')}</BodyS></NoteC> : null}
-      {S.incomeSync === 'error' ? <NoteC><BodyS>{t('inc_sync_error')}</BodyS></NoteC> : null}
-      {S.data.income.length ? null : <Display cls="h-m">{t('inc_empty')}</Display>}
-      <Card gap={8}>
-        <View style={{ gap: 6 }}>
-          <BodyS muted>{t('inc_amount')}</BodyS>
-          <TextField value={d.a} keyboardType="decimal-pad" inputMode="decimal"
-            onChangeText={v => up(s => { s.incomeDraft.a = v; s.incomeDraft.flag = null; })} />
-        </View>
-        <View style={{ gap: 6 }}>
-          <BodyS muted>{t('inc_date')}</BodyS>
+  /* WHEN: today, yesterday and the three days before; anything else via the date picker */
+  const now = new Date();
+  const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  const per = d.per || 'day';
+  let matched = false;
+  const dayCells = [0, 1, 2, 3, 4].map(i => {
+    const x = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const v = iso(x);
+    const on = !S.incPick && d.d === v;
+    if (on) matched = true;
+    const lbl = i === 0 ? t('inc_today') : i === 1 ? t('inc_yday') : monthName(x.getMonth()).slice(0, 3);
+    return { v, on, lbl, big: `${x.getDate()} ${monthName(x.getMonth())}` };
+  });
+  const pickOn = S.incPick || !matched;
+  const pickLbl = pickOn && d.d ? `${+d.d.slice(8, 10)} ${monthName(+d.d.slice(5, 7) - 1)}` : '…';
+
+  const mk = now.getFullYear() * 12 + now.getMonth();
+  const sofar = S.data.income
+    .filter(e => (+e.d.slice(0, 4)) * 12 + (+e.d.slice(5, 7) - 1) === mk)
+    .reduce((a, e) => a + (+e.a || 0), 0);
+
+  const typeBody = (
+    <>
+      <InHero tint="in" pillLabel={t('io_in')} question={t('inc_q_' + per)} decimal
+        value={d.a}
+        onChangeText={v => up(s => { s.incomeDraft.a = v; s.incomeDraft.flag = null; })} />
+      <InSec>
+        <InLbl>{t('inc_q_when')}</InLbl>
+        <PerSeg per={per} labels={p => t('perx_' + p)} tint="in"
+          onPer={p => up(s => { s.incomeDraft.per = p; s.incomeDraft.flag = null; })} />
+        <BodyS muted style={{ marginTop: 10, marginBottom: 6 }}>
+          {per === 'month' ? t('inc_monthof') : per === 'week' ? `${t('inc_weekend')} · ${t('inc_weekany')}` : t('inc_date')}
+        </BodyS>
+        {per === 'day' ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {dayCells.map(c => (
+              <InDay key={c.v} label={c.lbl} value={c.big} on={c.on}
+                onPress={() => up(s => { s.incomeDraft.d = c.v; s.incPick = false; })} />
+            ))}
+            <InDay label={t('inc_pick')} value={pickLbl} on={pickOn}
+              onPress={() => up(s => { s.incPick = true; })} />
+          </View>
+        ) : null}
+        {per === 'day' && pickOn ? (
+          <View style={{ marginTop: 8 }}>
+            <DatePickerField
+              value={d.d}
+              mode="date"
+              monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
+              maximumDate={new Date()}
+              onChange={v => up(s => { s.incomeDraft.d = v; s.incomeDraft.flag = null; })}
+            />
+          </View>
+        ) : null}
+        {per === 'week' ? (
           <DatePickerField
             value={d.d}
             mode="date"
@@ -297,107 +665,101 @@ export function IncomeScreen() {
             maximumDate={new Date()}
             onChange={v => up(s => { s.incomeDraft.d = v; s.incomeDraft.flag = null; })}
           />
+        ) : null}
+        {per === 'month' ? (
+          <DatePickerField
+            value={d.d.slice(0, 7)}
+            mode="month"
+            monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
+            maximumDate={new Date()}
+            onChange={v => up(s => { s.incomeDraft.d = v + '-15'; s.incomeDraft.flag = null; })}
+          />
+        ) : null}
+      </InSec>
+      <InSec>
+        <InLbl>{t('inc_q_src')}</InLbl>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {S.data.sources.map(x => (
+            <InChip key={x.id}
+              icon={<SrcIcon id={x.id} data={S.data} size={18} color={d.s === x.id ? '#fff' : C.ink} />}
+              label={x.custom ? x.name || '' : t(x.k || '')}
+              on={d.s === x.id}
+              onPress={() => up(s => { s.incomeDraft.s = x.id; s.incomeDraft.flag = null; })} />
+          ))}
+          <InChip dashed label={t('src_own').replace(/^\+\s*|^＋\s*/, '')}
+            onPress={() => up(s => { s.sheet = 'srcown'; })} />
         </View>
-        <View style={{ gap: 6 }}>
-          <BodyS muted>{t('inc_source')}</BodyS>
-          <Chips>
-            {S.data.sources.map(x => (
-              <Chip key={x.id} label={x.custom ? x.name || '' : t(x.k || '')} on={d.s === x.id}
-                onPress={() => up(s => { s.incomeDraft.s = x.id; s.incomeDraft.flag = null; })} />
-            ))}
-            <Chip label={t('src_own')} onPress={() => up(s => { s.sheet = 'srcown'; })} />
-          </Chips>
-        </View>
-        {d.flag === 'invalid' ? <NoteC><BodyS>{t('inc_invalid_amount')}</BodyS></NoteC> : null}
-        {d.flag === 'neg' ? <NoteC><BodyS>{t('inc_neg')}</BodyS></NoteC> : null}
-        {d.flag === 'outlier' ? (
+      </InSec>
+      {d.flag === 'invalid' ? <InSec><NoteC><BodyS>{t('inc_invalid_amount')}</BodyS></NoteC></InSec> : null}
+      {d.flag === 'neg' ? <InSec><NoteC><BodyS>{t('inc_neg')}</BodyS></NoteC></InSec> : null}
+      {d.flag === 'outlier' ? (
+        <InSec>
           <NoteC>
             <BodyS>{t('inc_outlier')}</BodyS>
             <BtnLine label={t('keep')} onPress={() => { void save(true); }} />
           </NoteC>
-        ) : null}
+        </InSec>
+      ) : null}
+      <InSec last>
         <Btn label={saving ? t('inc_saving') : t('inc_add')} onPress={() => { void save(false); }} />
-      </Card>
-      <BtnLine label={t('inc_past')} onPress={() => up(s => { s.sheet = 'pastmonth'; })} />
-      <BtnLine label={t('inc_import')} onPress={() => go('incomeimport')} />
+        {sofar ? (
+          <BodyS muted style={{ textAlign: 'center', marginTop: 8 }}>
+            {t('inc_sofar', { m: monthName(now.getMonth()), v: rm(sofar) })}
+          </BodyS>
+        ) : null}
+      </InSec>
+    </>
+  );
+
+  const recent = [...S.data.income]
+    .map((e, i) => ({ e, i }))
+    .slice(-6)
+    .reverse();
+
+  return (
+    <ScreenShell back title={t('money_income')}>
+      {S.incomeSync === 'loading' ? <NoteC><BodyS>{t('inc_sync_loading')}</BodyS></NoteC> : null}
+      {S.incomeSync === 'error' ? <NoteC><BodyS>{t('inc_sync_error')}</BodyS></NoteC> : null}
+      {S.data.income.length ? null : <Display cls="h-m">{t('inc_empty')}</Display>}
+      <InCard>
+        <InSeg mode={S.incMode} tint="in"
+          labels={[['type', t('im_type')], ['scan', t('im_scan')], ['csv', t('im_csv')]]}
+          onMode={m => {
+            if (m === 'csv') { go('incomeimport'); return; }
+            up(s => { s.incMode = m as typeof s.incMode; });
+          }} />
+        {S.incMode === 'scan' ? <IncomeScanBody /> : typeBody}
+      </InCard>
       {/* EN: Saved income is user-provided data, so provenance is shown once for the section instead of on every row. */}
       {/* 中文：已保存收入都属于用户提供的数据，因此来源标识只在区块顶部显示一次，不在每行重复。 */}
       {S.data.income.length ? (
-        <View style={{ marginTop: 4 }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: 8,
-            }}
-          >
-            <Text style={{ fontSize: 13, fontWeight: '700', color: C.ink64, letterSpacing: 0.2 }}>
-              {t('inc_recorded')}
-            </Text>
-            <View
-              style={{
-                paddingHorizontal: 9,
-                paddingVertical: 4,
-                borderRadius: 999,
-                backgroundColor: C.card,
-              }}
-            >
-              <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.7, color: C.ink64 }}>
-                {t('prov_user').toUpperCase()}
-              </Text>
-            </View>
+        <Card style={{ paddingVertical: 4, paddingHorizontal: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 40 }}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink }}>{t('inc_recent')}</Text>
+            <Prov p="user" />
           </View>
-
-          <View style={{ borderTopWidth: 1, borderTopColor: C.ink14 }}>
-            {[...S.data.income].reverse().map((e, i) => {
-              const src = S.data.sources.find(x => x.id === e.s);
-              const dd = +e.d.slice(8, 10) + ' ' + monthName(+e.d.slice(5, 7) - 1);
-              const label = e.method === 'historical_total'
-                ? `${monthName(+e.d.slice(5, 7) - 1)} ${e.d.slice(0, 4)} · ${t('inc_month_total')}`
-                : `${dd} · ${src ? (src.custom ? src.name : t(src.k || '')) : e.s}`;
-              const canEdit = (e.method === 'historical_total' || e.method === 'manual') && Boolean(e.id);
-              return (
-                <View
-                  key={e.id || `${e.d}-${i}`}
-                  style={{
-                    minHeight: 58,
-                    paddingVertical: 10,
-                    borderBottomWidth: 1,
-                    borderBottomColor: C.ink14,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                  }}
-                >
-                  <Text style={{ flex: 1, minWidth: 0, fontSize: 15, lineHeight: 20, color: C.ink }}>
-                    {label}
-                  </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: canEdit ? 12 : 0 }}>
-                    <Display cls="body-s">{rm(e.a)}</Display>
-                    {canEdit ? (
-                      <>
-                        <BtnLine
-                          label={t('edit')}
-                          style={{ fontSize: 13 }}
-                          onPress={() => up(state => { state.sheet = e.method === 'historical_total' ? `pastmonth:${e.id}` : `incomeedit:${e.id}`; })}
-                        />
-                        <BtnLine
-                          label={t('remove')}
-                          style={{ fontSize: 13 }}
-                          onPress={() => {
-                            void deleteIncomeEntry(e.id!).catch(() => toast(t('inc_save_failed'), 'error'));
-                          }}
-                        />
-                      </>
-                    ) : null}
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        </View>
+          {recent.map(({ e }, idx) => {
+            const src = S.data.sources.find(x => x.id === e.s);
+            const title = e.method === 'historical_total'
+              ? t('inc_month_total')
+              : (src ? (src.custom ? src.name || '' : t(src.k || '')) : e.s);
+            const sub = e.method === 'historical_total'
+              ? `${monthName(+e.d.slice(5, 7) - 1)} ${e.d.slice(0, 4)}`
+              : `${+e.d.slice(8, 10)} ${monthName(+e.d.slice(5, 7) - 1)}`;
+            const canEdit = (e.method === 'historical_total' || e.method === 'manual') && Boolean(e.id);
+            return (
+              <InRow key={e.id || `${e.d}-${idx}`} first={idx === 0} tint="in"
+                icon={<SrcIcon id={e.s} data={S.data} size={18} color="#3F7A7E" />}
+                title={title}
+                sub={sub}
+                subTag={e.method === 'import' ? t('cv_tag') : undefined}
+                amount={rm(e.a)}
+                onEdit={canEdit ? () => up(state => {
+                  state.sheet = e.method === 'historical_total' ? `pastmonth:${e.id}` : `incomeedit:${e.id}`;
+                }) : undefined} />
+            );
+          })}
+        </Card>
       ) : null}
     </ScreenShell>
   );

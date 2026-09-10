@@ -200,6 +200,12 @@ function getClientId(): string | null {
     return null;
   }
 
+  // In Playwright runs the browser app and the tests' request seeding must
+  // share one guest profile, so identity stays on the shared session cookie.
+  if (process.env.EXPO_PUBLIC_E2E === '1') {
+    return null;
+  }
+
   const storageKey = 'rumampu_client_id';
   let clientId = window.localStorage.getItem(storageKey);
 
@@ -428,6 +434,36 @@ export function createExpenseCategory(name: string): Promise<ApiExpenseCategory>
 
 export function fetchExpenses(): Promise<ApiExpenseEntry[]> {
   return request<ApiExpenseEntry[]>('/expenses/');
+}
+
+export interface AssistantMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export function assistantChat(
+  messages: AssistantMessage[],
+  language: string,
+): Promise<{ reply: string }> {
+  return request<{ reply: string }>('/assistant/chat/', {
+    method: 'POST',
+    body: JSON.stringify({ messages, language }),
+  });
+}
+
+export interface ApiReceiptScanResult {
+  is_receipt: boolean;
+  merchant: string | null;
+  date: string | null;
+  total: string | null;
+  category_slug: string | null;
+}
+
+export function scanReceipt(imageBase64: string, mediaType: string): Promise<ApiReceiptScanResult> {
+  return request<ApiReceiptScanResult>('/expenses/receipt-scan/', {
+    method: 'POST',
+    body: JSON.stringify({ image_base64: imageBase64, media_type: mediaType }),
+  });
 }
 
 export function createExpense(input: {

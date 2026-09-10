@@ -5,11 +5,14 @@ import { Hdr } from '../ui';
 
 /* Screen shell: sticky header + scrolling content column (mirrors #screen + .hdr). */
 export function ScreenShell({
-  back, title, brand, children,
-}: { back?: boolean; title?: string; brand?: boolean; children: React.ReactNode }) {
+  back, title, brand, greet, right, children,
+}: {
+  back?: boolean; title?: string; brand?: boolean; greet?: boolean;
+  right?: React.ReactNode; children: React.ReactNode;
+}) {
   return (
     <View style={{ flex: 1, backgroundColor: C.paper }}>
-      <Hdr back={back} title={title} brand={brand} />
+      <Hdr back={back} title={title} brand={brand} greet={greet} right={right} />
       <ScrollView
         testID="screen-scroll"
         style={{ flex: 1 }}

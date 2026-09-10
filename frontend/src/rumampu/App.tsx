@@ -1,10 +1,14 @@
 import React from 'react';
-import { BackHandler, Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { BackHandler, Platform, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppProvider, Route, useApp } from './state';
 import { C } from './theme';
-import { Onboarding, SheetHost, Splash, TabBar, ToastView } from './overlays';
+import { SheetHost, Splash, TabBar, ToastView } from './overlays';
+import { EntryFlow, GetToKnow } from './entry';
+import { AssistantFab, AssistantSheet } from './assistant';
 import { HomeScreen } from './screens/home';
+import { PlanScreen } from './screens/plan';
+import { ProfileScreen } from './screens/profile';
 import {
   CommitScreen, CoverageScreen, IncomeScreen, MoneyScreen, PatternScreen, RecordScreen, WorkcostsScreen,
 } from './screens/money';
@@ -12,7 +16,8 @@ import {
   ExLimitsScreen, ExpAddScreen, ExpMonthsScreen, ExpScanScreen, ExpensesScreen,
 } from './screens/expenses';
 import {
-  CompareScreen, HomecostScreen, HouseScreen, PrecheckScreen, RangeScreen, ResultScreen, ShockScreen,
+  CompareScreen, HomecostScreen, HousehomeScreen, HouseScreen, PrecheckScreen, RangeScreen,
+  ResultScreen, SavedtestsScreen, ShockScreen,
 } from './screens/test';
 import {
   BufferScreen, DocsScreen, PrepareScreen, PvCompareScreen, PvMonthScreen, PvSwitchScreen, UpfrontScreen,
@@ -20,7 +25,7 @@ import {
 import { ImportIncomeScreen } from './screens/imports';
 
 const SCREENS: Record<Route, React.ComponentType> = {
-  home: HomeScreen,
+  home: HomeScreen, plan: PlanScreen,
   money: MoneyScreen, income: IncomeScreen, incomeimport: ImportIncomeScreen,
   workcosts: WorkcostsScreen, commit: CommitScreen,
   pattern: PatternScreen, coverage: CoverageScreen, record: RecordScreen,
@@ -28,6 +33,7 @@ const SCREENS: Record<Route, React.ComponentType> = {
   expmonths: ExpMonthsScreen, exlimits: ExLimitsScreen,
   house: HouseScreen, homecost: HomecostScreen, precheck: PrecheckScreen, result: ResultScreen,
   range: RangeScreen, compare: CompareScreen, shock: ShockScreen,
+  househome: HousehomeScreen, savedtests: SavedtestsScreen, profile: ProfileScreen,
   prepare: PrepareScreen, upfront: UpfrontScreen, buffer: BufferScreen, docs: DocsScreen,
   pv_switch: PvSwitchScreen, pv_month: PvMonthScreen, pv_compare: PvCompareScreen,
 };
@@ -38,12 +44,12 @@ function Root() {
 
   React.useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (!S.onboarded || S.sheet) return false;
+      if (!S.onboarded || !S.knew || S.sheet) return false;
       backNav();
       return true;
     });
     return () => sub.remove();
-  }, [S.onboarded, S.sheet, backNav]);
+  }, [S.onboarded, S.knew, S.sheet, backNav]);
 
   const Screen = SCREENS[S.route] || HomeScreen;
 
@@ -54,9 +60,14 @@ function Root() {
       </View>
       <TabBar />
       <ToastView />
-      {!S.onboarded ? <Onboarding /> : null}
+      {/* v22 entry flow: language → meet Ruma → auth, then get-to-know. */}
+      {!S.onboarded ? <EntryFlow /> : null}
+      {S.onboarded && !S.knew ? <GetToKnow /> : null}
       {!S.onboarded ? <Splash /> : null}
       <SheetHost />
+      {/* US6.2: available on every page after onboarding, never before (AC6.2.10). */}
+      {S.onboarded && S.knew ? <AssistantFab /> : null}
+      {S.onboarded ? <AssistantSheet /> : null}
     </View>
   );
 }

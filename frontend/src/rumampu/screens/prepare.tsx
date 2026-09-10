@@ -12,19 +12,12 @@ import { C } from '../theme';
 import { Waterline } from '../charts';
 import { ScreenShell } from './shell';
 
-export function PrepareScreen() {
+/* v22: prepare rows live inside the House tab's "Get ready" segment. */
+export function PrepareBody() {
   const { t, go } = useApp();
   return (
-    <ScreenShell title={t('tab_prepare')}>
-      <NoteC>
-        <View style={{ gap: 3, alignItems: 'flex-start' }}>
-          <Badge label={t('pr_coming')} />
-          <BodyS muted>{t('pr_coming_note')}</BodyS>
-        </View>
-      </NoteC>
-      {/*
+    <View style={{ gap: 16 }}>
       <BtnQuiet onPress={() => go('upfront')}><IcLab name="wallet"><P>{t('pr_upfront')}</P></IcLab></BtnQuiet>
-      <BtnQuiet onPress={() => go('buffer')}><IcLab name="ring"><P>{t('pr_buffer')}</P></IcLab></BtnQuiet>
       <BtnQuiet onPress={() => go('docs')}><IcLab name="file"><P>{t('pr_docs')}</P></IcLab></BtnQuiet>
       <Divider />
       <BtnQuiet style={{ paddingVertical: 12 }} onPress={() => go('pv_switch')}>
@@ -35,7 +28,15 @@ export function PrepareScreen() {
           </View>
         </IcLab>
       </BtnQuiet>
-      */}
+    </View>
+  );
+}
+
+export function PrepareScreen() {
+  const { t } = useApp();
+  return (
+    <ScreenShell back title={t('hh_prep')}>
+      <PrepareBody />
     </ScreenShell>
   );
 }

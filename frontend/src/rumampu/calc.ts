@@ -19,14 +19,15 @@ export interface RecordSummary {
 
 export const EXP_FULL_DAYS = 20;
 
+/* v22 formats: whole ringgit everywhere; expenses (rmx) keep sen only when present. */
 export function nf(v: number): string {
-  return Number(v || 0).toLocaleString('en-MY', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return Math.round(Number(v) || 0).toLocaleString('en-MY');
 }
 export function rm(v: number): string { return 'RM ' + nf(v) }
-export function rmx(v: number): string { return rm(v) }
+export function rmx(v: number): string {
+  const r = Math.round((Number(v) || 0) * 100) / 100;
+  return Number.isInteger(r) ? rm(r) : 'RM ' + r.toFixed(2);
+}
 
 export function workCostTotal(data: AppData): number {
   return data.workCostEntries.reduce((a, c) => a + (+c.a || 0), 0);
