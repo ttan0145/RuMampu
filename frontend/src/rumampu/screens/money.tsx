@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { DimensionValue, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Route, useApp } from '../state';
 import { MOCK } from '../mock';
 import { ApiCoverageAnswer, INCOME_API_ENABLED } from '../api';
@@ -57,7 +57,7 @@ export function MoneyScreen() {
     const span = Math.max(1, hi - Math.min(lo, 0));
     const pos = (v: number) => Math.round((v - Math.min(lo, 0)) / span * 100);
     const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
-    const dotPos = (v: number) => `${clamp(pos(v), 2, 98)}%`;
+    const dotPos = (v: number): DimensionValue => `${clamp(pos(v), 2, 98)}%`;
     quiet = (
       <View style={mo.card}>
         <View style={mo.rowBetween}>
@@ -692,6 +692,13 @@ export function IncomeScreen() {
   const now = new Date();
   const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
   const per = d.per || 'day';
+  const currentMonthKey = iso(now).slice(0, 7);
+  const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  const previousMonthDraftDate = iso(new Date(
+    previousMonthEnd.getFullYear(),
+    previousMonthEnd.getMonth(),
+    15,
+  ));
   let matched = false;
   const dayCells = [0, 1, 2, 3, 4].map(i => {
     const x = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
@@ -720,13 +727,10 @@ export function IncomeScreen() {
           onPer={p => up(s => {
             s.incomeDraft.per = p;
             s.incomeDraft.flag = null;
-
-            // A "for a month" entry is a historical monthly total. Django
-            // intentionally rejects the current month, so move the draft to
-            // the previous month as soon as this mode is selected.
-            if (p === 'month') {
-              const prev = new Date(now.getFullYear(), now.getMonth() - 1, 15);
-              s.incomeDraft.d = iso(prev);
+            // US1.2 represents completed historical months. Do not leave the
+            // v22 month picker on the current month, which the API must reject.
+            if (p === 'month' && s.incomeDraft.d.slice(0, 7) >= currentMonthKey) {
+              s.incomeDraft.d = previousMonthDraftDate;
             }
           })} />
         <BodyS muted style={{ marginTop: 10, marginBottom: 6 }}>
@@ -768,7 +772,7 @@ export function IncomeScreen() {
             mode="month"
             monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
             // Historical monthly totals must be earlier than the current month.
-            maximumDate={new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)}
+            maximumDate={previousMonthEnd}
             onChange={v => up(s => { s.incomeDraft.d = v + '-15'; s.incomeDraft.flag = null; })}
           />
         ) : null}
@@ -1145,10 +1149,11 @@ export function CommitScreen() {
 export function PatternScreen() {
   const { S, t, monthName, go, refreshIncomePattern } = useApp();
   React.useEffect(() => {
-    if (S.incomePatternSync === 'idle') {
-      void refreshIncomePattern().catch(() => undefined);
-    }
-  }, [S.incomePatternSync, refreshIncomePattern]);
+    // Iteration 2 amendment: an income pattern is recomputed whenever this
+    // screen is opened. The shared request helper still deduplicates any
+    // request already in flight.
+    void refreshIncomePattern().catch(() => undefined);
+  }, [refreshIncomePattern]);
   const pattern = S.incomePattern;
   const monthLabel = (value: string) => {
     const month = Number(value.slice(5, 7)) - 1;
