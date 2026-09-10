@@ -679,6 +679,7 @@ export function ResultScreen() {
           <P>{t('rx_change')}</P>
         </Pressable>
       </View>
+      <BodyS muted>{t('rs_keep_hint')}</BodyS>
       <View style={{ flexDirection: 'row', gap: 12 }}>
         <Pressable onPress={() => go('range')} style={tx.hubtile}>
           <View style={tx.hubIc}><Ico name="band" size={22} color="#fff" /></View>

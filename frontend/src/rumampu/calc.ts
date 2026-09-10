@@ -107,14 +107,11 @@ function datedMonthKey(value: string): number | null {
   return Number(match[1]) * 12 + month - 1;
 }
 
-// EN: US8.1 record summary for Iteration 1. It counts only user-provided dated
-// income, expense, and work-cost entries because those are the current model's
-// financial records with business dates. Commitments are excluded because they
-// are recurring monthly items, not dated entries. Calculated values and
-// FinancialPeriod rows are also excluded because they are derived/supporting data.
-// 中文：US8.1 在 Iteration 1 的记录摘要逻辑。这里只统计用户输入且带业务日期的收入、支出和工作成本，
-// 因为它们才是当前模型中的带日期财务记录。commitments 是重复性的月度项目，不是带日期的记录，
-// 所以排除。计算结果和 FinancialPeriod 行属于派生/辅助数据，也不计入。
+// EN: US8.1 restores the Iteration 1 record boundary: Your Record summarises
+// dated income and expense entries only. Work costs, commitments, FinancialPeriod
+// rows, and calculated values stay outside these Epic 8 summary metrics.
+// 中文：US8.1 恢复 Iteration 1 的记录边界：“记录档案”只汇总带日期的收入和支出记录。
+// 工作成本、固定支出、FinancialPeriod 行和计算值都不计入这些 Epic 8 摘要指标。
 export function recordSummary(data: AppData): RecordSummary {
   // EN: Set deduplicates month keys automatically. If the user records several
   // income or expense entries in the same calendar month, that month contributes
@@ -130,9 +127,9 @@ export function recordSummary(data: AppData): RecordSummary {
   // “还没有带日期的收入或支出记录”，而不是显示误导性的最近日期。
   let latestEntryDate: string | null = null;
 
-  // EN: Arrow function helper shared by income, expense, and work-cost loops. Because dates
-  // are stored as ISO strings (YYYY-MM-DD), lexical string comparison correctly
-  // finds the latest business date after invalid dates are ignored.
+  // EN: Arrow function helper shared by the income and expense loops. Because
+  // dates are stored as ISO strings (YYYY-MM-DD), lexical string comparison
+  // correctly finds the latest business date after invalid dates are ignored.
   // 中文：这是收入和支出循环共用的箭头函数 helper。因为日期以 ISO 字符串
   //（YYYY-MM-DD）存储，在跳过无效日期后，直接用字符串比较就能正确找到最新业务日期。
   const addDate = (date: string) => {
@@ -149,16 +146,14 @@ export function recordSummary(data: AppData): RecordSummary {
   // 数组顺序，也避免在两个地方重复写月份和最近日期逻辑。
   data.income.forEach(entry => addDate(entry.d));
   data.expenses.forEach(entry => addDate(entry.d));
-  data.workCostEntries.forEach(entry => addDate(entry.d));
 
-  // EN: entryCount is deliberately simple: saved income, expense, and work-cost
-  // entries. The returned object is the complete US8.1 summary contract
-  // consumed by Your Record.
-  // 中文：entryCount 故意保持简单：已保存收入记录数 + 已保存支出记录数 + 已保存工作成本记录数。返回对象就是
-  // “记录档案”页面消费的完整 US8.1 摘要契约。
+  // EN: entryCount deliberately follows the same boundary: saved income entries
+  // plus saved expense entries, including multiple entries in the same month.
+  // 中文：entryCount 也遵循同一边界：已保存收入记录数 + 已保存支出记录数；
+  // 同一个月里的多笔记录仍分别计数。
   return {
     recordedMonthCount: months.size,
-    entryCount: data.income.length + data.expenses.length + data.workCostEntries.length,
+    entryCount: data.income.length + data.expenses.length,
     latestEntryDate,
   };
 }
