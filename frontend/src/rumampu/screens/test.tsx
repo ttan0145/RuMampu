@@ -379,6 +379,10 @@ export function ResultScreen() {
   const [shocked, setShocked] = React.useState<typeof base>(null);
   const [tryResult, setTryResult] = React.useState<typeof base>(null);
   const [customPay, setCustomPay] = React.useState('');
+  const shockIsCustom = ![0, 10, 20].includes(shock);
+  const [customShockOpen, setCustomShockOpen] = React.useState(shockIsCustom);
+  const [customShockText, setCustomShockText] = React.useState(shockIsCustom ? String(shock) : '');
+  const [customShockError, setCustomShockError] = React.useState('');
 
   /* Re-run the same scenario with the drop applied (backend-authoritative). */
   React.useEffect(() => {
@@ -440,27 +444,155 @@ export function ResultScreen() {
     : n < 4 ? <NoteC><BodyS>{t('rs_limit_thin', { n })}</BodyS></NoteC> : null;
 
   const legend = (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 8 }}>
-      {([[t('rx_leg_bar'), C.ink, 12], [t('rx_leg_line'), C.brand, 3], [t('rx_leg_gap'), C.short, 12]] as [string, string, number][]).map(([lbl, col, hh]) => (
-        <View key={lbl} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <View style={{ width: hh === 3 ? 16 : 12, height: hh, borderRadius: hh === 3 ? 2 : 3, backgroundColor: col }} />
-          <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, color: C.ink64 }}>{lbl}</Text>
+    <View
+      style={{
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 14,
+        marginTop: 8,
+        width: '100%',
+      }}
+    >
+      {([
+        [t('rx_leg_bar'), C.ink, 12],
+        [t('rx_leg_line'), C.brand, 3],
+        [t('rx_leg_gap'), C.short, 12],
+      ] as [string, string, number][]).map(([lbl, col, hh], i) => (
+        <View
+          key={lbl}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            gap: 6,
+            minWidth: 0,
+
+            // Long first label gets its own row
+            width: i === 0 ? '100%' : undefined,
+            maxWidth: '100%',
+          }}
+        >
+          <View
+            style={{
+              width: hh === 3 ? 16 : 12,
+              height: hh,
+              borderRadius: hh === 3 ? 2 : 3,
+              backgroundColor: col,
+              flexShrink: 0,
+              marginTop: hh === 3 ? 6 : 2,
+            }}
+          />
+
+          <Text
+            style={{
+              fontFamily: BODY_FONT,
+              fontSize: 11.5,
+              lineHeight: 17,
+              color: C.ink64,
+              flexShrink: 1,
+              minWidth: 0,
+            }}
+          >
+            {lbl}
+          </Text>
         </View>
       ))}
     </View>
   );
 
+  const applyCustomShock = () => {
+    const value = customShockText.trim();
+
+    // Accept 0-90 with up to 2 decimal places.
+    if (!/^\d+(\.\d{1,2})?$/.test(value)) {
+      setCustomShockError('Enter a percentage using up to 2 decimal places.');
+      return;
+    }
+
+    const next = Number(value);
+    if (!Number.isFinite(next) || next < 0 || next > 90) {
+      setCustomShockError('Enter a percentage from 0 to 90.');
+      return;
+    }
+
+    setCustomShockError('');
+    setCustomShockText(String(next));
+    up(x => { x.shock = next; });
+  };
+
   const shockChips = (
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 8 }}>
-      <BodyS muted>{t('rx_drop')}</BodyS>
-      <View style={{ flexDirection: 'row', gap: 6 }}>
+    <View style={tx.shockSection}>
+      <Text style={tx.shockTitle}>{t('rx_drop')}</Text>
+
+      <View style={tx.shockChipRow}>
         {[0, 10, 20].map(v => (
-          <Pressable key={v} onPress={() => up(x => { x.shock = v; })}
-            style={[tx.rxchip, shock === v && tx.rxchipOn]}>
-            <Text style={{ fontFamily: SEMI_FONT, fontSize: 13, color: shock === v ? '#fff' : C.ink }}>{v ? `−${v}%` : '0%'}</Text>
+          <Pressable
+            key={v}
+            onPress={() => {
+              setCustomShockOpen(false);
+              setCustomShockError('');
+              up(x => { x.shock = v; });
+            }}
+            style={[tx.rxchip, tx.shockChip, shock === v && !customShockOpen && tx.rxchipOn]}
+          >
+            <Text
+              style={{
+                fontFamily: SEMI_FONT,
+                fontSize: 13,
+                color: shock === v && !customShockOpen ? '#fff' : C.ink,
+              }}
+            >
+              {v ? `−${v}%` : '0%'}
+            </Text>
           </Pressable>
         ))}
+
+        <Pressable
+          onPress={() => {
+            setCustomShockOpen(true);
+            setCustomShockError('');
+            if (shockIsCustom) setCustomShockText(String(shock));
+          }}
+          style={[tx.rxchip, tx.shockChip, (customShockOpen || shockIsCustom) && tx.rxchipOn]}
+        >
+          <Text
+            style={{
+              fontFamily: SEMI_FONT,
+              fontSize: 13,
+              color: customShockOpen || shockIsCustom ? '#fff' : C.ink,
+            }}
+          >
+            {t('rx_custom')}
+          </Text>
+        </Pressable>
       </View>
+
+      {customShockOpen ? (
+        <View style={tx.customShockBox}>
+          <BodyS muted>{t('sh_pct')}</BodyS>
+          <View style={tx.customShockInputRow}>
+            <TextInput
+              value={customShockText}
+              accessibilityLabel="Custom income shock percentage"
+              keyboardType="decimal-pad"
+              inputMode="decimal"
+              placeholder="e.g. 15.5"
+              placeholderTextColor={C.ink40}
+              onChangeText={value => {
+                setCustomShockText(value);
+                setCustomShockError('');
+              }}
+              onSubmitEditing={applyCustomShock}
+              style={tx.customShockInput}
+            />
+            <Text style={tx.customShockPercent}>%</Text>
+            <Pressable onPress={applyCustomShock} style={tx.customShockApply}>
+              <Text style={tx.customShockApplyText}>{t('done')}</Text>
+            </Pressable>
+          </View>
+          {customShockError ? <Text style={tx.customShockError}>{customShockError}</Text> : null}
+          <Text style={tx.customShockDisclaimer}>{t('sh_disclaimer')}</Text>
+        </View>
+      ) : null}
     </View>
   );
 
@@ -872,6 +1004,29 @@ const tx = StyleSheet.create({
     backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center',
   },
   rxchipOn: { backgroundColor: C.brand, borderColor: C.brand },
+  shockSection: {
+    marginTop: 14, borderTopWidth: 1, borderTopColor: C.ink14, paddingTop: 12, gap: 9,
+  },
+  shockTitle: { fontFamily: DISP_FONT, fontSize: 14, color: C.ink },
+  shockChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  shockChip: { minWidth: 68, paddingHorizontal: 14 },
+  customShockBox: {
+    marginTop: 2, padding: 12, borderRadius: 14, backgroundColor: C.card, gap: 7,
+  },
+  customShockInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  customShockInput: {
+    flex: 1, minWidth: 0, minHeight: 42, backgroundColor: '#fff', borderWidth: 1.5,
+    borderColor: C.ink40, borderRadius: 12, paddingHorizontal: 12, fontFamily: BODY_FONT,
+    fontSize: 15, color: C.ink,
+  },
+  customShockPercent: { fontFamily: DISP_FONT, fontSize: 16, color: C.ink64 },
+  customShockApply: {
+    minHeight: 42, paddingHorizontal: 15, borderRadius: 12, backgroundColor: C.brand,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  customShockApplyText: { fontFamily: DISP_FONT, fontSize: 13.5, color: '#fff' },
+  customShockError: { fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 15, color: C.short },
+  customShockDisclaimer: { fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 15, color: C.ink64 },
   rxtry: { backgroundColor: '#D3E7E5', borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16 },
   btnQuiet: {
     minHeight: 52, backgroundColor: C.card, borderWidth: 1, borderColor: C.ink14, borderRadius: 14,

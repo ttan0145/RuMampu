@@ -48,27 +48,34 @@ export function MoneyScreen() {
     const lo = s[0], med = s[Math.floor(s.length / 2)], hi = s[s.length - 1];
     const span = Math.max(1, hi - Math.min(lo, 0));
     const pos = (v: number) => Math.round((v - Math.min(lo, 0)) / span * 100);
+    const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
+    const dotPos = (v: number) => `${clamp(pos(v), 2, 98)}%`;
     quiet = (
       <View style={mo.card}>
         <View style={mo.rowBetween}>
           <Text style={mo.ttl3}>{t('mo_quiet')}</Text>
           <Prov p="calc" />
         </View>
-        <View style={mo.band}>
-          <SvgXml
-            xml={'<svg width="100%" height="12" viewBox="0 0 100 12" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#F4D27A"/><stop offset="0.55" stop-color="#BFE2D8"/><stop offset="1" stop-color="#5CACB0"/></linearGradient></defs><rect width="100" height="12" rx="6" fill="url(#mb)"/></svg>'}
-            width="100%" height={12}
-            style={{ position: 'absolute', left: 0, right: 0, top: 0 }}
-          />
-          <View style={[mo.bandLbl, { left: `${pos(lo)}%`, bottom: 26 }]}>
-            <Text style={mo.bandLblTxt}>{t('mo_quietest')}</Text>
-            <Text style={mo.bandLblVal}>{rm(Math.max(0, lo))}</Text>
+        <View style={mo.bandWrap}>
+          <View style={mo.band}>
+            <SvgXml
+              xml={'<svg width="100%" height="12" viewBox="0 0 100 12" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#F4D27A"/><stop offset="0.55" stop-color="#BFE2D8"/><stop offset="1" stop-color="#5CACB0"/></linearGradient></defs><rect width="100" height="12" rx="6" fill="url(#mb)"/></svg>'}
+              width="100%" height={12}
+              style={{ position: 'absolute', left: 0, right: 0, top: 0 }}
+            />
+            <View style={[mo.bandDot, { left: dotPos(lo), backgroundColor: '#E0A800' }]} />
+            <View style={[mo.bandDot, { left: dotPos(med), backgroundColor: '#3F7A7E' }]} />
           </View>
-          <View style={[mo.bandDot, { left: `${pos(lo)}%`, backgroundColor: '#E0A800' }]} />
-          <View style={[mo.bandDot, { left: `${pos(med)}%`, backgroundColor: '#3F7A7E' }]} />
-          <View style={[mo.bandLbl, { left: `${pos(med)}%`, top: 26 }]}>
-            <Text style={mo.bandLblTxt}>{t('mo_usual')}</Text>
-            <Text style={mo.bandLblVal}>{rm(med)}</Text>
+
+          <View style={mo.bandLegend}>
+            <View style={mo.bandLegendLeft}>
+              <Text style={mo.bandLblTxt}>{t('mo_quietest')}</Text>
+              <Text style={mo.bandLblVal}>{rm(Math.max(0, lo))}</Text>
+            </View>
+            <View style={mo.bandLegendRight}>
+              <Text style={mo.bandLblTxt}>{t('mo_usual')}</Text>
+              <Text style={mo.bandLblVal}>{rm(med)}</Text>
+            </View>
           </View>
         </View>
         <BodyS muted>{t('mo_quiet_note')}</BodyS>
@@ -228,19 +235,56 @@ const mo = StyleSheet.create({
     shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.06, shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
     elevation: 2,
   },
+  bandWrap: {
+    marginTop: 24,
+    marginBottom: 18,
+    marginHorizontal: 14,
+  },
   band: {
-    position: 'relative', height: 12, borderRadius: 6,
-    marginTop: 26, marginBottom: 34, marginHorizontal: 8,
+    position: 'relative',
+    height: 12,
+    borderRadius: 6,
   },
   bandDot: {
-    position: 'absolute', top: -2, width: 16, height: 16, borderRadius: 8, borderWidth: 3, borderColor: '#fff',
-    marginLeft: -8,
-    shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
+    position: 'absolute',
+    top: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 3,
+    borderColor: '#fff',
+    marginLeft: -9,
+    shadowColor: 'rgba(60,81,82,1)',
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  bandLbl: { position: 'absolute', marginLeft: -30, width: 60, alignItems: 'center' },
-  bandLblTxt: { fontFamily: BODY_FONT, fontSize: 11, lineHeight: 13, color: C.ink64 },
-  bandLblVal: { fontFamily: DISP_FONT, fontSize: 13, color: C.ink, fontVariant: ['tabular-nums'] },
+  bandLegend: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginTop: 12,
+  },
+  bandLegendLeft: {
+    alignItems: 'flex-start',
+  },
+  bandLegendRight: {
+    alignItems: 'flex-end',
+  },
+  bandLblTxt: {
+    fontFamily: BODY_FONT,
+    fontSize: 11,
+    lineHeight: 13,
+    color: C.ink64,
+  },
+  bandLblVal: {
+    fontFamily: DISP_FONT,
+    fontSize: 13,
+    lineHeight: 17,
+    color: C.ink,
+    fontVariant: ['tabular-nums'],
+  },
   barVal: { fontFamily: DISP_FONT, fontSize: 10.5, color: C.ink, marginBottom: 3, fontVariant: ['tabular-nums'] },
   barLbl: { fontFamily: BODY_FONT, fontSize: 10.5, color: C.ink64, marginTop: 5, letterSpacing: 0.3 },
   motile: {

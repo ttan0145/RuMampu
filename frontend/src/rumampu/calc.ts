@@ -21,9 +21,18 @@ export const EXP_FULL_DAYS = 20;
 
 /* v22 formats: whole ringgit everywhere; expenses (rmx) keep sen only when present. */
 export function nf(v: number): string {
-  return Math.round(Number(v) || 0).toLocaleString('en-MY');
+  const n = Math.round((Number(v) || 0) * 100) / 100;
+
+  return n.toLocaleString('en-MY', {
+    minimumFractionDigits: Number.isInteger(n) ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
 }
-export function rm(v: number): string { return 'RM ' + nf(v) }
+
+export function rm(v: number): string {
+  return 'RM ' + nf(v);
+}
+
 export function rmx(v: number): string {
   const r = Math.round((Number(v) || 0) * 100) / 100;
   return Number.isInteger(r) ? rm(r) : 'RM ' + r.toFixed(2);
