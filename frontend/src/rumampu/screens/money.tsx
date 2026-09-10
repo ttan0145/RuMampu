@@ -34,8 +34,16 @@ export function MoneyScreen() {
   const now = new Date();
   const thisKey = now.getFullYear() * 12 + now.getMonth();
   /* month shown: the current month if it has income, else the latest month with income */
-  const ikeys = new Set(S.data.income.map(e => monthKeyOf(e.d)));
-  const mk = ikeys.has(thisKey) ? thisKey : (ikeys.size ? Math.max(...ikeys) : thisKey);
+  const recordedKeys = new Set([
+  ...S.data.income.map(e => monthKeyOf(e.d)),
+  ...S.data.expenses.map(e => monthKeyOf(e.d)),
+  ]);
+
+  const mk = recordedKeys.has(thisKey)
+    ? thisKey
+    : recordedKeys.size
+      ? Math.max(...recordedKeys)
+      : thisKey;
   const inSum = S.data.income.filter(e => monthKeyOf(e.d) === mk).reduce((a, e) => a + (+e.a || 0), 0);
   const outSum = S.data.expenses.filter(e => monthKeyOf(e.d) === mk).reduce((a, e) => a + (+e.a || 0), 0);
 

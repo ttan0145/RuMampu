@@ -31,11 +31,31 @@ function Blob({ size, style, color }: { size: number; style: object; color: stri
 /* .hero + .hero2 — the dark balance cards. */
 function HomeCards() {
   const { S, t, monthName, go } = useApp();
-  const ma = monthsAgg(S.data);
-  const last = ma[ma.length - 1];
-  const key = last ? last.y * 12 + last.m : null;
-  const ex = key != null ? (expByMonth(S.data).get(key) || { total: 0 }).total : 0;
-  const mn = last ? monthName(last.m) : '';
+  const monthKeyOf = (d: string) =>
+  (+d.slice(0, 4)) * 12 + (+d.slice(5, 7) - 1);
+
+  const keys = [
+    ...S.data.income.map(e => monthKeyOf(e.d)),
+    ...S.data.expenses.map(e => monthKeyOf(e.d)),
+  ];
+
+  const key = keys.length ? Math.max(...keys) : null;
+
+  const income = key != null
+    ? S.data.income
+        .filter(e => monthKeyOf(e.d) === key)
+        .reduce((sum, e) => sum + (+e.a || 0), 0)
+    : 0;
+
+  const ex = key != null
+    ? S.data.expenses
+        .filter(e => monthKeyOf(e.d) === key)
+        .reduce((sum, e) => sum + (+e.a || 0), 0)
+    : 0;
+
+  const mn = key != null
+    ? monthName(key % 12)
+    : '';
   const gap = Math.max(0, upfrontNeed(S.data) - S.data.cashOnHand);
   return (
     <View>
@@ -67,7 +87,7 @@ function HomeCards() {
           <SvgXml xml={arrowXml(true, '#5FD37A')} width={22} height={22} />
           <View style={{ minWidth: 0, flexShrink: 1 }}>
             <Text style={st.heroLbl} numberOfLines={1}>{t('hm_income')}{mn ? ' · ' + mn : ''}</Text>
-            <Text style={st.hero2Amt}>{rm(last ? last.gross : 0)}</Text>
+            <Text style={st.hero2Amt}>{rm(income)}</Text>
           </View>
         </View>
         <View style={{
