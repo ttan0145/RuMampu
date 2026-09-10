@@ -2,6 +2,7 @@ from collections import defaultdict
 from decimal import Decimal, ROUND_HALF_UP, localcontext
 
 from django.db.models import Sum
+from django.utils import timezone
 
 from finance.analysis_service import build_income_pattern
 from finance.models import GuestProfile
@@ -114,24 +115,46 @@ def pre_housing_check(profile: GuestProfile):
         or Decimal('0')
     )
 
+    # Housing stress tests are historical comparisons. The current calendar
+    # month is only a partial "recorded so far" month, so it must not be
+    # treated as a complete historical month. This prevents one income entry
+    # today from turning 12 completed months into 13 tested months.
+    today = timezone.localdate()
+
     rows = []
     for pattern_month in pattern['months']:
         year, month = (int(part) for part in pattern_month['month'].split('-'))
-        gross = pattern_month['gross_income']
-        usable_income = pattern_month['usable_income']
+
+        if year == today.year and month == today.month:
+            continue
+
+        gross = _decimal(pattern_month['gross_income'])
+        work_costs = _decimal(pattern_month.get('work_costs', 0))
+
         expense_month = expense_months.get((year, month))
-        existing_costs = commitment_total
+        commitment_costs = commitment_total
         if expense_month and len(expense_month['days']) >= EXP_FULL_DAYS:
-            existing_costs = commitment_total - variable_estimates + expense_month['total']
-        surplus = usable_income - existing_costs
+            commitment_costs = (
+                commitment_total
+                - variable_estimates
+                + expense_month['total']
+            )
+
+        # Keep one explicit, authoritative definition of the amount available
+        # for housing. This is the same meaning shown by the Money screen:
+        # gross income - dated work costs - commitments/current expenses.
+        # Do not compare the house payment against raw gross income.
+        usable_income = gross - work_costs
+        available_for_home = usable_income - commitment_costs
+
         rows.append({
             'year': year,
             'month': month,
             'gross_income': _money(gross),
             'usable_income': _money(usable_income),
-            'existing_costs': _money(existing_costs),
-            'surplus': _money(surplus),
-            'shortfall': _money(max(Decimal('0'), -surplus)),
+            'existing_costs': _money(commitment_costs),
+            'surplus': _money(available_for_home),
+            'shortfall': _money(max(Decimal('0'), -available_for_home)),
         })
 
     short_rows = [row for row in rows if row['shortfall'] > 0]
@@ -225,9 +248,17 @@ def housing_test_result(
 
     monthly = []
     for row in pre['months']:
-        usable_income = _decimal(row['usable_income']) * shock_factor
+        # The pre-check's surplus is the authoritative baseline available for
+        # housing. For an income-shock scenario, reduce usable income and then
+        # subtract the exact same existing-cost figure.
         existing_costs = _decimal(row['existing_costs'])
-        available = usable_income - existing_costs
+        if shock == 0:
+            usable_income = _decimal(row['usable_income'])
+            available = _decimal(row['surplus'])
+        else:
+            usable_income = _decimal(row['usable_income']) * shock_factor
+            available = usable_income - existing_costs
+
         existing_shortfall = max(Decimal('0'), -available)
         post_housing_residual = available - tested_cost
         total_shortfall = max(Decimal('0'), -post_housing_residual)

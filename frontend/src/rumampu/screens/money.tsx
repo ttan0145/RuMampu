@@ -831,6 +831,15 @@ export function WorkcostsScreen() {
   const summaryReady = (S.workCostSync === 'ready' || S.workCostSync === 'disabled') && summary?.month === selectedMonth;
   const [selectedYear, selectedMonthNumber] = selectedMonth.split('-').map(Number);
   const selectedMonthLabel = `${monthName(Math.max(0, selectedMonthNumber - 1))} ${selectedYear}`;
+  const dateForMonth = (monthValue: string) => {
+    const [year, month] = monthValue.split('-').map(Number);
+    const isCurrentMonth = year === today.getFullYear() && month === today.getMonth() + 1;
+    if (isCurrentMonth) return todayText;
+
+    const lastDay = new Date(year, month, 0).getDate();
+    const day = Math.min(today.getDate(), lastDay);
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  };
   const categoryLabel = (id: string, recordedName?: string) => {
     const category = S.data.workCostCategories.find(item => item.id === id);
     return category ? (category.custom ? category.name || '' : t(category.k || '')) : recordedName || id;
@@ -850,12 +859,16 @@ export function WorkcostsScreen() {
       toast(t('wc_entry_invalid'), 'error');
       return;
     }
+    if (!costDate.startsWith(selectedMonth)) {
+      toast('The work cost date must be within the selected month.', 'error');
+      return;
+    }
     savingRef.current = true;
     setSaving(true);
     try {
       await saveWorkCostEntry({ categoryId, amount: Number(amount), date: costDate });
       setAmount('');
-      setCostDate(todayText);
+      setCostDate(dateForMonth(selectedMonth));
       toast(t('saved'));
     } catch {
       toast(t('wc_save_failed'), 'error');
@@ -876,6 +889,10 @@ export function WorkcostsScreen() {
     if (!editingId || savingRef.current) return;
     if (!editCategoryId || !isValidMoneyText(editAmount) || Number(editAmount) <= 0 || !isValidIsoDate(editDate) || editDate > todayText) {
       toast(t('wc_entry_invalid'), 'error');
+      return;
+    }
+    if (!editDate.startsWith(selectedMonth)) {
+      toast('The work cost date must be within the selected month.', 'error');
       return;
     }
     savingRef.current = true;
@@ -915,6 +932,8 @@ export function WorkcostsScreen() {
               toast(t('wc_month_unavailable'), 'error');
               return;
             }
+            setCostDate(dateForMonth(value));
+            setEditingId(null);
             void refreshWorkCosts(value).catch(() => toast(t('wc_sync_error'), 'error'));
           }}
         />

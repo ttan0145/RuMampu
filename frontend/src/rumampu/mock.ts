@@ -79,7 +79,7 @@ export const MOCK: AppData = {
   upfront: [
     {id:'legal',k:'uf_legal',a:2700,p:'assume'},{id:'stampT',k:'uf_stampT',a:4000,p:'official'},{id:'stampL',k:'uf_stampL',a:1250,p:'official'},{id:'val',k:'uf_val',a:800,p:'assume'},{id:'disb',k:'uf_disb',a:1500,p:'assume'},{id:'move',k:'uf_move',a:800,p:'assume'},{id:'basic',k:'uf_basic',a:2000,p:'assume'}
   ],
-  comparePayments: [1000, 1200, 1400],
+  comparePayments: [],
   expenseCats: [
     {id:'meals',k:'xc_meals'},{id:'groc',k:'xc_groc'},{id:'transp',k:'xc_transp'},{id:'family',k:'xc_family'},{id:'other',k:'xc_other'}
   ],

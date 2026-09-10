@@ -367,6 +367,16 @@ export function PrecheckScreen() {
   );
 }
 
+function comparisonPaymentsAround(currentCost: number): number[] {
+  const current = Math.max(0, Math.round((Number(currentCost) || 0) * 100) / 100);
+  const step = 200;
+  return [
+    Math.max(0, Math.round((current - step) * 100) / 100),
+    current,
+    Math.round((current + step) * 100) / 100,
+  ];
+}
+
 export function ResultScreen() {
   const { S, t, monthName, up, go } = useApp();
   React.useEffect(() => {
@@ -444,56 +454,11 @@ export function ResultScreen() {
     : n < 4 ? <NoteC><BodyS>{t('rs_limit_thin', { n })}</BodyS></NoteC> : null;
 
   const legend = (
-    <View
-      style={{
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 14,
-        marginTop: 8,
-        width: '100%',
-      }}
-    >
-      {([
-        [t('rx_leg_bar'), C.ink, 12],
-        [t('rx_leg_line'), C.brand, 3],
-        [t('rx_leg_gap'), C.short, 12],
-      ] as [string, string, number][]).map(([lbl, col, hh], i) => (
-        <View
-          key={lbl}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'flex-start',
-            gap: 6,
-            minWidth: 0,
-
-            // Long first label gets its own row
-            width: i === 0 ? '100%' : undefined,
-            maxWidth: '100%',
-          }}
-        >
-          <View
-            style={{
-              width: hh === 3 ? 16 : 12,
-              height: hh,
-              borderRadius: hh === 3 ? 2 : 3,
-              backgroundColor: col,
-              flexShrink: 0,
-              marginTop: hh === 3 ? 6 : 2,
-            }}
-          />
-
-          <Text
-            style={{
-              fontFamily: BODY_FONT,
-              fontSize: 11.5,
-              lineHeight: 17,
-              color: C.ink64,
-              flexShrink: 1,
-              minWidth: 0,
-            }}
-          >
-            {lbl}
-          </Text>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 8 }}>
+      {([[t('rx_leg_bar'), C.ink, 12], [t('rx_leg_line'), C.brand, 3], [t('rx_leg_gap'), C.short, 12]] as [string, string, number][]).map(([lbl, col, hh]) => (
+        <View key={lbl} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <View style={{ width: hh === 3 ? 16 : 12, height: hh, borderRadius: hh === 3 ? 2 : 3, backgroundColor: col }} />
+          <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, color: C.ink64 }}>{lbl}</Text>
         </View>
       ))}
     </View>
@@ -613,7 +578,7 @@ export function ResultScreen() {
         </View>
       ) : null}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-        {[1000, 1200, 1400].map(v => (
+        {comparisonPaymentsAround(cost).map(v => (
           <Pressable key={v} onPress={() => up(x => { x.tryPay = v; })}
             style={[tx.rxchip, { backgroundColor: '#fff' }, S.tryPay === v && tx.rxchipOn]}>
             <Text style={{ fontFamily: SEMI_FONT, fontSize: 13, color: S.tryPay === v ? '#fff' : C.ink }}>{rm(v)}</Text>
@@ -630,8 +595,8 @@ export function ResultScreen() {
           <TextInput
             value={customPay}
             onChangeText={setCustomPay}
-            keyboardType="number-pad"
-            inputMode="numeric"
+            keyboardType="decimal-pad"
+            inputMode="decimal"
             placeholder="1100"
             placeholderTextColor={C.ink40}
             style={{
@@ -641,7 +606,7 @@ export function ResultScreen() {
           />
           <Pressable onPress={() => {
             const v = parseFloat(customPay) || 0;
-            if (v > 0) up(x => { x.tryPay = Math.round(v); });
+            if (v > 0) up(x => { x.tryPay = Math.round(v * 100) / 100; });
           }} style={[tx.rxchipOn, { minHeight: 42, borderRadius: 12, paddingHorizontal: 18, justifyContent: 'center' }]}>
             <Text style={{ fontFamily: DISP_FONT, fontSize: 14, color: '#fff' }}>{t('rx_try_go')}</Text>
           </Pressable>
@@ -774,15 +739,22 @@ export function RangeScreen() {
 }
 
 export function CompareScreen() {
-  const { S, t, monthName, up } = useApp();
+  const { t, monthName } = useApp();
+  const baseResult = getHousingTestResult();
+  const testedCost = baseResult?.tested_home_cost ?? 0;
+  const scenarioId = getHousingScenario()?.id ?? baseResult?.scenario_id;
+  const [payments, setPayments] = React.useState<number[]>(() => comparisonPaymentsAround(testedCost));
   const [results, setResults] = React.useState<Record<number, Awaited<ReturnType<typeof runHousingTest>>>>({});
-  const paymentsKey = S.data.comparePayments.join('|');
-  const scenarioId = getHousingScenario()?.id ?? getHousingTestResult()?.scenario_id;
+  const paymentsKey = payments.join('|');
+
+  React.useEffect(() => {
+    setPayments(comparisonPaymentsAround(testedCost));
+  }, [testedCost]);
 
   React.useEffect(() => {
     if (!scenarioId) return;
     let active = true;
-    void Promise.all(S.data.comparePayments.map(async (payment, index) => [index, await runHousingTest(scenarioId, payment)] as const))
+    void Promise.all(payments.map(async (payment, index) => [index, await runHousingTest(scenarioId, payment)] as const))
       .then(items => {
         if (!active) return;
         setResults(Object.fromEntries(items));
@@ -795,7 +767,7 @@ export function CompareScreen() {
   return (
     <ScreenShell back title={t('rs_compare')}>
       <BodyS muted>{t('cp_note')}</BodyS>
-      {S.data.comparePayments.map((p, i) => {
+      {payments.map((p, i) => {
         const result = results[i];
         const n = result?.tested_months ?? 0;
         const shortCount = result?.short_month_count ?? 0;
@@ -814,7 +786,7 @@ export function CompareScreen() {
                 value={p}
                 style={{ width: 118 }}
                 accessibilityLabel={t('cp_pay', { i: i + 1 })}
-                onNum={x => up(st => { st.data.comparePayments[i] = Math.max(0, x); })}
+                onNum={x => setPayments(current => current.map((value, index) => index === i ? Math.max(0, Math.round(x * 100) / 100) : value))}
               />
               <View style={{ alignItems: 'flex-end', gap: 2, flexShrink: 1 }}>
                 <Text style={{ fontSize: 13, lineHeight: 18, color: C.ink, fontWeight: '700' }}>
