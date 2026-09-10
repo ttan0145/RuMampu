@@ -75,7 +75,7 @@ export const MOCK: AppData = {
   homeCosts: [
     {id:'maint',k:'hc_maint',a:150},{id:'insure',k:'hc_insure',a:55},{id:'assess',k:'hc_assess',a:20},{id:'quit',k:'hc_quit',a:5},{id:'parking',k:'hc_parking',a:0},{id:'other',k:'hc_other',a:0}
   ],
-  cashOnHand: 8000,
+  cashOnHand: 0,
   upfront: [
     {id:'legal',k:'uf_legal',a:2700,p:'assume'},{id:'stampT',k:'uf_stampT',a:4000,p:'official'},{id:'stampL',k:'uf_stampL',a:1250,p:'official'},{id:'val',k:'uf_val',a:800,p:'assume'},{id:'disb',k:'uf_disb',a:1500,p:'assume'},{id:'move',k:'uf_move',a:800,p:'assume'},{id:'basic',k:'uf_basic',a:2000,p:'assume'}
   ],

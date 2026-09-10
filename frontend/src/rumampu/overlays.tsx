@@ -581,8 +581,10 @@ export function SheetHost() {
           date: editDate,
           sourceId: editSource,
         });
+        // Editing an existing entry does not change the total entry count.
+        const entryCount = S.data.income.length;
         up(state => { state.sheet = null; });
-        toast(t('entry_saved_n', { n: monthsAgg(S.data).length }));
+        toast(t('entry_saved_n', { n: entryCount }));
       } catch {
         toast(t('inc_save_failed'));
       } finally {
@@ -662,9 +664,12 @@ export function SheetHost() {
             confirmOutlier: true,
           });
         }
-        let months = 0;
-        up(s => { s.sheet = null; months = monthsAgg(s.data).length; });
-        toast(t('entry_saved_n', { n: months }));
+        // Count saved income entries directly. A new past-month entry adds one;
+        // editing an existing past-month entry keeps the same count.
+        const entryCount = S.data.income.length + (editId ? 0 : 1);
+
+        up(s => { s.sheet = null; });
+        toast(t('entry_saved_n', { n: entryCount }));
       } catch {
         toast(t('inc_save_failed'));
       } finally {

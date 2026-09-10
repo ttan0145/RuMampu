@@ -187,12 +187,39 @@ export class ApiError extends Error {
 }
 
 function apiErrorDetails(payload: unknown): { code: string; message: string } | null {
-  if (!payload || typeof payload !== 'object' || !('error' in payload)) return null;
-  const error = payload.error;
-  if (!error || typeof error !== 'object') return null;
-  const code = 'code' in error ? String(error.code) : 'request_error';
-  const message = 'message' in error ? String(error.message) : 'The request could not be completed.';
-  return { code, message };
+  if (!payload || typeof payload !== 'object') return null;
+
+  // RuMampu's wrapped API errors.
+  if ('error' in payload) {
+    const error = payload.error;
+    if (error && typeof error === 'object') {
+      const code = 'code' in error ? String(error.code) : 'request_error';
+      const message = 'message' in error
+        ? String(error.message)
+        : 'The request could not be completed.';
+      return { code, message };
+    }
+  }
+
+  // Django REST Framework serializer errors are returned as a field map, e.g.
+  // { source_id: ["..."] } or { date: ["..."] }. Preserve the first
+  // useful message instead of hiding it behind "Request failed with 400".
+  for (const [field, value] of Object.entries(payload as Record<string, unknown>)) {
+    const first = Array.isArray(value) ? value[0] : value;
+    if (typeof first === 'string' && first.trim()) {
+      return { code: `validation_${field}`, message: first };
+    }
+    if (first && typeof first === 'object') {
+      for (const nested of Object.values(first as Record<string, unknown>)) {
+        const nestedFirst = Array.isArray(nested) ? nested[0] : nested;
+        if (typeof nestedFirst === 'string' && nestedFirst.trim()) {
+          return { code: `validation_${field}`, message: nestedFirst };
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 function getClientId(): string | null {

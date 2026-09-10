@@ -343,6 +343,7 @@ function initialState(): AppState {
     data.commitments = { living: [], debts: [], savings: [] };
     data.expenseCats = [];
     data.expenses = [];
+    data.cashOnHand = 0;
   }
   return {
     lang: 'en',

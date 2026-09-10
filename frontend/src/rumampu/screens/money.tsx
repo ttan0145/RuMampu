@@ -596,6 +596,36 @@ export function IncomeScreen() {
       toast(t('inc_invalid_date'));
       return;
     }
+
+    // Historical monthly totals have stricter backend rules than daily/weekly
+    // manual entries. Validate them before POST so the UI never sends a request
+    // Django is guaranteed to reject with HTTP 400.
+    if ((d.per || 'day') === 'month') {
+      const selectedMonth = d.d.slice(0, 7);
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+      if (selectedMonth >= currentMonth) {
+        toast(t('inc_past_invalid'), 'error');
+        return;
+      }
+
+      if (S.data.income.some(entry => entry.d.slice(0, 7) === selectedMonth)) {
+        toast(t('inc_past_exists'), 'error');
+        return;
+      }
+    }
+
+    // A manual entry cannot be added into a month that is already represented
+    // by a historical monthly total. Catch this client-side as well.
+    if ((d.per || 'day') !== 'month') {
+      const selectedMonth = d.d.slice(0, 7);
+      if (S.data.income.some(entry =>
+        entry.d.slice(0, 7) === selectedMonth && entry.method === 'historical_total'
+      )) {
+        toast(t('inc_past_exists'), 'error');
+        return;
+      }
+    }
     // EN: Mirror AC1.1.10 on every client, including deployed web.
     // This keeps Expo/native, prototype, and web behaviour consistent even when
     // browser session/cookie handling means Django has not yet seen the same
@@ -634,12 +664,15 @@ export function IncomeScreen() {
         up(s => { s.incomeDraft.flag = 'outlier'; });
         return;
       }
-      let months = 0;
+      // saveIncomeEntry updates React state asynchronously, so S.data may still
+      // be the pre-save snapshot here. The toast should match the number of
+      // saved income entries, not the number of unique months.
+      const entryCount = S.data.income.length + 1;
+
       up(s => {
         s.incomeDraft = { a: '', d: d.d, s: d.s, flag: null, per: d.per || 'day' };
-        months = monthsAgg(s.data).length;
       });
-      toast(t('entry_saved_n', { n: months }));
+      toast(t('entry_saved_n', { n: entryCount }));
     } catch {
       toast(t('inc_save_failed'));
     } finally {
@@ -676,7 +709,18 @@ export function IncomeScreen() {
       <InSec>
         <InLbl>{t('inc_q_when')}</InLbl>
         <PerSeg per={per} labels={p => t('perx_' + p)} tint="in"
-          onPer={p => up(s => { s.incomeDraft.per = p; s.incomeDraft.flag = null; })} />
+          onPer={p => up(s => {
+            s.incomeDraft.per = p;
+            s.incomeDraft.flag = null;
+
+            // A "for a month" entry is a historical monthly total. Django
+            // intentionally rejects the current month, so move the draft to
+            // the previous month as soon as this mode is selected.
+            if (p === 'month') {
+              const prev = new Date(now.getFullYear(), now.getMonth() - 1, 15);
+              s.incomeDraft.d = iso(prev);
+            }
+          })} />
         <BodyS muted style={{ marginTop: 10, marginBottom: 6 }}>
           {per === 'month' ? t('inc_monthof') : per === 'week' ? `${t('inc_weekend')} · ${t('inc_weekany')}` : t('inc_date')}
         </BodyS>
@@ -715,7 +759,8 @@ export function IncomeScreen() {
             value={d.d.slice(0, 7)}
             mode="month"
             monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
-            maximumDate={new Date()}
+            // Historical monthly totals must be earlier than the current month.
+            maximumDate={new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)}
             onChange={v => up(s => { s.incomeDraft.d = v + '-15'; s.incomeDraft.flag = null; })}
           />
         ) : null}

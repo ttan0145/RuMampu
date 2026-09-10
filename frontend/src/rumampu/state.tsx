@@ -184,6 +184,9 @@ function initialState(): AppState {
     data.commitments = { living: [], debts: [], savings: [] };
     data.expenseCats = [];
     data.expenses = [];
+    // Never inherit demo/mock cash in the real API-backed app. The balance
+    // starts at zero and changes only through real user actions/data.
+    data.cashOnHand = 0;
   }
   const today = todayIso();
   return {

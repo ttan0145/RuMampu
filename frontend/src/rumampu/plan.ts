@@ -1,5 +1,5 @@
 import { AppState, PlanState } from './state';
-import { villageEnsure, villageRemove, villageSpawn } from './village';
+import { villageRemove, villageSpawn } from './village';
 
 /* v22 saving plan — the month's target split into small, uneven daily amounts
    that add up exactly. Ported verbatim from the prototype: same seeded PRNG so
@@ -13,16 +13,6 @@ export function planEnsure(s: AppState): PlanState {
   if (!s.plan || s.plan.key !== key) {
     s.plan = { key, target: 500, n, amounts: new Array(n).fill(0), done: new Array(n).fill(false), seed: 1 };
     planRegen(s.plan);
-    /* demo seed: the first four days of the month are already saved, one Pondok each */
-    const seeded = Math.min(4, d.getDate() - 1);
-    const v = villageEnsure(s);
-    const spots = [5, 6, 9, 10];
-    for (let i = 0; i < seeded; i++) {
-      s.plan.done[i] = true;
-      s.data.cashOnHand += s.plan.amounts[i];
-      v.cells[spots[i]] = 1;
-      v.built++;
-    }
   }
   return s.plan;
 }
