@@ -1,5 +1,5 @@
 import { expect, Page } from '@playwright/test';
-import { e2eGet, e2ePost, test } from './support/fixtures';
+import { e2eGet, e2ePost, e2ePut, test } from './support/fixtures';
 import { ac } from './support/acceptance';
 import { API, captureEvidence, openApp, openMoneyScreen } from './support/app';
 
@@ -47,6 +47,38 @@ async function openTwelveMonthPattern(page: Page): Promise<void> {
 }
 
 test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
+  test('TECH-E2-05 — reopening the pattern fetches newly recorded income', { tag: '@hardening' }, async ({ page }) => {
+    await addIncomeMonth(page, '2026-01-05', '1000.00');
+    await openApp(page);
+    await openMoneyScreen(page, 'Income pattern');
+    await expect(page.getByText('RM 1,000.00', { exact: true }).first()).toBeVisible();
+    await page.getByLabel('Back').click();
+    await addIncomeMonth(page, '2026-02-05', '2000.00');
+    const refreshed = page.waitForResponse(response => response.request().method() === 'GET' && response.url().endsWith('/income-pattern/'));
+    await openMoneyScreen(page, 'Income pattern');
+    expect((await (await refreshed).json()).recorded_month_count).toBe(2);
+    await expect(page.getByText('RM 1,500.00', { exact: true }).first()).toBeVisible();
+  });
+
+  test('TECH-E2-06 — recording a named quiet month refreshes coverage', { tag: '@hardening' }, async ({ page }) => {
+    await addIncomeMonth(page, '2026-01-05', '1000.00');
+    const saved = await e2ePut(page, `${API}/income-coverage/`, { data: { answer: 'yes', slower_months: [3] } });
+    expect(saved.ok()).toBeTruthy();
+    await openApp(page);
+    await openMoneyScreen(page, 'Coverage check');
+    await expect(page.getByText('Not yet represented in your recorded income: Mar.', { exact: true })).toBeVisible();
+    await openMoneyScreen(page, 'Income');
+    await page.locator('input:visible').first().fill('1500');
+    await page.getByText('Per month', { exact: true }).click();
+    await page.getByLabel('Choose month').click();
+    await page.getByRole('button', { name: 'Mar 2026', exact: true }).click();
+    await page.getByRole('button', { name: 'Add income', exact: true }).click();
+    await expect(page.getByText('Monthly total', { exact: true })).toBeVisible();
+    await openMoneyScreen(page, 'Coverage check');
+    await expect(page.getByText('Represented in your recorded income: Mar.', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Not yet represented in your recorded income/)).toHaveCount(0);
+  });
+
   test('US2.1 — View income month by month', { tag: '@us2.1' }, async ({ page }) => {
     await openTwelveMonthPattern(page);
     const bars = page.locator(
@@ -106,13 +138,13 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
 
     await ac('AC2.3.1', 'Use the recorded-history rule', async () => {
       await expect(page.getByLabel(/Feb 26: RM 3,160.00 calculated usable income, lowest recorded month/)).toBeVisible();
-      await expect(page.getByText(/Lowest in your current record: Feb 2026/)).toBeVisible();
+      await expect(page.getByText('Below that line: Feb 2026.', { exact: true })).toBeVisible();
     });
     await ac('AC2.3.2', 'Explain the identification', async () => {
       await expect(page.getByText(/not a financial standard or a prediction/i)).toBeVisible();
       await assertForbiddenConclusionsAbsent(page);
     });
-    await page.getByText(/Lowest in your current record: Feb 2026/).scrollIntoViewIfNeeded();
+    await page.getByText('Below that line: Feb 2026.', { exact: true }).scrollIntoViewIfNeeded();
     await captureEvidence(page, 'epic-2', 'ac2.3.1-2__lower-income-month.png', { resetScroll: false });
   });
 

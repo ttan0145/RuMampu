@@ -1,7 +1,7 @@
 import { expect, Locator, Page } from '@playwright/test';
 import { e2eGet, e2ePost, test } from './support/fixtures';
 import path from 'node:path';
-import { ac } from './support/acceptance';
+import { ac, deferredAc } from './support/acceptance';
 import { API, captureEvidence, openApp, openMoneyScreen } from './support/app';
 import { currentWorkCostMonth, monthLabel, previousMonth, selectWorkCostMonth } from './support/work-costs';
 
@@ -73,26 +73,36 @@ async function replaceValue(input: Locator, value: string): Promise<void> {
 }
 
 async function chooseDay(page: Page, day: number): Promise<void> {
-  await page.getByLabel('Choose date').click();
+  const chooseDate = page.locator('[aria-label="Choose date"]:visible').last();
+  if (!await chooseDate.isVisible().catch(() => false)) {
+    await page.getByText('Pick a date', { exact: true }).click();
+  }
+  await page.locator('[aria-label="Choose date"]:visible').last().click();
+  await page.getByText(String(day), { exact: true }).last().click();
+}
+
+async function choosePreviousMonthDay(page: Page, day: number): Promise<void> {
+  await page.locator('[aria-label="Choose date"]:visible').last().click();
+  await page.getByText('‹', { exact: true }).last().click();
   await page.getByText(String(day), { exact: true }).last().click();
 }
 
 test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
-  test('US1.1 — Record income from different sources', { tag: '@us1.1' }, async ({ page }) => {
+  test('US1.1 — Record income from different sources', { tag: '@us1.1' }, async ({ page, e2eClientId }) => {
     await openApp(page);
     await openMoneyScreen(page, 'Income');
     const amountInput = page.locator('input:visible').first();
 
     await ac('AC1.1.1', 'Enter income amount', async () => {
-      await expect(page.getByText('Amount (RM)', { exact: true })).toBeVisible();
+      await expect(page.getByText('How much did you earn today?', { exact: true })).toBeVisible();
       await expect(amountInput).toBeVisible();
       await expect(amountInput).toHaveAttribute('inputmode', 'decimal');
     });
     await ac('AC1.1.2', 'Enter income date', async () => {
       await expect(page.getByText('Date', { exact: true })).toBeVisible();
-      await expect(page.getByLabel('Choose date')).toBeVisible();
+      await expect(page.getByText('Pick a date', { exact: true })).toBeVisible();
       await chooseDay(page, 1);
-      await expect(page.getByLabel('Choose date')).toContainText('1 Aug 2026');
+      await expect(page.getByLabel('Choose date')).toContainText(/^1 /);
     });
     await ac('AC1.1.3', 'Select an income source', async () => {
       await expect(page.getByText('E-hailing', { exact: true })).toBeVisible();
@@ -100,10 +110,30 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
       await expect(page.getByText('Part-time (fixed)', { exact: true })).toBeVisible();
     });
     await ac('AC1.1.5', 'Add a custom income source', async () => {
-      await page.getByText('+ Your own source', { exact: true }).click();
+      await page.getByText('Your own source', { exact: true }).click();
       await page.locator('input:visible').last().fill('Weekend market');
+      const sourceResponsePromise = page.waitForResponse(response => (
+        response.request().method() === 'POST' && response.url().endsWith('/api/v1/income/sources/')
+      ));
       await page.getByRole('button', { name: 'Add', exact: true }).click();
+      const sourceResponse = await sourceResponsePromise;
       await expect(page.getByText('Weekend market', { exact: true })).toBeVisible();
+      expect(await page.evaluate(() => window.localStorage.getItem('rumampu_client_id'))).toBe(e2eClientId);
+      expect(await sourceResponse.request().headerValue('x-rumampu-client-id')).toBe(e2eClientId);
+      const response = await e2eGet(page, `${API}/income/record/`);
+      expect((await response.json()).sources).toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: 'Weekend market', is_custom: true }),
+      ]));
+    });
+    await ac('AC1.1.12', 'Reject an invalid monetary format until corrected', async () => {
+      await amountInput.fill('3oops');
+      await page.getByRole('button', { name: 'Add income' }).click();
+      await expect(page.getByText(
+        'Enter a valid cash amount using numbers only, with up to 2 decimal places.',
+        { exact: true },
+      )).toBeVisible();
+      const response = await e2eGet(page, `${API}/income/record/`);
+      expect((await response.json()).entries).toHaveLength(0);
     });
     await ac('AC1.1.9', 'Prevent negative income entry', async () => {
       await amountInput.fill('-10');
@@ -116,29 +146,49 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
     await chooseDay(page, 1);
     await page.getByText('E-hailing', { exact: true }).click();
     await ac('AC1.1.6', 'Save an income entry', async () => {
+      const savedResponse = page.waitForResponse(response => (
+        response.request().method() === 'POST' && response.url().endsWith('/api/v1/income/entries/')
+      ));
       await page.getByRole('button', { name: 'Add income' }).click();
-      await expect(page.getByText(/1 Aug · E-hailing/)).toBeVisible();
+      const response = await savedResponse;
+      expect(response.status(), await response.text()).toBe(201);
+      const entry = page.getByText('RM 100.55', { exact: true }).locator('..');
+      await expect(entry).toContainText('E-hailing');
+      await expect(entry).toContainText(/^.*1 [A-Za-z]+.*$/);
     });
     await ac('AC1.1.4', 'Use multiple income sources', async () => {
       await amountInput.fill('120');
       await chooseDay(page, 2);
       await page.getByText('Freelance', { exact: true }).click();
       await page.getByRole('button', { name: 'Add income' }).click();
-      await expect(page.getByText(/2 Aug · Freelance/)).toBeVisible();
-      await expect(page.getByText(/1 Aug · E-hailing/)).toBeVisible();
+      await expect(page.getByText('RM 120', { exact: true }).locator('..')).toContainText('Freelance');
+      await expect(page.getByText('RM 100.55', { exact: true }).locator('..')).toContainText('E-hailing');
     });
     await ac('AC1.1.7', 'Display existing entries', async () => {
-      await expect(page.getByText('RM 120.00', { exact: true })).toBeVisible();
+      await expect(page.getByText('RM 120', { exact: true })).toBeVisible();
       await expect(page.getByText('RM 100.55', { exact: true })).toBeVisible();
     });
-    await ac('AC1.1.8', 'Identify user-entered values', async () => {
-      await expect(page.getByText(/your data/i).first()).toBeVisible();
+    deferredAc(
+      'AC1.1.8',
+      'Identify user-entered values',
+      'The Your Data provenance treatment is explicitly deferred from this UI adaptation.',
+    );
+    await ac('AC1.1.11', 'Edit a recorded income amount, date, and source', async () => {
+      await page.getByLabel('edit').first().click();
+      await expect(page.getByText('Edit Income', { exact: true })).toBeVisible();
+      const editAmount = page.locator('input:visible').last();
+      await editAmount.fill('125.50');
+      await chooseDay(page, 5);
+      await page.getByText('E-hailing', { exact: true }).last().click();
+      await page.getByRole('button', { name: 'Done', exact: true }).click();
+      await expect(page.getByText('RM 125.50', { exact: true })).toBeVisible();
+      await expect(page.getByText('RM 125.50', { exact: true }).locator('..')).toContainText(/^.*5 [A-Za-z]+.*$/);
     });
 
     await amountInput.fill('140');
     await chooseDay(page, 3);
     await page.getByRole('button', { name: 'Add income' }).click();
-    await expect(page.getByText(/3 Aug · Freelance/)).toBeVisible();
+    await expect(page.getByText('RM 140', { exact: true }).locator('..')).toContainText('Freelance');
     await ac('AC1.1.10', 'Warn about an unusually high income entry', async () => {
       await amountInput.fill('1000');
       await chooseDay(page, 4);
@@ -152,19 +202,29 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
   test('US1.2 — Add historical income', { tag: '@us1.2' }, async ({ page }) => {
     await openApp(page);
     await openMoneyScreen(page, 'Income');
+    const current = new Date();
+    const currentMonthIso = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
+    const previous = new Date();
+    previous.setMonth(previous.getMonth() - 1);
+    const previousMonthIso = `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, '0')}`;
+    const previousMonthLabel = monthLabel(previousMonthIso);
 
     await ac('AC1.2.1', 'Access past-month entry', async () => {
-      await page.getByText('Add a past month', { exact: true }).click();
-      await expect(page.getByText('Add a past month', { exact: true }).last()).toBeVisible();
+      await page.getByText('Per month', { exact: true }).click();
+      await expect(page.getByText('How much did you earn this month?', { exact: true })).toBeVisible();
+      await expect(page.getByText('Which month?', { exact: true })).toBeVisible();
+      await expect(page.getByLabel('Choose month')).toContainText(previousMonthLabel);
     });
-    const amountInput = page.locator('input:visible').last();
+    const amountInput = page.locator('input:visible').first();
     await ac('AC1.2.2', 'Enter a monthly total', async () => {
-      await expect(page.getByText('One total for that month is enough.', { exact: true })).toBeVisible();
       await expect(page.getByLabel('Choose month')).toBeVisible();
+      await page.getByLabel('Choose month').click();
+      await expect(page.getByRole('button', { name: monthLabel(currentMonthIso), exact: true })).toBeDisabled();
+      await page.getByRole('button', { name: previousMonthLabel, exact: true }).click();
       await amountInput.fill('2750');
-      await page.getByRole('button', { name: 'Add', exact: true }).click();
-      await expect(page.getByText(/Monthly total/)).toBeVisible();
-      await expect(page.getByText('RM 2,750.00', { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Add income', exact: true }).click();
+      await expect(page.getByText('Monthly total', { exact: true })).toBeVisible();
+      await expect(page.getByText('RM 2,750', { exact: true })).toBeVisible();
     });
     await ac('AC1.2.3', 'Include past income in analysis', async () => {
       const response = await e2eGet(page, `${API}/income-pattern/`);
@@ -172,10 +232,55 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
       expect((await response.json()).recorded_month_count).toBe(1);
     });
     await ac('AC1.2.4', 'Allow any available history', async () => {
-      await page.getByText('Add a past month', { exact: true }).click();
-      await expect(page.getByText('Add whatever history you have. There is no 6 or 12 month minimum.', { exact: true })).toBeVisible();
+      const response = await e2eGet(page, `${API}/income/record/`);
+      const record = await response.json();
+      expect(record.recorded_month_count).toBe(1);
+      expect(record.entries).toHaveLength(1);
     });
     await captureEvidence(page, 'epic-1', 'ac1.2.1-4__historical-income-flow.png');
+  });
+
+  test('TECH-E1-01 — the v22 weekly income entry accepts any day in the week', { tag: '@hardening' }, async ({ page }) => {
+    const now = new Date();
+    const selectedDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    await openApp(page);
+    await openMoneyScreen(page, 'Income');
+    await page.getByText('Per week', { exact: true }).click();
+    await expect(page.getByText('How much did you earn this week?', { exact: true })).toBeVisible();
+    await expect(page.getByText('Week ending · Pick any day in that week.', { exact: true })).toBeVisible();
+    await page.locator('input:visible').first().fill('333');
+    await chooseDay(page, 1);
+    await page.getByRole('button', { name: 'Add income', exact: true }).click();
+    const response = await e2eGet(page, `${API}/income/record/`);
+    const entries = (await response.json()).entries;
+    expect(entries).toEqual([expect.objectContaining({ amount: '333.00', date: selectedDate, entry_method: 'manual' })]);
+  });
+
+  test('TECH-E1-02 — the v22 income scan preview saves confirmed sample rows', { tag: '@hardening' }, async ({ page }) => {
+    await openApp(page);
+    await openMoneyScreen(page, 'Income');
+    await page.getByText('Scan', { exact: true }).click();
+    await expect(page.getByText('Works with Grab, foodpanda and Lalamove earnings pages.', { exact: true })).toBeVisible();
+    await page.getByText('Try a sample', { exact: true }).click();
+    await expect(page.getByText('Reading your earnings…', { exact: true })).toBeVisible();
+    await expect(page.getByText('5 entries found. Untick any you do not want.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('checkbox')).toHaveCount(5);
+    await page.getByRole('button', { name: 'Add 5 entries', exact: true }).click();
+    await expect(page.getByText('5 entries added from your scan.', { exact: true })).toBeVisible();
+    const response = await e2eGet(page, `${API}/income/record/`);
+    expect((await response.json()).entries).toHaveLength(5);
+  });
+
+  test('TECH-E1-03 — the v22 expense CSV sample maps and persists its rows', { tag: '@hardening' }, async ({ page }) => {
+    await openApp(page);
+    await openMoneyScreen(page, 'Daily expenses');
+    await page.getByText('Import', { exact: true }).click();
+    await page.getByText('Try a sample file', { exact: true }).click();
+    await expect(page.getByText('Check the columns', { exact: true })).toBeVisible();
+    await page.getByText('Import 8 rows', { exact: true }).click();
+    await expect(page.getByText('8 expenses added, Aug 2026 to Aug 2026.', { exact: true })).toBeVisible();
+    const response = await e2eGet(page, `${API}/expenses/`);
+    expect(await response.json()).toHaveLength(8);
   });
 
   test('US1.3 — Record direct work-related costs', { tag: '@us1.3' }, async ({ page }) => {
@@ -206,7 +311,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
       await expect(page.getByLabel('Choose date')).toContainText(`1 ${monthLabel(currentMonth)}`);
     });
     await ac('AC1.3.4', 'Add a custom category', async () => {
-      await page.getByText('+ Your own category', { exact: true }).click();
+      await page.getByText('+ Your own cost', { exact: true }).click();
       await page.locator('input:visible').last().fill('Equipment rental');
       await page.getByRole('button', { name: 'Add', exact: true }).click();
       await expect(page.getByText('Equipment rental', { exact: true })).toBeVisible();
@@ -221,7 +326,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
     });
     await ac('AC1.3.6', 'Display recorded entries', async () => {
       await expect(page.getByText(`${costOnlyMonth}-01 · Petrol`, { exact: true })).toBeVisible();
-      await expect(page.getByText('RM 200.00', { exact: true })).toBeVisible();
+      await expect(page.getByText('RM 200', { exact: true })).toBeVisible();
     });
     await ac('AC1.3.7', 'Edit a work-cost record', async () => {
       const equipmentRecord = page.getByTestId(/^work-cost-entry-/).filter({ hasText: 'Equipment rental' });
@@ -229,7 +334,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
       const editAmount = page.locator('input:visible').last();
       await editAmount.fill('250');
       await page.getByRole('button', { name: 'Done', exact: true }).click();
-      await expect(page.getByText('RM 250.00', { exact: true })).toBeVisible();
+      await expect(page.getByText('RM 250', { exact: true })).toBeVisible();
     });
     await ac('AC1.3.8', 'Apply work costs to the correct month', async () => {
       const patternResponse = await e2eGet(page, `${API}/income-pattern/`);
@@ -240,7 +345,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
     });
     await ac('AC1.3.9', 'Show income after work costs', async () => {
       await expect(page.getByText('Income after work costs', { exact: true })).toBeVisible();
-      await expect(page.getByText('RM 1,750.00', { exact: true })).toBeVisible();
+      await expect(page.getByText('RM 1,750', { exact: true })).toBeVisible();
       await selectWorkCostMonth(page, costOnlyMonth);
       await expect(page.getByText(`No income recorded for ${monthLabel(costOnlyMonth)}. Add income before RuMampu can calculate this figure.`, { exact: true })).toBeVisible();
     });
@@ -273,7 +378,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
     });
     await ac('AC1.4.5', 'Display total commitments', async () => {
       await expect(page.getByText('Total commitments', { exact: true })).toBeVisible();
-      await expect(page.getByText('RM 1,220.00', { exact: true })).toBeVisible();
+      await expect(page.getByText('RM 1,220', { exact: true })).toBeVisible();
     });
     await ac('AC1.4.6', 'Identify total as calculated', async () => {
       await expect(page.getByText(/calculated/i).last()).toBeVisible();
@@ -316,16 +421,15 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
   test('US1.5 — Record daily expenses manually', { tag: '@us1.5' }, async ({ page }) => {
     await openApp(page);
     await openMoneyScreen(page, 'Daily expenses');
-    await page.getByRole('button', { name: 'Add expense', exact: true }).click();
     const amountInput = page.locator('input:visible').first();
 
     await ac('AC1.5.1', 'Enter an expense amount', async () => {
-      await expect(page.getByText('Amount (RM)', { exact: true })).toBeVisible();
+      await expect(page.getByText('How much did you spend today?', { exact: true })).toBeVisible();
       await expect(amountInput).toHaveAttribute('inputmode', 'decimal');
       await amountInput.fill('55.45');
     });
     await ac('AC1.5.2', 'Select an expense category', async () => {
-      await expect(page.getByText('Category', { exact: true })).toBeVisible();
+      await expect(page.getByText('What was it for?', { exact: true })).toBeVisible();
       await page.getByText('Groceries', { exact: true }).click();
     });
     await ac('AC1.5.3', 'Use predefined categories', async () => {
@@ -333,19 +437,20 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
       await expect(page.getByText('Tolls & parking', { exact: true })).toBeVisible();
     });
     await ac('AC1.5.4', 'Add a custom category', async () => {
-      await page.getByText('+ Your own category', { exact: true }).click();
+      await page.getByText('Your own category', { exact: true }).click();
       await page.locator('input:visible').last().fill('Pet supplies');
       await page.getByRole('button', { name: 'Add', exact: true }).click();
       await expect(page.getByText('Pet supplies', { exact: true })).toBeVisible();
       await page.getByText('Pet supplies', { exact: true }).click();
     });
     await ac('AC1.5.5', 'Enter expense date', async () => {
-      await chooseDay(page, 25);
+      await choosePreviousMonthDay(page, 25);
       await expect(page.getByLabel('Choose date')).toContainText('25 Aug 2026');
     });
     await ac('AC1.5.6', 'Add the expense', async () => {
-      await page.getByRole('button', { name: 'Add expense', exact: true }).click();
-      await expect(page.getByText(/25 Aug · Pet supplies/)).toBeVisible();
+      await page.getByText('Add expense', { exact: true }).click();
+      await expect(page.getByText('25 Aug', { exact: true }).locator('..').locator('..')).toContainText('Pet supplies');
+      await expect(page.getByText('25 Aug', { exact: true })).toBeVisible();
       await expect(page.getByText('RM 55.45', { exact: true }).first()).toBeVisible();
     });
     await captureEvidence(page, 'epic-1', 'ac1.5.1-6__manual-expense-flow.png');
@@ -359,24 +464,30 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
     await openMoneyScreen(page, 'Daily expenses');
 
     await ac('AC1.6.1', 'Display current monthly spending', async () => {
-      await expect(page.getByText('RM 55.00', { exact: true }).first()).toBeVisible();
+      await expect(page.getByText('RM 55', { exact: true }).first()).toBeVisible();
       await expect(page.getByText(/Aug so far/)).toBeVisible();
     });
     await ac('AC1.6.2', 'Display recorded days', async () => {
       await expect(page.getByText(/2 days recorded/)).toBeVisible();
     });
     await ac('AC1.6.3', 'Display individual expenses', async () => {
-      await expect(page.getByText(/24 Aug · Groceries/)).toBeVisible();
-      await expect(page.getByText(/25 Aug · Meals/)).toBeVisible();
+      await expect(page.getByText('Groceries', { exact: true }).first()).toBeVisible();
+      await expect(page.getByText('24 Aug', { exact: true })).toBeVisible();
+      await expect(page.getByText('Meals', { exact: true }).first()).toBeVisible();
+      await expect(page.getByText('25 Aug', { exact: true })).toBeVisible();
     });
     await ac('AC1.6.4', 'Access manual expense entry', async () => {
-      await expect(page.getByRole('button', { name: 'Add expense', exact: true })).toBeVisible();
+      await expect(page.getByText('Manual', { exact: true })).toBeVisible();
+      await expect(page.getByText('Add expense', { exact: true })).toBeVisible();
     });
     await ac('AC1.6.5', 'Access receipt-entry flow', async () => {
-      await expect(page.getByText('Scan a receipt', { exact: true })).toBeVisible();
+      await page.getByText('Scan', { exact: true }).click();
+      await expect(page.getByText('Take a photo', { exact: true })).toBeVisible();
+      await expect(page.getByText('Use a sample receipt', { exact: true })).toBeVisible();
     });
     await ac('AC1.6.6', 'Access monthly expense summary', async () => {
-      await page.getByText('Monthly summary', { exact: true }).click();
+      await page.getByLabel('Back').click();
+      await page.getByText('See monthly summary', { exact: true }).click();
       await expect(page.getByText('Aug 2026', { exact: true })).toBeVisible();
       await expect(page.getByText('Jul 2026', { exact: true })).toBeVisible();
     });
@@ -386,7 +497,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
   test('US1.7 — Use a receipt as the starting point for an expense', { tag: '@us1.7' }, async ({ page }) => {
     await openApp(page);
     await openMoneyScreen(page, 'Daily expenses');
-    await page.getByText('Scan a receipt', { exact: true }).click();
+    await page.getByText('Scan', { exact: true }).click();
 
     await ac('AC1.7.1', 'Select a receipt image', async () => {
       await expect(page.getByText('Take a photo', { exact: true })).toBeVisible();
@@ -437,7 +548,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
       await confirmationInputs.nth(2).fill('35.20');
       await page.getByText('Meals', { exact: true }).click();
       await page.getByRole('button', { name: 'Add', exact: true }).click();
-      await expect(page.getByText(/25 Aug · Meals/)).toBeVisible();
+      await expect(page.getByText('25 Aug · Kedai Maju edited', { exact: true }).locator('..').locator('..')).toContainText('Meals');
       await expect(page.getByText('RM 35.20', { exact: true }).first()).toBeVisible();
       const response = await e2eGet(page, `${API}/expenses/`);
       const entries = await response.json();
@@ -455,7 +566,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
     await openMoneyScreen(page, 'Income');
 
     await ac('AC1.8.1', 'Access historical import', async () => {
-      await page.getByText('Import income from CSV', { exact: true }).click();
+      await page.getByText('Import', { exact: true }).click();
       await expect(page.getByText('Import income', { exact: true })).toBeVisible();
     });
     await ac('AC1.8.2', 'Import historical income records', async () => {
@@ -468,7 +579,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
     await ac('AC1.8.3', 'Preview imported records', async () => {
       await expect(page.getByText(/3 ready/i)).toBeVisible();
       await expect(page.getByText('Row 2', { exact: true })).toBeVisible();
-      await expect(page.getByText(/RM 900.00 · 2026-05-03 · E-hailing/)).toBeVisible();
+      await expect(page.getByText('RM 900 · 2026-05-03 · E-hailing', { exact: true })).toBeVisible();
     });
     await ac('AC1.8.7', 'Handle records that cannot be recognised', async () => {
       await expect(page.getByText(/2 need attention/i)).toBeVisible();

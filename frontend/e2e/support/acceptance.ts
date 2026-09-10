@@ -11,3 +11,18 @@ export async function ac<T>(
 ): Promise<T> {
   return test.step(`${id} — ${title}`, body);
 }
+
+/**
+ * Records an explicitly deferred acceptance criterion without presenting it as
+ * implemented. The traceability gate counts this separately from executable ACs.
+ */
+export function deferredAc(
+  id: `AC${number}.${number}.${number}`,
+  title: string,
+  reason: string,
+): void {
+  test.info().annotations.push({
+    type: 'deferred-ac',
+    description: `${id} — ${title}: ${reason}`,
+  });
+}

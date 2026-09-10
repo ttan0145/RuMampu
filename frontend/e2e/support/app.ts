@@ -10,13 +10,22 @@ export async function openApp(page: Page): Promise<void> {
   const splash = page.getByLabel('RuMampu');
   if (await splash.isVisible().catch(() => false)) await splash.click();
 
-  const skip = page.getByText('Skip', { exact: true });
-  if (await skip.isVisible().catch(() => false)) await skip.click();
+  // The v22 UI adds language, introduction, and guest-auth steps before the
+  // existing optional profile questions. Complete that real flow so every
+  // acceptance test starts from the same app state without bypassing the UI.
+  for (const label of ['Next', 'Nice to meet you →', 'Continue as guest', 'Next', 'Skip']) {
+    const control = page.getByText(label, { exact: true }).last();
+    if (await control.isVisible().catch(() => false)) await control.click();
+  }
+
+  await page.getByText('Money', { exact: true }).last().waitFor({ state: 'visible' });
 }
 
 export async function openMoneyScreen(page: Page, label: string): Promise<void> {
   await page.getByText('Money', { exact: true }).last().click();
-  await page.getByText(label, { exact: true }).last().click();
+  // The requirement calls this Coverage check; v22 names its navigation Quiet months.
+  const navigationLabel = label === 'Coverage check' ? 'Quiet months' : label;
+  await page.getByText(navigationLabel, { exact: true }).last().click();
 }
 
 export async function resetScreenScroll(page: Page): Promise<void> {
