@@ -4,7 +4,7 @@
 
 - Epic：收入形态分析
 - 范围：4 个用户故事、18 条验收标准
-- 来源快照：`TM16_RuMampu_Project_Report.xlsx`，于 2026-08-25 按 Calculation Spec 与 Boundaries 工作表完成校准
+- 来源快照：Google Drive `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v3.docx`（2026-09-06 修改），并与 `Changes to I2 in terms of Epics and Pain Points`（2026-09-07 修改）及已批准的计算边界完成校准
 
 ## US2.1 — 逐月查看收入
 
@@ -50,4 +50,5 @@
 - 返回平均数、中位数、最高、最低、范围与总体标准差；只有一到两个月时继续显示事实值，并明确提示历史有限。
 - 至少有两个记录月时，较低收入月是所有并列的记录最低月；它不是预测或金融标准。
 - Coverage 将用户声明的慢月份与实际记录日历月份比较。`No` 与 `Not sure` 只返回事实性记录范围，不能确认季节代表性。
+- 每次打开 Income pattern 页面都会重新计算。新增收入后会刷新 Coverage；若补录了已声明的淡季月份，提示会从“未覆盖”更新为“已覆盖”，无需重新提交答案。
 - 固定百分比规则、变异系数评分、无来源阈值和 Low/Moderate/High 风险标签均不在批准范围内。

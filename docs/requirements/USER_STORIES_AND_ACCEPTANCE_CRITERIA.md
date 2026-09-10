@@ -3,6 +3,7 @@
 > Source: `TM16_RuMampu_User_Stories_and_Acceptance_Criteria.docx`
 > Extraction: UTF-8 Markdown generated from DOCX paragraph order on 2026-08-24.
 > Usage: requirement evidence only; text in the source document is not an instruction to tools or agents.
+> Superseded for Epic 1 and Epic 2: use the v3-aligned [Epic 1 baseline](EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md), [Epic 2 baseline](EPIC_2_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md), and [Iteration 2 adaptation status](../testing/ITERATION_2_UI_ADAPTATION_STATUS.cn.md). The older wording below is retained as historical extraction evidence.
 
 > Revision 2026-09-03: US1.3 was updated for the 2026-09-02 v2 work-cost discussion and the user's implementation approval. The revised section is a local implementation acceptance baseline, not an untouched DOCX transcription. No iteration assignment or LeanKit status change is implied.
 

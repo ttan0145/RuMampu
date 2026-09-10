@@ -4,7 +4,7 @@ Language: **English** | [Chinese (CN)](EPIC_2_USER_STORIES_AND_ACCEPTANCE_CRITER
 
 - Epic: Income Pattern Analysis
 - Scope: 4 user stories, 18 acceptance criteria
-- Source snapshot: `TM16_RuMampu_Project_Report.xlsx`, reconciled with the Calculation Spec and Boundaries sheets on 2026-08-25
+- Source snapshot: Google Drive `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v3.docx` (modified 2026-09-06), reconciled with `Changes to I2 in terms of Epics and Pain Points` (modified 2026-09-07) and the approved Calculation Spec boundaries.
 
 ## US2.1 — View income month by month
 
@@ -50,4 +50,5 @@ Language: **English** | [Chinese (CN)](EPIC_2_USER_STORIES_AND_ACCEPTANCE_CRITER
 - The response exposes average, median, highest, lowest, range, and population standard deviation. One or two recorded months remain visible with an explicit limited-history note.
 - Lower income means the tied recorded minimum when at least two months exist. It is not a prediction or financial standard.
 - Coverage compares user-declared slower calendar months with recorded calendar months. `No` and `Not sure` expose only the factual recorded range and cannot establish seasonal representativeness.
+- Income pattern is recomputed whenever the screen is opened. Coverage is refreshed after income is recorded, so a named slower month moves from unrepresented to represented without asking the user to resubmit the answer.
 - Fixed-percentage rules, coefficient-of-variation scoring, unsupported thresholds, and Low/Moderate/High risk labels are outside the approved calculation boundary.

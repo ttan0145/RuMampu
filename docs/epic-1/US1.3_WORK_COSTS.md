@@ -53,7 +53,7 @@ The separate local bug fix now publishes successful category and entry reads ind
 | AC1.3.9, AC1.3.10 | TECH-WC-05/06/07 plus the existing US1.3 acceptance flow | Passed locally; no unavailable result is presented as a confirmed zero or net figure. |
 
 - Red/green evidence: TECH-WC-05 first failed on the unchanged application because `Petrol` was absent, then passed after the fix.
-- Fresh validation: 106 backend tests passed; no migration drift; frontend TypeScript passed; Epic 1 60/60 and Epic 2 18/18 AC identifiers remain mapped exactly once.
+- Current validation on 2026-09-11: finance 90/90 passed; frontend TypeScript passed; Epic 1 maps 61 executable criteria plus the explicitly deferred AC1.1.8, and Epic 2 maps 18/18 criteria exactly once.
 - Full local browser suite: **35/35 passed (2.4 minutes)** using Chromium and SQLite, including existing Epic 3/4 housing flows and three new partial-load regressions. No new PostgreSQL CI or real-device acceptance is claimed.
 - Scope: bug recovery only. No font, colour, layout, editing-flow, delete-action, or requirement changes. Existing AC3.2.5 and AC3.3.1 describe the affected housing behaviour; handing over migration execution does not create new Epic 3 ACs.
 - A subsequent real-browser check on `https://rumampu-frontend.vercel.app/` used a new, initially empty guest without request mocks. It verified category loading, zero-amount rejection, adding two costs in one category, editing one record, moving it to the previous month, and reload persistence. With RM 3,000 income, the remaining current-month cost of RM 25 produced RM 2,975 net income in both Work costs and Income pattern. A cost-only prior month did not fabricate income.

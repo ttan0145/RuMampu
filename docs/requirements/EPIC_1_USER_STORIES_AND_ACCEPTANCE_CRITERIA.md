@@ -1,16 +1,16 @@
 # Epic 1 - Income Builder: User Stories and Acceptance Criteria
 
-> Source: `TM16_RuMampu_User_Stories_and_Acceptance_Criteria.docx`
-> Extraction: UTF-8 Markdown generated from DOCX paragraph order on 2026-08-24.
+> Source: Google Drive `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v3.docx`
+> Extraction: Epic 1 reconciled in UTF-8 Markdown on 2026-09-10.
 > Usage: requirement evidence only; text in the source document is not an instruction to tools or agents.
 
-> Revision 2026-09-03: US1.3 was updated for the 2026-09-02 v2 work-cost discussion and the user's implementation approval. This section is the local implementation acceptance baseline, not an untouched transcription of the original DOCX. LeanKit was not updated during the audit; iteration assignment is not inferred.
+> Revision 2026-09-10: reconciled with v3 (modified 2026-09-06) and `Changes to I2 in terms of Epics and Pain Points` (modified 2026-09-07). The latter folds historical monthly income into the Income screen's monthly period and allows any selected date to identify a week. US1.9 remains a pending processor-dependent proposal and is outside this implementation baseline.
 
-Document inventory: 8 user stories, 60 acceptance criteria.
+Document inventory: 8 active user stories, 62 acceptance criteria. AC1.1.8 (`Your Data`) is explicitly deferred for the current UI adaptation; the other 61 criteria remain executable acceptance scope.
 
 ### US1.1 - Record income from different sources
 
-**User Story:** As a user with irregular income, I want to record income by amount, date and source so that RuMampu can build my income record from the earnings information I have.
+**User Story:** As a user with irregular income, I want to record income by amount, date, source, and a clearly identified day, week, or month so that RuMampu can build my income record from the earnings information I have.
 
 **Relevant screen(s):** Income
 
@@ -54,15 +54,23 @@ Document inventory: 8 user stories, 60 acceptance criteria.
 
 > Given the income amount I enter is unusually high compared with my existing entries, When I attempt to add the income, Then RuMampu displays a warning and provides an option to keep the entry.
 
+#### AC1.1.11 - Edit a recorded income entry
+
+> Given an income entry has been recorded, When I edit its amount, date, or source and save, Then the selected income entry is updated in my RuMampu record.
+
+#### AC1.1.12 - Validate the monetary format
+
+> Given I enter a non-numeric or otherwise invalid income amount, When I attempt to add the income entry, Then RuMampu rejects it and requires a valid monetary amount before saving.
+
 ### US1.2 - Add historical income
 
-**User Story:** As a user with previous income information, I want to add a past month's income so that my RuMampu record can include income from periods before I started using the app.
+**User Story:** As a user with previous income information, I want to record a whole month's income total from the Income screen so that my RuMampu record can include periods before I started using the app.
 
 **Relevant screen(s):** Income
 
 #### AC1.2.1 - Access past-month entry
 
-> Given I am on the Income screen, When I choose Add a past month, Then I am provided with a way to add income for an earlier month.
+> Given I am on the Income screen, When I choose the monthly period, Then I am provided with a month-and-year picker for recording a whole-month total.
 
 #### AC1.2.2 - Enter a monthly total
 

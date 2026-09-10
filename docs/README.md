@@ -7,7 +7,7 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 - [API contract](API_CONTRACT.md): versioning, data types, errors, endpoints, and compatibility policy.
 - [OpenAPI schema](openapi.yaml): machine-readable contract generated from and validated against the backend.
 - [Complete US/AC Markdown](requirements/USER_STORIES_AND_ACCEPTANCE_CRITERIA.md): 8 Epics, 35 user stories, and 219 acceptance criteria extracted from the formal DOCX.
-- [Epic 1 US/AC Markdown](requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md): the 8 user stories and 56 acceptance criteria in the current delivery scope.
+- [Epic 1 US/AC Markdown](requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md): the 8 active user stories and 62 acceptance criteria in the v3 delivery scope; AC1.1.8 is deferred for the current UI adaptation.
 - [Epic 2 US/AC Markdown](requirements/EPIC_2_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md): the reconciled 4 user stories, 18 acceptance criteria, and calculation boundaries.
 - [Epic 1 implementation and acceptance index](epic-1/README.md): acceptance status and evidence by user story.
 - [US1.1 acceptance record](epic-1/US1.1_RECORD_INCOME.md): evidence for the 10 criteria covering income from different sources.
@@ -22,6 +22,7 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 - [Epic 2 implementation and acceptance index](epic-2/README.md): all 18 criteria, per-US evidence, API boundaries, and browser acceptance.
 - [Playwright acceptance-test standard](testing/PLAYWRIGHT_ACCEPTANCE_STANDARD.md): Epic/US/AC naming, exact traceability gate, evidence policy, commands, and completion rules.
 - [Real production website checks](testing/LIVE_WEBSITE_TESTS.md): repeatable read-only smoke and opt-in isolated writing flow, reports, and safety boundaries.
+- [US1.8 comprehensive gig-driver CSV](testing/US1.8_COMPREHENSIVE_CSV_FIXTURE.md): 12-month income import with valid/invalid rows aligned to the complete driver scenario.
 - [12-month Malaysian e-hailing driver scenario](testing/SCENARIO_GIG_DRIVER_12M.md): one-request test data, development-only API, Playwright flows, and reuse boundaries for Epics 2 and 5.
 - [Epic 1/2/5 implementation matrix](EPIC_1_2_5_IMPLEMENTATION_MATRIX.md): current implementation, gaps, and recommended sequence.
 - [ADR 0001](adr/0001-foundation-and-api-contract.md): foundation and API-contract decision.
