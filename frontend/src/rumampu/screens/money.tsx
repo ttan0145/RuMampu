@@ -17,7 +17,7 @@ import { Ico } from '../svgs';
 import { SrcIcon } from '../icons';
 import { Ruma } from '../ruma-view';
 import {
-  Drop, InCard, InChip, InDay, InHero, InLbl, InRow, InSec, InSeg, MockStmt, PerSeg,
+  DayShortcutPicker, Drop, InCard, InChip, InHero, InLbl, InRow, InSec, InSeg, MockStmt, PerSeg,
 } from '../incard';
 import { IncomePatternChart } from '../charts';
 import { ScreenShell } from './shell';
@@ -688,7 +688,7 @@ export function IncomeScreen() {
     }
   };
 
-  /* WHEN: today, yesterday and the three days before; anything else via the date picker */
+  /* WHEN: keep the most useful day shortcuts on one line and reveal more on wider screens. */
   const now = new Date();
   const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
   const per = d.per || 'day';
@@ -699,18 +699,6 @@ export function IncomeScreen() {
     previousMonthEnd.getMonth(),
     15,
   ));
-  let matched = false;
-  const dayCells = [0, 1, 2, 3, 4].map(i => {
-    const x = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-    const v = iso(x);
-    const on = !S.incPick && d.d === v;
-    if (on) matched = true;
-    const lbl = i === 0 ? t('inc_today') : i === 1 ? t('inc_yday') : monthName(x.getMonth()).slice(0, 3);
-    return { v, on, lbl, big: `${x.getDate()} ${monthName(x.getMonth())}` };
-  });
-  const pickOn = S.incPick || !matched;
-  const pickLbl = pickOn && d.d ? `${+d.d.slice(8, 10)} ${monthName(+d.d.slice(5, 7) - 1)}` : '…';
-
   const mk = now.getFullYear() * 12 + now.getMonth();
   const sofar = S.data.income
     .filter(e => (+e.d.slice(0, 4)) * 12 + (+e.d.slice(5, 7) - 1) === mk)
@@ -737,25 +725,15 @@ export function IncomeScreen() {
           {per === 'month' ? t('inc_monthof') : per === 'week' ? `${t('inc_weekend')} · ${t('inc_weekany')}` : t('inc_date')}
         </BodyS>
         {per === 'day' ? (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {dayCells.map(c => (
-              <InDay key={c.v} label={c.lbl} value={c.big} on={c.on}
-                onPress={() => up(s => { s.incomeDraft.d = c.v; s.incPick = false; })} />
-            ))}
-            <InDay label={t('inc_pick')} value={pickLbl} on={pickOn}
-              onPress={() => up(s => { s.incPick = true; })} />
-          </View>
-        ) : null}
-        {per === 'day' && pickOn ? (
-          <View style={{ marginTop: 8 }}>
-            <DatePickerField
-              value={d.d}
-              mode="date"
-              monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
-              maximumDate={new Date()}
-              onChange={v => up(s => { s.incomeDraft.d = v; s.incomeDraft.flag = null; })}
-            />
-          </View>
+          <DayShortcutPicker
+            value={d.d}
+            monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
+            todayLabel={t('inc_today')}
+            yesterdayLabel={t('inc_yday')}
+            pickLabel={t('inc_pick')}
+            maximumDate={new Date()}
+            onChange={value => up(s => { s.incomeDraft.d = value; s.incomeDraft.flag = null; })}
+          />
         ) : null}
         {per === 'week' ? (
           <DatePickerField
@@ -888,6 +866,18 @@ export function WorkcostsScreen() {
   const summaryReady = (S.workCostSync === 'ready' || S.workCostSync === 'disabled') && summary?.month === selectedMonth;
   const [selectedYear, selectedMonthNumber] = selectedMonth.split('-').map(Number);
   const selectedMonthLabel = `${monthName(Math.max(0, selectedMonthNumber - 1))} ${selectedYear}`;
+  const shortcutPresets = [0, 1, 2].map(offset => {
+    const isCurrentMonth = selectedYear === today.getFullYear() && selectedMonthNumber === today.getMonth() + 1;
+    const lastDay = new Date(selectedYear, selectedMonthNumber, 0).getDate();
+    const anchorDay = Math.min(today.getDate(), lastDay);
+    const date = new Date(selectedYear, selectedMonthNumber - 1, anchorDay - offset);
+    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    return {
+      value,
+      label: isCurrentMonth && offset === 0 ? t('inc_today') : isCurrentMonth && offset === 1 ? t('inc_yday') : monthName(date.getMonth()).slice(0, 3),
+      display: `${date.getDate()} ${monthName(date.getMonth())}`,
+    };
+  }).filter(preset => preset.value.slice(0, 7) === selectedMonth);
   const dateForMonth = (monthValue: string) => {
     const [year, month] = monthValue.split('-').map(Number);
     const isCurrentMonth = year === today.getFullYear() && month === today.getMonth() + 1;
@@ -1010,11 +1000,14 @@ export function WorkcostsScreen() {
         <BodyS muted>{t('inc_amount')}</BodyS>
         <TextField accessibilityLabel={t('wc_entry_amount')} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" inputMode="decimal" />
         <BodyS muted>{t('inc_date')}</BodyS>
-        <DatePickerField
+        <DayShortcutPicker
           value={costDate}
-          mode="date"
           monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
           maximumDate={today}
+          presets={shortcutPresets}
+          todayLabel={t('inc_today')}
+          yesterdayLabel={t('inc_yday')}
+          pickLabel={t('inc_pick')}
           onChange={setCostDate}
         />
         <Btn disabled={saving} label={saving ? t('inc_saving') : t('wc_add')} onPress={() => { void save(); }} />
@@ -1062,8 +1055,16 @@ export function WorkcostsScreen() {
                 <BodyS muted>{t('inc_amount')}</BodyS>
                 <TextField accessibilityLabel={t('wc_edit_amount')} value={editAmount} onChangeText={setEditAmount} keyboardType="decimal-pad" inputMode="decimal" />
                 <BodyS muted>{t('inc_date')}</BodyS>
-                <DatePickerField value={editDate} mode="date" maximumDate={today}
-                  monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))} onChange={setEditDate} />
+                <DayShortcutPicker
+                  value={editDate}
+                  maximumDate={today}
+                  presets={shortcutPresets}
+                  monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
+                  todayLabel={t('inc_today')}
+                  yesterdayLabel={t('inc_yday')}
+                  pickLabel={t('inc_pick')}
+                  onChange={setEditDate}
+                />
                 <Btn disabled={saving} label={saving ? t('inc_saving') : t('done')} onPress={() => { void saveEdit(); }} />
                 <BtnLine label={t('cancel')} onPress={() => setEditingId(null)} />
               </View>

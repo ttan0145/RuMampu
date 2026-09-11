@@ -82,7 +82,11 @@ async function chooseDay(page: Page, day: number): Promise<void> {
 }
 
 async function choosePreviousMonthDay(page: Page, day: number): Promise<void> {
-  await page.locator('[aria-label="Choose date"]:visible').last().click();
+  const chooseDate = page.locator('[aria-label="Choose date"]:visible').last();
+  if (!await chooseDate.isVisible().catch(() => false)) {
+    await page.getByText('Pick a date', { exact: true }).last().click();
+  }
+  await chooseDate.click();
   await page.getByText('‹', { exact: true }).last().click();
   await page.getByText(String(day), { exact: true }).last().click();
 }

@@ -1,8 +1,9 @@
 import React from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text, TextInput, View, ViewStyle } from 'react-native';
+import { Animated, Easing, Platform, Pressable, StyleSheet, Text, TextInput, View, ViewStyle, useWindowDimensions } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from './theme';
 import { EntryPer } from './state';
+import { DatePickerField } from './date-picker';
 
 /* v22 entry-card anatomy (.incard family) shared by the income and expense
    screens: white rounded card, segmented type/scan/csv switcher, big centred
@@ -130,14 +131,89 @@ export function PerSeg({ per, onPer, labels, tint = 'in' }: {
 }
 
 /* .inday — one day cell on the WHEN strip (also the month-of / pick cells). */
-export function InDay({ label, value, on, onPress, style }: {
-  label: string; value: string; on?: boolean; onPress: () => void; style?: ViewStyle;
+export function InDay({ label, value, on, onPress, style, tint = 'in' }: {
+  label: string; value: string; on?: boolean; onPress: () => void; style?: ViewStyle; tint?: InTint;
 }) {
+  const colors = IN_TINTS[tint];
   return (
-    <Pressable onPress={onPress} style={[st.inday, on && st.indayOn, style]}>
+    <Pressable onPress={onPress} style={[st.inday, on && { backgroundColor: colors.perOn, borderColor: colors.perOn }, style]}>
       <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 14, color: on ? 'rgba(255,255,255,0.75)' : C.ink64 }}>{label}</Text>
       <Text style={{ fontFamily: DISP_FONT, fontSize: 14, color: on ? '#fff' : C.ink, marginTop: 2 }}>{value}</Text>
     </Pressable>
+  );
+}
+
+export type DayShortcutPreset = { value: string; label: string; display: string };
+
+export function DayShortcutPicker({
+  value, monthNames, onChange, maximumDate, tint = 'in', presets, todayLabel, yesterdayLabel, pickLabel,
+}: {
+  value: string;
+  monthNames: string[];
+  onChange: (value: string) => void;
+  maximumDate?: Date;
+  tint?: InTint;
+  presets?: DayShortcutPreset[];
+  todayLabel: string;
+  yesterdayLabel: string;
+  pickLabel: string;
+}) {
+  const { width: windowWidth } = useWindowDimensions();
+  const [pickOpen, setPickOpen] = React.useState(false);
+  const now = new Date();
+  const iso = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const defaultPresets: DayShortcutPreset[] = [0, 1, 2, 3, 4].map(offset => {
+    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - offset);
+    return {
+      value: iso(date),
+      label: offset === 0 ? todayLabel : offset === 1 ? yesterdayLabel : monthNames[date.getMonth()].slice(0, 3),
+      display: `${date.getDate()} ${monthNames[date.getMonth()]}`,
+    };
+  });
+  const availablePresets = presets || defaultPresets;
+  const contentWidth = Platform.OS === 'web' ? Math.min(windowWidth, 390) : windowWidth;
+  const compact = contentWidth < 420;
+  const visible = availablePresets.slice(0, contentWidth < 520 ? 3 : availablePresets.length);
+  const selectedVisible = visible.some(preset => preset.value === value);
+  const pickOn = pickOpen || !selectedVisible;
+  const pickValue = pickOn && value ? `${+value.slice(8, 10)} ${monthNames[+value.slice(5, 7) - 1]}` : '…';
+  const dayStyle = compact ? { minWidth: 0, paddingHorizontal: 7, paddingVertical: 7 } : undefined;
+
+  return (
+    <>
+      <View style={{ flexDirection: 'row', flexWrap: 'nowrap', justifyContent: 'space-between' }}>
+        {visible.map(preset => (
+          <InDay
+            key={preset.value}
+            label={preset.label}
+            value={preset.display}
+            on={!pickOpen && value === preset.value}
+            tint={tint}
+            style={dayStyle}
+            onPress={() => { setPickOpen(false); onChange(preset.value); }}
+          />
+        ))}
+        <InDay
+          label={pickLabel}
+          value={pickValue}
+          on={pickOn}
+          tint={tint}
+          style={dayStyle}
+          onPress={() => setPickOpen(true)}
+        />
+      </View>
+      {pickOn ? (
+        <View style={{ marginTop: 8 }}>
+          <DatePickerField
+            value={value}
+            mode="date"
+            monthNames={monthNames}
+            maximumDate={maximumDate}
+            onChange={next => { onChange(next); setPickOpen(true); }}
+          />
+        </View>
+      ) : null}
+    </>
   );
 }
 

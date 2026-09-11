@@ -14,7 +14,7 @@ import { C, CHART_COLS, DISP_FONT } from '../theme';
 import { Ico } from '../svgs';
 import { CatIcon, guessCat } from '../icons';
 import { CSV_SAMPLE_EX, csvAmount, parseCsv, parseDateAny } from '../csv';
-import { InCard, InChip, InHero, InLbl, InRow, InSec, InSeg, PerSeg } from '../incard';
+import { DayShortcutPicker, InCard, InChip, InHero, InLbl, InRow, InSec, InSeg, PerSeg } from '../incard';
 import { HBar, Shimmer } from '../charts';
 import { ScreenShell } from './shell';
 import { isValidIsoDate } from '../validation';
@@ -259,6 +259,17 @@ export function ExpensesScreen() {
             monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
             maximumDate={new Date()}
             onChange={v => { setError(null); up(s => { s.expDraft.d = v + '-15'; }); }}
+          />
+        ) : per === 'day' ? (
+          <DayShortcutPicker
+            value={d.d}
+            tint="out"
+            monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
+            todayLabel={t('inc_today')}
+            yesterdayLabel={t('inc_yday')}
+            pickLabel={t('inc_pick')}
+            maximumDate={new Date()}
+            onChange={v => { setError(null); up(s => { s.expDraft.d = v; }); }}
           />
         ) : (
           <DatePickerField
@@ -566,12 +577,15 @@ export function ExpAddScreen() {
         </View>
         <View style={{ gap: 6 }}>
           <BodyS muted>{t('inc_date')}</BodyS>
-          <DatePickerField
+          <DayShortcutPicker
             value={d.d}
-            mode="date"
+            tint="out"
             monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
             maximumDate={new Date()}
             onChange={v => { setError(null); up(s => { s.expDraft.d = v; }); }}
+            todayLabel={t('inc_today')}
+            yesterdayLabel={t('inc_yday')}
+            pickLabel={t('inc_pick')}
           />
         </View>
         {error ? <BodyS>{t(`ex_${error === 'amount' ? 'amount_positive' : error === 'date' ? 'date_invalid' : 'save_failed'}`)}</BodyS> : null}
