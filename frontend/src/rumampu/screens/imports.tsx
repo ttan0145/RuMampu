@@ -208,8 +208,8 @@ export function IncomeCsvBody({ embedded = false }: IncomeCsvBodyProps) {
   );
 
   const preview = batch ? (
-    <>
-      <Card gap={10}>
+    <View style={[styles.previewContent, embedded && styles.previewContentEmbedded]}>
+      <Card gap={8} style={styles.previewSummary}>
         <BodyS muted>{t('imp_summary', { name: batch.file_name, total: batch.total_rows })}</BodyS>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           <Badge label={t('imp_ready', { n: batch.ready_count })} />
@@ -217,11 +217,19 @@ export function IncomeCsvBody({ embedded = false }: IncomeCsvBodyProps) {
         </View>
       </Card>
 
-      <StackS>
+      <StackS style={styles.previewRows}>
         {batch.rows.map(row => {
           const editing = editDraft?.rowId === row.id;
           return (
-            <Card key={row.id} gap={8} style={{ borderLeftWidth: 4, borderLeftColor: row.is_valid ? C.confirm : C.caution }}>
+            <Card
+              key={row.id}
+              gap={5}
+              style={{
+                ...styles.previewRow,
+                borderLeftWidth: 4,
+                borderLeftColor: row.is_valid ? C.confirm : C.caution,
+              }}
+            >
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
                 <BodyS>{t('imp_row', { n: row.row_number })}</BodyS>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -293,11 +301,6 @@ export function IncomeCsvBody({ embedded = false }: IncomeCsvBodyProps) {
                   )}
                 </>
               )}
-              <BodyS muted>{t('imp_raw', {
-                amount: row.raw_amount || '—',
-                date: row.raw_date || '—',
-                source: row.raw_source || '—',
-              })}</BodyS>
             </Card>
           );
         })}
@@ -313,7 +316,7 @@ export function IncomeCsvBody({ embedded = false }: IncomeCsvBodyProps) {
       {batch.status === 'preview' && batch.ready_count === 0 ? (
         <NoteC><BodyS>{t('imp_no_ready')}</BodyS></NoteC>
       ) : null}
-    </>
+    </View>
   ) : null;
 
   const body = (
@@ -336,6 +339,24 @@ export function ImportIncomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  previewContent: {
+    gap: 10,
+  },
+  previewContentEmbedded: {
+    marginHorizontal: 14,
+    marginTop: 10,
+  },
+  previewSummary: {
+    padding: 12,
+    borderRadius: 12,
+  },
+  previewRows: {
+    gap: 10,
+  },
+  previewRow: {
+    padding: 12,
+    borderRadius: 12,
+  },
   editButton: {
     minHeight: 32,
     paddingHorizontal: 4,
