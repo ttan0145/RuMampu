@@ -387,6 +387,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             d: entry.date,
             s: entry.source_id == null ? '' : String(entry.source_id),
             method: entry.entry_method,
+            createdAt: entry.created_at,
           }));
           const selectedSlug = prev.incomeDraft.s;
           const selected = record.sources.find(source => source.slug === selectedSlug)
@@ -521,6 +522,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           d: entry.date,
           s: entry.source_id == null ? '' : String(entry.source_id),
           method: entry.entry_method,
+          createdAt: entry.created_at,
         }));
         const selectedValue = prev.incomeDraft.s;
         const selected = record.sources.find(source => String(source.id) === selectedValue)
@@ -724,6 +726,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           d: input.date,
           s: input.sourceId || '',
           method: input.entryMethod || 'manual',
+          createdAt: new Date().toISOString(),
         });
         s.data.income.sort((x, y) => (x.d < y.d ? -1 : 1));
         s.workCostSummary = localWorkCostSummary(s.data, s.workCostSelectedMonth);
@@ -739,6 +742,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           d: entry.date,
           s: entry.source_id == null ? '' : String(entry.source_id),
           method: entry.entry_method,
+          createdAt: entry.created_at,
         });
         s.data.income.sort((x, y) => (x.d < y.d ? -1 : 1));
         s.incomeSync = 'ready';

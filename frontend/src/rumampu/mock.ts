@@ -8,6 +8,8 @@ export interface IncomeEntry {
   d: string;
   s: string;
   method?: 'manual' | 'historical_total' | 'import';
+  /** Server creation time, used to keep Recent entries aligned with actual additions. */
+  createdAt?: string;
 }
 export interface CostItem { id: string; k?: string; a: number; custom?: boolean; name?: string; dv?: boolean; p?: string }
 export interface WorkCostCategory { id: string; k?: string; custom?: boolean; name?: string; legacyMonthlyAmount?: number }

@@ -3,7 +3,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .import_service import confirm_income_import, preview_income_import
+from .import_service import confirm_income_import, preview_income_import, update_income_import_row
 from .models import (
     CommitmentItem,
     ExpenseCategory,
@@ -26,6 +26,7 @@ from .serializers import (
     IncomeEntrySerializer,
     IncomeEntryUpdateSerializer,
     IncomeImportBatchSerializer,
+    IncomeImportRowUpdateSerializer,
     IncomeImportUploadSerializer,
     IncomeRecordSerializer,
     IncomeSourceCreateSerializer,
@@ -529,6 +530,36 @@ class IncomeImportDetailView(APIView):
             from rest_framework.exceptions import NotFound
 
             raise NotFound("Income import batch was not found for this profile.")
+        return Response(IncomeImportBatchSerializer(batch).data)
+
+
+# EN: Let the user correct one preview row before confirmation; raw CSV fields stay untouched.
+# 中文：允许用户在确认前修正一条预览记录，同时保留原始 CSV 字段。
+class IncomeImportRowUpdateView(APIView):
+
+    @extend_schema(
+        operation_id="income_import_rows_update",
+        summary="Correct one unconfirmed income import preview row",
+        tags=["Income imports"],
+        request=IncomeImportRowUpdateSerializer,
+        responses={
+            200: IncomeImportBatchSerializer,
+            400: ApiErrorSerializer,
+            404: ApiErrorSerializer,
+        },
+    )
+    def patch(self, request, batch_id: int, row_id: int):
+        profile = profile_for_request(request)
+        serializer = IncomeImportRowUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        batch = update_income_import_row(
+            profile=profile,
+            batch_id=batch_id,
+            row_id=row_id,
+            amount_text=serializer.validated_data["amount"],
+            date_text=serializer.validated_data["date"],
+            source_text=serializer.validated_data["source"],
+        )
         return Response(IncomeImportBatchSerializer(batch).data)
 
 

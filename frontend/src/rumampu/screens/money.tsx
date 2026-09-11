@@ -791,10 +791,17 @@ export function IncomeScreen() {
     </>
   );
 
+  // Recent means recently added, not the latest earning date. This keeps a newly
+  // imported CSV visible even when its dates are historical.
   const recent = [...S.data.income]
     .map((e, i) => ({ e, i }))
-    .slice(-6)
-    .reverse();
+    .sort((left, right) => {
+      const createdOrder = (right.e.createdAt || '').localeCompare(left.e.createdAt || '');
+      if (createdOrder) return createdOrder;
+      const idOrder = Number(right.e.id || 0) - Number(left.e.id || 0);
+      return idOrder || right.i - left.i;
+    })
+    .slice(0, 6);
 
   return (
     <ScreenShell back title={t('money_income')}>

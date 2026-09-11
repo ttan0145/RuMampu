@@ -58,6 +58,60 @@ class IncomeImportApiTests(TestCase):
         )
         self.assertEqual(IncomeEntry.objects.count(), 0)
 
+    def test_preview_row_can_be_corrected_without_changing_original_csv_values(self):
+        preview = self.upload(
+            "amount,date,source\n"
+            "oops,not-a-date,\n"
+            "200.00,2025-06-10,Freelance\n"
+        ).json()
+        row = preview["rows"][0]
+
+        response = self.client.patch(
+            f"/api/v1/income-imports/{preview['id']}/rows/{row['id']}/",
+            data={
+                "amount": "125.50",
+                "date": "2025-05-10",
+                "source": "Weekend market",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["ready_count"], 2)
+        self.assertEqual(response.json()["error_count"], 0)
+        corrected = response.json()["rows"][0]
+        self.assertEqual(corrected["amount"], "125.50")
+        self.assertEqual(corrected["date"], "2025-05-10")
+        self.assertEqual(corrected["source_name"], "Weekend market")
+        self.assertTrue(corrected["is_valid"])
+        self.assertEqual(corrected["raw_amount"], "oops")
+        self.assertEqual(corrected["raw_date"], "not-a-date")
+        self.assertEqual(corrected["raw_source"], "")
+        self.assertEqual(IncomeEntry.objects.count(), 0)
+
+    def test_preview_row_rejects_invalid_correction_and_changes_after_confirmation(self):
+        preview = self.upload(self.valid_csv()).json()
+        row = preview["rows"][0]
+        url = f"/api/v1/income-imports/{preview['id']}/rows/{row['id']}/"
+
+        invalid = self.client.patch(
+            url,
+            data={"amount": "bad", "date": "2025-05-10", "source": "E-hailing"},
+            content_type="application/json",
+        )
+        self.assertEqual(invalid.status_code, 400)
+
+        self.client.post(
+            f"/api/v1/income-imports/{preview['id']}/confirm/",
+            content_type="application/json",
+        )
+        confirmed = self.client.patch(
+            url,
+            data={"amount": "100.00", "date": "2025-05-10", "source": "E-hailing"},
+            content_type="application/json",
+        )
+        self.assertEqual(confirmed.status_code, 400)
+
     def test_confirm_adds_available_limited_history_and_custom_source(self):
         preview = self.upload(self.valid_csv()).json()
 
@@ -125,6 +179,50 @@ class IncomeImportApiTests(TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(IncomeEntry.objects.count(), 3)
 
+    def test_confirm_rejects_an_unchanged_duplicate_csv_for_the_same_profile(self):
+        first = self.upload(self.valid_csv(), name="same-file.csv").json()
+        confirmed = self.client.post(
+            f"/api/v1/income-imports/{first['id']}/confirm/",
+            content_type="application/json",
+        )
+        self.assertEqual(confirmed.status_code, 200)
+
+        second = self.upload(self.valid_csv(), name="same-file.csv").json()
+        duplicate = self.client.post(
+            f"/api/v1/income-imports/{second['id']}/confirm/",
+            content_type="application/json",
+        )
+
+        self.assertEqual(duplicate.status_code, 400)
+        self.assertIn("already been imported", duplicate.json()["error"]["fields"]["batch"])
+        self.assertEqual(IncomeEntry.objects.count(), 3)
+
+    def test_corrected_duplicate_csv_remains_confirmable(self):
+        first = self.upload(self.valid_csv(), name="editable-file.csv").json()
+        self.assertEqual(
+            self.client.post(
+                f"/api/v1/income-imports/{first['id']}/confirm/",
+                content_type="application/json",
+            ).status_code,
+            200,
+        )
+
+        second = self.upload(self.valid_csv(), name="editable-file.csv").json()
+        row = second["rows"][0]
+        corrected = self.client.patch(
+            f"/api/v1/income-imports/{second['id']}/rows/{row['id']}/",
+            data={"amount": "1201.00", "date": "2025-05-10", "source": "E-hailing"},
+            content_type="application/json",
+        )
+        self.assertEqual(corrected.status_code, 200)
+
+        confirmed = self.client.post(
+            f"/api/v1/income-imports/{second['id']}/confirm/",
+            content_type="application/json",
+        )
+        self.assertEqual(confirmed.status_code, 200)
+        self.assertEqual(IncomeEntry.objects.count(), 6)
+
     def test_deleting_guest_cascades_confirmed_import_record(self):
         batch_id = self.upload(self.valid_csv()).json()["id"]
         self.client.post(
@@ -190,4 +288,5 @@ class IncomeImportApiTests(TestCase):
         paths = response.json()["paths"]
         self.assertIn("/api/v1/income-imports/preview/", paths)
         self.assertIn("/api/v1/income-imports/{batch_id}/", paths)
+        self.assertIn("/api/v1/income-imports/{batch_id}/rows/{row_id}/", paths)
         self.assertIn("/api/v1/income-imports/{batch_id}/confirm/", paths)

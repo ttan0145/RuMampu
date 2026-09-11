@@ -540,6 +540,17 @@ export function fetchIncomeImport(batchId: number): Promise<ApiIncomeImportBatch
   return request<ApiIncomeImportBatch>(`/income-imports/${batchId}/`);
 }
 
+export function updateIncomeImportRow(
+  batchId: number,
+  rowId: number,
+  input: { amount: string; date: string; source: string },
+): Promise<ApiIncomeImportBatch> {
+  return request<ApiIncomeImportBatch>(`/income-imports/${batchId}/rows/${rowId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
 export function confirmIncomeImport(batchId: number): Promise<ApiIncomeImportBatch> {
   return request<ApiIncomeImportBatch>(`/income-imports/${batchId}/confirm/`, {
     method: 'POST',

@@ -528,6 +528,55 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/income-imports/{batch_id}/rows/{row_id}/:
+    patch:
+      operationId: income_import_rows_update
+      summary: Correct one unconfirmed income import preview row
+      parameters:
+      - in: path
+        name: batch_id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: row_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Income imports
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedIncomeImportRowUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedIncomeImportRowUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedIncomeImportRowUpdateRequest'
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncomeImportBatch'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/income-imports/preview/:
     post:
       operationId: income_imports_preview
@@ -1997,6 +2046,18 @@ components:
           type: integer
           minimum: 1
           nullable: true
+    PatchedIncomeImportRowUpdateRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          maxLength: 64
+        date:
+          type: string
+          maxLength: 32
+        source:
+          type: string
+          maxLength: 160
     PatchedWorkCostEntryWriteRequest:
       type: object
       properties:

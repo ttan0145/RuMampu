@@ -70,6 +70,48 @@ def _row_errors(*, profile, amount_text: str, date_text: str, source_text: str):
     return amount, income_date, source_name, ",".join(codes), " ".join(messages)
 
 
+def _same_confirmed_file_exists(*, profile, batch: IncomeImportBatch, rows: list[IncomeImportRow]) -> bool:
+    """Return true when an unchanged file already produced the same imported rows.
+
+    We deliberately scope this to the same profile and filename. A corrected
+    preview row changes the canonical value and therefore remains confirmable,
+    while accidentally confirming the same CSV twice is rejected.
+    """
+
+    candidate = {
+        row.row_number: (
+            row.amount,
+            row.income_date,
+            " ".join(row.source_name.split()).casefold(),
+        )
+        for row in rows
+    }
+    if not candidate:
+        return False
+
+    previous_batches = profile.income_import_batches.filter(
+        file_name=batch.file_name,
+        status=IncomeImportBatch.Status.CONFIRMED,
+    ).exclude(id=batch.id)
+    for previous in previous_batches:
+        imported_rows = list(
+            previous.rows.filter(imported_entry__isnull=False).order_by("row_number")
+        )
+        if len(imported_rows) != len(candidate):
+            continue
+        previous_values = {
+            row.row_number: (
+                row.amount,
+                row.income_date,
+                " ".join(row.source_name.split()).casefold(),
+            )
+            for row in imported_rows
+        }
+        if previous_values == candidate:
+            return True
+    return False
+
+
 @transaction.atomic
 def preview_income_import(*, profile, uploaded_file) -> IncomeImportBatch:
     """EN: Build the reviewable US1.8 preview; no IncomeEntry is created here.
@@ -126,6 +168,50 @@ def preview_income_import(*, profile, uploaded_file) -> IncomeImportBatch:
 
 
 @transaction.atomic
+def update_income_import_row(
+    *,
+    profile,
+    batch_id: int,
+    row_id: int,
+    amount_text: str,
+    date_text: str,
+    source_text: str,
+) -> IncomeImportBatch:
+    """Update one unconfirmed preview row while retaining its original CSV snapshot."""
+
+    batch = profile.income_import_batches.select_for_update().filter(id=batch_id).first()
+    if batch is None:
+        from rest_framework.exceptions import NotFound
+
+        raise NotFound("Income import batch was not found for this profile.")
+    if batch.status != IncomeImportBatch.Status.PREVIEW:
+        raise ValidationError({"batch": "Confirmed income import rows cannot be changed."})
+
+    row = batch.rows.select_for_update().filter(id=row_id).first()
+    if row is None:
+        from rest_framework.exceptions import NotFound
+
+        raise NotFound("Income import row was not found in this batch.")
+
+    amount, income_date, source_name, error_code, error_message = _row_errors(
+        profile=profile,
+        amount_text=amount_text.strip(),
+        date_text=date_text.strip(),
+        source_text=source_text.strip(),
+    )
+    if error_code:
+        raise ValidationError({"row": error_message})
+
+    row.amount = amount
+    row.income_date = income_date
+    row.source_name = source_name
+    row.error_code = ""
+    row.error_message = ""
+    row.save(update_fields=["amount", "income_date", "source_name", "error_code", "error_message"])
+    return batch
+
+
+@transaction.atomic
 def confirm_income_import(*, profile, batch_id: int) -> IncomeImportBatch:
     """EN: Atomically promote recognised US1.8 rows into confirmed income facts.
     中文：以原子事务把已识别的 US1.8 行提升为已确认收入事实。
@@ -138,10 +224,13 @@ def confirm_income_import(*, profile, batch_id: int) -> IncomeImportBatch:
         raise NotFound("Income import batch was not found for this profile.")
     if batch.status == IncomeImportBatch.Status.CONFIRMED:
         return batch
-    if not batch.rows.filter(error_code="").exists():
+    ready_rows = list(batch.rows.select_for_update().filter(error_code="").order_by("row_number"))
+    if not ready_rows:
         raise ValidationError({"batch": "There are no recognised rows to import."})
+    if _same_confirmed_file_exists(profile=profile, batch=batch, rows=ready_rows):
+        raise ValidationError({"batch": "This CSV appears to have already been imported for this profile."})
 
-    for row in batch.rows.select_for_update().filter(error_code="").order_by("row_number"):
+    for row in ready_rows:
         if profile.financial_periods.filter(
             period_month=row.income_date.replace(day=1),
             record_basis=FinancialPeriod.RecordBasis.MONTHLY_TOTAL,

@@ -123,4 +123,39 @@ test.describe('US1.8 comprehensive fixture regression', { tag: ['@us1.8', '@hard
     await expect(persistedRow).toContainText('Freelance');
     await expect(persistedRow).toContainText('CSV');
   });
+
+  test('TECH-IMPORT-03 — preview rows can be corrected and confirmation resets the picker', async ({ page }) => {
+    await openApp(page);
+    await openMoneyScreen(page, 'Income');
+    await page.getByText('Import', { exact: true }).click();
+
+    const chooserPromise = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Choose a .csv file', exact: true }).click();
+    const chooser = await chooserPromise;
+    await chooser.setFiles(path.resolve(__dirname, 'fixtures/epic1-income.csv'));
+
+    await page.getByRole('button', { name: 'Edit Row 5', exact: true }).click();
+    await page.getByLabel('Amount (RM) Row 5', { exact: true }).fill('725.25');
+    await page.getByLabel('Date Row 5', { exact: true }).fill('2026-06-20');
+    await page.getByLabel('Source Row 5', { exact: true }).fill('Weekend shift');
+
+    const updateResponsePromise = page.waitForResponse(response => (
+      response.request().method() === 'PATCH'
+      && /\/api\/v1\/income-imports\/\d+\/rows\/\d+\/$/.test(response.url())
+    ));
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    const updateResponse = await updateResponsePromise;
+    expect(updateResponse.status(), await updateResponse.text()).toBe(200);
+
+    await expect(page.getByText(/^4 ready$/i)).toBeVisible();
+    await expect(page.getByText(/^1 need attention$/i)).toBeVisible();
+    await expect(page.getByText('RM 725.25 · 2026-06-20 · Weekend shift', { exact: true })).toBeVisible();
+    await expect(page.getByText('Original: oops · 2026-06-20 · Broken amount', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Confirm and add 4 records', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Choose a .csv file', exact: true })).toBeVisible();
+    await expect(page.getByText('View income pattern', { exact: true })).toBeVisible();
+    await expect(page.getByText(/^Row \d+$/)).toHaveCount(0);
+    await expect(page.getByText('RM 725.25', { exact: true })).toBeVisible();
+  });
 });
