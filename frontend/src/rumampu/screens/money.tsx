@@ -1231,7 +1231,6 @@ export function PatternScreen() {
         <Divider />
         <KV k={t('pt_range_total')}><Fig value={formatApiMoney(stats.range)} p="calc" /></KV>
         <Divider />
-        <KV k={t('pt_std')}><Fig value={formatApiMoney(stats.standard_deviation)} p="calc" /></KV>
       </StackS>
       <BodyS muted>{t('pt_work_basis')}</BodyS>
       <BodyS muted>{t('pt_rule')}</BodyS>

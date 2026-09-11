@@ -2,7 +2,7 @@ import React from 'react';
 import { Animated, Easing, Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { getHousingTestResult } from '../../../services/housingSession';
-import { useApp } from '../state';
+import { Route, useApp } from '../state';
 import { expByMonth, monthsAgg, recSpan, rm } from '../calc';
 import { planEnsure, planSaved, planToggle } from '../plan';
 import { villageEnsure } from '../village';
@@ -10,6 +10,7 @@ import { IsoIsland } from '../isosvg';
 import { BODY_FONT, C, DISP_FONT } from '../theme';
 import { Btn, BodyS, Display } from '../ui';
 import { ScreenShell } from './shell';
+
 
 /* v22 home: total-saving hero + last-month income/expense card, a slim
    house-test row, then the saving-plan card with the village island. */
@@ -31,73 +32,256 @@ function Blob({ size, style, color }: { size: number; style: object; color: stri
 /* .hero + .hero2 — the dark balance cards. */
 function HomeCards() {
   const { S, t, monthName, go } = useApp();
-  const monthKeyOf = (d: string) =>
-  (+d.slice(0, 4)) * 12 + (+d.slice(5, 7) - 1);
 
-  const keys = [
+  const monthKeyOf = (d: string) =>
+    (+d.slice(0, 4)) * 12 + (+d.slice(5, 7) - 1);
+
+  // Work out which month should be shown
+  const now = new Date();
+  const thisKey = now.getFullYear() * 12 + now.getMonth();
+
+  const recordedKeys = new Set([
     ...S.data.income.map(e => monthKeyOf(e.d)),
     ...S.data.expenses.map(e => monthKeyOf(e.d)),
-  ];
+  ]);
 
-  const key = keys.length ? Math.max(...keys) : null;
+  const key = recordedKeys.has(thisKey)
+    ? thisKey
+    : recordedKeys.size
+      ? Math.max(...recordedKeys)
+      : null;
 
-  const income = key != null
-    ? S.data.income
-        .filter(e => monthKeyOf(e.d) === key)
-        .reduce((sum, e) => sum + (+e.a || 0), 0)
-    : 0;
+  const income =
+    key != null
+      ? S.data.income
+          .filter(e => monthKeyOf(e.d) === key)
+          .reduce((sum, e) => sum + (+e.a || 0), 0)
+      : 0;
 
-  const ex = key != null
-    ? S.data.expenses
-        .filter(e => monthKeyOf(e.d) === key)
-        .reduce((sum, e) => sum + (+e.a || 0), 0)
-    : 0;
+  const ex =
+    key != null
+      ? S.data.expenses
+          .filter(e => monthKeyOf(e.d) === key)
+          .reduce((sum, e) => sum + (+e.a || 0), 0)
+      : 0;
 
   const mn = key != null
     ? monthName(key % 12)
     : '';
-  const gap = Math.max(0, upfrontNeed(S.data) - S.data.cashOnHand);
+
+  const gap = Math.max(
+    0,
+    upfrontNeed(S.data) - S.data.cashOnHand
+  );
+
+  const saving = income - ex;
+
   return (
     <View>
       <View style={st.hero}>
-        <Blob size={150} color="rgba(74,145,149,0.55)" style={{ right: -60, top: -70 }} />
-        <Blob size={90} color="rgba(254,200,68,0.9)" style={{ right: -22, top: -32 }} />
-        <Blob size={120} color="rgba(50,177,74,0.55)" style={{ left: -60, bottom: -70 }} />
-        <Text style={st.heroLbl}>{t('hm_saving')}</Text>
-        <Text style={st.heroAmt}>{rm(S.data.cashOnHand)}</Text>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 8 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: gap > 0 ? C.caution : C.confirm }} />
-            <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, lineHeight: 16, color: 'rgba(255,255,255,0.88)', flexShrink: 1 }}>
-              {gap > 0 ? t('hm_togo', { g: rm(gap) }) : t('hm_ready')}
+        <Blob
+          size={150}
+          color="rgba(74,145,149,0.55)"
+          style={{ right: -60, top: -70 }}
+        />
+
+        <Blob
+          size={90}
+          color="rgba(254,200,68,0.9)"
+          style={{ right: -22, top: -32 }}
+        />
+
+        <Blob
+          size={120}
+          color="rgba(50,177,74,0.55)"
+          style={{ left: -60, bottom: -70 }}
+        />
+
+        <Text style={st.heroLbl}>
+          {t('hm_saving')}
+        </Text>
+
+        <Text style={st.heroAmt}>
+          {rm(saving)}
+        </Text>
+
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 10,
+            marginTop: 8,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              flexShrink: 1,
+            }}
+          >
+            <View
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor:
+                  gap > 0 ? C.caution : C.confirm,
+              }}
+            />
+
+            <Text
+              style={{
+                fontFamily: BODY_FONT,
+                fontSize: 12.5,
+                lineHeight: 16,
+                color: 'rgba(255,255,255,0.88)',
+                flexShrink: 1,
+              }}
+            >
+              {gap > 0
+                ? t('hm_togo', { g: rm(gap) })
+                : t('hm_ready')}
             </Text>
           </View>
-          <Pressable onPress={() => go('upfront')} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 30 }}>
-            <Text style={{ fontFamily: BODY_FONT, fontSize: 13, color: '#fff' }}>{t('hm_mysav')}</Text>
-            <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ color: '#1F3F42', fontWeight: '700', fontSize: 15 }}>↓</Text>
+
+          <Pressable
+            onPress={() => go('upfront')}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              minHeight: 30,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: BODY_FONT,
+                fontSize: 13,
+                color: '#fff',
+              }}
+            >
+              {t('hm_mysav')}
+            </Text>
+
+            <View
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: 13,
+                backgroundColor: '#fff',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text
+                style={{
+                  color: '#1F3F42',
+                  fontWeight: '700',
+                  fontSize: 15,
+                }}
+              >
+                ↓
+              </Text>
             </View>
           </Pressable>
         </View>
       </View>
-      <View style={[st.hero, { flexDirection: 'row', marginTop: 10, paddingVertical: 14 }]}>
-        <Blob size={80} color="rgba(74,145,149,0.6)" style={{ left: -40, top: -40 }} />
-        <Blob size={70} color="rgba(254,200,68,0.85)" style={{ right: -30, bottom: -35 }} />
-        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 }}>
-          <SvgXml xml={arrowXml(true, '#5FD37A')} width={22} height={22} />
-          <View style={{ minWidth: 0, flexShrink: 1 }}>
-            <Text style={st.heroLbl} numberOfLines={1}>{t('hm_income')}{mn ? ' · ' + mn : ''}</Text>
-            <Text style={st.hero2Amt}>{rm(income)}</Text>
+
+      <View
+        style={[
+          st.hero,
+          {
+            flexDirection: 'row',
+            marginTop: 10,
+            paddingVertical: 14,
+          },
+        ]}
+      >
+        <Blob
+          size={80}
+          color="rgba(74,145,149,0.6)"
+          style={{ left: -40, top: -40 }}
+        />
+
+        <Blob
+          size={70}
+          color="rgba(254,200,68,0.85)"
+          style={{ right: -30, bottom: -35 }}
+        />
+
+        <View
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            minWidth: 0,
+          }}
+        >
+          <SvgXml
+            xml={arrowXml(true, '#5FD37A')}
+            width={22}
+            height={22}
+          />
+
+          <View
+            style={{
+              minWidth: 0,
+              flexShrink: 1,
+            }}
+          >
+            <Text
+              style={st.heroLbl}
+              numberOfLines={1}
+            >
+              {t('hm_income')}
+              {mn ? ' · ' + mn : ''}
+            </Text>
+
+            <Text style={st.hero2Amt}>
+              {rm(income)}
+            </Text>
           </View>
         </View>
-        <View style={{
-          flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0,
-          borderLeftWidth: 1.5, borderLeftColor: 'rgba(255,255,255,0.25)', paddingLeft: 14,
-        }}>
-          <SvgXml xml={arrowXml(false, '#FF8A66')} width={22} height={22} />
-          <View style={{ minWidth: 0, flexShrink: 1 }}>
-            <Text style={st.heroLbl} numberOfLines={1}>{t('hm_exp')}{mn ? ' · ' + mn : ''}</Text>
-            <Text style={st.hero2Amt}>{rm(ex)}</Text>
+
+        <View
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            minWidth: 0,
+            borderLeftWidth: 1.5,
+            borderLeftColor: 'rgba(255,255,255,0.25)',
+            paddingLeft: 14,
+          }}
+        >
+          <SvgXml
+            xml={arrowXml(false, '#FF8A66')}
+            width={22}
+            height={22}
+          />
+
+          <View
+            style={{
+              minWidth: 0,
+              flexShrink: 1,
+            }}
+          >
+            <Text
+              style={st.heroLbl}
+              numberOfLines={1}
+            >
+              {t('hm_exp')}
+              {mn ? ' · ' + mn : ''}
+            </Text>
+
+            <Text style={st.hero2Amt}>
+              {rm(ex)}
+            </Text>
           </View>
         </View>
       </View>
