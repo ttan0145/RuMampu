@@ -562,3 +562,45 @@ class IncomeImportBatchSerializer(serializers.ModelSerializer):
 
     def get_imported_count(self, obj) -> int:
         return obj.rows.filter(imported_entry__isnull=False).count()
+
+
+class ReceiptScanRequestSerializer(serializers.Serializer):
+    # ~6 MB of base64 covers a phone photo at reduced quality; larger uploads
+    # are rejected before any model call is made.
+    image_base64 = serializers.CharField(trim_whitespace=False, max_length=6_000_000)
+    media_type = serializers.ChoiceField(
+        choices=["image/jpeg", "image/png", "image/webp"],
+        default="image/jpeg",
+    )
+
+
+class ReceiptScanResultSerializer(serializers.Serializer):
+    is_receipt = serializers.BooleanField()
+    merchant = serializers.CharField(allow_null=True)
+    date = serializers.DateField(allow_null=True)
+    total = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        coerce_to_string=True,
+        allow_null=True,
+    )
+    category_slug = serializers.CharField(allow_null=True)
+
+
+class AssistantMessageSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=["user", "assistant"])
+    content = serializers.CharField(max_length=2000, trim_whitespace=True)
+
+
+class AssistantChatRequestSerializer(serializers.Serializer):
+    messages = AssistantMessageSerializer(many=True, min_length=1, max_length=24)
+    language = serializers.ChoiceField(choices=["en", "ms", "zh"], default="en")
+
+    def validate_messages(self, value):
+        if value[-1]["role"] != "user":
+            raise serializers.ValidationError("The last message must come from the user.")
+        return value
+
+
+class AssistantChatResponseSerializer(serializers.Serializer):
+    reply = serializers.CharField()

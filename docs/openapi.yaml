@@ -164,6 +164,54 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/expenses/receipt-scan/:
+    post:
+      operationId: expense_receipt_scan
+      description: Sends the photo to a vision model and returns a structured draft.
+        Nothing is saved; the user reviews the draft and records it through the normal
+        expense-entry endpoint.
+      summary: Read a receipt photo into a draft expense
+      tags:
+      - Expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiptScanRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReceiptScanRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReceiptScanRequestRequest'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiptScanResult'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The vision model call failed.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No GROQ_API_KEY configured.
   /api/v1/health/:
     get:
       operationId: system_health
@@ -1994,6 +2042,16 @@ components:
       required:
       - basis
       - months
+    MediaTypeEnum:
+      enum:
+      - image/jpeg
+      - image/png
+      - image/webp
+      type: string
+      description: |-
+        * `image/jpeg` - image/jpeg
+        * `image/png` - image/png
+        * `image/webp` - image/webp
     NullEnum:
       enum:
       - null
@@ -2179,6 +2237,45 @@ components:
       - calculated_from_user_record
       type: string
       description: '* `calculated_from_user_record` - calculated_from_user_record'
+    ReceiptScanRequestRequest:
+      type: object
+      properties:
+        image_base64:
+          type: string
+          minLength: 1
+          maxLength: 6000000
+        media_type:
+          allOf:
+          - $ref: '#/components/schemas/MediaTypeEnum'
+          default: image/jpeg
+      required:
+      - image_base64
+    ReceiptScanResult:
+      type: object
+      properties:
+        is_receipt:
+          type: boolean
+        merchant:
+          type: string
+          nullable: true
+        date:
+          type: string
+          format: date
+          nullable: true
+        total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        category_slug:
+          type: string
+          nullable: true
+      required:
+      - category_slug
+      - date
+      - is_receipt
+      - merchant
+      - total
     ShortfallTypeEnum:
       enum:
       - none

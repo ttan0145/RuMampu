@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from . import assistant_service, receipt_service
 from .import_service import confirm_income_import, preview_income_import, update_income_import_row
 from .models import (
     CommitmentItem,
@@ -16,6 +17,8 @@ from .models import (
 )
 from .serializers import (
     ApiErrorSerializer,
+    AssistantChatRequestSerializer,
+    AssistantChatResponseSerializer,
     CommitmentItemSerializer,
     CommitmentItemUpdateSerializer,
     ExpenseCategoryCreateSerializer,
@@ -31,6 +34,8 @@ from .serializers import (
     IncomeRecordSerializer,
     IncomeSourceCreateSerializer,
     IncomeSourceSerializer,
+    ReceiptScanRequestSerializer,
+    ReceiptScanResultSerializer,
     WorkCostItemCreateSerializer,
     WorkCostItemSerializer,
     WorkCostEntrySerializer,
@@ -486,6 +491,78 @@ class ExpenseEntryListCreateView(APIView):
             user_confirmed=True,
         )
         return Response(ExpenseEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+
+class ExpenseReceiptScanView(APIView):
+    @extend_schema(
+        operation_id="expense_receipt_scan",
+        summary="Read a receipt photo into a draft expense",
+        description=(
+            "Sends the photo to a vision model and returns a structured draft. "
+            "Nothing is saved; the user reviews the draft and records it through "
+            "the normal expense-entry endpoint."
+        ),
+        tags=["Expenses"],
+        request=ReceiptScanRequestSerializer,
+        responses={
+            200: ReceiptScanResultSerializer,
+            400: ApiErrorSerializer,
+            502: OpenApiResponse(ApiErrorSerializer, description="The vision model call failed."),
+            503: OpenApiResponse(ApiErrorSerializer, description="No GROQ_API_KEY configured."),
+        },
+    )
+    def post(self, request):
+        profile_for_request(request)
+        serializer = ReceiptScanRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        try:
+            result = receipt_service.scan_receipt(data["image_base64"], data["media_type"])
+        except receipt_service.ReceiptScanError as exc:
+            return Response(
+                {"error": {"code": exc.code, "message": exc.message}},
+                status=exc.status,
+            )
+        return Response(ReceiptScanResultSerializer(result).data)
+
+
+class AssistantChatView(APIView):
+    @extend_schema(
+        operation_id="assistant_chat",
+        summary="Ask the RuMampu assistant about the guest's record",
+        description=(
+            "Answers questions about the guest's own recorded data in plain "
+            "language. The record snapshot and conversation rules are built "
+            "server-side; the assistant only discusses RuMampu topics and "
+            "never presents guidance as financial advice."
+        ),
+        tags=["Assistant"],
+        request=AssistantChatRequestSerializer,
+        responses={
+            200: AssistantChatResponseSerializer,
+            400: ApiErrorSerializer,
+            429: OpenApiResponse(ApiErrorSerializer, description="Daily message limit reached."),
+            502: OpenApiResponse(ApiErrorSerializer, description="The model call failed."),
+            503: OpenApiResponse(ApiErrorSerializer, description="No GROQ_API_KEY configured."),
+        },
+    )
+    def post(self, request):
+        profile = profile_for_request(request)
+        serializer = AssistantChatRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        try:
+            reply = assistant_service.answer_chat(
+                profile,
+                data["messages"],
+                ui_language=data["language"],
+            )
+        except assistant_service.AssistantError as exc:
+            return Response(
+                {"error": {"code": exc.code, "message": exc.message}},
+                status=exc.status,
+            )
+        return Response(AssistantChatResponseSerializer({"reply": reply}).data)
 
 
 # EN: Create the unconfirmed, reviewable preview for US1.8.
