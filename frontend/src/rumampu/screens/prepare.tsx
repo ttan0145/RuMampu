@@ -90,7 +90,7 @@ export function UpfrontScreen() {
         <KV k={t('uf_dep')}><Fig value={rm(dep)} p="user" /></KV>
       )}
       <Card gap={8}>
-        <EditList list={S.data.upfront} onNum={(i, n) => up(s => { s.data.upfront[i].a = n; })} />
+        <EditList decimal list={S.data.upfront} onNum={(i, n) => up(s => { s.data.upfront[i].a = n; })} />
       </Card>
       <BodyS muted>{t('dc_src')}</BodyS>
     </ScreenShell>
