@@ -637,7 +637,7 @@ paths:
   /api/v1/income/entries/{entry_id}/:
     patch:
       operationId: income_entry_update
-      summary: Update a manual or historical monthly income entry
+      summary: Update a manual, imported, or historical monthly income entry
       parameters:
       - in: path
         name: entry_id

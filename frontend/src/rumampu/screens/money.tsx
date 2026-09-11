@@ -21,6 +21,7 @@ import {
 } from '../incard';
 import { IncomePatternChart } from '../charts';
 import { ScreenShell } from './shell';
+import { IncomeCsvBody } from './imports';
 import { isValidIsoDate, isValidMoneyText } from '../validation';
 import { DatePickerField } from '../date-picker';
 
@@ -799,15 +800,14 @@ export function IncomeScreen() {
     <ScreenShell back title={t('money_income')}>
       {S.incomeSync === 'loading' ? <NoteC><BodyS>{t('inc_sync_loading')}</BodyS></NoteC> : null}
       {S.incomeSync === 'error' ? <NoteC><BodyS>{t('inc_sync_error')}</BodyS></NoteC> : null}
-      {S.data.income.length ? null : <Display cls="h-m">{t('inc_empty')}</Display>}
+      {S.data.income.length || S.incMode === 'csv' ? null : <Display cls="h-m">{t('inc_empty')}</Display>}
       <InCard>
         <InSeg mode={S.incMode} tint="in"
           labels={[['type', t('im_type')], ['scan', t('im_scan')], ['csv', t('im_csv')]]}
           onMode={m => {
-            if (m === 'csv') { go('incomeimport'); return; }
             up(s => { s.incMode = m as typeof s.incMode; });
           }} />
-        {S.incMode === 'scan' ? <IncomeScanBody /> : typeBody}
+        {S.incMode === 'csv' ? <IncomeCsvBody embedded /> : S.incMode === 'scan' ? <IncomeScanBody /> : typeBody}
       </InCard>
       {/* EN: Saved income is user-provided data, so provenance is shown once for the section instead of on every row. */}
       {/* 中文：已保存收入都属于用户提供的数据，因此来源标识只在区块顶部显示一次，不在每行重复。 */}
@@ -825,7 +825,9 @@ export function IncomeScreen() {
             const sub = e.method === 'historical_total'
               ? `${monthName(+e.d.slice(5, 7) - 1)} ${e.d.slice(0, 4)}`
               : `${+e.d.slice(8, 10)} ${monthName(+e.d.slice(5, 7) - 1)}`;
-            const canEdit = (e.method === 'historical_total' || e.method === 'manual') && Boolean(e.id);
+            const canEdit = (
+              e.method === 'historical_total' || e.method === 'manual' || e.method === 'import'
+            ) && Boolean(e.id);
             return (
               <InRow key={e.id || `${e.d}-${idx}`} first={idx === 0} tint="in"
                 icon={<SrcIcon id={e.s} data={S.data} size={18} color="#3F7A7E" />}

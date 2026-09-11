@@ -363,11 +363,13 @@ export function SheetHost() {
     const existing = editId ? S.data.income.find(entry => entry.id === editId && entry.method === 'historical_total') : null;
     setPastM(existing ? existing.d.slice(0, 7) : null);
     setPastA(existing ? String(existing.a) : '');
-    const manualEditId = sheet?.startsWith('incomeedit:') ? sheet.slice('incomeedit:'.length) : null;
-    const manualEntry = manualEditId ? S.data.income.find(entry => entry.id === manualEditId && entry.method === 'manual') : null;
-    setEditAmount(manualEntry ? String(manualEntry.a) : '');
-    setEditDate(manualEntry ? manualEntry.d : '');
-    setEditSource(manualEntry ? manualEntry.s : '');
+    const itemEditId = sheet?.startsWith('incomeedit:') ? sheet.slice('incomeedit:'.length) : null;
+    const itemEntry = itemEditId ? S.data.income.find(entry => (
+      entry.id === itemEditId && (entry.method === 'manual' || entry.method === 'import')
+    )) : null;
+    setEditAmount(itemEntry ? String(itemEntry.a) : '');
+    setEditDate(itemEntry ? itemEntry.d : '');
+    setEditSource(itemEntry ? itemEntry.s : '');
     setEditError(null);
     if (sheet === 'exlimit') setLimitA(S.data.expenseLimits.total ? String(S.data.expenseLimits.total) : '');
     if (sheet === 'savename') setSvName(S.svDraft || '');

@@ -71,7 +71,7 @@
 | POST | `/api/v1/income/sources/` | 新建自定义收入来源 |
 | GET | `/api/v1/income/entries/` | 收入明细 |
 | POST | `/api/v1/income/entries/` | 新建收入或历史月总额 |
-| PATCH | `/api/v1/income/entries/{id}/` | 更新一笔收入或历史月总额记录 |
+| PATCH | `/api/v1/income/entries/{id}/` | 更新一笔手工、导入或历史月总额收入记录 |
 | DELETE | `/api/v1/income/entries/{id}/` | 删除当前访客的一笔收入记录 |
 | POST | `/api/v1/income-imports/preview/` | 上传 CSV 并建立逐行预览，不创建收入记录 |
 | GET | `/api/v1/income-imports/{id}/` | 读取当前访客的导入批次与逐行结果 |
@@ -291,6 +291,8 @@ POST/PATCH 已返回确认记录，即代表写入成功，后续 GET 失败不�
 ```
 
 客户端必须显示识别后的金额、日期、来源以及错误行，再由用户调用 confirm。confirm 在事务中只创建无错误的行，复用同名有效来源或创建自定义来源，收入记录标为 `entry_method: "import"`；已确认批次再次 confirm 返回同一状态，不重复创建收入。导入不要求 6 或 12 个月最低历史长度。
+
+确认后，导入收入可以通过收入记录 `PATCH` 接口编辑。系统更新参与计算的金额、日期与来源，同时保留 `entry_method: "import"` 以及导入行的原始审计快照。
 
 ## 9. 收入形态分析
 

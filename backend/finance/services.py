@@ -185,10 +185,11 @@ def update_income_entry(
     gross_amount: Decimal,
     source: IncomeSource | None = None,
 ) -> IncomeEntry:
-    """Update a manual or historical-total income entry and keep its FinancialPeriod consistent."""
+    """Update an itemised or historical-total income and keep its period consistent."""
     if entry.entry_method not in (
         IncomeEntry.EntryMethod.MANUAL,
         IncomeEntry.EntryMethod.HISTORICAL_TOTAL,
+        IncomeEntry.EntryMethod.IMPORT,
     ):
         raise ValueError("This income entry type cannot be edited through this operation.")
 

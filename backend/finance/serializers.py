@@ -192,10 +192,13 @@ class IncomeEntryUpdateSerializer(serializers.Serializer):
             attrs["source_id"] = None
             return attrs
 
-        if entry.entry_method == IncomeEntry.EntryMethod.MANUAL:
+        if entry.entry_method in (
+            IncomeEntry.EntryMethod.MANUAL,
+            IncomeEntry.EntryMethod.IMPORT,
+        ):
             if not attrs.get("source_id"):
                 raise serializers.ValidationError(
-                    {"source_id": "An income source is required for a manual entry."}
+                    {"source_id": "An income source is required for an itemised entry."}
                 )
             if profile.financial_periods.filter(
                 period_month=period_month,

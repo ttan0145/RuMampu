@@ -571,11 +571,11 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
 
     await ac('AC1.8.1', 'Access historical import', async () => {
       await page.getByText('Import', { exact: true }).click();
-      await expect(page.getByText('Import income', { exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Choose a .csv file', exact: true })).toBeVisible();
     });
     await ac('AC1.8.2', 'Import historical income records', async () => {
       const chooserPromise = page.waitForEvent('filechooser');
-      await page.getByRole('button', { name: 'Select CSV file', exact: true }).click();
+      await page.getByRole('button', { name: 'Choose a .csv file', exact: true }).click();
       const chooser = await chooserPromise;
       await chooser.setFiles(path.resolve(__dirname, 'fixtures/epic1-income.csv'));
       await expect(page.getByText('epic1-income.csv: 5 rows', { exact: true })).toBeVisible();

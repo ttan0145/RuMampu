@@ -2,6 +2,12 @@
 
 Language: **English** | [Chinese (CN)](CHANGELOG.cn.md)
 
+## 2026-09-11 — Editable confirmed income imports
+
+- Enabled confirmed CSV income entries to use the existing income edit flow while retaining their `CSV` provenance tag.
+- Extended the income-entry update API to edit imported amounts, dates, and sources without changing `entry_method` or the original import-row audit snapshot.
+- Added backend and Playwright hardening coverage without introducing a new formal acceptance criterion.
+
 ## 2026-09-04 — Income deletion and Work costs regression protection
 
 - Removed a legacy Work costs notice and duplicated row provenance that returned in the income-deletion commit; restored the responsive row layout.

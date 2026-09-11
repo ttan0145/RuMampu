@@ -275,7 +275,7 @@ export function Drop({ icon, title, hint, badge, onPress, tint = 'in' }: {
 }) {
   const color = tint === 'out' ? '#D9663D' : C.brand;
   return (
-    <Pressable onPress={onPress} style={st.drop}>
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={title} style={st.drop}>
       <SvgXml xml={`<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">${SEG_ICO[icon]}</svg>`} width={34} height={34} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
         <Text style={{ fontFamily: DISP_FONT, fontSize: 14.5, color: C.ink }}>{title}</Text>

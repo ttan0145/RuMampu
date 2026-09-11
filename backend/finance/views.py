@@ -180,7 +180,7 @@ class IncomeEntryListCreateView(APIView):
 class HistoricalIncomeEntryDetailView(APIView):
     @extend_schema(
         operation_id="income_entry_update",
-        summary="Update a manual or historical monthly income entry",
+        summary="Update a manual, imported, or historical monthly income entry",
         tags=["Income"],
         request=IncomeEntryUpdateSerializer,
         responses={200: IncomeEntrySerializer, 400: ApiErrorSerializer, 404: ApiErrorSerializer},

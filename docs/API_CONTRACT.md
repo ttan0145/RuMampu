@@ -71,7 +71,7 @@ After confirmation, the client retries the same data with `confirm_outlier: true
 | POST | `/api/v1/income/sources/` | Create a custom income source |
 | GET | `/api/v1/income/entries/` | Income entries |
 | POST | `/api/v1/income/entries/` | Create itemised income or a historical monthly total |
-| PATCH | `/api/v1/income/entries/{id}/` | Update one itemised or historical income entry |
+| PATCH | `/api/v1/income/entries/{id}/` | Update one manual, imported, or historical income entry |
 | DELETE | `/api/v1/income/entries/{id}/` | Delete one current-guest income entry |
 | POST | `/api/v1/income-imports/preview/` | Upload CSV and create a row preview without income entries |
 | GET | `/api/v1/income-imports/{id}/` | Read the current guest's import batch and row results |
@@ -291,6 +291,8 @@ Example preview response:
 ```
 
 The client displays parsed amounts, dates, sources, and invalid rows before the user confirms. Confirmation creates only valid rows in one transaction, reuses an active same-name source or creates a custom source, and marks entries with `entry_method: "import"`. Confirming an already confirmed batch returns the same state without duplicates. Import has no minimum history of six or twelve months.
+
+After confirmation, an imported income entry can be edited through the income-entry `PATCH` endpoint. The authoritative amount, date, and source are updated while `entry_method: "import"` and the import row's original audit snapshot remain unchanged.
 
 ## 9. Income-pattern analysis
 

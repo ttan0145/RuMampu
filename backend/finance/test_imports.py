@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 
@@ -73,6 +75,44 @@ class IncomeImportApiTests(TestCase):
         )
         self.assertEqual(FinancialPeriod.objects.count(), 2)
         self.assertTrue(IncomeSource.objects.filter(name="Weekend market", is_custom=True).exists())
+
+    def test_confirmed_import_can_be_edited_without_rewriting_its_audit_row(self):
+        preview = self.upload(self.valid_csv()).json()
+        confirmed = self.client.post(
+            f"/api/v1/income-imports/{preview['id']}/confirm/",
+            content_type="application/json",
+        )
+        self.assertEqual(confirmed.status_code, 200)
+
+        row = IncomeImportRow.objects.get(batch_id=preview["id"], row_number=2)
+        entry_id = row.imported_entry_id
+        profile = GuestProfile.objects.get()
+        freelance = profile.income_sources.get(slug="freelance")
+
+        response = self.client.patch(
+            f"/api/v1/income/entries/{entry_id}/",
+            data={
+                "amount": "1234.56",
+                "date": "2025-07-04",
+                "source_id": freelance.id,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["amount"], "1234.56")
+        self.assertEqual(response.json()["date"], "2025-07-04")
+        self.assertEqual(response.json()["source_id"], freelance.id)
+        self.assertEqual(response.json()["entry_method"], IncomeEntry.EntryMethod.IMPORT)
+
+        row.refresh_from_db()
+        self.assertEqual(row.imported_entry_id, entry_id)
+        self.assertEqual(row.raw_amount, "1200.00")
+        self.assertEqual(row.raw_date, "2025-05-10")
+        self.assertEqual(row.raw_source, "E-hailing")
+        self.assertEqual(row.amount, Decimal("1200.00"))
+        self.assertEqual(row.income_date.isoformat(), "2025-05-10")
+        self.assertEqual(row.source_name, "E-hailing")
 
     def test_confirm_is_idempotent(self):
         batch_id = self.upload(self.valid_csv()).json()["id"]

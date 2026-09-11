@@ -10,7 +10,7 @@ test.describe('US1.8 comprehensive fixture regression', { tag: ['@us1.8', '@hard
     await page.getByText('Import', { exact: true }).click();
 
     const chooserPromise = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'Select CSV file', exact: true }).click();
+    await page.getByRole('button', { name: 'Choose a .csv file', exact: true }).click();
     const chooser = await chooserPromise;
     await chooser.setFiles(path.resolve(__dirname, 'fixtures/us1.8-comprehensive-12-month-income.csv'));
 
@@ -76,5 +76,51 @@ test.describe('US1.8 comprehensive fixture regression', { tag: ['@us1.8', '@hard
     await expect(page.locator('[aria-label*="calculated usable income"]:not([aria-label="Month-by-month calculated usable income"])')).toHaveCount(12);
     const persisted = await e2eGet(page, `${API}/income/record/`);
     expect((await persisted.json()).entries).toHaveLength(60);
+  });
+
+  test('TECH-IMPORT-02 — a confirmed imported income entry remains editable', async ({ page }) => {
+    await openApp(page);
+    await openMoneyScreen(page, 'Income');
+    await page.getByText('Import', { exact: true }).click();
+
+    const chooserPromise = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Choose a .csv file', exact: true }).click();
+    const chooser = await chooserPromise;
+    await chooser.setFiles(path.resolve(__dirname, 'fixtures/epic1-income.csv'));
+    await page.getByRole('button', { name: 'Confirm and add 3 records', exact: true }).click();
+    await expect(page.getByText('3 income records added. Your analyses now use them.', { exact: true })).toBeVisible();
+
+    await openMoneyScreen(page, 'Income');
+    const importedRow = page.getByText('RM 900', { exact: true }).locator('..');
+    await expect(importedRow).toContainText('CSV');
+    await importedRow.getByLabel('edit').click();
+
+    const amountInput = page.locator('input:visible').first();
+    await expect(amountInput).toHaveValue('900');
+    await amountInput.fill('975.50');
+    await page.getByText('Freelance', { exact: true }).last().click();
+
+    const updateResponsePromise = page.waitForResponse(response => (
+      response.request().method() === 'PATCH'
+      && /\/api\/v1\/income\/entries\/\d+\/$/.test(response.url())
+    ));
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    const updateResponse = await updateResponsePromise;
+    expect(updateResponse.status(), await updateResponse.text()).toBe(200);
+    expect(await updateResponse.json()).toMatchObject({
+      amount: '975.50',
+      entry_method: 'import',
+    });
+
+    const updatedRow = page.getByText('RM 975.50', { exact: true }).locator('..');
+    await expect(updatedRow).toContainText('Freelance');
+    await expect(updatedRow).toContainText('CSV');
+
+    await page.reload();
+    await openApp(page);
+    await openMoneyScreen(page, 'Income');
+    const persistedRow = page.getByText('RM 975.50', { exact: true }).locator('..');
+    await expect(persistedRow).toContainText('Freelance');
+    await expect(persistedRow).toContainText('CSV');
   });
 });
