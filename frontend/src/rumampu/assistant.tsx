@@ -11,9 +11,9 @@ import { BODY_FONT, C, DISP_FONT } from './theme';
 import { RobotIco } from './svgs';
 import { RumaAvatar } from './ruma-view';
 
-/* Flip to true to bring the whole Ask RuMampu UI back (bubble, header
-   button, popover). Hidden for now while the team decides when it ships. */
-export const ASSISTANT_UI_ENABLED = false;
+/* Flip to false to hide the whole Ask RuMampu UI (bubble, header
+   button, popover), e.g. while the AI backend is unavailable. */
+export const ASSISTANT_UI_ENABLED = true;
 
 /* US6.2 — "Ask RuMampu".
 
