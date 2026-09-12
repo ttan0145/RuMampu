@@ -2,6 +2,9 @@ from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
+from rest_framework.permissions import IsAuthenticated
+from rest_framework import status
+from .models import SavedHousingTest
 
 from .models import HousingScenario
 from .serializers import (
@@ -98,3 +101,37 @@ class StatelessHousingTestView(APIView):
         serializer.is_valid(raise_exception=True)
         profile = profile_for_request(request)
         return Response(stateless_housing_test_result(profile, serializer.validated_data))
+
+class SavedHousingTestView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        rows = SavedHousingTest.objects.filter(user=request.user)
+        return Response([{
+            'id': x.id, 'scenario_id': x.scenario_id,
+            'monthly_payment': float(x.monthly_payment),
+            'short_month_count': x.short_month_count,
+            'tested_months': x.tested_months,
+            'largest_gap': float(x.largest_gap),
+            'income_shock_percent': float(x.income_shock_percent),
+            'created_at': x.created_at.isoformat(),
+        } for x in rows])
+
+    def post(self, request):
+        scenario = None
+        scenario_id = request.data.get('scenario_id')
+        if scenario_id:
+            scenario = HousingScenario.objects.filter(id=scenario_id, user=request.user).first()
+            if scenario is None:
+                from rest_framework.exceptions import NotFound
+                raise NotFound('Housing scenario not found.')
+        x = SavedHousingTest.objects.create(
+            user=request.user,
+            scenario=scenario,
+            monthly_payment=request.data.get('monthly_payment', 0),
+            short_month_count=request.data.get('short_month_count', 0),
+            tested_months=request.data.get('tested_months', 0),
+            largest_gap=request.data.get('largest_gap', 0),
+            income_shock_percent=request.data.get('income_shock_percent', 0),
+        )
+        return Response({'id': x.id}, status=status.HTTP_201_CREATED)

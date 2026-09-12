@@ -52,9 +52,15 @@ DEFAULT_EXPENSE_CATEGORIES = (
 
 
 def profile_for_request(request) -> GuestProfile:
-    """EN: Resolve the guest boundary used by all Epic 1 writes and Epic 2 reads.
-    中文：解析所有 Epic 1 写入与 Epic 2 读取共用的访客边界。
+    """EN: Resolve the account profile first, otherwise the current guest boundary.
+    中文：已登录时优先使用账号 profile，否则使用当前访客边界。
     """
+
+    user = getattr(request, "user", None)
+    if user is not None and user.is_authenticated:
+        existing = GuestProfile.objects.filter(user=user).first()
+        if existing is not None:
+            return existing
 
     client_id = request.headers.get("X-RuMampu-Client-ID", "").strip()
 
@@ -125,6 +131,45 @@ def ensure_default_expense_categories(profile: GuestProfile) -> None:
             defaults={"name": name, "is_custom": False},
         )
 
+
+
+@transaction.atomic
+def claim_guest_profile_for_user(request, user) -> GuestProfile:
+    """Attach the current anonymous profile to a user when the account has no profile yet.
+
+    If the user already owns a RuMampu profile, keep that profile authoritative.
+    This makes login safe for returning users while allowing a new account to keep
+    the financial data entered before authentication.
+    """
+    existing = GuestProfile.objects.select_for_update().filter(user=user).first()
+    if existing is not None:
+        return existing
+
+    profile = profile_for_request(request)
+    if profile.user_id is None:
+        profile.user = user
+        profile.save(update_fields=["user", "last_active_at"])
+        return profile
+
+    if profile.user_id == user.pk:
+        return profile
+
+    # The current anonymous identifier is already owned by another account.
+    # Create a clean account profile rather than stealing another user's data.
+    fallback_key = hashlib.sha256(f"user:{user.pk}".encode("utf-8")).hexdigest()[:40]
+    profile, created = GuestProfile.objects.get_or_create(
+        session_key=fallback_key,
+        defaults={"user": user},
+    )
+    if profile.user_id is None:
+        profile.user = user
+        profile.save(update_fields=["user", "last_active_at"])
+    if created:
+        ensure_default_sources(profile)
+        ensure_default_work_costs(profile)
+        ensure_default_commitments(profile)
+        ensure_default_expense_categories(profile)
+    return profile
 
 def is_unusually_high(profile: GuestProfile, amount: Decimal) -> tuple[bool, Decimal | None]:
     """EN: AC1.1.10 requires confirmation above 3x median after 3 manual entries.

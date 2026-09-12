@@ -356,7 +356,7 @@ en: {
   wf_copy: '© 2026 RuMampu by Cendol Compiler · Made in Malaysia for people with irregular income · SDG 11',
   wf_meet: 'Nice to meet you →',
   au_hello: 'Hello!',
-  au_create: 'Create an<br>account',
+  au_create: 'Create an account',
   au_ctag: 'Keep your record for next time.',
   au_login: 'Log in',
   au_email: 'Email',

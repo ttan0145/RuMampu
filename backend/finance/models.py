@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -11,6 +12,13 @@ class GuestProfile(models.Model):
     中文：Epic 1 财务记录与 Epic 2 分析共用的匿名数据所有权边界。
     """
 
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="finance_profile",
+        null=True,
+        blank=True,
+    )
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     session_key = models.CharField(max_length=40, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -432,3 +440,23 @@ class IncomeCoverage(models.Model):
 
     def __str__(self) -> str:
         return f"{self.profile.public_id}: {self.answer}"
+
+
+class UserAppState(models.Model):
+    """Persistent account-level UI/domain inputs that do not belong to a monthly finance row."""
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="rumampu_app_state",
+    )
+    cash_on_hand = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    upfront_costs = models.JSONField(default=list, blank=True)
+    docs_checked = models.JSONField(default=list, blank=True)
+    bought_home = models.BooleanField(default=False)
+    expense_limits = models.JSONField(default=dict, blank=True)
+    compare_payments = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"RuMampu state for {self.user_id}"

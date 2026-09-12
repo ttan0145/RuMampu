@@ -1,9 +1,13 @@
 import React from 'react';
 import {
-  Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
+import {
+  ApiError, confirmPasswordReset, login as loginRequest, register as registerRequest, requestPasswordReset,
+} from './api';
 import { lastMonthIso, useApp } from './state';
 import { BODY_FONT, C, DISP_FONT } from './theme';
 import { Ruma, RumaFlat } from './ruma-view';
@@ -100,10 +104,14 @@ function AuthField({ label, icon, value, onChangeText, placeholder, secure, show
   );
 }
 
-function BtnP({ label, onPress }: { label: string; onPress: () => void }) {
+function BtnP({ label, onPress, loading = false }: { label: string; onPress: () => void; loading?: boolean }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [st.btnp, pressed && { opacity: 0.88 }]}>
-      <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: '#fff' }}>{label}</Text>
+    <Pressable
+      onPress={onPress}
+      disabled={loading}
+      style={({ pressed }) => [st.btnp, (pressed || loading) && { opacity: 0.72 }]}
+    >
+      {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: '#fff' }}>{label}</Text>}
     </Pressable>
   );
 }
@@ -133,6 +141,15 @@ function LineBtn({ label, onPress, small }: { label: string; onPress: () => void
 export function EntryFlow() {
   const { S, t, up } = useApp();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ uid?: string | string[]; token?: string | string[] }>();
+  const resetUid = Array.isArray(params.uid) ? params.uid[0] : params.uid;
+  const resetToken = Array.isArray(params.token) ? params.token[0] : params.token;
+
+  // A link from the password-reset email opens this screen directly, skipping
+  // the normal language / intro steps.
+  if (resetUid && resetToken) {
+    return <AuthStep resetUid={resetUid} resetToken={resetToken} />;
+  }
 
   if (S.wstep === 0) {
     /* STEP 1 — language first */
@@ -201,19 +218,124 @@ export function EntryFlow() {
   return <AuthStep />;
 }
 
-function AuthStep() {
-  const { S, t, up } = useApp();
+function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: string }) {
+  const { S, t, up, refreshAccountData } = useApp();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [email, setEmail] = React.useState('');
   const [pw, setPw] = React.useState('');
   const [pw2, setPw2] = React.useState('');
-  const login = S.authMode === 'login';
-  const amode = S.authMode;
+  const [authLoading, setAuthLoading] = React.useState(false);
+  const [authError, setAuthError] = React.useState('');
+  const [resetDone, setResetDone] = React.useState(false);
+  const forcedReset = Boolean(resetUid && resetToken);
+  const login = !forcedReset && S.authMode === 'login';
+  const amode: 'login' | 'signup' | 'forgot' | 'checkmail' | 'reset' = forcedReset ? 'reset' : S.authMode;
 
-  const authGo = () => up(s => {
-    if (s.authMode === 'signup') { s.authMode = 'login'; s.acctMade = true; }
-    else { s.guest = false; s.onboarded = true; s.acctMade = false; }
-  });
+  React.useEffect(() => { setAuthError(''); }, [amode]);
+
+  const finishAuthenticatedEntry = async () => {
+    await refreshAccountData();
+    up(s => {
+      s.guest = false;
+      s.onboarded = true;
+      s.acctMade = false;
+    });
+  };
+
+  const authGo = async () => {
+    if (authLoading) return;
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !pw) {
+      setAuthError('Enter your email and password.');
+      return;
+    }
+    if (amode === 'signup') {
+      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail);
+      if (!emailOk) {
+        setAuthError('Enter a valid email address.');
+        return;
+      }
+      if (pw.length < 8) {
+        setAuthError('Password must be at least 8 characters.');
+        return;
+      }
+      if (!/[A-Za-z]/.test(pw) || !/\d/.test(pw)) {
+        setAuthError('Password must include at least one letter and one number.');
+        return;
+      }
+      if (pw !== pw2) {
+        setAuthError('Passwords do not match.');
+        return;
+      }
+    }
+
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      if (amode === 'signup') await registerRequest(cleanEmail, pw);
+      else await loginRequest(cleanEmail, pw);
+      await finishAuthenticatedEntry();
+    } catch (error) {
+      setAuthError(error instanceof ApiError ? error.message : 'Could not reach the RuMampu backend.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+
+  const sendResetLink = async () => {
+    if (authLoading) return;
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setAuthError('Enter your email address.');
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      await requestPasswordReset(cleanEmail);
+      up(s => {
+        s.fgMail = cleanEmail;
+        s.authMode = 'checkmail';
+      });
+    } catch (error) {
+      setAuthError(error instanceof ApiError ? error.message : 'Could not reach the RuMampu backend.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const resetPasswordGo = async () => {
+    if (authLoading || !resetUid || !resetToken) return;
+    if (pw.length < 8) {
+      setAuthError('Password must be at least 8 characters.');
+      return;
+    }
+    if (!/[A-Za-z]/.test(pw) || !/\d/.test(pw)) {
+      setAuthError('Password must include at least one letter and one number.');
+      return;
+    }
+    if (pw !== pw2) {
+      setAuthError('Passwords do not match.');
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      await confirmPasswordReset(resetUid, resetToken, pw);
+      setResetDone(true);
+    } catch (error) {
+      setAuthError(error instanceof ApiError ? error.message : 'Could not reach the RuMampu backend.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const leaveReset = () => {
+    up(s => { s.authMode = 'login'; s.wstep = 2; });
+    router.replace('/');
+  };
 
   return (
     <View style={[StyleSheet.absoluteFillObject, { zIndex: 50, backgroundColor: '#4C8388' }]}>
@@ -231,6 +353,11 @@ function AuthStep() {
                 <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: '#fff', marginTop: 2 }}>RuMampu</Text>
                 <Text style={{ fontFamily: DISP_FONT, fontSize: 30, color: '#fff', marginTop: 14 }}>{t('au_hello')}</Text>
                 <Text style={st.authTag}>{t('ob_slogan')}</Text>
+              </>
+            ) : amode === 'reset' ? (
+              <>
+                <Text style={st.authTitle}>Set a new password</Text>
+                <Text style={st.authTag}>Choose a new password for your RuMampu account.</Text>
               </>
             ) : amode === 'forgot' ? (
               <>
@@ -256,12 +383,36 @@ function AuthStep() {
       </View>
       <View style={st.sheet2}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 20 + insets.bottom }}>
-          {amode === 'forgot' ? (
+          {amode === 'reset' ? (
+            <View style={{ gap: 10 }}>
+              <Text style={st.h2}>{resetDone ? 'Password changed' : 'Set a new password'}</Text>
+              {resetDone ? (
+                <>
+                  <View style={st.okbanner}>
+                    <Text style={{ fontFamily: BODY_FONT, fontSize: 13, fontWeight: '600', color: '#1E7A34', textAlign: 'center' }}>
+                      ✓ Your password has been reset successfully.
+                    </Text>
+                  </View>
+                  <BodyS muted>Use your new password the next time you log in.</BodyS>
+                  <BtnP label="Back to log in" onPress={leaveReset} />
+                </>
+              ) : (
+                <>
+                  <BodyS muted>Enter a new password with at least 8 characters, including a letter and a number.</BodyS>
+                  <AuthField label="New password" icon="🔒" value={pw} onChangeText={setPw} placeholder="At least 8 characters" secure showLabel={t('au_show')} hideLabel={t('au_hide')} />
+                  <AuthField label="Confirm new password" icon="🔒" value={pw2} onChangeText={setPw2} placeholder="Enter it again" secure />
+                  {authError ? <Text style={st.authError}>{authError}</Text> : null}
+                  <BtnP label="Reset password" onPress={() => void resetPasswordGo()} loading={authLoading} />
+                </>
+              )}
+            </View>
+          ) : amode === 'forgot' ? (
             <View style={{ gap: 10 }}>
               <Text style={st.h2}>{t('fg_title')}</Text>
               <BodyS muted>{t('fg_hint')}</BodyS>
               <AuthField label={t('au_email')} icon="✉" value={email} onChangeText={setEmail} placeholder={t('au_eph')} />
-              <BtnP label={t('fg_send')} onPress={() => up(s => { s.fgMail = email || 'you@example.com'; s.authMode = 'checkmail'; })} />
+              {authError ? <Text style={st.authError}>{authError}</Text> : null}
+              <BtnP label={t('fg_send')} onPress={() => void sendResetLink()} loading={authLoading} />
               <View style={{ alignItems: 'center' }}>
                 <LineBtn label={t('cm_back')} onPress={() => up(s => { s.authMode = 'login'; })} />
               </View>
@@ -289,13 +440,14 @@ function AuthStep() {
                 <LineBtn small label={t('au_mailhow')} onPress={() => up(s => { s.sheet = 'mailhow'; })} />
                 <LineBtn small label={t('au_forgot')} onPress={() => up(s => { s.authMode = 'forgot'; })} />
               </View>
-              <BtnP label={t('au_login')} onPress={authGo} />
+              {authError ? <Text style={st.authError}>{authError}</Text> : null}
+              <BtnP label={t('au_login')} onPress={() => void authGo()} loading={authLoading} />
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 4 }}>
                 <View style={{ flex: 1, borderTopWidth: 1.5, borderTopColor: C.ink14 }} />
                 <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink40 }}>{t('au_or')}</Text>
                 <View style={{ flex: 1, borderTopWidth: 1.5, borderTopColor: C.ink14 }} />
               </View>
-              <BtnO prefix="G" label={t('au_google')} onPress={authGo} />
+              <BtnO prefix="G" label={t('au_google')} onPress={() => setAuthError('Google login is not connected yet. Use email and password.')} />
               <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4 }}>
                 <Text style={st.authfoot}>{t('au_new')}</Text>
                 <LineBtn label={t('au_createbtn')} onPress={() => up(s => { s.authMode = 'signup'; })} />
@@ -314,7 +466,8 @@ function AuthStep() {
               <AuthField label={t('au_cpw')} icon="🔒" value={pw2} onChangeText={setPw2} placeholder={t('au_again')} secure />
               <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 15, color: C.ink40 }}>{t('au_mix')}</Text>
               <LineBtn small label={t('au_mailhow')} onPress={() => up(s => { s.sheet = 'mailhow'; })} />
-              <BtnP label={t('au_createacct')} onPress={authGo} />
+              {authError ? <Text style={st.authError}>{authError}</Text> : null}
+              <BtnP label={t('au_createacct')} onPress={() => void authGo()} loading={authLoading} />
               <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, color: C.ink40, textAlign: 'center' }}>{t('au_mailonly')}</Text>
               <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4 }}>
                 <Text style={st.authfoot}>{t('au_have')}</Text>
@@ -531,6 +684,7 @@ const st = StyleSheet.create({
     borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 2,
   },
   authfoot: { fontFamily: BODY_FONT, fontSize: 13.5, color: C.ink64 },
+  authError: { fontFamily: BODY_FONT, fontSize: 12.5, lineHeight: 17, color: '#B42318', backgroundColor: '#FEF3F2', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
   demobox: {
     borderWidth: 1.5, borderColor: '#D7E2E1', borderRadius: 12,
     paddingTop: 14, paddingHorizontal: 12, paddingBottom: 10, marginTop: 12,

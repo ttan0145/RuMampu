@@ -175,6 +175,35 @@ export interface ApiIncomeCoverage {
   observation: ApiIncomeCoverageObservation | null;
 }
 
+export interface ApiUser {
+  id: number;
+  username: string;
+  email: string;
+}
+
+export interface ApiAuthResponse {
+  token: string;
+  user: ApiUser;
+}
+
+let nativeAuthToken: string | null = null;
+const AUTH_TOKEN_KEY = 'rumampu_auth_token';
+
+function storedAuthToken(): string | null {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return window.localStorage.getItem(AUTH_TOKEN_KEY);
+  }
+  return nativeAuthToken;
+}
+
+function storeAuthToken(token: string | null): void {
+  nativeAuthToken = token;
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    if (token) window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+    else window.localStorage.removeItem(AUTH_TOKEN_KEY);
+  }
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -245,11 +274,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData;
   const clientId = getClientId();
 
+  const authToken = storedAuthToken();
   const response = await fetch(`${API_ROOT}${path}`, {
     ...init,
     credentials: 'include',
     headers: {
       Accept: 'application/json',
+      ...(authToken ? { Authorization: `Token ${authToken}` } : {}),
       ...(init?.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...(clientId ? { 'X-RuMampu-Client-ID': clientId } : {}),
       ...init?.headers,
@@ -266,6 +297,59 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     );
   }
   return payload as T;
+}
+
+export async function login(identifier: string, password: string): Promise<ApiAuthResponse> {
+  const result = await request<ApiAuthResponse>('/auth/login/', {
+    method: 'POST',
+    body: JSON.stringify({ username: identifier, password }),
+  });
+  storeAuthToken(result.token);
+  return result;
+}
+
+export async function register(email: string, password: string): Promise<ApiAuthResponse> {
+  const result = await request<ApiAuthResponse>('/auth/register/', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+  storeAuthToken(result.token);
+  return result;
+}
+
+
+export function requestPasswordReset(email: string): Promise<{ message: string }> {
+  return request<{ message: string }>('/auth/password-reset/', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function confirmPasswordReset(
+  uid: string,
+  token: string,
+  password: string,
+): Promise<{ message: string }> {
+  return request<{ message: string }>('/auth/password-reset/confirm/', {
+    method: 'POST',
+    body: JSON.stringify({ uid, token, password }),
+  });
+}
+
+export function fetchCurrentUser(): Promise<{ user: ApiUser }> {
+  return request<{ user: ApiUser }>('/auth/me/');
+}
+
+export async function logout(): Promise<void> {
+  try {
+    await request<null>('/auth/logout/', { method: 'POST' });
+  } finally {
+    storeAuthToken(null);
+  }
+}
+
+export function hasStoredLogin(): boolean {
+  return Boolean(storedAuthToken());
 }
 
 export function fetchIncomeRecord(): Promise<ApiIncomeRecord> {

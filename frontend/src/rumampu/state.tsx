@@ -290,6 +290,7 @@ export interface Ctx {
   deleteIncomeEntry: (id: string) => Promise<void>;
   saveIncomeSource: (name: string) => Promise<string>;
   refreshIncomeRecord: () => Promise<void>;
+  refreshAccountData: () => Promise<void>;
   refreshIncomePattern: () => Promise<void>;
   refreshIncomeCoverage: () => Promise<void>;
   saveIncomeCoverage: (input: {
@@ -985,6 +986,60 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [up]);
 
+  const refreshAccountData = useCallback(async (): Promise<void> => {
+    if (!INCOME_API_ENABLED) return;
+
+    // Authentication can change which profile is authoritative. Discard the
+    // anonymous bootstrap promise so later reads cannot reuse stale guest data.
+    guestBootstrap.current = null;
+
+    await refreshIncomeRecord();
+    const [commitmentItems, expenseCategories, expenses] = await Promise.all([
+      fetchCommitments(),
+      fetchExpenseCategories(),
+      fetchExpenses(),
+    ]);
+    up(s => {
+      const commitments: AppData['commitments'] = { living: [], debts: [], savings: [] };
+      for (const item of commitmentItems) {
+        const target = item.commitment_type === 'debt' ? commitments.debts
+          : item.commitment_type === 'savings' ? commitments.savings
+            : commitments.living;
+        target.push({
+          id: String(item.id),
+          k: `cm_${item.slug}`,
+          a: Number(item.monthly_amount),
+          dv: item.is_daily_variable,
+        });
+      }
+      s.data.commitments = commitments;
+      s.data.expenseCats = expenseCategories.map(category => ({
+        id: String(category.id),
+        k: category.slug ? `xc_${category.slug}` : undefined,
+        custom: category.is_custom,
+        name: category.name,
+      }));
+      s.data.expenses = expenses.map(entry => ({
+        a: Number(entry.amount),
+        d: entry.date,
+        c: String(entry.category_id),
+        method: entry.entry_method,
+        merchant: entry.merchant,
+      }));
+      const selectedCategory = expenseCategories.find(category => String(category.id) === s.expDraft.c)
+        || expenseCategories.find(category => category.slug === s.expDraft.c)
+        || expenseCategories[0];
+      if (selectedCategory) s.expDraft.c = String(selectedCategory.id);
+      s.commitmentSync = 'ready';
+      s.expenseSync = 'ready';
+      s.incomePattern = null;
+      s.incomeCoverage = null;
+      s.incomePatternSync = 'idle';
+      s.coverageSync = 'idle';
+    });
+    await refreshWorkCosts();
+  }, [refreshIncomeRecord, refreshWorkCosts, up]);
+
   const toast = useCallback((msg: string, tone: 'success' | 'error' = 'success') => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToastMsg({ msg, key: Date.now(), tone });
@@ -993,13 +1048,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Ctx>(() => ({
     S, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
+    saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   }), [
     S, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshIncomePattern,
+    saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
