@@ -39,7 +39,7 @@ const SCREENS: Record<Route, React.ComponentType> = {
 };
 
 function Root() {
-  const { S, backNav } = useApp();
+  const { S, authReady, backNav } = useApp();
   const insets = useSafeAreaInsets();
 
   React.useEffect(() => {
@@ -61,9 +61,9 @@ function Root() {
       <TabBar />
       <ToastView />
       {/* v22 entry flow: language → meet Ruma → auth, then get-to-know. */}
-      {!S.onboarded ? <EntryFlow /> : null}
-      {S.onboarded && !S.knew ? <GetToKnow /> : null}
-      {!S.onboarded ? <Splash /> : null}
+      {authReady && !S.onboarded ? <EntryFlow /> : null}
+      {authReady && S.onboarded && !S.knew ? <GetToKnow /> : null}
+      {!authReady || !S.onboarded ? <Splash /> : null}
       <SheetHost />
       {/* US6.2: available on every page after onboarding, never before (AC6.2.10). */}
       {S.onboarded && S.knew ? <AssistantFab /> : null}

@@ -456,6 +456,7 @@ class UserAppState(models.Model):
     bought_home = models.BooleanField(default=False)
     expense_limits = models.JSONField(default=dict, blank=True)
     compare_payments = models.JSONField(default=list, blank=True)
+    onboarding_completed = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

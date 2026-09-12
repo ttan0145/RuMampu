@@ -23,6 +23,12 @@ import {
   fetchWorkCostCategories,
   fetchWorkCostEntries,
   fetchWorkCostMonthSummary,
+  fetchCurrentUser,
+  hasStoredLogin,
+  initializeAuthStorage,
+  logout as logoutRequest,
+  rotateGuestClientId,
+  ApiError,
   INCOME_API_ENABLED,
   isOutlierConfirmation,
   updateIncomeCoverage as updateIncomeCoverageRequest,
@@ -278,6 +284,7 @@ export interface SaveIncomeInput {
 
 export interface Ctx {
   S: AppState;
+  authReady: boolean;
   /** Mutate a draft copy of the state; the result becomes the next state. */
   up: (fn: (s: AppState) => void) => void;
   t: (k: string, vars?: Record<string, string | number>) => string;
@@ -291,6 +298,8 @@ export interface Ctx {
   saveIncomeSource: (name: string) => Promise<string>;
   refreshIncomeRecord: () => Promise<void>;
   refreshAccountData: () => Promise<void>;
+  signOut: () => Promise<void>;
+  enterGuestMode: () => Promise<void>;
   refreshIncomePattern: () => Promise<void>;
   refreshIncomeCoverage: () => Promise<void>;
   saveIncomeCoverage: (input: {
@@ -332,6 +341,7 @@ function applyConfirmedWorkCost(state: AppState, entry: ApiWorkCostEntry): void 
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [S, setS] = useState<AppState>(initialState);
+  const [authReady, setAuthReady] = useState(!INCOME_API_ENABLED);
   const [toastMsg, setToastMsg] = useState<{
     msg: string;
     key: number;
@@ -365,10 +375,60 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // Restore a real account session before any anonymous profile request runs.
+  // Web reads localStorage; native reads the token from Expo SecureStore.
+  React.useEffect(() => {
+    if (!INCOME_API_ENABLED) return;
+    let active = true;
+    void (async () => {
+      await initializeAuthStorage();
+      const hasLogin = await hasStoredLogin();
+      if (!hasLogin) {
+        if (active) setAuthReady(true);
+        return;
+      }
+
+      try {
+        const auth = await fetchCurrentUser();
+        if (!active) return;
+        setS(prev => {
+          const next: AppState = JSON.parse(JSON.stringify(prev));
+          next.guest = false;
+          next.onboarded = true;
+          // The database, not the fact that a token exists, decides whether the
+          // first-time profile setup has already been completed.
+          next.knew = auth.onboarding_completed;
+          return next;
+        });
+      } catch (error) {
+        if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+          // The token is no longer valid (for example after a password reset).
+          // Clear it and rotate the anonymous boundary so account data cannot
+          // accidentally appear in guest mode.
+          try { await logoutRequest(); } catch { /* logout() still clears local token */ }
+          await rotateGuestClientId();
+        } else if (active) {
+          // A temporary network failure should not silently sign a returning user out.
+          setS(prev => {
+            const next: AppState = JSON.parse(JSON.stringify(prev));
+            next.guest = false;
+            next.onboarded = true;
+            // Keep the current UI state during a temporary network failure;
+            // do not guess that onboarding has been completed.
+            return next;
+          });
+        }
+      } finally {
+        if (active) setAuthReady(true);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
   // EN: Bootstrap Epic 1 domains from one guest-owned backend record before Epic 2 analysis runs.
   // 中文：在 Epic 2 分析启动前，从同一访客所有的后端记录加载 Epic 1 各数据域。
   React.useEffect(() => {
-    if (!INCOME_API_ENABLED) return;
+    if (!INCOME_API_ENABLED || !authReady) return;
     let active = true;
     void (async () => {
       try {
@@ -461,7 +521,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     })();
     return () => { active = false; };
-  }, [ensureGuest, up]);
+  }, [authReady, ensureGuest, up]);
 
   const t = useCallback((k: string, vars?: Record<string, string | number>) => {
     const table = STRINGS[S.lang];
@@ -602,9 +662,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Work costs load independently: an expense/commitment failure must not hide them.
   React.useEffect(() => {
+    if (!authReady) return;
     void refreshWorkCosts().catch(() => undefined);
     return () => { workCostRequestVersion.current += 1; };
-  }, [refreshWorkCosts]);
+  }, [authReady, refreshWorkCosts]);
 
   const refreshAfterMoneyWrite = useCallback(() => {
     // Ignore any pre-write analyses; a successful write must not become a failed
@@ -710,9 +771,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     // Let the income bootstrap establish the guest session before coverage starts.
     // Parallel first requests can otherwise create different anonymous sessions.
-    if (!INCOME_API_ENABLED || S.incomeSync !== 'ready' || S.coverageSync !== 'idle') return;
+    if (!INCOME_API_ENABLED || !authReady || S.incomeSync !== 'ready' || S.coverageSync !== 'idle') return;
     void refreshIncomeCoverage().catch(() => undefined);
-  }, [S.coverageSync, S.incomeSync, refreshIncomeCoverage]);
+  }, [authReady, S.coverageSync, S.incomeSync, refreshIncomeCoverage]);
 
   /**
    * EN: Persist US1.1/US1.2 income; return the stable 409 warning for AC1.1.10 confirmation.
@@ -1040,6 +1101,46 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await refreshWorkCosts();
   }, [refreshIncomeRecord, refreshWorkCosts, up]);
 
+  const signOut = useCallback(async (): Promise<void> => {
+    try {
+      await logoutRequest();
+    } catch {
+      // logoutRequest clears the locally stored token in its finally block.
+    }
+    await rotateGuestClientId();
+    guestBootstrap.current = null;
+    setS(prev => {
+      const next = initialState();
+      next.lang = prev.lang;
+      next.splash = false;
+      next.wstep = 2;
+      next.authMode = 'login';
+      return next;
+    });
+  }, []);
+
+  const enterGuestMode = useCallback(async (): Promise<void> => {
+    try {
+      await logoutRequest();
+    } catch {
+      // This is expected when there is no authenticated token yet.
+    }
+    await rotateGuestClientId();
+    guestBootstrap.current = null;
+
+    setS(prev => {
+      const next = initialState();
+      next.lang = prev.lang;
+      next.splash = false;
+      next.guest = true;
+      next.onboarded = true;
+      return next;
+    });
+
+    // Load a clean anonymous profile using the newly rotated client id.
+    await refreshAccountData();
+  }, [refreshAccountData]);
+
   const toast = useCallback((msg: string, tone: 'success' | 'error' = 'success') => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToastMsg({ msg, key: Date.now(), tone });
@@ -1047,14 +1148,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<Ctx>(() => ({
-    S, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, refreshIncomePattern,
+    S, authReady, up, t, monthName, go, goTab, backNav,
+    saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, signOut, enterGuestMode, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   }), [
-    S, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, refreshIncomePattern,
+    S, authReady, up, t, monthName, go, goTab, backNav,
+    saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, signOut, enterGuestMode, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,

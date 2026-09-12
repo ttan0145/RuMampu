@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 const configuredAppMode = process.env.EXPO_PUBLIC_API_URL;
@@ -181,27 +182,71 @@ export interface ApiUser {
   email: string;
 }
 
-export interface ApiAuthResponse {
-  token: string;
+export interface ApiAuthState {
   user: ApiUser;
+  onboarding_completed: boolean;
+}
+
+export interface ApiAuthResponse extends ApiAuthState {
+  token: string;
 }
 
 let nativeAuthToken: string | null = null;
+let nativeAuthStorageLoaded = Platform.OS === 'web';
 const AUTH_TOKEN_KEY = 'rumampu_auth_token';
+const CLIENT_ID_KEY = 'rumampu_client_id';
 
-function storedAuthToken(): string | null {
+export async function initializeAuthStorage(): Promise<void> {
+  if (Platform.OS === 'web' || nativeAuthStorageLoaded) return;
+  nativeAuthToken = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+  nativeAuthStorageLoaded = true;
+}
+
+async function storedAuthToken(): Promise<string | null> {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     return window.localStorage.getItem(AUTH_TOKEN_KEY);
   }
+  await initializeAuthStorage();
   return nativeAuthToken;
 }
 
-function storeAuthToken(token: string | null): void {
+async function storeAuthToken(token: string | null): Promise<void> {
   nativeAuthToken = token;
+  nativeAuthStorageLoaded = true;
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     if (token) window.localStorage.setItem(AUTH_TOKEN_KEY, token);
     else window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    return;
   }
+  if (token) await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
+  else await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+}
+
+function newClientId(): string {
+  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
+async function storedClientId(): Promise<string | null> {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return window.localStorage.getItem(CLIENT_ID_KEY);
+  }
+  return SecureStore.getItemAsync(CLIENT_ID_KEY);
+}
+
+async function storeClientId(clientId: string): Promise<void> {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    window.localStorage.setItem(CLIENT_ID_KEY, clientId);
+    return;
+  }
+  await SecureStore.setItemAsync(CLIENT_ID_KEY, clientId);
+}
+
+export async function rotateGuestClientId(): Promise<string> {
+  const clientId = newClientId();
+  await storeClientId(clientId);
+  return clientId;
 }
 
 export class ApiError extends Error {
@@ -251,33 +296,21 @@ function apiErrorDetails(payload: unknown): { code: string; message: string } | 
   return null;
 }
 
-function getClientId(): string | null {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') {
-    return null;
-  }
-
-  const storageKey = 'rumampu_client_id';
-  let clientId = window.localStorage.getItem(storageKey);
-
+async function getClientId(): Promise<string> {
+  let clientId = await storedClientId();
   if (!clientId) {
-    clientId =
-      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    window.localStorage.setItem(storageKey, clientId);
+    clientId = newClientId();
+    await storeClientId(clientId);
   }
-
   return clientId;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData;
-  const clientId = getClientId();
-
-  const authToken = storedAuthToken();
+  const [clientId, authToken] = await Promise.all([getClientId(), storedAuthToken()]);
   const response = await fetch(`${API_ROOT}${path}`, {
     ...init,
-    credentials: 'include',
+    credentials: 'omit',
     headers: {
       Accept: 'application/json',
       ...(authToken ? { Authorization: `Token ${authToken}` } : {}),
@@ -304,7 +337,7 @@ export async function login(identifier: string, password: string): Promise<ApiAu
     method: 'POST',
     body: JSON.stringify({ username: identifier, password }),
   });
-  storeAuthToken(result.token);
+  await storeAuthToken(result.token);
   return result;
 }
 
@@ -313,7 +346,7 @@ export async function register(email: string, password: string): Promise<ApiAuth
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
-  storeAuthToken(result.token);
+  await storeAuthToken(result.token);
   return result;
 }
 
@@ -336,21 +369,33 @@ export function confirmPasswordReset(
   });
 }
 
-export function fetchCurrentUser(): Promise<{ user: ApiUser }> {
-  return request<{ user: ApiUser }>('/auth/me/');
+export function fetchCurrentUser(): Promise<ApiAuthState> {
+  return request<ApiAuthState>('/auth/me/');
+}
+
+export function completeAccountOnboarding(): Promise<ApiAuthState> {
+  return request<ApiAuthState>('/auth/me/', {
+    method: 'PATCH',
+    body: JSON.stringify({ onboarding_completed: true }),
+  });
 }
 
 export async function logout(): Promise<void> {
   try {
     await request<null>('/auth/logout/', { method: 'POST' });
   } finally {
-    storeAuthToken(null);
+    await storeAuthToken(null);
   }
 }
 
-export function hasStoredLogin(): boolean {
-  return Boolean(storedAuthToken());
+export async function hasStoredLogin(): Promise<boolean> {
+  return Boolean(await storedAuthToken());
 }
+
+export async function clearStoredLogin(): Promise<void> {
+  await storeAuthToken(null);
+}
+
 
 export function fetchIncomeRecord(): Promise<ApiIncomeRecord> {
   return request<ApiIncomeRecord>('/income/record/');

@@ -12,7 +12,7 @@ import { ScreenShell } from './shell';
 const FLAGS: Record<string, string> = { en: '🇬🇧', ms: '🇲🇾', zh: '🇨🇳' };
 
 export function ProfileScreen() {
-  const { S, t, up, go, toast } = useApp();
+  const { S, t, up, go, toast, signOut } = useApp();
 
   const startSignup = () => up(s => {
     s.onboarded = false;
@@ -66,6 +66,12 @@ export function ProfileScreen() {
           <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
         </Pressable>
       </View>
+
+      {!S.guest ? (
+        <Pressable onPress={() => void signOut()} style={st.logoutBtn}>
+          <Text style={st.logoutText}>{S.lang === 'ms' ? 'Log keluar' : S.lang === 'zh' ? '退出登录' : 'Log out'}</Text>
+        </Pressable>
+      ) : null}
       <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: C.ink40, textAlign: 'center' }}>
         {t('pf_version')}
       </Text>
@@ -100,4 +106,9 @@ const st = StyleSheet.create({
     minHeight: 48, paddingHorizontal: 4,
   },
   morowLine: { borderTopWidth: 1, borderTopColor: C.ink14 },
+  logoutBtn: {
+    minHeight: 48, borderRadius: 16, borderWidth: 1.5, borderColor: '#D4DDDB',
+    alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff',
+  },
+  logoutText: { fontFamily: DISP_FONT, fontSize: 14.5, color: C.ink },
 });

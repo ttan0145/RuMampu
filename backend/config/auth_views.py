@@ -28,6 +28,20 @@ def _user_payload(user):
     }
 
 
+def _app_state(user):
+    return UserAppState.objects.get_or_create(user=user)[0]
+
+
+def _auth_payload(user, token=None):
+    payload = {
+        "user": _user_payload(user),
+        "onboarding_completed": _app_state(user).onboarding_completed,
+    }
+    if token is not None:
+        payload["token"] = token.key
+    return payload
+
+
 class RegisterView(APIView):
     """Create a real Django account and authenticate it immediately.
 
@@ -90,14 +104,14 @@ class RegisterView(APIView):
         # current anonymous profile under this account. Returning users always
         # keep their existing account-owned profile instead.
         claim_guest_profile_for_user(request, user)
-        UserAppState.objects.get_or_create(user=user)
+        _app_state(user)
 
         # Registration also signs the user in. Subsequent API requests use this
         # token and therefore resolve the account-owned profile, not the guest
         # session/profile boundary.
         token, _ = Token.objects.get_or_create(user=user)
         return Response(
-            {"token": token.key, "user": _user_payload(user)},
+            _auth_payload(user, token),
             status=status.HTTP_201_CREATED,
         )
 
@@ -131,14 +145,26 @@ class LoginView(APIView):
 
         claim_guest_profile_for_user(request, user)
         token, _ = Token.objects.get_or_create(user=user)
-        return Response({"token": token.key, "user": _user_payload(user)})
+        return Response(_auth_payload(user, token))
 
 
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response({"user": _user_payload(request.user)})
+        return Response(_auth_payload(request.user))
+
+    def patch(self, request):
+        if request.data.get("onboarding_completed") is not True:
+            return Response(
+                {"error": {"code": "invalid_onboarding_state", "message": "onboarding_completed must be true."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        state = _app_state(request.user)
+        if not state.onboarding_completed:
+            state.onboarding_completed = True
+            state.save(update_fields=["onboarding_completed", "updated_at"])
+        return Response(_auth_payload(request.user))
 
 
 class LogoutView(APIView):

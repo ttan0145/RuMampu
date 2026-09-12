@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
 import {
-  ApiError, confirmPasswordReset, login as loginRequest, register as registerRequest, requestPasswordReset,
+  ApiAuthResponse, ApiError, completeAccountOnboarding, confirmPasswordReset, login as loginRequest, register as registerRequest, requestPasswordReset,
 } from './api';
 import { lastMonthIso, useApp } from './state';
 import { BODY_FONT, C, DISP_FONT } from './theme';
@@ -219,7 +219,7 @@ export function EntryFlow() {
 }
 
 function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: string }) {
-  const { S, t, up, refreshAccountData } = useApp();
+  const { S, t, up, refreshAccountData, enterGuestMode } = useApp();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [email, setEmail] = React.useState('');
@@ -234,12 +234,14 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
 
   React.useEffect(() => { setAuthError(''); }, [amode]);
 
-  const finishAuthenticatedEntry = async () => {
+  const finishAuthenticatedEntry = async (auth: ApiAuthResponse) => {
     await refreshAccountData();
     up(s => {
       s.guest = false;
       s.onboarded = true;
       s.acctMade = false;
+      s.knew = auth.onboarding_completed;
+      s.kstep = 0;
     });
   };
 
@@ -273,9 +275,10 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
     setAuthLoading(true);
     setAuthError('');
     try {
-      if (amode === 'signup') await registerRequest(cleanEmail, pw);
-      else await loginRequest(cleanEmail, pw);
-      await finishAuthenticatedEntry();
+      const auth = amode === 'signup'
+        ? await registerRequest(cleanEmail, pw)
+        : await loginRequest(cleanEmail, pw);
+      await finishAuthenticatedEntry(auth);
     } catch (error) {
       setAuthError(error instanceof ApiError ? error.message : 'Could not reach the RuMampu backend.');
     } finally {
@@ -455,7 +458,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
               <View style={st.demobox}>
                 <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 15, color: C.ink40, textAlign: 'center', marginBottom: 6 }}>{t('au_guestnote')}</Text>
                 <View style={{ alignItems: 'center' }}>
-                  <LineBtn label={t('au_guest')} onPress={() => up(s => { s.guest = true; s.onboarded = true; })} />
+                  <LineBtn label={t('au_guest')} onPress={() => void enterGuestMode()} />
                 </View>
               </View>
             </View>
@@ -474,7 +477,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
                 <LineBtn label={t('au_login')} onPress={() => up(s => { s.authMode = 'login'; })} />
               </View>
               <View style={{ alignItems: 'center' }}>
-                <LineBtn label={t('au_guest2')} onPress={() => up(s => { s.guest = true; s.onboarded = true; })} />
+                <LineBtn label={t('au_guest2')} onPress={() => void enterGuestMode()} />
               </View>
             </View>
           )}
@@ -516,7 +519,7 @@ export function GetToKnow() {
   const [amt, setAmt] = React.useState(S.lastMonth || '');
   const step = S.kstep || 0;
 
-  const finish = (save: boolean) => {
+  const finish = async (save: boolean) => {
     const amount = save ? (parseFloat(amt) || 0) : 0;
     up(s => {
       if (save) {
@@ -532,14 +535,24 @@ export function GetToKnow() {
       s.knew = true;
       s.sheet = null;
     });
-    if (save && amount > 0) {
-      const sourceId = S.data.sources[0]?.id;
-      void saveIncomeEntry({
-        amount, date: lastMonthIso(), sourceId,
-        entryMethod: 'historical_total', confirmOutlier: true,
-      }).then(() => toast(t('k_saved'))).catch(() => toast(t('k_saved')));
-    } else if (save) {
-      toast(t('k_saved'));
+
+    try {
+      if (save && amount > 0) {
+        const sourceId = S.data.sources[0]?.id;
+        await saveIncomeEntry({
+          amount, date: lastMonthIso(), sourceId,
+          entryMethod: 'historical_total', confirmOutlier: true,
+        });
+      }
+      // Guests only complete this flow locally. Registered users persist the
+      // completion flag so future logins and app restarts skip these pages.
+      if (!S.guest) await completeAccountOnboarding();
+      if (save) toast(t('k_saved'));
+    } catch {
+      // The setup UI is already complete locally. If the network write fails,
+      // the backend flag remains false and the user will be asked again later
+      // rather than silently losing first-time setup state.
+      if (save) toast(t('k_saved'));
     }
   };
 
