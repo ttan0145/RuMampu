@@ -5,6 +5,143 @@ info:
   description: Versioned API for RuMampu's irregular-income housing readiness tool.
     RuMampu is not a lender, credit score or loan approval predictor.
 paths:
+  /api/v1/assistant/chat/:
+    post:
+      operationId: assistant_chat
+      description: Answers questions about the guest's own recorded data in plain
+        language. The record snapshot and conversation rules are built server-side;
+        the assistant only discusses RuMampu topics and never presents guidance as
+        financial advice.
+      summary: Ask the RuMampu assistant about the guest's record
+      tags:
+      - Assistant
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantChatRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AssistantChatRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AssistantChatRequestRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantChatResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Daily message limit reached.
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The model call failed.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No GROQ_API_KEY configured.
+  /api/v1/auth/login/:
+    post:
+      operationId: auth_login_create
+      tags:
+      - auth
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/logout/:
+    post:
+      operationId: auth_logout_create
+      tags:
+      - auth
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/me/:
+    get:
+      operationId: auth_me_retrieve
+      tags:
+      - auth
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: auth_me_partial_update
+      tags:
+      - auth
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/password-reset/:
+    post:
+      operationId: auth_password_reset_create
+      description: |-
+        Email a one-time Django password reset token.
+
+        The response is deliberately identical for known and unknown email
+        addresses so this endpoint cannot be used to discover registered users.
+      tags:
+      - auth
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/password-reset/confirm/:
+    post:
+      operationId: auth_password_reset_confirm_create
+      description: Validate a reset token and replace the user's password.
+      tags:
+      - auth
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/register/:
+    post:
+      operationId: auth_register_create
+      description: |-
+        Create a real Django account and authenticate it immediately.
+
+        The UI promises an email-based account with a password of at least eight
+        characters containing letters and numbers, so those rules are enforced on
+        the server as well as in the React Native form.
+      tags:
+      - auth
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/commitments/:
     get:
       operationId: commitment_items_list
@@ -12,6 +149,7 @@ paths:
       tags:
       - Commitments
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -46,6 +184,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedCommitmentItemUpdateRequest'
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -73,6 +212,7 @@ paths:
       tags:
       - Expenses
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -101,6 +241,7 @@ paths:
               $ref: '#/components/schemas/ExpenseCategoryCreateRequest'
         required: true
       security:
+      - tokenAuth: []
       - {}
       responses:
         '201':
@@ -122,6 +263,7 @@ paths:
       tags:
       - Expenses
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -150,6 +292,7 @@ paths:
               $ref: '#/components/schemas/ExpenseEntryCreateRequest'
         required: true
       security:
+      - tokenAuth: []
       - {}
       responses:
         '201':
@@ -186,6 +329,7 @@ paths:
               $ref: '#/components/schemas/ReceiptScanRequestRequest'
         required: true
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -243,6 +387,7 @@ paths:
               $ref: '#/components/schemas/HousingCalculationRequest'
         required: true
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -268,6 +413,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PreHousingCheckRequest'
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -276,12 +422,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/PreHousingCheckResult'
           description: ''
+  /api/v1/housing/saved-tests/:
+    get:
+      operationId: housing_saved_tests_retrieve
+      tags:
+      - housing
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: housing_saved_tests_create
+      tags:
+      - housing
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/housing/scenarios/:
     get:
       operationId: housing_scenarios_list
       tags:
       - housing
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -309,6 +475,7 @@ paths:
               $ref: '#/components/schemas/HousingScenarioRequest'
         required: true
       security:
+      - tokenAuth: []
       - {}
       responses:
         '201':
@@ -330,6 +497,7 @@ paths:
       tags:
       - housing
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -362,6 +530,7 @@ paths:
               $ref: '#/components/schemas/HousingScenarioRequest'
         required: true
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -393,6 +562,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedHousingScenarioRequest'
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -413,6 +583,7 @@ paths:
       tags:
       - housing
       security:
+      - tokenAuth: []
       - {}
       responses:
         '204':
@@ -435,6 +606,7 @@ paths:
               $ref: '#/components/schemas/StatelessHousingTestRequestRequest'
         required: true
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -461,6 +633,7 @@ paths:
               $ref: '#/components/schemas/HousingTestRequestRequest'
         required: true
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -476,6 +649,7 @@ paths:
       tags:
       - Income pattern
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -502,6 +676,7 @@ paths:
               $ref: '#/components/schemas/IncomeCoverageUpdateRequest'
         required: true
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -529,6 +704,7 @@ paths:
       tags:
       - Income imports
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -556,6 +732,7 @@ paths:
       tags:
       - Income imports
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -605,6 +782,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedIncomeImportRowUpdateRequest'
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -644,6 +822,7 @@ paths:
               $ref: '#/components/schemas/IncomeImportUploadRequest'
         required: true
       security:
+      - tokenAuth: []
       - {}
       responses:
         '201':
@@ -665,6 +844,7 @@ paths:
       tags:
       - Income pattern
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -680,6 +860,7 @@ paths:
       tags:
       - Income
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -711,6 +892,7 @@ paths:
               $ref: '#/components/schemas/IncomeEntryCreateRequest'
         required: true
       security:
+      - tokenAuth: []
       - {}
       responses:
         '201':
@@ -755,6 +937,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedIncomeEntryUpdateRequest'
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -787,6 +970,7 @@ paths:
       tags:
       - Income
       security:
+      - tokenAuth: []
       - {}
       responses:
         '204':
@@ -804,6 +988,7 @@ paths:
       tags:
       - Income
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -819,6 +1004,7 @@ paths:
       tags:
       - Income
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -847,6 +1033,7 @@ paths:
               $ref: '#/components/schemas/IncomeSourceCreateRequest'
         required: true
       security:
+      - tokenAuth: []
       - {}
       responses:
         '201':
@@ -868,6 +1055,7 @@ paths:
       tags:
       - Work costs
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -896,6 +1084,7 @@ paths:
               $ref: '#/components/schemas/WorkCostItemCreateRequest'
         required: true
       security:
+      - tokenAuth: []
       - {}
       responses:
         '201':
@@ -917,6 +1106,7 @@ paths:
       tags:
       - Work costs
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -945,6 +1135,7 @@ paths:
               $ref: '#/components/schemas/WorkCostEntryWriteRequest'
         required: true
       security:
+      - tokenAuth: []
       - {}
       responses:
         '201':
@@ -983,6 +1174,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedWorkCostEntryWriteRequest'
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -1017,6 +1209,7 @@ paths:
       tags:
       - Work costs
       security:
+      - tokenAuth: []
       - {}
       responses:
         '200':
@@ -1062,6 +1255,38 @@ components:
       required:
       - code
       - message
+    AssistantChatRequestRequest:
+      type: object
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantMessageRequest'
+        language:
+          allOf:
+          - $ref: '#/components/schemas/LanguageEnum'
+          default: en
+      required:
+      - messages
+    AssistantChatResponse:
+      type: object
+      properties:
+        reply:
+          type: string
+      required:
+      - reply
+    AssistantMessageRequest:
+      type: object
+      properties:
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        content:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required:
+      - content
+      - role
     BasisEnum:
       enum:
       - recorded_minimum
@@ -2030,6 +2255,16 @@ components:
       - recorded_range
       type: string
       description: '* `recorded_range` - recorded_range'
+    LanguageEnum:
+      enum:
+      - en
+      - ms
+      - zh
+      type: string
+      description: |-
+        * `en` - en
+        * `ms` - ms
+        * `zh` - zh
     LowerIncome:
       type: object
       properties:
@@ -2276,6 +2511,14 @@ components:
       - is_receipt
       - merchant
       - total
+    RoleEnum:
+      enum:
+      - user
+      - assistant
+      type: string
+      description: |-
+        * `user` - user
+        * `assistant` - assistant
     ShortfallTypeEnum:
       enum:
       - none
@@ -2530,3 +2773,9 @@ components:
       - income_recorded
       - month
       - work_cost_total
+  securitySchemes:
+    tokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Token-based authentication with required prefix "Token"
