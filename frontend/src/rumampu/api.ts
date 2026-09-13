@@ -185,6 +185,7 @@ export interface ApiUser {
 export interface ApiAuthState {
   user: ApiUser;
   onboarding_completed: boolean;
+  preferred_language: 'en' | 'ms' | 'zh' | '';
 }
 
 export interface ApiAuthResponse extends ApiAuthState {
@@ -371,6 +372,13 @@ export function confirmPasswordReset(
 
 export function fetchCurrentUser(): Promise<ApiAuthState> {
   return request<ApiAuthState>('/auth/me/');
+}
+
+export function savePreferredLanguage(preferred_language: 'en' | 'ms' | 'zh'): Promise<ApiAuthState> {
+  return request<ApiAuthState>('/auth/me/', {
+    method: 'PATCH',
+    body: JSON.stringify({ preferred_language }),
+  });
 }
 
 export function completeAccountOnboarding(): Promise<ApiAuthState> {

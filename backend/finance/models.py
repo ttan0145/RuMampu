@@ -457,6 +457,7 @@ class UserAppState(models.Model):
     expense_limits = models.JSONField(default=dict, blank=True)
     compare_payments = models.JSONField(default=list, blank=True)
     onboarding_completed = models.BooleanField(default=False)
+    preferred_language = models.CharField(max_length=5, blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

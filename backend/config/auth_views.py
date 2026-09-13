@@ -36,6 +36,7 @@ def _auth_payload(user, token=None):
     payload = {
         "user": _user_payload(user),
         "onboarding_completed": _app_state(user).onboarding_completed,
+        "preferred_language": _app_state(user).preferred_language,
     }
     if token is not None:
         payload["token"] = token.key
@@ -155,15 +156,40 @@ class MeView(APIView):
         return Response(_auth_payload(request.user))
 
     def patch(self, request):
-        if request.data.get("onboarding_completed") is not True:
-            return Response(
-                {"error": {"code": "invalid_onboarding_state", "message": "onboarding_completed must be true."}},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
         state = _app_state(request.user)
-        if not state.onboarding_completed:
-            state.onboarding_completed = True
-            state.save(update_fields=["onboarding_completed", "updated_at"])
+        update_fields = []
+
+        if "preferred_language" in request.data:
+            language = str(request.data.get("preferred_language", "")).strip().lower()
+            if language not in {"en", "ms", "zh"}:
+                return Response(
+                    {"error": {"code": "invalid_language", "message": "Choose English, Bahasa Melayu, or Chinese."}},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if state.preferred_language != language:
+                state.preferred_language = language
+                update_fields.append("preferred_language")
+
+        if "onboarding_completed" in request.data:
+            if request.data.get("onboarding_completed") is not True:
+                return Response(
+                    {"error": {"code": "invalid_onboarding_state", "message": "onboarding_completed must be true."}},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not state.onboarding_completed:
+                state.onboarding_completed = True
+                update_fields.append("onboarding_completed")
+
+        if not update_fields:
+            if not any(key in request.data for key in ("preferred_language", "onboarding_completed")):
+                return Response(
+                    {"error": {"code": "empty_app_state_update", "message": "No supported account settings were provided."}},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return Response(_auth_payload(request.user))
+
+        update_fields.append("updated_at")
+        state.save(update_fields=update_fields)
         return Response(_auth_payload(request.user))
 
 

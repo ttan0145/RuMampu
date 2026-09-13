@@ -6,17 +6,17 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
 import {
-  ApiAuthResponse, ApiError, completeAccountOnboarding, confirmPasswordReset, login as loginRequest, register as registerRequest, requestPasswordReset,
+  ApiAuthResponse, ApiError, completeAccountOnboarding, confirmPasswordReset, login as loginRequest, register as registerRequest, requestPasswordReset, savePreferredLanguage,
 } from './api';
 import { lastMonthIso, useApp } from './state';
 import { BODY_FONT, C, DISP_FONT } from './theme';
 import { Ruma, RumaFlat } from './ruma-view';
 import { BodyS } from './ui';
 
-/* v22 entry flow — three steps before the app:
-   1. language, 2. meet Ruma, 3. log in / create account (flat, per the Figma
-   frames). Then the short get-to-know flow (intro → job tiles → last-month
-   income). Ported from the prototype's renderOverlay(). */
+/* Account-first entry flow:
+   1. log in / create account, 2. choose a language for a new account,
+   3. meet Ruma, then the short get-to-know flow. Returning accounts whose
+   onboarding is complete skip all three onboarding screens. */
 
 /* ---------- shared bits ---------- */
 
@@ -144,15 +144,35 @@ export function EntryFlow() {
   const params = useLocalSearchParams<{ uid?: string | string[]; token?: string | string[] }>();
   const resetUid = Array.isArray(params.uid) ? params.uid[0] : params.uid;
   const resetToken = Array.isArray(params.token) ? params.token[0] : params.token;
+  const [languageSaving, setLanguageSaving] = React.useState(false);
+  const [languageError, setLanguageError] = React.useState('');
 
-  // A link from the password-reset email opens this screen directly, skipping
-  // the normal language / intro steps.
+  // A link from the password-reset email opens this screen directly.
   if (resetUid && resetToken) {
     return <AuthStep resetUid={resetUid} resetToken={resetToken} />;
   }
 
   if (S.wstep === 0) {
-    /* STEP 1 — language first */
+    // Authentication comes first so onboarding choices can be persisted to the account.
+    return <AuthStep />;
+  }
+
+  if (S.wstep === 1) {
+    /* First-time account setup — choose and persist the account language. */
+    const continueWithLanguage = async () => {
+      if (languageSaving) return;
+      setLanguageSaving(true);
+      setLanguageError('');
+      try {
+        await savePreferredLanguage(S.lang);
+        up(state => { state.wstep = 2; });
+      } catch (error) {
+        setLanguageError(error instanceof ApiError ? error.message : 'Could not save your language choice.');
+      } finally {
+        setLanguageSaving(false);
+      }
+    };
+
     return (
       <View style={[st.wpage, { paddingTop: 20 + insets.top, paddingBottom: 22 + insets.bottom }]}>
         <KProg total={3} on={1} />
@@ -164,7 +184,7 @@ export function EntryFlow() {
               const on = S.lang === code;
               return (
                 <Pressable key={code}
-                  onPress={() => up(s => { s.lang = code as typeof s.lang; })}
+                  onPress={() => up(state => { state.lang = code as typeof state.lang; })}
                   style={[st.langcard, on && st.langcardOn]}>
                   <Text style={{ fontSize: 26 }}>{flag}</Text>
                   <View>
@@ -175,47 +195,42 @@ export function EntryFlow() {
               );
             })}
           </View>
+          {languageError ? <Text style={st.authError}>{languageError}</Text> : null}
         </View>
-        <Pressable onPress={() => up(s => { s.wstep = 1; })} style={st.btn}>
-          <Text style={st.btnTxt}>{t('wf_next')}</Text>
+        <Pressable disabled={languageSaving} onPress={() => void continueWithLanguage()} style={[st.btn, languageSaving && { opacity: 0.72 }]}>
+          {languageSaving ? <ActivityIndicator color="#fff" /> : <Text style={st.btnTxt}>{t('wf_next')}</Text>}
         </Pressable>
       </View>
     );
   }
 
-  if (S.wstep === 1) {
-    /* STEP 2 — meet Ruma: commercial feature rows, drawn icons */
-    return (
-      <View style={[st.wpage, { paddingTop: 20 + insets.top, paddingBottom: 22 + insets.bottom }]}>
-        <KProg total={3} on={2} />
-        <View style={{ flexDirection: 'row', minHeight: 40, alignItems: 'center' }}>
-          <IconBtn label="←" onPress={() => up(s => { s.wstep = 0; })} />
-        </View>
-        <ScrollView contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
-          <Ruma w={172} pose="happy" />
-          <View style={{ alignItems: 'center' }}>
-            <Text style={st.hL}>{t('wf_hi')}</Text>
-            <Text style={{ fontFamily: BODY_FONT, fontSize: 16, lineHeight: 24, color: C.ink64, maxWidth: 280, marginTop: 4, textAlign: 'center' }}>
-              {/* The prototype string carries light HTML emphasis; plain text here. */}
-              {t('wf_blend').replace(/<[^>]+>/g, '')}
-            </Text>
-          </View>
-          <View style={{ width: '100%', maxWidth: 330, gap: 8 }}>
-            <Feat ico="ledger" title={t('wf_f1t')} desc={t('wf_f1d')} />
-            <Feat ico="house" title={t('wf_f2t')} desc={t('wf_f2d')} />
-            <Feat ico="shield" title={t('wf_f3t')} desc={t('wf_f3d')} />
-          </View>
-          <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 16, color: C.ink40, textAlign: 'center' }}>{t('wf_copy')}</Text>
-        </ScrollView>
-        <Pressable onPress={() => up(s => { s.wstep = 2; })} style={st.btn}>
-          <Text style={st.btnTxt}>{t('wf_meet')}</Text>
-        </Pressable>
+  /* First-time account setup — meet Ruma. */
+  return (
+    <View style={[st.wpage, { paddingTop: 20 + insets.top, paddingBottom: 22 + insets.bottom }]}>
+      <KProg total={3} on={2} />
+      <View style={{ flexDirection: 'row', minHeight: 40, alignItems: 'center' }}>
+        <IconBtn label="←" onPress={() => up(state => { state.wstep = 1; })} />
       </View>
-    );
-  }
-
-  /* STEP 3 — log in / create account (flat, per the Figma frames) */
-  return <AuthStep />;
+      <ScrollView contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+        <Ruma w={172} pose="happy" />
+        <View style={{ alignItems: 'center' }}>
+          <Text style={st.hL}>{t('wf_hi')}</Text>
+          <Text style={{ fontFamily: BODY_FONT, fontSize: 16, lineHeight: 24, color: C.ink64, maxWidth: 280, marginTop: 4, textAlign: 'center' }}>
+            {t('wf_blend').replace(/<[^>]+>/g, '')}
+          </Text>
+        </View>
+        <View style={{ width: '100%', maxWidth: 330, gap: 8 }}>
+          <Feat ico="ledger" title={t('wf_f1t')} desc={t('wf_f1d')} />
+          <Feat ico="house" title={t('wf_f2t')} desc={t('wf_f2d')} />
+          <Feat ico="shield" title={t('wf_f3t')} desc={t('wf_f3d')} />
+        </View>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 16, color: C.ink40, textAlign: 'center' }}>{t('wf_copy')}</Text>
+      </ScrollView>
+      <Pressable onPress={() => up(state => { state.onboarded = true; state.knew = false; state.kstep = 0; })} style={st.btn}>
+        <Text style={st.btnTxt}>{t('wf_meet')}</Text>
+      </Pressable>
+    </View>
+  );
 }
 
 function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: string }) {
@@ -238,10 +253,21 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
     await refreshAccountData();
     up(s => {
       s.guest = false;
-      s.onboarded = true;
       s.acctMade = false;
       s.knew = auth.onboarding_completed;
       s.kstep = 0;
+      if (auth.preferred_language) s.lang = auth.preferred_language;
+
+      if (auth.onboarding_completed) {
+        // Returning users skip language, Meet Ruma and Get to Know entirely.
+        s.onboarded = true;
+        s.wstep = 0;
+      } else {
+        // New/incomplete accounts remain in EntryFlow. If they already chose a
+        // language during an interrupted onboarding, continue from Meet Ruma.
+        s.onboarded = false;
+        s.wstep = auth.preferred_language ? 2 : 1;
+      }
     });
   };
 
@@ -336,7 +362,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
   };
 
   const leaveReset = () => {
-    up(s => { s.authMode = 'login'; s.wstep = 2; });
+    up(s => { s.authMode = 'login'; s.wstep = 0; });
     router.replace('/');
   };
 
@@ -344,10 +370,9 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
     <View style={[StyleSheet.absoluteFillObject, { zIndex: 50, backgroundColor: '#4C8388' }]}>
       <View style={{ paddingHorizontal: 20, paddingTop: 16 + insets.top }}>
         <View style={{ flexDirection: 'row' }}>
-          <IconBtn light label="←" onPress={() => up(s => {
-            if (login) s.wstep = 1;
-            else s.authMode = 'login';
-          })} />
+          {!login ? (
+            <IconBtn light label="←" onPress={() => up(s => { s.authMode = 'login'; })} />
+          ) : <View style={{ width: 44, height: 44 }} />}
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
           <View style={{ flex: 1, paddingBottom: 26 }}>
