@@ -394,10 +394,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setS(prev => {
           const next: AppState = JSON.parse(JSON.stringify(prev));
           next.guest = false;
-          next.onboarded = true;
-          // The database, not the fact that a token exists, decides whether the
-          // first-time profile setup has already been completed.
           next.knew = auth.onboarding_completed;
+          if (auth.preferred_language) next.lang = auth.preferred_language;
+
+          if (auth.onboarding_completed) {
+            // Returning accounts go directly to Home in their stored language.
+            next.onboarded = true;
+            next.wstep = 0;
+          } else {
+            // An unfinished account resumes onboarding after authentication.
+            next.onboarded = false;
+            next.wstep = auth.preferred_language ? 2 : 1;
+          }
           return next;
         });
       } catch (error) {
@@ -1113,7 +1121,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const next = initialState();
       next.lang = prev.lang;
       next.splash = false;
-      next.wstep = 2;
+      // Logging out must always return to the authentication screen.
+      // Language/onboarding steps are only resumed after a successful login.
+      next.wstep = 0;
       next.authMode = 'login';
       return next;
     });
