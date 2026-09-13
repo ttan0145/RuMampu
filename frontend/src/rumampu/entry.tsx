@@ -233,8 +233,57 @@ export function EntryFlow() {
   );
 }
 
+function AccountLoadingScreen({
+  progress,
+  stage,
+  error,
+  onRetry,
+  onLogout,
+}: {
+  progress: number;
+  stage: string;
+  error?: string;
+  onRetry: () => void;
+  onLogout: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const safeProgress = Math.max(0, Math.min(100, Math.round(progress)));
+
+  return (
+    <View style={[st.accountLoadingPage, { paddingTop: 28 + insets.top, paddingBottom: 28 + insets.bottom }]}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+        <Ruma w={190} pose="count" />
+        <Text style={st.accountLoadingTitle}>Getting RuMampu ready</Text>
+        <Text style={st.accountLoadingSub}>
+          {error ? 'We could not finish loading your account.' : stage}
+        </Text>
+
+        <View style={st.loadingCard}>
+          <View style={st.loadingTrack}>
+            <View style={[st.loadingFill, { width: `${safeProgress}%` }]} />
+          </View>
+          <View style={st.loadingRow}>
+            <Text style={st.loadingStage}>{error ? 'Loading paused' : stage}</Text>
+            <Text style={st.loadingPercent}>{safeProgress}%</Text>
+          </View>
+        </View>
+
+        {error ? (
+          <View style={{ width: '100%', maxWidth: 340, marginTop: 18, gap: 10 }}>
+            <Text style={st.authError}>{error}</Text>
+            <BtnP label="Try again" onPress={onRetry} />
+            <BtnO label="Log out" onPress={onLogout} />
+          </View>
+        ) : (
+          <ActivityIndicator style={{ marginTop: 20 }} color={C.brand} />
+        )}
+      </View>
+    </View>
+  );
+}
+
 function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: string }) {
-  const { S, t, up, refreshAccountData, enterGuestMode } = useApp();
+  const { S, t, up, refreshAccountData, enterGuestMode, signOut } = useApp();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [email, setEmail] = React.useState('');
@@ -243,6 +292,11 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
   const [authLoading, setAuthLoading] = React.useState(false);
   const [authError, setAuthError] = React.useState('');
   const [resetDone, setResetDone] = React.useState(false);
+  const [accountLoading, setAccountLoading] = React.useState(false);
+  const [accountProgress, setAccountProgress] = React.useState(0);
+  const [accountStage, setAccountStage] = React.useState('Signing you in...');
+  const [accountLoadError, setAccountLoadError] = React.useState('');
+  const [pendingAuth, setPendingAuth] = React.useState<ApiAuthResponse | null>(null);
   const forcedReset = Boolean(resetUid && resetToken);
   const login = !forcedReset && S.authMode === 'login';
   const amode: 'login' | 'signup' | 'forgot' | 'checkmail' | 'reset' = forcedReset ? 'reset' : S.authMode;
@@ -250,7 +304,9 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
   React.useEffect(() => { setAuthError(''); }, [amode]);
 
   const finishAuthenticatedEntry = async (auth: ApiAuthResponse) => {
-    await refreshAccountData();
+    // Authentication and account loading are deliberately separate. As soon as
+    // credentials succeed, leave the login form. Returning accounts then get a
+    // real progress screen while all dashboard data is prepared.
     up(s => {
       s.guest = false;
       s.acctMade = false;
@@ -258,18 +314,69 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
       s.kstep = 0;
       if (auth.preferred_language) s.lang = auth.preferred_language;
 
-      if (auth.onboarding_completed) {
-        // Returning users skip language, Meet Ruma and Get to Know entirely.
-        s.onboarded = true;
-        s.wstep = 0;
-      } else {
-        // New/incomplete accounts remain in EntryFlow. If they already chose a
-        // language during an interrupted onboarding, continue from Meet Ruma.
+      if (!auth.onboarding_completed) {
+        // A new/incomplete account continues onboarding instead of loading Home.
         s.onboarded = false;
         s.wstep = auth.preferred_language ? 2 : 1;
       }
     });
+
+    if (!auth.onboarding_completed) return;
+
+    setPendingAuth(auth);
+    setAccountLoading(true);
+    setAccountLoadError('');
+    setAccountProgress(10);
+    setAccountStage('Signed in successfully');
+
+    try {
+      await refreshAccountData((progress, stage) => {
+        setAccountProgress(progress);
+        setAccountStage(stage);
+      });
+      up(s => {
+        s.guest = false;
+        s.knew = true;
+        s.onboarded = true;
+        s.wstep = 0;
+        if (auth.preferred_language) s.lang = auth.preferred_language;
+      });
+      setAccountLoading(false);
+      setPendingAuth(null);
+    } catch (error) {
+      setAccountLoadError(error instanceof ApiError
+        ? error.message
+        : 'Could not finish loading your RuMampu account.');
+    }
   };
+
+  const retryAccountLoad = async () => {
+    if (!pendingAuth) return;
+    setAccountLoadError('');
+    setAccountProgress(10);
+    setAccountStage('Trying again...');
+    await finishAuthenticatedEntry(pendingAuth);
+  };
+
+  const logoutFromLoading = async () => {
+    await signOut();
+    setAccountLoading(false);
+    setPendingAuth(null);
+    setAccountLoadError('');
+    setAccountProgress(0);
+  };
+
+  if (accountLoading) {
+    return (
+      <AccountLoadingScreen
+        progress={accountProgress}
+        stage={accountStage}
+        error={accountLoadError}
+        onRetry={() => void retryAccountLoad()}
+        onLogout={() => void logoutFromLoading()}
+      />
+    );
+  }
 
   const authGo = async () => {
     if (authLoading) return;
@@ -670,6 +777,36 @@ const st = StyleSheet.create({
   wpage: {
     ...StyleSheet.absoluteFillObject, zIndex: 50, backgroundColor: '#F7FAF9',
     paddingHorizontal: 22, flexDirection: 'column',
+  },
+  accountLoadingPage: {
+    ...StyleSheet.absoluteFillObject, zIndex: 80, backgroundColor: '#F7FAF9',
+    paddingHorizontal: 24,
+  },
+  accountLoadingTitle: {
+    marginTop: 18, fontFamily: DISP_FONT, fontSize: 26, lineHeight: 32, color: C.ink, textAlign: 'center',
+  },
+  accountLoadingSub: {
+    marginTop: 8, minHeight: 22, fontFamily: BODY_FONT, fontSize: 14, lineHeight: 20, color: C.ink64, textAlign: 'center',
+  },
+  loadingCard: {
+    width: '100%', maxWidth: 340, marginTop: 24, padding: 18, borderRadius: 20,
+    backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#DDE7E5',
+    shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.1, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 2,
+  },
+  loadingTrack: {
+    width: '100%', height: 14, borderRadius: 8, backgroundColor: '#E6EFED', overflow: 'hidden',
+  },
+  loadingFill: {
+    height: '100%', borderRadius: 8, backgroundColor: C.brand,
+  },
+  loadingRow: {
+    marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+  },
+  loadingStage: {
+    flex: 1, fontFamily: BODY_FONT, fontSize: 12.5, lineHeight: 17, color: C.ink64,
+  },
+  loadingPercent: {
+    fontFamily: DISP_FONT, fontSize: 17, color: C.ink,
   },
   kpage: {
     ...StyleSheet.absoluteFillObject, zIndex: 50, backgroundColor: '#FBFCFC',

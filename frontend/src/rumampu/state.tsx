@@ -297,7 +297,7 @@ export interface Ctx {
   deleteIncomeEntry: (id: string) => Promise<void>;
   saveIncomeSource: (name: string) => Promise<string>;
   refreshIncomeRecord: () => Promise<void>;
-  refreshAccountData: () => Promise<void>;
+  refreshAccountData: (onProgress?: (progress: number, stage: string) => void) => Promise<void>;
   signOut: () => Promise<void>;
   enterGuestMode: () => Promise<void>;
   refreshIncomePattern: () => Promise<void>;
@@ -1055,18 +1055,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [up]);
 
-  const refreshAccountData = useCallback(async (): Promise<void> => {
-    if (!INCOME_API_ENABLED) return;
+  const refreshAccountData = useCallback(async (
+    onProgress?: (progress: number, stage: string) => void,
+  ): Promise<void> => {
+    if (!INCOME_API_ENABLED) {
+      onProgress?.(100, 'Ready');
+      return;
+    }
 
     // Authentication can change which profile is authoritative. Discard the
     // anonymous bootstrap promise so later reads cannot reuse stale guest data.
     guestBootstrap.current = null;
+    onProgress?.(15, 'Preparing your account...');
 
     await refreshIncomeRecord();
+    onProgress?.(35, 'Income records loaded');
+
+    // These three domains do not depend on one another, so load them in parallel.
+    // Progress is based on completed account-loading tasks rather than a fake timer.
+    let completedDomains = 0;
+    const tracked = async <T,>(promise: Promise<T>, label: string): Promise<T> => {
+      const result = await promise;
+      completedDomains += 1;
+      const progress = 35 + (completedDomains * 15);
+      onProgress?.(progress, label);
+      return result;
+    };
+
     const [commitmentItems, expenseCategories, expenses] = await Promise.all([
-      fetchCommitments(),
-      fetchExpenseCategories(),
-      fetchExpenses(),
+      tracked(fetchCommitments(), 'Commitments loaded'),
+      tracked(fetchExpenseCategories(), 'Expense categories loaded'),
+      tracked(fetchExpenses(), 'Expenses loaded'),
     ]);
     up(s => {
       const commitments: AppData['commitments'] = { living: [], debts: [], savings: [] };
@@ -1106,7 +1125,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       s.incomePatternSync = 'idle';
       s.coverageSync = 'idle';
     });
+
+    onProgress?.(85, 'Loading work costs...');
     await refreshWorkCosts();
+    onProgress?.(95, 'Preparing your dashboard...');
+
+    // Yield once so the final state updates above can be committed before Home renders.
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+    onProgress?.(100, 'Your account is ready');
   }, [refreshIncomeRecord, refreshWorkCosts, up]);
 
   const signOut = useCallback(async (): Promise<void> => {
