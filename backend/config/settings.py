@@ -141,6 +141,7 @@ CORS_ALLOW_HEADERS = (
     *default_headers,
     "x-rumampu-client-id",
 )
+CORS_EXPOSE_HEADERS = ("Content-Disposition",)
 
 SESSION_COOKIE_SAMESITE = "None"
 SESSION_COOKIE_SECURE = not DEBUG

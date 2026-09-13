@@ -15,6 +15,7 @@ import { IsoHouse, IsoIsland } from './isosvg';
 import { ISO_TIERS, villagePlay } from './village';
 import { DatePickerField } from './date-picker';
 import { isValidMoneyText } from './validation';
+import { deleteSavedHousingTest, updateSavedHousingTest } from '../../services/housingService';
 
 /* ---------- bottom sheets ---------- */
 
@@ -339,7 +340,7 @@ function VillageSheet() {
 export function SheetHost() {
   const {
     S, t, up, monthName, saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource,
-    saveWorkCostCategory, saveExpenseCategory, toast,
+    saveWorkCostCategory, saveExpenseCategory, refreshSavedHousingTests, toast,
   } = useApp();
   const sheet = S.sheet;
   const close = () => up(s => { s.sheet = null; });
@@ -513,14 +514,24 @@ export function SheetHost() {
           <BodyS muted>{t('sv_name_l')}</BodyS>
           <SheetInput value={svName} onChangeText={setSvName} autoFocus selectTextOnFocus />
           <Btn label={t('rx_keep')} onPress={() => {
+            let savedId: number | undefined;
+            let name = '';
             up(s => {
-              const name = (svName || s.svDraft || '').trim();
+              name = (svName || s.svDraft || '').trim();
               const pend = s.keptTests[s.keptTests.length - 1];
-              if (pend) pend.name = name || pend.name;
+              if (pend) {
+                pend.name = name || pend.name;
+                savedId = pend.id;
+              }
               s.sheet = null;
               s.stack = ['househome'];
               s.route = 'savedtests';
             });
+            if (savedId) {
+              void updateSavedHousingTest(savedId, { name })
+                .then(() => refreshSavedHousingTests())
+                .catch(() => toast(t('housing_run_failed'), 'error'));
+            }
             toast(t('sv_kept_where'));
           }} />
         </View>
@@ -543,25 +554,45 @@ export function SheetHost() {
             {t('cp_short', { s: k.s, n: k.n })}{k.g ? ' · ' + t('gap_lbl') + ' ' + rm(k.g) : ''}
           </BodyS>
           <Btn label={t('done')} onPress={() => {
+            let savedId: number | undefined;
+            let name = '';
+            let pay = 0;
             up(s => {
               const kk = s.keptTests[s.svIdx];
               if (kk) {
-                kk.name = svName.trim() || kk.name;
-                kk.pay = Math.max(0, Math.round(parseFloat(svPay) || kk.pay));
+                name = svName.trim() || kk.name || '';
+                pay = Math.max(0, Math.round(parseFloat(svPay) || kk.pay));
+                kk.name = name;
+                kk.pay = pay;
+                savedId = kk.id;
               }
               s.sheet = null;
             });
+            if (savedId) {
+              void updateSavedHousingTest(savedId, { name, monthly_payment: pay })
+                .then(() => refreshSavedHousingTests())
+                .catch(() => toast(t('housing_run_failed'), 'error'));
+            }
           }} />
           <View style={{ alignItems: 'center' }}>
             <BtnLine
               label={S.svDelArm ? t('sv_del2') : t('sv_del')}
               style={{ color: C.short, textDecorationColor: C.short, fontSize: 13.5 }}
-              onPress={() => up(s => {
-                if (!s.svDelArm) { s.svDelArm = true; return; }
-                s.keptTests.splice(s.svIdx, 1);
-                s.svDelArm = false;
-                s.sheet = null;
-              })}
+              onPress={() => {
+                let savedId: number | undefined;
+                up(s => {
+                  if (!s.svDelArm) { s.svDelArm = true; return; }
+                  savedId = s.keptTests[s.svIdx]?.id;
+                  s.keptTests.splice(s.svIdx, 1);
+                  s.svDelArm = false;
+                  s.sheet = null;
+                });
+                if (savedId) {
+                  void deleteSavedHousingTest(savedId)
+                    .then(() => refreshSavedHousingTests())
+                    .catch(() => toast(t('housing_run_failed'), 'error'));
+                }
+              }}
             />
           </View>
         </View>

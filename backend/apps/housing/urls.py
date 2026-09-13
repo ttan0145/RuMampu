@@ -15,6 +15,7 @@ urlpatterns = [
     path('pre-check/', PreHousingCheckView.as_view(), name='housing-pre-check'),
     path('test-result/', HousingTestResultView.as_view(), name='housing-test-result'),
     path('test/', StatelessHousingTestView.as_view(), name='housing-test'),
+    path('saved-tests/<int:test_id>/', SavedHousingTestView.as_view(), name='housing-saved-test-detail'),
     path('saved-tests/', SavedHousingTestView.as_view(), name='housing-saved-tests'),
     path('house-costs/', house_costs, name='house-costs'),
 ]

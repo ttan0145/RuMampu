@@ -1,3 +1,5 @@
+from decimal import Decimal, InvalidOperation
+
 from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -23,6 +25,43 @@ from .serializers import (
 )
 from .services import calculation_result, housing_test_result, pre_housing_check, stateless_housing_test_result
 from finance.services import profile_for_request
+
+
+def _decimal_from_input(value, default='0'):
+    if value in (None, ''):
+        value = default
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal(default)
+
+
+def _scenario_snapshot(scenario):
+    if scenario is None:
+        return {}
+    return dict(HousingScenarioSerializer(scenario).data)
+
+
+def _saved_test_payload(row):
+    scenario = _scenario_snapshot(row.scenario) if row.scenario_id else row.scenario_snapshot
+    result = row.result_snapshot or {}
+    property_price = scenario.get('property_price') if isinstance(scenario, dict) else None
+    return {
+        'id': row.id,
+        'name': row.name,
+        'scenario_id': row.scenario_id,
+        'property_price': property_price,
+        'monthly_payment': float(row.monthly_payment),
+        'tested_monthly_home_cost': float(row.monthly_payment),
+        'short_month_count': row.short_month_count,
+        'tested_months': row.tested_months,
+        'largest_gap': float(row.largest_gap),
+        'income_shock_percent': float(row.income_shock_percent),
+        'scenario': scenario,
+        'result': result,
+        'created_at': row.created_at.isoformat(),
+        'updated_at': row.updated_at.isoformat(),
+    }
 
 
 class HousingScenarioViewSet(viewsets.ModelViewSet):
@@ -109,36 +148,77 @@ class StatelessHousingTestView(APIView):
 class SavedHousingTestView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        rows = SavedHousingTest.objects.filter(user=request.user)
-        return Response([{
-            'id': x.id, 'scenario_id': x.scenario_id,
-            'monthly_payment': float(x.monthly_payment),
-            'short_month_count': x.short_month_count,
-            'tested_months': x.tested_months,
-            'largest_gap': float(x.largest_gap),
-            'income_shock_percent': float(x.income_shock_percent),
-            'created_at': x.created_at.isoformat(),
-        } for x in rows])
+    def get_object(self, request, test_id):
+        from rest_framework.exceptions import NotFound
+        row = SavedHousingTest.objects.filter(
+            id=test_id,
+            user=request.user,
+        ).select_related('scenario').prefetch_related('scenario__additional_costs').first()
+        if row is None:
+            raise NotFound('Saved housing test not found.')
+        return row
+
+    def get(self, request, test_id=None):
+        if test_id is not None:
+            return Response(_saved_test_payload(self.get_object(request, test_id)))
+        rows = SavedHousingTest.objects.filter(
+            user=request.user,
+        ).select_related('scenario').prefetch_related('scenario__additional_costs')
+        return Response([_saved_test_payload(row) for row in rows])
 
     def post(self, request):
         scenario = None
         scenario_id = request.data.get('scenario_id')
         if scenario_id:
-            scenario = HousingScenario.objects.filter(id=scenario_id, user=request.user).first()
+            scenario = HousingScenario.objects.filter(
+                id=scenario_id, user=request.user
+            ).prefetch_related('additional_costs').first()
             if scenario is None:
                 from rest_framework.exceptions import NotFound
                 raise NotFound('Housing scenario not found.')
+        result_snapshot = request.data.get('result') if isinstance(request.data.get('result'), dict) else {}
         x = SavedHousingTest.objects.create(
             user=request.user,
             scenario=scenario,
-            monthly_payment=request.data.get('monthly_payment', 0),
+            name=str(request.data.get('name', '')).strip()[:120],
+            monthly_payment=_decimal_from_input(
+                request.data.get('monthly_payment', request.data.get('tested_monthly_home_cost', 0))
+            ),
             short_month_count=request.data.get('short_month_count', 0),
             tested_months=request.data.get('tested_months', 0),
-            largest_gap=request.data.get('largest_gap', 0),
-            income_shock_percent=request.data.get('income_shock_percent', 0),
+            largest_gap=_decimal_from_input(request.data.get('largest_gap', 0)),
+            income_shock_percent=_decimal_from_input(request.data.get('income_shock_percent', 0)),
+            scenario_snapshot=_scenario_snapshot(scenario),
+            result_snapshot=result_snapshot,
         )
-        return Response({'id': x.id}, status=status.HTTP_201_CREATED)
+        return Response(_saved_test_payload(x), status=status.HTTP_201_CREATED)
+
+    def patch(self, request, test_id=None):
+        if test_id is None:
+            from rest_framework.exceptions import NotFound
+            raise NotFound('Saved housing test not found.')
+        row = self.get_object(request, test_id)
+        update_fields = []
+        if 'name' in request.data:
+            row.name = str(request.data.get('name', '')).strip()[:120]
+            update_fields.append('name')
+        if 'monthly_payment' in request.data or 'tested_monthly_home_cost' in request.data:
+            row.monthly_payment = _decimal_from_input(
+                request.data.get('monthly_payment', request.data.get('tested_monthly_home_cost'))
+            )
+            update_fields.append('monthly_payment')
+        if update_fields:
+            update_fields.append('updated_at')
+            row.save(update_fields=update_fields)
+        return Response(_saved_test_payload(row))
+
+    def delete(self, request, test_id=None):
+        if test_id is None:
+            from rest_framework.exceptions import NotFound
+            raise NotFound('Saved housing test not found.')
+        row = self.get_object(request, test_id)
+        row.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # Short key per state, matching the housing-cost screen.

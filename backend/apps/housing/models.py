@@ -50,12 +50,16 @@ class HousingCost(models.Model):
 class SavedHousingTest(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='saved_housing_tests')
     scenario = models.ForeignKey(HousingScenario, on_delete=models.SET_NULL, null=True, blank=True, related_name='saved_tests')
+    name = models.CharField(max_length=120, blank=True)
     monthly_payment = models.DecimalField(max_digits=12, decimal_places=2)
     short_month_count = models.PositiveIntegerField(default=0)
     tested_months = models.PositiveIntegerField(default=0)
     largest_gap = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     income_shock_percent = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    scenario_snapshot = models.JSONField(default=dict, blank=True)
+    result_snapshot = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-created_at', '-id']

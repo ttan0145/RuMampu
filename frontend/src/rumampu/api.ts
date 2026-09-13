@@ -306,17 +306,24 @@ async function getClientId(): Promise<string> {
   return clientId;
 }
 
+export async function apiIdentityHeaders(): Promise<Record<string, string>> {
+  const [clientId, authToken] = await Promise.all([getClientId(), storedAuthToken()]);
+  return {
+    ...(authToken ? { Authorization: `Token ${authToken}` } : {}),
+    ...(clientId ? { 'X-RuMampu-Client-ID': clientId } : {}),
+  };
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData;
-  const [clientId, authToken] = await Promise.all([getClientId(), storedAuthToken()]);
+  const identityHeaders = await apiIdentityHeaders();
   const response = await fetch(`${API_ROOT}${path}`, {
     ...init,
     credentials: 'omit',
     headers: {
       Accept: 'application/json',
-      ...(authToken ? { Authorization: `Token ${authToken}` } : {}),
       ...(init?.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
-      ...(clientId ? { 'X-RuMampu-Client-ID': clientId } : {}),
+      ...identityHeaders,
       ...init?.headers,
     },
   });
@@ -391,6 +398,44 @@ export function completeAccountOnboarding(): Promise<ApiAuthState> {
 export async function logout(): Promise<void> {
   try {
     await request<null>('/auth/logout/', { method: 'POST' });
+  } finally {
+    await storeAuthToken(null);
+  }
+}
+
+export async function exportRecord(): Promise<{ blob: Blob; filename: string }> {
+  const identityHeaders = await apiIdentityHeaders();
+  const response = await fetch(`${API_ROOT}/auth/export/`, {
+    credentials: 'omit',
+    headers: {
+      Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, */*',
+      ...identityHeaders,
+    },
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const details = apiErrorDetails(payload);
+    throw new ApiError(
+      details?.message || `Request failed with status ${response.status}`,
+      response.status,
+      details?.code || 'request_error',
+      payload,
+    );
+  }
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const filenameMatch = /filename="?([^"]+)"?/i.exec(disposition);
+  const now = new Date();
+  const month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][now.getMonth()];
+  const fallback = `RuMampu_Record_${String(now.getDate()).padStart(2, '0')}_${month}_${now.getFullYear()}.xlsx`;
+  return {
+    blob: await response.blob(),
+    filename: filenameMatch?.[1] || fallback,
+  };
+}
+
+export async function deleteRecord(): Promise<void> {
+  try {
+    await request<null>('/auth/record/', { method: 'DELETE' });
   } finally {
     await storeAuthToken(null);
   }

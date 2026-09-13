@@ -1,29 +1,10 @@
-import { Platform } from 'react-native';
+import { apiIdentityHeaders } from '../src/rumampu/api';
 
 const API_ROOT = (
   process.env.EXPO_PUBLIC_E2E === '1'
     ? process.env.EXPO_PUBLIC_PLAYWRIGHT_API_URL
     : process.env.EXPO_PUBLIC_API_URL
 ) || 'http://localhost:8000/api/v1';
-
-function getClientId(): string | null {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') {
-    return null;
-  }
-
-  const storageKey = 'rumampu_client_id';
-  let clientId = window.localStorage.getItem(storageKey);
-
-  if (!clientId) {
-    clientId =
-      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    window.localStorage.setItem(storageKey, clientId);
-  }
-
-  return clientId;
-}
 
 export class ApiError extends Error {
   status: number;
@@ -38,14 +19,16 @@ export class ApiError extends Error {
 }
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const clientId = getClientId();
+  const identityHeaders = await apiIdentityHeaders();
+  const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData;
 
   const response = await fetch(`${API_ROOT}${path}`, {
     ...init,
-    credentials: 'include',
+    credentials: 'omit',
     headers: {
-      'Content-Type': 'application/json',
-      ...(clientId ? { 'X-RuMampu-Client-ID': clientId } : {}),
+      Accept: 'application/json',
+      ...(init.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
+      ...identityHeaders,
       ...(init.headers || {}),
     },
   });

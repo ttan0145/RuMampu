@@ -4,6 +4,9 @@ from django.test import TransactionTestCase
 
 
 class HousingOwnershipMigrationTests(TransactionTestCase):
+    migrate_housing_down_first = [
+        ("housing", "0001_initial"),
+    ]
     migrate_from = [
         ("finance", "0009_income_coverage"),
         ("housing", "0001_initial"),
@@ -15,6 +18,10 @@ class HousingOwnershipMigrationTests(TransactionTestCase):
 
     def setUp(self):
         super().setUp()
+        executor = MigrationExecutor(connection)
+        # Reverse housing while finance is still at its current schema; then
+        # move finance back to the historical dependency used by housing 0002.
+        executor.migrate(self.migrate_housing_down_first)
         executor = MigrationExecutor(connection)
         executor.migrate(self.migrate_from)
         old_apps = executor.loader.project_state(self.migrate_from).apps

@@ -6,6 +6,8 @@ import {
   HousingScenarioResponse,
   HousingTestResult,
   PreHousingResult,
+  SavedHousingTestRecord,
+  SaveHousingTestPayload,
 } from '../types/housing';
 import { apiRequest } from './api';
 
@@ -87,4 +89,35 @@ export async function calculateHousing(data: AppData): Promise<HousingCalculatio
 export async function fetchHouseCosts(quarters?: number): Promise<HouseCostsResponse> {
   const q = quarters ? `?quarters=${quarters}` : '';
   return apiRequest<HouseCostsResponse>(`/housing/house-costs/${q}`);
+}
+
+export async function fetchSavedHousingTests(): Promise<SavedHousingTestRecord[]> {
+  return apiRequest<SavedHousingTestRecord[]>('/housing/saved-tests/');
+}
+
+export async function fetchSavedHousingTest(id: number): Promise<SavedHousingTestRecord> {
+  return apiRequest<SavedHousingTestRecord>(`/housing/saved-tests/${id}/`);
+}
+
+export async function createSavedHousingTest(payload: SaveHousingTestPayload): Promise<SavedHousingTestRecord> {
+  return apiRequest<SavedHousingTestRecord>('/housing/saved-tests/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateSavedHousingTest(
+  id: number,
+  payload: { name?: string; monthly_payment?: number; tested_monthly_home_cost?: number },
+): Promise<SavedHousingTestRecord> {
+  return apiRequest<SavedHousingTestRecord>(`/housing/saved-tests/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteSavedHousingTest(id: number): Promise<void> {
+  await apiRequest<void>(`/housing/saved-tests/${id}/`, {
+    method: 'DELETE',
+  });
 }

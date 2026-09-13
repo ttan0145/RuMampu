@@ -1,24 +1,58 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useApp } from '../state';
 import { STRINGS } from '../strings';
 import { BODY_FONT, C, DISP_FONT } from '../theme';
 import { Btn, BodyS, IcLab, P } from '../ui';
 import { Ruma } from '../ruma-view';
 import { ScreenShell } from './shell';
+import { exportRecord } from '../api';
 
 /* v22 profile tab: guest/signed hero, account rows, language, saved tests. */
 
 const FLAGS: Record<string, string> = { en: '🇬🇧', ms: '🇲🇾', zh: '🇨🇳' };
 
 export function ProfileScreen() {
-  const { S, t, up, go, toast, signOut } = useApp();
+  const { S, t, up, go, toast, signOut, deleteCurrentRecord } = useApp();
+  const [deleteArmed, setDeleteArmed] = React.useState(false);
 
   const startSignup = () => up(s => {
     s.onboarded = false;
     s.wstep = 2;
     s.authMode = 'signup';
   });
+  const downloadExport = async () => {
+    try {
+      const file = await exportRecord();
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const url = URL.createObjectURL(file.blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = file.filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+      toast(t('pf_export_done'));
+    } catch {
+      toast(t('pf_export_failed'), 'error');
+    }
+  };
+  const deleteRecord = async () => {
+    if (!deleteArmed) {
+      setDeleteArmed(true);
+      toast(t(S.guest ? 'pf_delete_guest_confirm' : 'pf_delete_confirm'));
+      return;
+    }
+    try {
+      await deleteCurrentRecord();
+      setDeleteArmed(false);
+      toast(t('pf_delete_done'));
+    } catch {
+      toast(t('pf_delete_failed'), 'error');
+    }
+  };
 
   return (
     <ScreenShell greet title={t('pf_title')}>
@@ -64,6 +98,18 @@ export function ProfileScreen() {
         <Pressable onPress={() => go('savedtests')} style={[st.morow, st.morowLine]}>
           <IcLab name="book"><P style={{ fontSize: 15 }}>{t('sv_title')}</P></IcLab>
           <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
+        </Pressable>
+        <Pressable onPress={() => { void downloadExport(); }} style={[st.morow, st.morowLine]}>
+          <IcLab name="book"><P style={{ fontSize: 15 }}>{t('pf_export')}</P></IcLab>
+          <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
+        </Pressable>
+        <Pressable onPress={() => { void deleteRecord(); }} style={[st.morow, st.morowLine]}>
+          <IcLab name="ring">
+            <P style={{ fontSize: 15, color: deleteArmed ? C.short : C.ink }}>
+              {deleteArmed ? t('pf_delete2') : t(S.guest ? 'pf_delete_guest' : 'pf_delete')}
+            </P>
+          </IcLab>
+          <Text style={{ fontSize: 16, color: deleteArmed ? C.short : C.ink }}>→</Text>
         </Pressable>
       </View>
 

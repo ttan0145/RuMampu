@@ -561,6 +561,8 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
                 </View>
               </View>
               <BodyS style={{ textAlign: 'center' }}>{t('cm_body', { e: S.fgMail || 'you@example.com' })}</BodyS>
+              {authError ? <Text style={st.authError}>{authError}</Text> : null}
+              <LineBtn label={t('cm_resend')} onPress={() => void sendResetLink()} />
               <BtnP label={t('cm_back')} onPress={() => up(s => { s.authMode = 'login'; })} />
             </View>
           ) : login ? (

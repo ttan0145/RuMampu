@@ -14,6 +14,7 @@ import {
   createIncomeEntry as createIncomeEntryRequest,
   createIncomeSource as createIncomeSourceRequest,
   deleteIncomeEntry as deleteIncomeEntryRequest,
+  deleteRecord as deleteRecordRequest,
   fetchCommitments,
   fetchExpenseCategories,
   fetchExpenses,
@@ -36,6 +37,8 @@ import {
   updateCommitment as updateCommitmentRequest,
   updateWorkCostEntry as updateWorkCostEntryRequest,
 } from './api';
+import { fetchSavedHousingTests as fetchSavedHousingTestsRequest } from '../../services/housingService';
+import { SavedHousingTestRecord } from '../../types/housing';
 
 /* Central app state — mirrors the prototype's `S` object and navigation model. */
 
@@ -66,7 +69,20 @@ export const TAB_OF: Record<Route, Tab> = {
 // EN: US8.2 stores the compact kept-test summary used by Your Record during the
 // current frontend session: payment, short months, tested months, and largest gap.
 // 中文：US8.2 在当前前端会话中保存“记录档案”需要的留存测试摘要：月供、短缺月份、测试月份和最大缺口。
-export interface KeptTest { name?: string; pay: number; s: number; n: number; g: number }
+export interface KeptTest {
+  id?: number;
+  name?: string;
+  pay: number;
+  s: number;
+  n: number;
+  g: number;
+  scenarioId?: number | null;
+  propertyPrice?: number | null;
+  scenario?: SavedHousingTestRecord['scenario'];
+  result?: SavedHousingTestRecord['result'];
+  createdAt?: string;
+  incomeShockPercent?: number;
+}
 
 /* v22 saving plan: the month's target split into uneven daily amounts. */
 export interface PlanState {
@@ -298,7 +314,9 @@ export interface Ctx {
   saveIncomeSource: (name: string) => Promise<string>;
   refreshIncomeRecord: () => Promise<void>;
   refreshAccountData: (onProgress?: (progress: number, stage: string) => void) => Promise<void>;
+  refreshSavedHousingTests: () => Promise<void>;
   signOut: () => Promise<void>;
+  deleteCurrentRecord: () => Promise<void>;
   enterGuestMode: () => Promise<void>;
   refreshIncomePattern: () => Promise<void>;
   refreshIncomeCoverage: () => Promise<void>;
@@ -328,6 +346,23 @@ const AppCtx = createContext<Ctx | null>(null);
 
 function applyConfirmedCoverage(state: AppState, coverage: ApiIncomeCoverage): void {
   state.incomeCoverage = coverage;
+}
+
+function keptTestFromRecord(record: SavedHousingTestRecord): KeptTest {
+  return {
+    id: record.id,
+    name: record.name,
+    pay: Math.round(Number(record.monthly_payment || record.tested_monthly_home_cost || 0)),
+    s: Number(record.short_month_count) || 0,
+    n: Number(record.tested_months) || 0,
+    g: Math.round(Number(record.largest_gap) || 0),
+    scenarioId: record.scenario_id,
+    propertyPrice: record.property_price == null ? null : Number(record.property_price),
+    scenario: record.scenario,
+    result: record.result,
+    createdAt: record.created_at,
+    incomeShockPercent: Number(record.income_shock_percent) || 0,
+  };
 }
 
 function applyConfirmedWorkCost(state: AppState, entry: ApiWorkCostEntry): void {
@@ -607,6 +642,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [up]);
 
+  const refreshSavedHousingTests = useCallback(async (): Promise<void> => {
+    if (!INCOME_API_ENABLED) return;
+    try {
+      const records = await fetchSavedHousingTestsRequest();
+      up(s => {
+        if (!s.guest) s.keptTests = records.map(keptTestFromRecord);
+      });
+    } catch (error) {
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) return;
+      throw error;
+    }
+  }, [up]);
+
   // EN: Successful category/entry reads remain visible when another read fails.
   // Only publish the calculated result after the whole refresh is confirmed.
   // 中文：其他读取失败时仍展示成功加载的类别/记录；整次刷新成功后才展示计算结果。
@@ -674,6 +722,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     void refreshWorkCosts().catch(() => undefined);
     return () => { workCostRequestVersion.current += 1; };
   }, [authReady, refreshWorkCosts]);
+
+  React.useEffect(() => {
+    if (!INCOME_API_ENABLED || !authReady || S.guest) return;
+    void refreshSavedHousingTests().catch(() => undefined);
+  }, [authReady, S.guest, refreshSavedHousingTests]);
 
   const refreshAfterMoneyWrite = useCallback(() => {
     // Ignore any pre-write analyses; a successful write must not become a failed
@@ -1126,14 +1179,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       s.coverageSync = 'idle';
     });
 
-    onProgress?.(85, 'Loading work costs...');
-    await refreshWorkCosts();
+    let finalDomains = 0;
+    const trackedFinal = async <T,>(promise: Promise<T>, label: string): Promise<T> => {
+      const result = await promise;
+      finalDomains += 1;
+      onProgress?.(80 + (finalDomains * 7), label);
+      return result;
+    };
+
+    await Promise.all([
+      trackedFinal(refreshWorkCosts(), 'Work costs loaded'),
+      trackedFinal(refreshSavedHousingTests(), 'Saved tests loaded'),
+    ]);
     onProgress?.(95, 'Preparing your dashboard...');
 
     // Yield once so the final state updates above can be committed before Home renders.
     await new Promise<void>(resolve => setTimeout(resolve, 0));
     onProgress?.(100, 'Your account is ready');
-  }, [refreshIncomeRecord, refreshWorkCosts, up]);
+  }, [refreshIncomeRecord, refreshSavedHousingTests, refreshWorkCosts, up]);
 
   const signOut = useCallback(async (): Promise<void> => {
     try {
@@ -1154,6 +1217,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }, []);
+
+  const deleteCurrentRecord = useCallback(async (): Promise<void> => {
+    await deleteRecordRequest();
+    await rotateGuestClientId();
+    guestBootstrap.current = null;
+    setS(prev => {
+      const next = initialState();
+      next.lang = prev.lang;
+      next.splash = false;
+      next.guest = true;
+      next.onboarded = true;
+      return next;
+    });
+    await refreshAccountData();
+  }, [refreshAccountData]);
 
   const enterGuestMode = useCallback(async (): Promise<void> => {
     try {
@@ -1185,13 +1263,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Ctx>(() => ({
     S, authReady, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, signOut, enterGuestMode, refreshIncomePattern,
+    saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   }), [
     S, authReady, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, signOut, enterGuestMode, refreshIncomePattern,
+    saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,

@@ -1,8 +1,11 @@
 import React from 'react';
 import {
+  createSavedHousingTest,
   createHousingScenario,
+  fetchSavedHousingTest,
   runHousingTest,
   runPreHousingCheck,
+  updateSavedHousingTest,
   updateHousingScenario,
 } from '../../../services/housingService';
 import {
@@ -285,12 +288,36 @@ export function HouseScreen() {
 
 /* v22 saved tests list. */
 export function SavedtestsScreen() {
-  const { S, t, up } = useApp();
+  const { S, t, up, go, toast } = useApp();
+  const openSavedTest = async (idx: number) => {
+    const saved = S.keptTests[idx];
+    if (!saved) return;
+    try {
+      const record = saved.id ? await fetchSavedHousingTest(saved.id) : null;
+      const scenario = record?.scenario || saved.scenario;
+      const result = record?.result || saved.result;
+      if (!scenario || !result || !('tested_home_cost' in result)) {
+        toast(t('housing_run_failed'), 'error');
+        return;
+      }
+      setHousingScenario(scenario as any);
+      setHousingTestResult(result as any);
+      up(s => {
+        s.testRan = true;
+        s.tryPay = null;
+        s.shock = Number((result as any).income_shock_percent) || 0;
+        s.howOpen = false;
+        s.rgHowOpen = false;
+      });
+      go('result');
+    } catch {
+      toast(t('housing_run_failed'), 'error');
+    }
+  };
   return (
     <ScreenShell back title={t('sv_title')}>
       {S.keptTests.length ? S.keptTests.map((k, i) => (
-        <Pressable key={i} onPress={() => up(s => { s.svIdx = i; s.svDelArm = false; s.sheet = 'svedit'; })}
-          style={tx.txcard}>
+        <View key={k.id || i} style={tx.txcard}>
           {k.name ? <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: C.ink, marginBottom: 4 }}>{k.name}</Text> : null}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
             <Text style={{ fontFamily: BODY_FONT, fontSize: 15, color: C.ink }}>
@@ -299,9 +326,13 @@ export function SavedtestsScreen() {
             <Fig value={t('cp_short', { s: k.s, n: k.n })} p="calc" cls="body-s" />
           </View>
           <BodyS muted style={{ marginTop: 4 }}>
-            {k.g ? `${t('gap_lbl')} ${rm(k.g)} · ` : ''}{t('edit')} →
+            {k.g ? `${t('gap_lbl')} ${rm(k.g)} · ` : ''}{k.createdAt ? new Date(k.createdAt).toLocaleDateString() : t('edit')}
           </BodyS>
-        </Pressable>
+          <View style={{ flexDirection: 'row', gap: 14, flexWrap: 'wrap', marginTop: 8 }}>
+            <BtnLine label={t('sv_open_l')} onPress={() => { void openSavedTest(i); }} />
+            <BtnLine label={t('sv_edit_l')} onPress={() => up(s => { s.svIdx = i; s.svDelArm = false; s.sheet = 'svedit'; })} />
+          </View>
+        </View>
       )) : (
         <Card><BodyS muted>{t('sv_none')}</BodyS></Card>
       )}
@@ -378,7 +409,7 @@ function comparisonPaymentsAround(currentCost: number): number[] {
 }
 
 export function ResultScreen() {
-  const { S, t, monthName, up, go } = useApp();
+  const { S, t, monthName, up, go, toast } = useApp();
   React.useEffect(() => {
     up(state => { state.stack = ['househome']; });
   }, [up]);
@@ -630,23 +661,60 @@ export function ResultScreen() {
   ) : null;
 
   const keepTest = () => {
+    const scenario = getHousingScenario();
+    const duplicate = S.keptTests.some(test => (
+      test.pay === Math.round(cost)
+      && test.s === s && test.n === n
+    ));
     up(x2 => {
       const h = x2.data.house;
       x2.svDraft = (h.knownPayment == null && (h.price || 0) > 0)
         ? rm(h.price || 0)
         : `${rm(Math.round(cost))} ${t('mo_permo')}`;
-      const duplicate = x2.keptTests.some(test => (
-        test.pay === Math.round(cost)
-        && test.s === s && test.n === n
-      ));
       if (!duplicate) {
-        // EN: Iteration 1 stores only the summary fields Your Record needs in
-        // frontend session state, not a persistent account copy of the result.
-        // 中文：Iteration 1 只把“记录档案”需要的摘要字段放进前端会话状态。
-        x2.keptTests.push({ pay: Math.round(cost), s, n, g: Math.round(g) });
+        x2.keptTests.push({
+          pay: Math.round(cost),
+          s,
+          n,
+          g: Math.round(g),
+          scenarioId: scenario?.id,
+          scenario: scenario || undefined,
+          result,
+          propertyPrice: h.price || null,
+          incomeShockPercent: result.income_shock_percent,
+        });
       }
       x2.sheet = 'savename';
     });
+    if (!duplicate && !S.guest && scenario?.id) {
+      void createSavedHousingTest({
+        scenario_id: scenario.id,
+        monthly_payment: Math.round(cost),
+        short_month_count: s,
+        tested_months: n,
+        largest_gap: Math.round(g),
+        income_shock_percent: result.income_shock_percent,
+        result,
+      }).then(record => {
+        let pendingName = '';
+        up(x2 => {
+          const pending = [...x2.keptTests].reverse().find(item => !item.id
+            && item.pay === Math.round(cost)
+            && item.s === s
+            && item.n === n);
+          if (pending) {
+            pendingName = pending.name || '';
+            pending.id = record.id;
+            pending.createdAt = record.created_at;
+            pending.scenario = record.scenario;
+            pending.result = record.result;
+          }
+        });
+        if (pendingName) void updateSavedHousingTest(record.id, { name: pendingName }).catch(() => undefined);
+      }).catch(() => {
+        toast(t('housing_run_failed'), 'error');
+      });
+    }
   };
 
   return (

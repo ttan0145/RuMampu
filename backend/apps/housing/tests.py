@@ -1,12 +1,17 @@
 from datetime import date
 from decimal import Decimal
 
+from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.test import Client, TestCase
+from rest_framework.authtoken.models import Token
 
 from finance.models import FinancialPeriod, GuestProfile, IncomeEntry, WorkCostEntry
 
-from .models import HousingScenario
+from .models import HousingScenario, SavedHousingTest
+
+
+User = get_user_model()
 
 
 class HousingApiTestMixin:
@@ -137,6 +142,91 @@ class HousingScenarioApiTests(HousingApiTestMixin, TestCase):
             list(scenario.additional_costs.values_list("category", "amount")),
             [("Maintenance", Decimal("50.00"))],
         )
+
+
+class AuthenticatedHousingApiTests(HousingApiTestMixin, TestCase):
+    saved_tests_url = "/api/v1/housing/saved-tests/"
+
+    def auth_client(self, email):
+        user = User.objects.create_user(username=email, email=email, password="Passw0rd123")
+        token, _ = Token.objects.get_or_create(user=user)
+        return Client(HTTP_AUTHORIZATION=f"Token {token.key}"), user
+
+    def test_authenticated_scenario_is_owned_by_the_user_not_guest_profile(self):
+        client, user = self.auth_client("owner@example.com")
+
+        response = client.post(
+            self.scenarios_url,
+            data=self.scenario_payload,
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        scenario = HousingScenario.objects.get(id=response.json()["id"])
+        self.assertEqual(scenario.user, user)
+        self.assertIsNone(scenario.profile)
+
+    def test_saved_housing_test_persists_result_can_reopen_update_and_delete(self):
+        client, user = self.auth_client("save@example.com")
+        scenario = client.post(
+            self.scenarios_url,
+            data={
+                **self.scenario_payload,
+                "known_monthly_payment": "900.00",
+                "additional_costs": [{"category": "Maintenance", "amount": "80.00"}],
+            },
+            content_type="application/json",
+        ).json()
+        result = {
+            "scenario_id": scenario["id"],
+            "tested_home_cost": 980.0,
+            "income_shock_percent": 0.0,
+            "tested_months": 2,
+            "short_month_count": 1,
+            "largest_gap": 120.0,
+            "months": [],
+        }
+
+        created = client.post(
+            self.saved_tests_url,
+            data={
+                "name": "Near MRT",
+                "scenario_id": scenario["id"],
+                "monthly_payment": "980.00",
+                "short_month_count": 1,
+                "tested_months": 2,
+                "largest_gap": "120.00",
+                "income_shock_percent": "0.00",
+                "result": result,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(created.status_code, 201)
+        saved_id = created.json()["id"]
+        detail = client.get(f"{self.saved_tests_url}{saved_id}/")
+        self.assertEqual(detail.status_code, 200)
+        payload = detail.json()
+        self.assertEqual(payload["name"], "Near MRT")
+        self.assertEqual(payload["property_price"], "300000.00")
+        self.assertEqual(payload["result"]["tested_home_cost"], 980.0)
+        self.assertEqual(payload["scenario"]["additional_costs"][0]["category"], "Maintenance")
+
+        patched = client.patch(
+            f"{self.saved_tests_url}{saved_id}/",
+            data={"name": "Edited", "monthly_payment": "1000.00"},
+            content_type="application/json",
+        )
+        self.assertEqual(patched.status_code, 200)
+        self.assertEqual(patched.json()["name"], "Edited")
+        self.assertEqual(patched.json()["monthly_payment"], 1000.0)
+
+        other_client, _ = self.auth_client("other@example.com")
+        self.assertEqual(other_client.get(f"{self.saved_tests_url}{saved_id}/").status_code, 404)
+
+        deleted = client.delete(f"{self.saved_tests_url}{saved_id}/")
+        self.assertEqual(deleted.status_code, 204)
+        self.assertFalse(SavedHousingTest.objects.filter(id=saved_id, user=user).exists())
 
 
 class PreHousingCheckApiTests(HousingApiTestMixin, TestCase):

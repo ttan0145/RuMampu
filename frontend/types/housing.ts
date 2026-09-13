@@ -117,3 +117,31 @@ export interface HousingTestResult {
   carrying_range: CarryingRangeResult | null;
   starting_liquidity: StartingLiquidityResult;
 }
+
+export interface SavedHousingTestRecord {
+  id: number;
+  name: string;
+  scenario_id: number | null;
+  property_price: string | number | null;
+  monthly_payment: number;
+  tested_monthly_home_cost: number;
+  short_month_count: number;
+  tested_months: number;
+  largest_gap: number;
+  income_shock_percent: number;
+  scenario: HousingScenarioResponse | HousingScenarioPayload | Record<string, unknown>;
+  result: HousingTestResult | Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SaveHousingTestPayload {
+  name?: string;
+  scenario_id: number;
+  monthly_payment: number;
+  short_month_count: number;
+  tested_months: number;
+  largest_gap: number;
+  income_shock_percent?: number;
+  result: HousingTestResult;
+}

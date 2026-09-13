@@ -283,15 +283,15 @@ export function Shimmer({ label }: { label: string }) {
 const wl = StyleSheet.create({
   wrap: { paddingTop: 10, paddingRight: 34, paddingBottom: 26, paddingLeft: 2, marginRight: -20 },
   wrapSmall: { paddingTop: 8, paddingRight: 6, paddingBottom: 4, paddingLeft: 2 },
-  plot: { flexDirection: 'row', alignItems: 'flex-end' },
+  plot: { position: 'relative', flexDirection: 'row', alignItems: 'flex-end' },
   col: { flex: 1, height: '100%', justifyContent: 'flex-end' },
   bar: { width: '100%', backgroundColor: C.ink, borderTopLeftRadius: 3, borderTopRightRadius: 3 },
   gap: { position: 'absolute', left: '15%', width: '70%', backgroundColor: C.short, borderRadius: 2, opacity: 0.95 },
-  line: { position: 'absolute', left: -2, borderTopWidth: 2.5, borderTopColor: C.ink },
+  line: { position: 'absolute', left: -2, borderTopWidth: 2.5, borderTopColor: C.brand },
   arrow: {
     position: 'absolute', right: -1, top: -7,
     borderTopWidth: 4, borderBottomWidth: 4, borderLeftWidth: 7,
-    borderTopColor: 'transparent', borderBottomColor: 'transparent', borderLeftColor: C.ink,
+    borderTopColor: 'transparent', borderBottomColor: 'transparent', borderLeftColor: C.brand,
     width: 0, height: 0,
   },
   lineLbl: {
@@ -300,7 +300,7 @@ const wl = StyleSheet.create({
     backgroundColor: C.paper, paddingVertical: 2, paddingHorizontal: 5,
     borderRadius: 5, borderWidth: 1.5, borderColor: C.ink14,
   },
-  lineLblTxt: { fontSize: 11, letterSpacing: 0.66, color: C.ink, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  lineLblTxt: { fontSize: 11, letterSpacing: 0.66, color: C.brand, fontWeight: '700', fontVariant: ['tabular-nums'] },
   xrow: { flexDirection: 'row', paddingTop: 6 },
   xlbl: { flex: 1, textAlign: 'center', fontSize: 11, letterSpacing: 0.44, color: C.ink64 },
 });

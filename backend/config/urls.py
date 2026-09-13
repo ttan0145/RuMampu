@@ -4,7 +4,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 
 from .auth_views import (
     LoginView, LogoutView, MeView, PasswordResetConfirmView,
-    PasswordResetRequestView, RegisterView,
+    PasswordResetRequestView, RecordDeleteView, RecordExportView, RegisterView,
 )
 from .views import HealthCheckView
 
@@ -20,6 +20,8 @@ urlpatterns = [
     path("api/v1/auth/register/", RegisterView.as_view(), name="auth-register"),
     path("api/v1/auth/login/", LoginView.as_view(), name="auth-login"),
     path("api/v1/auth/me/", MeView.as_view(), name="auth-me"),
+    path("api/v1/auth/export/", RecordExportView.as_view(), name="auth-export"),
+    path("api/v1/auth/record/", RecordDeleteView.as_view(), name="auth-record-delete"),
     path("api/v1/auth/logout/", LogoutView.as_view(), name="auth-logout"),
     path("api/v1/auth/password-reset/", PasswordResetRequestView.as_view(), name="auth-password-reset"),
     path("api/v1/auth/password-reset/confirm/", PasswordResetConfirmView.as_view(), name="auth-password-reset-confirm"),
