@@ -1,5 +1,12 @@
 import { AppData } from '../src/rumampu/mock';
-import { HousingCalculationResult, HousingScenarioPayload, HousingScenarioResponse, HousingTestResult, PreHousingResult } from '../types/housing';
+import {
+  HouseCostsResponse,
+  HousingCalculationResult,
+  HousingScenarioPayload,
+  HousingScenarioResponse,
+  HousingTestResult,
+  PreHousingResult,
+} from '../types/housing';
 import { apiRequest } from './api';
 
 function roundMoney(value: number): number {
@@ -75,4 +82,9 @@ export async function calculateHousing(data: AppData): Promise<HousingCalculatio
       })),
     }),
   });
+}
+
+export async function fetchHouseCosts(quarters?: number): Promise<HouseCostsResponse> {
+  const q = quarters ? `?quarters=${quarters}` : '';
+  return apiRequest<HouseCostsResponse>(`/housing/house-costs/${q}`);
 }

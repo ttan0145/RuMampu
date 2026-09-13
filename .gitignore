@@ -8,6 +8,7 @@ __pycache__/
 *.sqlite3
 node_modules/
 **/node_modules/
+backend/data/transactions_clean.csv
 docs/.DS_Store
 backend/.DS_Store
 output/playwright/report/

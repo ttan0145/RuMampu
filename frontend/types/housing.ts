@@ -12,6 +12,24 @@ export interface HousingScenarioPayload {
   additional_costs?: HousingCostInput[];
 }
 
+export type HouseCostType = 'all' | 'terr' | 'condo' | 'flat' | 'lch' | 'lcf';
+export type HouseCostPlace = [sales: number, median: number, underThreshold: number];
+
+export interface HouseCostsResponse {
+  window: {
+    from: string;
+    to: string;
+    quarters: number;
+  };
+  income_year: number;
+  affordable_threshold: number;
+  states: Record<string, {
+    name: string;
+    income: number | null;
+    types: Record<HouseCostType, Record<string, HouseCostPlace>>;
+  }>;
+}
+
 export interface HousingCalculationResult {
   financing_amount: number;
   monthly_instalment: number;

@@ -1,6 +1,10 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-from .views import HousingCalculationView, HousingScenarioViewSet, HousingTestResultView, PreHousingCheckView, StatelessHousingTestView, SavedHousingTestView
+from .views import (
+    HousingCalculationView, HousingScenarioViewSet, HousingTestResultView,
+    PreHousingCheckView, StatelessHousingTestView, SavedHousingTestView,
+    house_costs,
+)
 
 router = DefaultRouter()
 router.register('scenarios', HousingScenarioViewSet, basename='housing-scenario')
@@ -12,4 +16,5 @@ urlpatterns = [
     path('test-result/', HousingTestResultView.as_view(), name='housing-test-result'),
     path('test/', StatelessHousingTestView.as_view(), name='housing-test'),
     path('saved-tests/', SavedHousingTestView.as_view(), name='housing-saved-tests'),
+    path('house-costs/', house_costs, name='house-costs'),
 ]

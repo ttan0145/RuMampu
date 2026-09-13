@@ -59,3 +59,94 @@ class SavedHousingTest(models.Model):
 
     class Meta:
         ordering = ['-created_at', '-id']
+
+
+# These models map to tables created by backend/data/schema.sql and
+# backend/data/schema_transactions.sql. The SQL loaders own those tables;
+# Django must not generate or apply migrations for them.
+class State(models.Model):
+    name = models.TextField(unique=True)
+
+    class Meta:
+        managed = False
+        db_table = "state"
+
+    def __str__(self):
+        return self.name
+
+
+class District(models.Model):
+    name = models.TextField()
+    state = models.ForeignKey(State, models.PROTECT, db_column="state_id")
+    osm_relation_id = models.BigIntegerField(null=True, blank=True)
+    centroid_lat = models.FloatField(null=True, blank=True)
+    centroid_lng = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = "district"
+        unique_together = (("name", "state"),)
+
+    def __str__(self):
+        return f"{self.name}, {self.state.name}"
+
+
+class StateIncome(models.Model):
+    state = models.OneToOneField(State, models.PROTECT, db_column="state_id",
+                                 primary_key=True)
+    year = models.IntegerField()
+    income_mean = models.DecimalField(max_digits=12, decimal_places=2, null=True)
+    income_median = models.DecimalField(max_digits=12, decimal_places=2, null=True)
+    expenditure_mean = models.DecimalField(max_digits=12, decimal_places=2, null=True)
+    gini = models.DecimalField(max_digits=5, decimal_places=3, null=True)
+    poverty = models.DecimalField(max_digits=5, decimal_places=2, null=True)
+    source = models.TextField(default="DOSM HIES")
+
+    class Meta:
+        managed = False
+        db_table = "state_income"
+        unique_together = (("state", "year"),)
+
+
+class PriceAgg(models.Model):
+    """Per district x type x quarter; medians are not additive."""
+    district = models.ForeignKey(District, models.PROTECT, db_column="district_id")
+    quarter = models.TextField()
+    property_type = models.TextField()
+    sales_count = models.IntegerField()
+    total_value_rm = models.DecimalField(max_digits=16, decimal_places=2, null=True)
+    mean_price_rm = models.DecimalField(max_digits=14, decimal_places=2, null=True)
+    median_price_rm = models.DecimalField(max_digits=14, decimal_places=2, null=True)
+    p25_price_rm = models.DecimalField(max_digits=14, decimal_places=2, null=True)
+    p75_price_rm = models.DecimalField(max_digits=14, decimal_places=2, null=True)
+    under_300k = models.IntegerField(null=True)
+    under_500k = models.IntegerField(null=True)
+    preliminary = models.BooleanField(default=False)
+    source = models.TextField(default="NAPIC Open Transaction Data")
+    loaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = "price_agg"
+        unique_together = (("district", "quarter", "property_type"),)
+
+
+class PropertyTransaction(models.Model):
+    """One sale, used for percentile calculations over rolling windows."""
+    district = models.ForeignKey(District, models.PROTECT, db_column="district_id")
+    mukim = models.TextField(blank=True)
+    scheme_area = models.TextField(blank=True)
+    txn_date = models.DateField()
+    quarter = models.TextField()
+    property_type = models.TextField()
+    tenure = models.TextField(blank=True)
+    land_area = models.FloatField(null=True)
+    floor_area = models.FloatField(null=True)
+    price_rm = models.DecimalField(max_digits=14, decimal_places=2)
+
+    class Meta:
+        managed = False
+        db_table = "property_transaction"
+        indexes = [
+            models.Index(fields=["district", "property_type", "quarter"]),
+        ]
