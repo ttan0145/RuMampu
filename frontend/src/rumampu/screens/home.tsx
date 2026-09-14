@@ -9,6 +9,7 @@ import {
 } from '../plan';
 import { villageEnsure } from '../village';
 import { IsoIsland } from '../isosvg';
+import { Ico } from '../svgs';
 import { BODY_FONT, C, DISP_FONT } from '../theme';
 import { Btn, BodyS, Display } from '../ui';
 import { ScreenShell } from './shell';
@@ -426,6 +427,22 @@ export function PlanCard() {
         <BodyS muted>{t('pl_progress', { s: rm(saved), t: rm(p.target) })}</BodyS>
         <BodyS muted>{pct}%</BodyS>
       </View>
+      {/* v24: the pot stated on the home card (shield semantics: declared
+          savings plus what was moved in from finished months). */}
+      <Pressable onPress={() => go('plan')} style={{
+        flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10,
+        backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E3EAE8', borderRadius: 14,
+        paddingVertical: 8, paddingHorizontal: 12, minHeight: 52,
+      }}>
+        <Ico name="ring" size={20} color={C.brand} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 13.5, color: C.ink }}>{t('sp_pot1')}</Text>
+          <BodyS muted style={{ fontSize: 11 }}>{t('sp_pot1h')}</BodyS>
+        </View>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: C.ink, fontVariant: ['tabular-nums'] }}>
+          {rm((v?.savedRm ?? 0) + S.potMoved)}
+        </Text>
+      </Pressable>
       <Text style={{
         fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.66, textTransform: 'uppercase',
         color: C.ink64, marginTop: 12,

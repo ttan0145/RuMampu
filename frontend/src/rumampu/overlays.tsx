@@ -433,6 +433,50 @@ export function SheetHost() {
   if (sheet === 'plinfo') return <PeekSheet pose="happy" title={t('pl_title')} body={t('pl_note')} onClose={close} doneLabel={t('done')} />;
   if (sheet === 'potadd') return <PeekSheet pose="count" title={t('sp_add_t')} body={t('sp_add_b')} onClose={close} doneLabel={t('done')} />;
   if (sheet === 'mailhow') return <PeekSheet pose="happy" title={t('mh_title')} body={t('mh_body')} onClose={close} doneLabel={t('done')} />;
+  if (sheet === 'cardinfo' && S.cardInfo) {
+    const ci = S.cardInfo;
+    return (
+      <Modal transparent animationType="none" visible onRequestClose={close}>
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={close}>
+            <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
+          </Pressable>
+          <View style={{ alignItems: 'center', marginBottom: -30, zIndex: 2 }}>
+            <Ruma w={96} pose="curious" float={false} />
+          </View>
+          <View style={[
+            sheetSt.sheet, { paddingBottom: 26, paddingTop: 34 },
+            Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null,
+          ]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <SheetH3 noMargin>{t(ci.t)}</SheetH3>
+              <Pressable onPress={close} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10 }}>
+                <Text style={{ fontSize: 18, color: C.ink }}>✕</Text>
+              </Pressable>
+            </View>
+            <View style={{ gap: 8, marginTop: 6 }}>
+              {ci.b.map(k => <BodyS key={k}>{t(k)}</BodyS>)}
+              {(ci.x ?? []).map((line, i) => <BodyS key={'x' + i}>{line}</BodyS>)}
+            </View>
+            {ci.p ? (
+              <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: C.ink14, gap: 5 }}>
+                <Text style={{ fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.99, textTransform: 'uppercase', color: C.ink64 }}>
+                  {t('ci_tag')}
+                </Text>
+                <Text style={{ fontFamily: SEMI_FONT, fontSize: 12, color: C.ink }}>
+                  {PROV_G[ci.p]} {t('prov_' + ci.p)}
+                </Text>
+                <BodyS muted>{t('provf_' + ci.p)}</BodyS>
+              </View>
+            ) : null}
+            <View style={{ marginTop: 14 }}>
+              <Btn label={t('done')} onPress={close} />
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
   if (sheet === 'howworks') return <PeekSheet pose="happy" title={t('how_title')} body={`${t('how_1')}\n\n${t('how_2')}\n\n${t('how_3')}`} onClose={close} doneLabel={t('done')} />;
 
   if (sheet === 'quick' || sheet === 'quick2') return <QuickMenu />;

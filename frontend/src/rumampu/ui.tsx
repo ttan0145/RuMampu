@@ -13,6 +13,26 @@ import { ASSISTANT_UI_ENABLED } from './assistant';
 export const PROV_G: Record<string, string> = { user: '●', official: '○', calc: '▸', assume: '▩' };
 
 /* Header shortforms per language — Bahasa Melayu reads BM in Malaysia. */
+/* v24 cardI — a row that needs explaining carries an (i), not a paragraph.
+   Tapping it opens the info sheet with the words and the tag explained. */
+export function CardI({ t: titleKey, b, p, x }: {
+  t: string; b: string[]; p?: 'user' | 'official' | 'calc' | 'assume'; x?: string[];
+}) {
+  const { t, up } = useApp();
+  return (
+    <Pressable
+      onPress={() => up(s => { s.cardInfo = { t: titleKey, b, p, x }; s.sheet = 'cardinfo'; })}
+      accessibilityLabel={t('ci_more')}
+      hitSlop={8}
+      style={{
+        width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: C.ink40,
+        alignItems: 'center', justifyContent: 'center', marginLeft: 6,
+      }}>
+      <Text style={{ fontFamily: DISP_FONT, fontSize: 11, color: C.ink64 }}>i</Text>
+    </Pressable>
+  );
+}
+
 export const LANG_SHORT: Record<string, string> = { en: 'EN', ms: 'BM', zh: 'ZH' };
 
 /* ---------- text ---------- */

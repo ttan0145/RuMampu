@@ -10,6 +10,7 @@ import {
 import {
   Badge, BodyS, Btn, BtnLine, BtnQuiet, Card, Chip, Chips, Display, Divider, EditList,
   Fig, IcLab, KV, NoteC, P, Prov, StackS, TextField,
+  CardI,
 } from '../ui';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { SvgXml } from 'react-native-svg';
@@ -199,7 +200,7 @@ export function MoneyScreen() {
       <View style={mo.hero}>
         <View style={mo.rowBetween}>
           <Text style={[mo.ttl3, { color: '#fff' }]}>{t('mo_sofar', { m: monthName(mk % 12) })}</Text>
-          <Text style={mo.heroProv}>● {t('prov_user').toUpperCase()}</Text>
+          <CardI t="mo_sofar_t" b={['mo_fixed']} p="user" />
         </View>
         <View style={{ flexDirection: 'row', marginTop: 10 }}>
           {([[t('mo_in'), inSum, '#fff'], [t('mo_out'), outSum, '#fff'], [t('mo_left'), inSum - outSum, '#FEC844']] as [string, number, string][]).map(([lbl, v, col], i) => (
@@ -209,7 +210,6 @@ export function MoneyScreen() {
             </View>
           ))}
         </View>
-        <Text style={mo.heroNote}>{t('mo_fixed')}</Text>
       </View>
       {quiet}
       {trend}

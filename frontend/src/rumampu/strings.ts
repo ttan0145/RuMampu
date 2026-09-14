@@ -344,6 +344,9 @@ en: {
   pl_showweek: 'Show this week only',
   pl_week: 'This week',
   sc_notearn: 'No earnings could be read from that image. Try a clearer screenshot of your earnings page.',
+  ci_more: 'What this is',
+  ci_tag: 'The tag on this card',
+  mo_sofar_t: 'The month so far',
   /* v24 carrying-range rework. */
   rg_alt: 'Your recorded months carried {a} to {b} a month. You tested {p}.',
   rg_counted: 'Counted: {c} of {n} recorded months.',
@@ -1446,6 +1449,9 @@ ms: {
   pl_showweek: 'Tunjuk minggu ini sahaja',
   pl_week: 'Minggu ini',
   sc_notearn: 'Tiada pendapatan dapat dibaca daripada imej itu. Cuba tangkapan skrin halaman pendapatan yang lebih jelas.',
+  ci_more: 'Apa ini',
+  ci_tag: 'Tag pada kad ini',
+  mo_sofar_t: 'Bulan ini setakat ini',
   /* v24 carrying-range rework. */
   rg_alt: 'Bulan direkod anda membawa {a} hingga {b} sebulan. Anda menguji {p}.',
   rg_counted: 'Dikira: {c} daripada {n} bulan direkod.',
@@ -2547,6 +2553,9 @@ zh: {
   pl_showweek: '只显示本周',
   pl_week: '本周',
   sc_notearn: '无法从这张图片读取任何收入。请试试更清晰的收入页面截图。',
+  ci_more: '这是什么',
+  ci_tag: '这张卡上的标签',
+  mo_sofar_t: '本月至今',
   /* v24 carrying-range rework. */
   rg_alt: '你已记录的月份承担过每月 {a} 至 {b}。你测试的是 {p}。',
   rg_counted: '已计入：{n} 个已记录月份中的 {c} 个。',
