@@ -5,12 +5,12 @@ import { MOCK } from '../mock';
 import { ApiCoverageAnswer, INCOME_API_ENABLED } from '../api';
 import { formatApiMoney } from '../money';
 import {
-  actualMonths, commitTotal, expByMonth, monthsAgg, nf, recordSummary, rm, workCostTotal,
+  actualMonths, commitTotal, expByMonth, monthsAgg, nf, pickMonth, recordSummary, rm,
 } from '../calc';
 import {
   Badge, BodyS, Btn, BtnLine, BtnQuiet, Card, Chip, Chips, Display, Divider, EditList,
   Fig, IcLab, KV, NoteC, P, Prov, StackS, TextField,
-  CardI,
+  CardI, MonthBtn,
 } from '../ui';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { SvgXml } from 'react-native-svg';
@@ -24,7 +24,7 @@ import { Ico } from '../svgs';
 import { SrcIcon } from '../icons';
 import { Ruma } from '../ruma-view';
 import {
-  DayShortcutPicker, Drop, InCard, InChip, InHero, InLbl, InRow, InSec, InSeg, MockStmt, PerSeg,
+  DayShortcutPicker, Drop, InCard, InChip, InHero, InLbl, InRow, InSec, InSeg, MockStmt,
 } from '../incard';
 import { IncomePatternChart } from '../charts';
 import { ScreenShell } from './shell';
@@ -42,10 +42,7 @@ export function MoneyScreen() {
   const now = new Date();
   const thisKey = now.getFullYear() * 12 + now.getMonth();
   /* month shown: the current month if it has income, else the latest month with income */
-  const recordedKeys = new Set([
-  ...S.data.income.map(e => monthKeyOf(e.d)),
-  ...S.data.expenses.map(e => monthKeyOf(e.d)),
-  ]);
+  const recordedKeys = new Set(S.data.income.map(e => monthKeyOf(e.d)));
 
   const mk = recordedKeys.has(thisKey)
     ? thisKey
@@ -66,36 +63,32 @@ export function MoneyScreen() {
     const pos = (v: number) => Math.round((v - Math.min(lo, 0)) / span * 100);
     const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
     const dotPos = (v: number): DimensionValue => `${clamp(pos(v), 2, 98)}%`;
+    /* v24 .moband: labels ride the band, centred on their dot — quietest above, usual below. */
+    const bandLbl = (v: number, txtKey: string, amount: number, above: boolean) => (
+      <View style={{ position: 'absolute', left: dotPos(v), width: 0, alignItems: 'center', ...(above ? { bottom: 14 } : { top: 14 }) }}>
+        <View style={{ width: 120, alignItems: 'center', marginLeft: -60 }}>
+          <Text style={mo.bandLblTxt} numberOfLines={1}>{t(txtKey)}</Text>
+          <Text style={mo.bandLblVal} numberOfLines={1}>{rm(amount)}</Text>
+        </View>
+      </View>
+    );
     quiet = (
       <View style={mo.card}>
         <View style={mo.rowBetween}>
           <Text style={mo.ttl3}>{t('mo_quiet')}</Text>
-          <Prov p="calc" />
+          <CardI t="mo_quiet" b={['mo_quiet_note', 'mo_quiet_ask']} p="calc" />
         </View>
-        <View style={mo.bandWrap}>
-          <View style={mo.band}>
-            <SvgXml
-              xml={'<svg width="100%" height="12" viewBox="0 0 100 12" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#F4D27A"/><stop offset="0.55" stop-color="#BFE2D8"/><stop offset="1" stop-color="#5CACB0"/></linearGradient></defs><rect width="100" height="12" rx="6" fill="url(#mb)"/></svg>'}
-              width="100%" height={12}
-              style={{ position: 'absolute', left: 0, right: 0, top: 0 }}
-            />
-            <View style={[mo.bandDot, { left: dotPos(lo), backgroundColor: '#E0A800' }]} />
-            <View style={[mo.bandDot, { left: dotPos(med), backgroundColor: '#3F7A7E' }]} />
-          </View>
-
-          <View style={mo.bandLegend}>
-            <View style={mo.bandLegendLeft}>
-              <Text style={mo.bandLblTxt}>{t('mo_quietest')}</Text>
-              <Text style={mo.bandLblVal}>{rm(Math.max(0, lo))}</Text>
-            </View>
-            <View style={mo.bandLegendRight}>
-              <Text style={mo.bandLblTxt}>{t('mo_usual')}</Text>
-              <Text style={mo.bandLblVal}>{rm(med)}</Text>
-            </View>
-          </View>
+        <View style={{ marginTop: 26, marginBottom: 30, marginHorizontal: 8, height: 12 }}>
+          <SvgXml
+            xml={'<svg width="100%" height="12" viewBox="0 0 100 12" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#F4D27A"/><stop offset="0.55" stop-color="#BFE2D8"/><stop offset="1" stop-color="#5CACB0"/></linearGradient></defs><rect width="100" height="12" rx="6" fill="url(#mb)"/></svg>'}
+            width="100%" height={12}
+            style={{ position: 'absolute', left: 0, right: 0, top: 0 }}
+          />
+          {bandLbl(lo, 'mo_quietest', Math.max(0, lo), true)}
+          <View style={[mo.bandDot, { left: dotPos(lo), backgroundColor: '#E0A800' }]} />
+          <View style={[mo.bandDot, { left: dotPos(med), backgroundColor: '#3F7A7E' }]} />
+          {bandLbl(med, 'mo_usual', med, false)}
         </View>
-        <BodyS muted>{t('mo_quiet_note')}</BodyS>
-        <BodyS style={{ marginTop: 6 }}>{t('mo_quiet_ask')}</BodyS>
         <BtnLine label={t('money_coverage') + ' →'} style={{ fontSize: 13 }} onPress={() => go('coverage')} />
       </View>
     );
@@ -140,7 +133,7 @@ export function MoneyScreen() {
       <Pressable onPress={() => go('expenses')} style={mo.motile}>
         <View style={mo.motileIc}><Ico name="wrench" size={18} /></View>
         <BodyS muted style={{ fontSize: 12 }}>{t('money_workcosts')}</BodyS>
-        <Text style={mo.motileVal}>{rm(workCostTotal(S.data))}</Text>
+        <Text style={mo.motileVal}>{rm(S.data.workCostEntries.filter(e => monthKeyOf(e.d) === mk).reduce((a, e) => a + (+e.a || 0), 0))}</Text>
         <Text style={mo.motileEm}>{t('mo_permo')}</Text>
       </Pressable>
     </View>
@@ -153,7 +146,7 @@ export function MoneyScreen() {
   const pct = lim ? Math.min(100, Math.round(outSum / lim * 100)) : 0;
   const paceColor = pct >= 100 ? C.short : pct > Math.round(day / dim * 100) + 10 ? '#E0A800' : C.brand;
   const pace = (
-    <Pressable onPress={() => go('exlimits')} style={mo.card}>
+    <Pressable onPress={() => go('commit')} style={mo.card}>
       <View style={mo.rowBetween}>
         <Text style={mo.ttl3}>{t('mo_pace')}</Text>
         <Text style={{ color: C.ink }}>→</Text>
@@ -198,9 +191,14 @@ export function MoneyScreen() {
   return (
     <ScreenShell greet title={t('tab_money')}>
       <View style={mo.hero}>
+        <SvgXml
+          xml={'<svg width="100%" height="100%" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mh" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2F5D61"/><stop offset="1" stop-color="#1F3F42"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#mh)"/></svg>'}
+          width="100%" height="100%"
+          style={{ position: 'absolute', left: 0, top: 0 }}
+        />
         <View style={mo.rowBetween}>
           <Text style={[mo.ttl3, { color: '#fff' }]}>{t('mo_sofar', { m: monthName(mk % 12) })}</Text>
-          <CardI t="mo_sofar_t" b={['mo_fixed']} p="user" />
+          <CardI t="mo_sofar_t" b={['mo_fixed']} p="user" light />
         </View>
         <View style={{ flexDirection: 'row', marginTop: 10 }}>
           {([[t('mo_in'), inSum, '#fff'], [t('mo_out'), outSum, '#fff'], [t('mo_left'), inSum - outSum, '#FEC844']] as [string, number, string][]).map(([lbl, v, col], i) => (
@@ -249,42 +247,20 @@ const mo = StyleSheet.create({
     shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.06, shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
     elevation: 2,
   },
-  bandWrap: {
-    marginTop: 24,
-    marginBottom: 18,
-    marginHorizontal: 14,
-  },
-  band: {
-    position: 'relative',
-    height: 12,
-    borderRadius: 6,
-  },
   bandDot: {
     position: 'absolute',
-    top: -4,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    top: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     borderWidth: 3,
     borderColor: '#fff',
-    marginLeft: -9,
+    marginLeft: -8,
     shadowColor: 'rgba(60,81,82,1)',
     shadowOpacity: 0.3,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
-  },
-  bandLegend: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginTop: 12,
-  },
-  bandLegendLeft: {
-    alignItems: 'flex-start',
-  },
-  bandLegendRight: {
-    alignItems: 'flex-end',
   },
   bandLblTxt: {
     fontFamily: BODY_FONT,
@@ -334,34 +310,6 @@ const mo = StyleSheet.create({
   },
 });
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <Display cls="h-m" style={{ fontSize: 17, lineHeight: 23 }}>{children}</Display>;
-}
-
-// EN: US8.1/US8.2 use this compact metric block in Your Record for both
-// financial-summary numbers and kept-test summary numbers.
-// 中文：US8.1/US8.2 在“记录档案”中复用这个小型数字区块，用来展示财务摘要和留存测试摘要。
-function RecordMetric({ value, label }: { value: string; label: string }) {
-  return (
-    <View accessibilityLabel={`${value} ${label}`} style={{ flex: 1, minWidth: 0, gap: 2 }}>
-      <Display cls="h-l">{value}</Display>
-      <BodyS muted>{label}</BodyS>
-    </View>
-  );
-}
-
-// EN: US8.2.5 needs the kept-test status to say "this session" so the UI does
-// not imply account storage, cloud sync, or permanent saved history.
-// 中文：US8.2.5 要求留存状态说明“本次会话”，避免让用户以为它已保存到账户、云端或永久历史。
-function SessionStatus({ label }: { label: string }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-      <Text style={{ color: C.confirm, fontSize: 16, lineHeight: 18 }}>✓</Text>
-      <BodyS muted>{label}</BodyS>
-    </View>
-  );
-}
-
 /* v24 R18: what changed, newest first, over the last 72 hours — on a screen
    called Your record, this IS the record. */
 function WhatChanged() {
@@ -372,9 +320,9 @@ function WhatChanged() {
   const shown = all ? entries : entries.slice(0, SHOWN);
   return (
     <View style={{ gap: 8 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <SectionTitle>{t('lg_title')}</SectionTitle>
-        <Prov p="user" />
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Text style={mo.eyebrow}>{t('lg_title')}</Text>
+        <CardI t="lg_title" b={['lg_window']} p="user" />
       </View>
       <Card gap={6}>
         {entries.length ? (
@@ -412,15 +360,16 @@ function WhatChanged() {
               );
             })}
             {entries.length > SHOWN ? (
-              <Pressable onPress={() => setAll(o => !o)} style={{ minHeight: 36, justifyContent: 'center' }}>
-                <BodyS style={{ color: C.brand }}>{all ? t('lg_less') : t('lg_more', { n: entries.length - SHOWN })}</BodyS>
-              </Pressable>
+              <BtnLine
+                label={all ? t('lg_less') : t('lg_more', { n: entries.length - SHOWN })}
+                style={{ fontSize: 14 }}
+                onPress={() => setAll(o => !o)}
+              />
             ) : null}
           </>
         ) : (
           <BodyS muted>{t('lg_none')}</BodyS>
         )}
-        <BodyS muted style={{ fontSize: 10.5 }}>{t('lg_window')}</BodyS>
       </Card>
     </View>
   );
@@ -437,71 +386,38 @@ export function RecordScreen() {
   // 中文：US8.1 把已记录月份、记录条数和最近记录日期交给 recordSummary()，避免页面重复计算规则。
   const summary = recordSummary(S.data);
   const n = summary.recordedMonthCount;
-  const last = summary.latestEntryDate;
-
-  // EN: The latest-entry label formats the actual financial business date for
-  // the selected language; it is not based on created_at or updated_at.
-  // 中文：最近记录标签格式化真实财务业务日期，并按当前语言显示；它不使用 created_at 或 updated_at。
-  const lastLbl = last ? `${+last.slice(8, 10)} ${monthName(+last.slice(5, 7) - 1)} ${last.slice(0, 4)}` : '';
+  const e = S.data.income.length;
+  const last = e ? S.data.income[e - 1].d : '';
+  const lastLbl = last ? `${+last.slice(8, 10)} ${monthName(+last.slice(5, 7) - 1)}` : '';
   return (
     <ScreenShell back title={t('money_record')}>
-      <Card gap={12}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <SectionTitle>{t('rc_summary')}</SectionTitle>
-          <Prov p="user" />
+      {/* v24 R8f: the screen is the count and the list; guest keeping and why more
+         weeks help live behind the (i) on the figure. */}
+      <View style={{ gap: 4 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Display cls="h-l">{t('rc_months', { n })}</Display>
+          <CardI t="money_record" b={[S.guest ? 'rc_live_guest' : 'rc_live_acct', 'rc_keep_line']} p="user" />
         </View>
-        {/* EN: AC8.1.1/AC8.1.2 show the month count and individual-entry count together. */}
-        {/* 中文：AC8.1.1/AC8.1.2 把月份数和单笔记录数并排展示。 */}
-        <View style={{ flexDirection: 'row', gap: 18 }}>
-          <RecordMetric value={String(n)} label={t(n === 1 ? 'rc_month_metric_one' : 'rc_month_metric')} />
-          <RecordMetric value={String(summary.entryCount)} label={t('rc_entry_metric')} />
-        </View>
-        <Divider />
-        <View style={{ gap: 2 }}>
-          <BodyS muted>{t('rc_latest_label')}</BodyS>
-          {/* EN: AC8.1.3 has an explicit empty state so no fake latest date is rendered. */}
-          {/* 中文：AC8.1.3 在没有记录时显示空状态文案，不渲染伪造的最近日期。 */}
-          {lastLbl ? <Display cls="h-m">{lastLbl}</Display> : <BodyS>{t('rc_latest_empty')}</BodyS>}
-        </View>
-      </Card>
-
-      <WhatChanged />
-      <View style={{ gap: 8 }}>
-        <SectionTitle>{t('rc_tests')}</SectionTitle>
-        {/* EN: AC8.2.3 displays kept tests from S.keptTests, the current frontend session state. */}
-        {/* 中文：AC8.2.3 从当前前端会话状态 S.keptTests 中展示留存测试。 */}
-        {S.keptTests.length ? S.keptTests.map((k, i) => (
-          <Card key={i} gap={12}>
-            <View style={{ gap: 2 }}>
-              <Fig value={t('rc_pay_month', { p: rm(k.pay) })} p="calc" cls="h-m" />
-            </View>
-            <View style={{ flexDirection: 'row', gap: 14 }}>
-              <RecordMetric value={t('rc_short_value', { s: k.s, n: k.n })} label={t('rc_short_label')} />
-              <RecordMetric value={rm(k.g)} label={t('gap_lbl')} />
-            </View>
-            <SessionStatus label={t('rc_test_session')} />
-          </Card>
-        )) : (
-          <Card gap={10}>
-            <View style={{ gap: 3 }}>
-              {/* EN: AC8.2.4 handles the no-kept-test state and links the user back to Test. */}
-              {/* 中文：AC8.2.4 处理没有留存测试的状态，并引导用户回到测试页。 */}
-              <Display cls="h-m" style={{ fontSize: 17, lineHeight: 23 }}>{t('rc_none_title')}</Display>
-              <BodyS muted>{t('rc_none_body')}</BodyS>
-            </View>
-            <BtnQuiet onPress={() => go('house')} style={{ backgroundColor: C.paper }}>
-              <IcLab name="book"><P>{t('rc_test_action')}</P></IcLab>
-            </BtnQuiet>
-          </Card>
-        )}
+        <BodyS muted>{t('rc_entries', { e, d: lastLbl })}</BodyS>
       </View>
 
-      <Card gap={8} style={{ backgroundColor: C.paper }}>
-        <SectionTitle>{t('rc_about')}</SectionTitle>
-        {/* EN: AC8.1.5/AC8.2.5 explain current guest-session scope only. */}
-        {/* 中文：AC8.1.5/AC8.2.5 只说明当前访客会话范围，不暗示保存到 RuMampu 账号。 */}
-        <BodyS muted>{t('rc_live')}</BodyS>
-      </Card>
+      <WhatChanged />
+
+      <View style={{ gap: 8 }}>
+        <Text style={mo.eyebrow}>{t('rc_tests')}</Text>
+        <Card gap={10}>
+          {S.keptTests.length ? S.keptTests.map((k, i) => (
+            <KV key={i} k={`${rm(k.pay)} · ${t('cp_short', { s: k.s, n: k.n })}`}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                <BodyS muted>{t('gap_lbl')}</BodyS>
+                <Fig value={rm(k.g)} p="calc" cls="body-s" />
+              </View>
+            </KV>
+          )) : (
+            <BodyS muted>{t('rc_none')}</BodyS>
+          )}
+        </Card>
+      </View>
     </ScreenShell>
   );
 }
@@ -820,17 +736,7 @@ export function IncomeScreen() {
     }
   };
 
-  /* WHEN: keep the most useful day shortcuts on one line and reveal more on wider screens. */
   const now = new Date();
-  const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
-  const per = d.per || 'day';
-  const currentMonthKey = iso(now).slice(0, 7);
-  const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-  const previousMonthDraftDate = iso(new Date(
-    previousMonthEnd.getFullYear(),
-    previousMonthEnd.getMonth(),
-    15,
-  ));
   const mk = now.getFullYear() * 12 + now.getMonth();
   const sofar = S.data.income
     .filter(e => (+e.d.slice(0, 4)) * 12 + (+e.d.slice(5, 7) - 1) === mk)
@@ -838,54 +744,19 @@ export function IncomeScreen() {
 
   const typeBody = (
     <>
-      <InHero tint="in" pillLabel={t('io_in')} question={t('inc_q_' + per)} decimal
+      {/* v24 R7 item 3: one amount and one date — the per day/week/month switch is gone. */}
+      <InHero tint="in" pillLabel={t('io_in')} question={t('r7_inc_q')} decimal
         value={d.a}
         onChangeText={v => up(s => { s.incomeDraft.a = v; s.incomeDraft.flag = null; })} />
       <InSec>
         <InLbl>{t('inc_q_when')}</InLbl>
-        <PerSeg per={per} labels={p => t('perx_' + p)} tint="in"
-          onPer={p => up(s => {
-            s.incomeDraft.per = p;
-            s.incomeDraft.flag = null;
-            // US1.2 represents completed historical months. Do not leave the
-            // v22 month picker on the current month, which the API must reject.
-            if (p === 'month' && s.incomeDraft.d.slice(0, 7) >= currentMonthKey) {
-              s.incomeDraft.d = previousMonthDraftDate;
-            }
-          })} />
-        <BodyS muted style={{ marginTop: 10, marginBottom: 6 }}>
-          {per === 'month' ? t('inc_monthof') : per === 'week' ? `${t('inc_weekend')} · ${t('inc_weekany')}` : t('inc_date')}
-        </BodyS>
-        {per === 'day' ? (
-          <DayShortcutPicker
-            value={d.d}
-            monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
-            todayLabel={t('inc_today')}
-            yesterdayLabel={t('inc_yday')}
-            pickLabel={t('inc_pick')}
-            maximumDate={new Date()}
-            onChange={value => up(s => { s.incomeDraft.d = value; s.incomeDraft.flag = null; })}
-          />
-        ) : null}
-        {per === 'week' ? (
-          <DatePickerField
-            value={d.d}
-            mode="date"
-            monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
-            maximumDate={new Date()}
-            onChange={v => up(s => { s.incomeDraft.d = v; s.incomeDraft.flag = null; })}
-          />
-        ) : null}
-        {per === 'month' ? (
-          <DatePickerField
-            value={d.d.slice(0, 7)}
-            mode="month"
-            monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
-            // Historical monthly totals must be earlier than the current month.
-            maximumDate={previousMonthEnd}
-            onChange={v => up(s => { s.incomeDraft.d = v + '-15'; s.incomeDraft.flag = null; })}
-          />
-        ) : null}
+        <DatePickerField
+          value={d.d}
+          mode="date"
+          monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
+          maximumDate={new Date()}
+          onChange={v => up(s => { s.incomeDraft.d = v; s.incomeDraft.flag = null; })}
+        />
       </InSec>
       <InSec>
         <InLbl>{t('inc_q_src')}</InLbl>
@@ -918,21 +789,22 @@ export function IncomeScreen() {
             {t('inc_sofar', { m: monthName(now.getMonth()), v: rm(sofar) })}
           </BodyS>
         ) : null}
+        {/* v24 R7 item 3: bulk entry for a whole past month stays, as a quiet link. */}
+        <View style={{ alignItems: 'center', marginTop: 8 }}>
+          <BtnLine label={t('inc_past')} style={{ fontSize: 13.5 }}
+            onPress={() => up(s => { s.sheet = 'pastmonth'; })} />
+        </View>
       </InSec>
     </>
   );
 
-  // Recent means recently added, not the latest earning date. This keeps a newly
-  // imported CSV visible even when its dates are historical.
+  /* v24: the recent list shows one month at a time (month filter), newest date first. */
+  const impk = pickMonth(S.incMonth, [S.data.income]);
   const recent = [...S.data.income]
     .map((e, i) => ({ e, i }))
-    .sort((left, right) => {
-      const createdOrder = (right.e.createdAt || '').localeCompare(left.e.createdAt || '');
-      if (createdOrder) return createdOrder;
-      const idOrder = Number(right.e.id || 0) - Number(left.e.id || 0);
-      return idOrder || right.i - left.i;
-    })
-    .slice(0, 6);
+    .filter(({ e }) => impk.key == null || (+e.d.slice(0, 4)) * 12 + (+e.d.slice(5, 7) - 1) === impk.key)
+    .sort((a, b) => (a.e.d < b.e.d ? 1 : -1))
+    .slice(0, 8);
 
   return (
     <ScreenShell back title={t('money_income')}>
@@ -950,6 +822,8 @@ export function IncomeScreen() {
       {/* EN: Saved income is user-provided data, so provenance is shown once for the section instead of on every row. */}
       {/* 中文：已保存收入都属于用户提供的数据，因此来源标识只在区块顶部显示一次，不在每行重复。 */}
       {S.data.income.length ? (
+        <>
+        <MonthBtn act="incmonth" monthKey={impk.key} />
         <Card style={{ paddingVertical: 4, paddingHorizontal: 16 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 40 }}>
             <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink }}>{t('inc_recent')}</Text>
@@ -979,6 +853,7 @@ export function IncomeScreen() {
             );
           })}
         </Card>
+        </>
       ) : null}
     </ScreenShell>
   );

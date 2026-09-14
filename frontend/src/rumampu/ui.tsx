@@ -12,11 +12,36 @@ import { ASSISTANT_UI_ENABLED } from './assistant';
 
 export const PROV_G: Record<string, string> = { user: '●', official: '○', calc: '▸', assume: '▩' };
 
+/* v24 monthBtn (.fhsel): the month-filter field above a recent list. */
+export function MonthBtn({ act, monthKey }: { act: 'incmonth' | 'exmonth'; monthKey: number | null }) {
+  const { t, up, monthName } = useApp();
+  return (
+    <Pressable onPress={() => up(s => { s.sheet = act; })}
+      style={{
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+        width: '100%', minHeight: 52, paddingVertical: 7, paddingHorizontal: 14,
+        borderRadius: 12, backgroundColor: C.card,
+      }}>
+      <View style={{ flexShrink: 1 }}>
+        <Text style={{ fontFamily: SEMI_FONT, fontSize: 10.5, letterSpacing: 0.63, textTransform: 'uppercase', color: C.ink64, marginBottom: 1 }}>
+          {t('mf_cap')}
+        </Text>
+        <Text style={{ fontFamily: SEMI_FONT, fontSize: 14.5, color: C.ink }}>
+          {monthKey == null ? t('mf_none') : `${monthName(monthKey % 12)} ${Math.floor(monthKey / 12)}`}
+        </Text>
+      </View>
+      <Text style={{ color: C.ink40 }}>{'▾'}</Text>
+    </Pressable>
+  );
+}
+
 /* Header shortforms per language — Bahasa Melayu reads BM in Malaysia. */
 /* v24 cardI — a row that needs explaining carries an (i), not a paragraph.
    Tapping it opens the info sheet with the words and the tag explained. */
-export function CardI({ t: titleKey, b, p, x }: {
+export function CardI({ t: titleKey, b, p, x, light }: {
   t: string; b: string[]; p?: 'user' | 'official' | 'calc' | 'assume'; x?: string[];
+  /* v24 `.mohero .vinfo`: white ring on dark hero cards. */
+  light?: boolean;
 }) {
   const { t, up } = useApp();
   return (
@@ -25,10 +50,11 @@ export function CardI({ t: titleKey, b, p, x }: {
       accessibilityLabel={t('ci_more')}
       hitSlop={8}
       style={{
-        width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: C.ink40,
+        width: 20, height: 20, borderRadius: 10, borderWidth: 1.5,
+        borderColor: light ? 'rgba(255,255,255,0.55)' : C.ink40,
         alignItems: 'center', justifyContent: 'center', marginLeft: 6,
       }}>
-      <Text style={{ fontFamily: DISP_FONT, fontSize: 11, color: C.ink64 }}>i</Text>
+      <Text style={{ fontFamily: DISP_FONT, fontSize: 11, color: light ? '#fff' : C.ink64 }}>i</Text>
     </Pressable>
   );
 }

@@ -230,6 +230,9 @@ export interface AppState {
   scan: ScanState;
   exCatOpen: boolean;
   exMonthOpen: number | null;
+  /* v24 month filter for the recent lists: null = latest recorded month. */
+  incMonth: number | null;
+  exMonth: number | null;
   shock: number;
   bought: boolean;
   incomeDraft: { a: string; d: string; s: string; flag: 'invalid' | 'neg' | 'outlier' | null; per: EntryPer };
@@ -289,7 +292,7 @@ function initialState(): AppState {
     docsChecked: [], keptTests: [],
     expDraft: { a: '', c: 'meals', d: today, per: 'day' },
     scan: { stage: 'pick' },
-    exCatOpen: false, exMonthOpen: null,
+    exCatOpen: false, exMonthOpen: null, incMonth: null, exMonth: null,
     shock: 0,
     bought: false,
     incomeDraft: { a: '', d: today, s: 'ehail', flag: null, per: 'day' },

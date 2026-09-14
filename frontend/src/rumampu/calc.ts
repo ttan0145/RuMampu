@@ -184,3 +184,16 @@ export function expCatTotals(data: AppData, key: number): Map<string, number> {
   }
   return totals;
 }
+
+/* v24 month filter: every month with an entry, newest first. */
+export function monthKeysOf(arrs: { d: string }[][]): number[] {
+  const set = new Set<number>();
+  for (const a of arrs) for (const e of a) set.add((+e.d.slice(0, 4)) * 12 + (+e.d.slice(5, 7) - 1));
+  return [...set].sort((a, b) => b - a);
+}
+
+export function pickMonth(sel: number | null, arrs: { d: string }[][]): { key: number | null; keys: number[] } {
+  const ks = monthKeysOf(arrs);
+  if (!ks.length) return { key: null, keys: ks };
+  return { key: (sel != null && ks.includes(sel)) ? sel : ks[0], keys: ks };
+}

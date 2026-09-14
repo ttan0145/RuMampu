@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
 import { TAB_OF, Tab, useApp } from './state';
 import { STRINGS, Lang } from './strings';
-import { monthsAgg, rm } from './calc';
+import { monthKeysOf, monthsAgg, pickMonth, rm } from './calc';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from './theme';
 import { Btn, BtnLine, BodyS, EditList, NumInput, PROV_G } from './ui';
 import { Ico, Logo } from './svgs';
@@ -413,6 +413,47 @@ export function SheetHost() {
             onPress={() => up(s => { s.lang = l; s.sheet = null; })} />
         ))}
       </SheetFrame>
+    );
+  }
+
+  /* v24 month filter sheet: which month the recent list shows. */
+  if (sheet === 'incmonth' || sheet === 'exmonth') {
+    const inc = sheet === 'incmonth';
+    const arrs = inc ? [S.data.income] : [S.data.expenses, S.data.workCostEntries];
+    const ks = monthKeysOf(arrs);
+    const cur = pickMonth(inc ? S.incMonth : S.exMonth, arrs).key;
+    return (
+      <Modal transparent animationType="none" visible onRequestClose={close}>
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={close}>
+            <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
+          </Pressable>
+          <View style={{ alignItems: 'center', marginBottom: -30, zIndex: 2 }}>
+            <Ruma w={96} pose="count" float={false} />
+          </View>
+          <View style={[
+            sheetSt.sheet, { paddingBottom: 26, paddingTop: 34 },
+            Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null,
+          ]}>
+            <SheetH3>{t('mf_title')}</SheetH3>
+            {ks.map((k, i) => (
+              <Pressable key={k}
+                onPress={() => up(s => { if (inc) s.incMonth = k; else s.exMonth = k; s.sheet = null; })}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                  minHeight: 46, paddingHorizontal: 4,
+                  borderBottomWidth: i < ks.length - 1 ? 1 : 0, borderBottomColor: C.ink14,
+                }}>
+                <Text style={{
+                  fontFamily: k === cur ? SEMI_FONT : BODY_FONT, fontSize: 15,
+                  color: k === cur ? C.brand : C.ink,
+                }}>{`${monthName(k % 12)} ${Math.floor(k / 12)}`}</Text>
+                {k === cur ? <Text style={{ fontSize: 15, color: C.brand }}>✓</Text> : null}
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </Modal>
     );
   }
 
