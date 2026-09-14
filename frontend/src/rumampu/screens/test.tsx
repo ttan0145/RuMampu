@@ -289,7 +289,7 @@ function HouseCostsRow() {
     const yearsAll = Object.values(stateData.types.all ?? {})
       .map(([, median]) => median / (stateData.income! * 12));
     if (yearsAll.length) {
-      range = t('hh_costs_range', {
+      range = t('hc_span', {
         a: Math.min(...yearsAll).toFixed(1),
         b: Math.max(...yearsAll).toFixed(1),
         s: stateData.name,
@@ -302,8 +302,8 @@ function HouseCostsRow() {
         <SvgXml xml={`<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#3F7A7E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 20h16"/><path d="M6 20v-7"/><path d="M11 20V9"/><path d="M16 20V5"/></svg>`} width={20} height={20} />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ fontFamily: DISP_FONT, fontSize: 14.5, lineHeight: 18, color: C.ink }}>{t('hh_costs')}</Text>
-        <Text style={{ fontFamily: BODY_FONT, fontSize: 12, lineHeight: 15, color: C.ink64, marginTop: 2 }}>{t('hh_costs_sub')}</Text>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 14.5, lineHeight: 18, color: C.ink }}>{t('hh_cost')}</Text>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 12, lineHeight: 15, color: C.ink64, marginTop: 2 }}>{t('hh_cost_d')}</Text>
         {range ? (
           <View style={{ marginTop: 6, gap: 4 }}>
             <View style={{ height: 6, borderRadius: 3, backgroundColor: C.ink14, overflow: 'hidden' }}>

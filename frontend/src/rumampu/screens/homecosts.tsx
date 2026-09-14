@@ -14,12 +14,13 @@ import { ScreenShell } from './shell';
 
 const TYPE_KEYS: HouseCostType[] = ['all', 'terr', 'condo', 'flat', 'lch', 'lcf'];
 
-/* Years of state income → bar colour: the calmer the shorter. */
-function yearsColor(y: number): string {
-  if (y <= 3) return '#3EA34D';
-  if (y <= 4) return '#F4C64D';
-  return C.out;
+/* v24: Demographia band for a median multiple — the colours belong to the
+   scale, never to a household. */
+export function fhBand(y: number): number {
+  return y <= 3 ? 0 : y <= 4 ? 1 : y <= 5 ? 2 : 3;
 }
+export const FH_BANDC = [C.confirm, C.caution, C.short, C.ink];
+export const FH_BAND_KEYS = [['fh_r1', 'fh_b1'], ['fh_r2', 'fh_b2'], ['fh_r3', 'fh_b3'], ['fh_r4', 'fh_b4']] as const;
 
 function PickSheet({ title, options, value, onPick, onClose }: {
   title: string;
@@ -62,7 +63,7 @@ function PickSheet({ title, options, value, onPick, onClose }: {
 
 export function HomeCostsScreen() {
   const { S, t, up, loadHouseCosts } = useApp();
-  const [pick, setPick] = React.useState<'state' | 'type' | 'from' | null>(null);
+  const [pick, setPick] = React.useState<'state' | 'type' | 'info' | null>(null);
 
   React.useEffect(() => { void loadHouseCosts(); }, [loadHouseCosts]);
 
@@ -80,33 +81,31 @@ export function HomeCostsScreen() {
       }))
       .sort((a, b) => (a.years ?? Number.MAX_VALUE) - (b.years ?? Number.MAX_VALUE));
   }, [stateData, S.hcType, income]);
+  const maxYears = Math.max(1e-9, ...rows.map(r => r.years ?? 0));
 
   const stateOptions = Object.entries(data?.states ?? {})
     .map(([key, s]) => ({ key, label: s.name }))
     .sort((a, b) => a.label.localeCompare(b.label));
-  const typeOptions = TYPE_KEYS.map(k => ({ key: k, label: t('hc_t_' + k) }));
+  const typeOptions = TYPE_KEYS.map(k => ({ key: k, label: t('fh_t_' + k) }));
 
   return (
-    <ScreenShell back title={t('hc_title')}>
+    <ScreenShell back title={t('fh_title')}>
       <Pressable onPress={() => setPick('state')} style={st.pickField}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={st.pickLbl}>{t('hc_state')}</Text>
+          <Text style={st.pickLbl}>{t('fh_state_c')}</Text>
           <Text style={st.pickVal}>{stateData?.name ?? '—'}</Text>
         </View>
         <Text style={{ color: C.ink40 }}>▾</Text>
       </Pressable>
       <Pressable onPress={() => setPick('type')} style={st.pickField}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={st.pickLbl}>{t('hc_type')}</Text>
-          <Text style={st.pickVal}>{t('hc_t_' + S.hcType)}</Text>
+          <Text style={st.pickLbl}>{t('fh_type')}</Text>
+          <Text style={st.pickVal}>{t('fh_t_' + S.hcType)}</Text>
         </View>
         <Text style={{ color: C.ink40 }}>▾</Text>
       </Pressable>
       <Text style={{ fontFamily: BODY_FONT, fontSize: 13.5, lineHeight: 18, color: C.ink }}>
-        {t('hc_intro', { s: stateData?.name ?? '—' })}{' '}
-        <Text onPress={() => setPick('from')} style={{ color: C.brand, textDecorationLine: 'underline' }}>
-          {t('hc_from')}
-        </Text>
+        {t('fh_intro', { s: stateData?.name ?? '—' })}
       </Text>
       {S.houseCostsSync === 'loading' || S.houseCostsSync === 'idle' ? (
         <View style={{ alignItems: 'center', paddingVertical: 30, gap: 10 }}>
@@ -120,43 +119,95 @@ export function HomeCostsScreen() {
           {rows.map((r, i) => (
             <View key={r.district} style={[st.row, i > 0 && { borderTopWidth: 1, borderTopColor: C.ink14 }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                <Text style={st.rowName} numberOfLines={1}>{r.district}</Text>
+                <Text style={st.rowName} numberOfLines={1}>
+                  {r.district}
+                  {r.sales < 10 ? <Text style={{ fontFamily: BODY_FONT, fontSize: 10.5, color: C.ink64 }}>  {t('fh_few')}</Text> : null}
+                </Text>
                 <Text style={st.rowYears}>
-                  {r.years == null ? '—' : t('hc_years', { y: r.years.toFixed(1) })}
+                  {r.years == null ? '—' : t('fh_yrs', { n: r.years.toFixed(1) })}
                 </Text>
               </View>
               <View style={st.bar}>
                 {r.years != null ? (
                   <View style={{
-                    width: `${Math.max(4, Math.min(100, Math.round(r.years / 5 * 100)))}%`,
-                    height: '100%', borderRadius: 4, backgroundColor: yearsColor(r.years),
+                    width: `${Math.max(4, Math.min(100, Math.round(r.years / maxYears * 100)))}%`,
+                    height: '100%', borderRadius: 4, backgroundColor: FH_BANDC[fhBand(r.years)],
                   }} />
                 ) : null}
               </View>
               <Text style={st.rowSub}>
-                {t('hc_sub', { p: rm(r.median), n: r.sales.toLocaleString('en-MY'), u: r.under.toLocaleString('en-MY'), t: threshold })}
+                {rm(r.median)} {'\u00b7'} {t('fh_sold', { n: r.sales.toLocaleString('en-MY') })} {'\u00b7'} {t('fh_u300', { n: r.under.toLocaleString('en-MY') })}
               </Text>
             </View>
           ))}
-          {!rows.length ? <BodyS muted style={{ padding: 14 }}>—</BodyS> : null}
+          {!rows.length ? <BodyS muted style={{ padding: 14 }}>{t('fh_none')}</BodyS> : null}
         </View>
       )}
+      <Pressable onPress={() => setPick('info')} style={st.infoBtn}>
+        <View style={st.infoIc}><Text style={{ fontFamily: DISP_FONT, fontSize: 11, color: C.ink64 }}>i</Text></View>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink64, flexShrink: 1 }}>{t('fh_i')}</Text>
+      </Pressable>
       {pick === 'state' ? (
-        <PickSheet title={t('hc_state')} options={stateOptions} value={S.hcState}
+        <PickSheet title={t('fh_state_c')} options={stateOptions} value={S.hcState}
           onPick={key => up(s => { s.hcState = key; })} onClose={() => setPick(null)} />
       ) : null}
       {pick === 'type' ? (
-        <PickSheet title={t('hc_type')} options={typeOptions} value={S.hcType}
+        <PickSheet title={t('fh_type')} options={typeOptions} value={S.hcType}
           onPick={key => up(s => { s.hcType = key as HouseCostType; })} onClose={() => setPick(null)} />
       ) : null}
-      {pick === 'from' && data ? (
-        <PickSheet title={t('hc_from')} value="" onPick={() => undefined} onClose={() => setPick(null)}
-          options={[{
-            key: 'body',
-            label: t('hc_from_b', { w: `${data.window.from} \u2013 ${data.window.to}`, y: String(data.income_year) }),
-          }]} />
+      {pick === 'info' ? (
+        <InfoSheet t={t} stateName={stateData?.name ?? '—'} income={income ?? 0} onClose={() => setPick(null)} />
       ) : null}
     </ScreenShell>
+  );
+}
+
+/* v24 fhInfoBody: what the figures are, what they are not, the Demographia
+   scale with its colours, and every source. */
+function InfoSheet({ t, stateName, income, onClose }: {
+  t: (k: string, v?: Record<string, string | number>) => string;
+  stateName: string; income: number; onClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal transparent animationType="none" visible onRequestClose={onClose}>
+      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
+        </Pressable>
+        <View style={[
+          st.sheet, { paddingBottom: 20 + insets.bottom, maxHeight: '88%' },
+          Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null,
+        ]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 19, color: C.ink, flexShrink: 1 }}>{t('fh_i')}</Text>
+            <Pressable onPress={onClose} hitSlop={10}><Text style={{ fontSize: 18, color: C.ink }}>✕</Text></Pressable>
+          </View>
+          <ScrollView style={{ marginTop: 8 }} contentContainerStyle={{ gap: 8 }}>
+            <BodyS>{t('fh_not')}</BodyS>
+            <BodyS>{t('fh_earn', { s: stateName, m: income.toLocaleString('en-MY') })}</BodyS>
+            <BodyS>{t('fh_basis')}</BodyS>
+            {['fh_i1', 'fh_i7', 'fh_i2', 'fh_i5', 'fh_i6'].map(k => <BodyS key={k}>{t(k)}</BodyS>)}
+            <BodyS muted>{t('fh_i4')}</BodyS>
+            <View style={st.scaleCard}>
+              {FH_BAND_KEYS.map(([rk, bk], i) => (
+                <View key={rk} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 28 }}>
+                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: FH_BANDC[i] }} />
+                  <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink, width: 92 }}>{t(rk)}</Text>
+                  <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink, flexShrink: 1 }}>{t(bk)}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.99, textTransform: 'uppercase', color: C.ink64 }}>{t('fh_src')}</Text>
+            {['fh_src1', 'fh_src2', 'fh_src3'].map(k => (
+              <BodyS key={k} muted style={{ fontSize: 11.5 }}>{t(k)}</BodyS>
+            ))}
+            <BodyS muted style={{ fontSize: 11.5 }}>{t('fh_src4', { s: stateName })}</BodyS>
+            <BodyS muted style={{ fontSize: 11.5 }}>{t('fh_opened')}</BodyS>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -185,5 +236,14 @@ const st = StyleSheet.create({
   opt: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     minHeight: 52, paddingHorizontal: 12, borderRadius: 12,
+  },
+  infoBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 40 },
+  infoIc: {
+    width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: C.ink40,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  scaleCard: {
+    backgroundColor: '#F3F7F6', borderWidth: 1.5, borderColor: '#E3EAE8', borderRadius: 14,
+    paddingHorizontal: 12, paddingVertical: 8, gap: 2,
   },
 });
