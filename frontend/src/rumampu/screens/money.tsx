@@ -545,6 +545,16 @@ function IncomeScanBody() {
     }, 1500);
   };
 
+  /* Quick-menu shortcut: Add → Scan a receipt → Income goes straight to
+     the camera instead of stopping at the picker step. */
+  const scanAuto = S.scanAuto;
+  React.useEffect(() => {
+    if (!scanAuto || S.incMode !== 'scan' || sc.stage !== 'pick') return;
+    up(s => { s.scanAuto = false; });
+    void realScan('camera');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanAuto]);
+
   const realScan = async (source: 'camera' | 'library') => {
     try {
       if (source === 'camera' && Platform.OS !== 'web') {

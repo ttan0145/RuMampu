@@ -765,6 +765,16 @@ export function ExpScanScreen() {
     return () => { active = false; };
   }, [S.route, st, up]);
 
+  /* Quick-menu shortcut: Add → Scan a receipt → Expense goes straight to
+     the camera instead of stopping at the picker step. */
+  const scanAuto = S.scanAuto;
+  React.useEffect(() => {
+    if (S.route !== 'expscan' || !scanAuto) return;
+    up(s => { s.scanAuto = false; });
+    void pickPhoto('camera');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanAuto]);
+
   const pickPhoto = async (source: 'camera' | 'library') => {
     setError(null);
     try {

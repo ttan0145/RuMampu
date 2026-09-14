@@ -145,8 +145,8 @@ function QuickMenu() {
   const spGo = (kind: 'in' | 'out') => {
     up(s => {
       s.sheet = null;
-      if (kind === 'in') { s.incMode = 'scan'; s.incScan = { stage: 'pick', rows: [] }; }
-      else { s.exMode = 'scan'; s.scan = { stage: 'pick' }; }
+      if (kind === 'in') { s.incMode = 'scan'; s.incScan = { stage: 'pick', rows: [] }; s.scanAuto = true; }
+      else { s.exMode = 'scan'; s.scan = { stage: 'pick' }; s.scanAuto = true; }
     });
     /* The expense scan lives on its own route; landing on the expenses screen
        with exMode 'scan' used to show the manual body under a Scan tab. */

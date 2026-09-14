@@ -192,6 +192,8 @@ export interface AppState {
   ufReno: boolean;
   /* v24: name shown while the Result screen displays a saved test. */
   viewTestName: string | null;
+  /* Quick-menu shortcut: open the camera as soon as the scan screen mounts. */
+  scanAuto: boolean;
   /* LeanKit 10.10.3: leftovers from finished months, moved into the pot only
      by the user's own control. Keys are YYYY-MM of months already added. */
   potMoved: number;
@@ -270,7 +272,7 @@ function initialState(): AppState {
     plan: null, village: null, buffer: null, vHelp: false,
     moView: 'tiles', houseTab: 'test',
     houseCosts: null, houseCostsSync: 'idle', hcState: 'sgr', hcType: 'all', firstHome: false,
-    potMoved: 0, potMovedMonths: [], ufTest: null, ufReno: false, viewTestName: null, log: [],
+    potMoved: 0, potMovedMonths: [], ufTest: null, ufReno: false, viewTestName: null, scanAuto: false, log: [],
     tryPay: null, tryCust: false, depMode: null,
     incPick: false, incMode: 'type', incScan: { stage: 'pick', rows: [] }, incCsv: { stage: 'pick' }, incEdit: null,
     exMode: 'type', exCsv: { stage: 'pick' }, exEdit: null,
