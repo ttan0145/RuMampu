@@ -1,5 +1,5 @@
 import { expect, Page } from '@playwright/test';
-import { e2eGet, e2ePost, test } from './support/fixtures';
+import { e2eGet, e2ePatch, e2ePost, test } from './support/fixtures';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { captureEvidence } from './support/app';
@@ -73,20 +73,25 @@ async function completeVisibleOnboarding(page: Page): Promise<void> {
 // primary keys. expect(...).toBeTruthy() fails early if fixture data is missing.
 // 中文：US8.1 的测试准备步骤从后端读取种子数据 ID，而不是写死数据库主键。
 // expect(...).toBeTruthy() 会在 fixture 数据缺失时尽早让测试失败。
-async function defaultIds(page: Page): Promise<{ sourceId: number; categoryId: number; workCostCategoryId: number }> {
-  const record = await e2eGet(page, `${API}/income/record/`);
+function authHeaders(token?: string): Record<string, string> | undefined {
+  return token ? { Authorization: `Token ${token}` } : undefined;
+}
+
+async function defaultIds(page: Page, token?: string): Promise<{ sourceId: number; categoryId: number; workCostCategoryId: number }> {
+  const headers = authHeaders(token);
+  const record = await e2eGet(page, `${API}/income/record/`, { headers });
   expect(record.ok()).toBeTruthy();
   const payload = await record.json();
   const source = payload.sources.find((item: { slug: string }) => item.slug === 'ehail');
   expect(source).toBeTruthy();
 
-  const categories = await e2eGet(page, `${API}/expense-categories/`);
+  const categories = await e2eGet(page, `${API}/expense-categories/`, { headers });
   expect(categories.ok()).toBeTruthy();
   const categoryPayload = await categories.json();
   const category = categoryPayload.find((item: { slug: string }) => item.slug === 'meals');
   expect(category).toBeTruthy();
 
-  const workCosts = await e2eGet(page, `${API}/work-costs/`);
+  const workCosts = await e2eGet(page, `${API}/work-costs/`, { headers });
   expect(workCosts.ok()).toBeTruthy();
   const workCostPayload = await workCosts.json();
   const workCostCategory = workCostPayload.find((item: { slug: string }) => item.slug === 'petrol');
@@ -98,8 +103,9 @@ async function defaultIds(page: Page): Promise<{ sourceId: number; categoryId: n
 // EN: US8.1 setup creates income through the public API so Your Record reads the
 // same saved-data path a real current guest session would use.
 // 中文：US8.1 通过公开 API 创建收入记录，让“记录档案”读取真实当前访客会话会使用的数据路径。
-async function addIncome(page: Page, sourceId: number, date: string, amount: string): Promise<void> {
+async function addIncome(page: Page, sourceId: number, date: string, amount: string, token?: string): Promise<void> {
   const response = await e2ePost(page, `${API}/income/entries/`, {
+    headers: authHeaders(token),
     data: { amount, date, source_id: sourceId, entry_method: 'manual', confirm_outlier: true },
   });
   expect(response.status()).toBe(201);
@@ -108,15 +114,17 @@ async function addIncome(page: Page, sourceId: number, date: string, amount: str
 // EN: Expense setup mirrors income setup so US8.1 can verify mixed income and
 // expense counting without testing the manual Expense screen flow.
 // 中文：支出准备方式与收入一致，让 US8.1 可以验证收入和支出的混合统计，而不测试手动支出页面流程。
-async function addExpense(page: Page, categoryId: number, date: string, amount: string): Promise<void> {
+async function addExpense(page: Page, categoryId: number, date: string, amount: string, token?: string): Promise<void> {
   const response = await e2ePost(page, `${API}/expenses/`, {
+    headers: authHeaders(token),
     data: { amount, date, category_id: categoryId, entry_method: 'manual' },
   });
   expect(response.status()).toBe(201);
 }
 
-async function addWorkCost(page: Page, categoryId: number, date: string, amount: string): Promise<void> {
+async function addWorkCost(page: Page, categoryId: number, date: string, amount: string, token?: string): Promise<void> {
   const response = await e2ePost(page, `${API}/work-costs/entries/`, {
+    headers: authHeaders(token),
     data: { amount, date, category_id: categoryId },
   });
   expect(response.status()).toBe(201);
@@ -138,11 +146,40 @@ async function clickThroughFirstAccountOnboarding(page: Page): Promise<void> {
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
 }
 
+function expectedLastMonthIso(): string {
+  const now = new Date();
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}-01`;
+}
+
+async function syncClientIdFromBrowser(page: Page): Promise<void> {
+  const clientId = await page.evaluate(() => window.localStorage.getItem('rumampu_client_id'));
+  expect(clientId).toBeTruthy();
+  (page as Page & { __rumampuE2EClientId?: string }).__rumampuE2EClientId = clientId || undefined;
+}
+
 async function seedHousingReadyIncome(page: Page): Promise<void> {
   const { sourceId } = await defaultIds(page);
   await addIncome(page, sourceId, '2026-01-10', '10000.00');
   await addIncome(page, sourceId, '2026-02-10', '10000.00');
   await addIncome(page, sourceId, '2026-03-10', '10000.00');
+}
+
+async function completedAccountForUi(page: Page): Promise<string> {
+  const token = await registerAccountForTest(
+    page,
+    `epic8-complete-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`,
+    'Passw0rd123',
+  );
+  const response = await e2ePatch(page, `${API}/auth/me/`, {
+    headers: { Authorization: `Token ${token}` },
+    data: { preferred_language: 'en', onboarding_completed: true },
+  });
+  expect(response.status()).toBe(200);
+  await page.addInitScript((authToken: string) => {
+    window.localStorage.setItem('rumampu_auth_token', authToken);
+  }, token);
+  return token;
 }
 
 async function registerAccountForTest(page: Page, email: string, password: string): Promise<string> {
@@ -200,6 +237,88 @@ async function loginExistingAccountFromGuest(page: Page, email: string, password
   await expect(page.getByText('Keep your guest record?', { exact: true })).toBeVisible();
 }
 
+test('US8.16 first-launch onboarding explains RuMampu and supports Back between steps', async ({ page }) => {
+  await page.goto('/');
+  const splash = page.getByLabel('RuMampu');
+  if (await splash.isVisible().catch(() => false)) await splash.click({ force: true });
+
+  const email = `epic8-onboarding-${Date.now()}@example.com`;
+  const password = 'Passw0rd123';
+  await page.getByText('Create an account', { exact: true }).click();
+  await page.getByPlaceholder('name@example.com').fill(email);
+  await page.getByPlaceholder('At least 8 characters').fill(password);
+  await page.getByPlaceholder('Type it again').fill(password);
+  await page.getByText('Create account', { exact: true }).last().click();
+
+  await expect(page.getByText('Which language feels like home?', { exact: true })).toBeVisible();
+  await page.getByLabel('Back').click();
+  await expect(page.getByText('Log in', { exact: true }).last()).toBeVisible();
+
+  await page.getByPlaceholder('name@example.com').fill(email);
+  await page.getByPlaceholder('Your password').fill(password);
+  await page.getByText('Log in', { exact: true }).last().click();
+  await expect(page.getByText('Which language feels like home?', { exact: true })).toBeVisible();
+  await page.getByText('Next', { exact: true }).last().click();
+
+  await expect(page.getByText('Hi, I’m Ruma!', { exact: true })).toBeVisible();
+  await expect(page.getByText('RuMampu blends rumah and mampu: can I afford a home?', { exact: true })).toBeVisible();
+  await expect(page.getByText('I test a home against your recorded months', { exact: true })).toBeVisible();
+  await expect(page.getByText('It is not a loan or home approval', { exact: true })).toBeVisible();
+  await page.getByLabel('Back').click();
+  await expect(page.getByText('Which language feels like home?', { exact: true })).toBeVisible();
+
+  await page.getByText('Next', { exact: true }).last().click();
+  await page.getByText('Nice to meet you →', { exact: true }).click();
+  await expect(page.getByText('Hi there!', { exact: true })).toBeVisible();
+  await page.getByLabel('Back').click();
+  await expect(page.getByText('Hi, I’m Ruma!', { exact: true })).toBeVisible();
+});
+
+test('US8.17 skipped get-to-know creates no fake income and leaves Home guidance', async ({ page }) => {
+  await page.goto('/');
+  const splash = page.getByLabel('RuMampu');
+  if (await splash.isVisible().catch(() => false)) await splash.click({ force: true });
+
+  await page.getByText('Continue as guest', { exact: true }).click();
+  await expect(page.getByText('Hi there!', { exact: true })).toBeVisible();
+  await page.getByText('Next', { exact: true }).last().click();
+  await page.getByText('Skip', { exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+  await expect(page.getByText('Add last week’s earnings. That’s enough to start.', { exact: true })).toBeVisible();
+
+  const record = await e2eGet(page, `${API}/income/record/`);
+  expect(record.status()).toBe(200);
+  const payload = await record.json();
+  expect(payload.entries).toEqual([]);
+});
+
+test('US8.17 get-to-know accepts custom work and saves one editable rough monthly income', async ({ page }) => {
+  await page.goto('/');
+  const splash = page.getByLabel('RuMampu');
+  if (await splash.isVisible().catch(() => false)) await splash.click({ force: true });
+
+  await page.getByText('Continue as guest', { exact: true }).click();
+  await page.getByText('Next', { exact: true }).last().click();
+  await expect(page.getByText('What do you do?', { exact: true })).toBeVisible();
+  await page.getByText('＋ Add your own', { exact: true }).click();
+  await page.locator('input:visible').last().fill('Night market stall');
+  await page.getByText('Add', { exact: true }).click();
+  await expect(page.getByText('Night market stall', { exact: true })).toBeVisible();
+  await page.getByText('Next', { exact: true }).last().click();
+  await page.locator('input:visible').last().fill('3000');
+  await page.getByText('Start using RuMampu', { exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+
+  await syncClientIdFromBrowser(page);
+  const record = await e2eGet(page, `${API}/income/record/`);
+  expect(record.status()).toBe(200);
+  const payload = await record.json();
+  expect(payload.entries).toHaveLength(1);
+  expect(payload.entries[0].amount).toBe('3000.00');
+  expect(payload.entries[0].date).toBe(expectedLastMonthIso());
+  expect(payload.entries[0].entry_method).toBe('historical_total');
+});
+
 test('US8.12 guest entry does not call authenticated-only account endpoints', async ({ page }) => {
   const savedTestRequests: string[] = [];
   const authOnlyRequests: string[] = [];
@@ -255,6 +374,8 @@ test('US8.12 delete account then create account opens real registration first', 
   await page.getByRole('tab', { name: 'Profile', exact: true }).click();
   await page.getByText('Delete account and record', { exact: true }).click();
   await page.getByText('Tap again to delete', { exact: true }).click();
+  await expect(page.getByText('Add last week’s earnings. That’s enough to start.', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Home', exact: true }).click();
   await page.getByRole('tab', { name: 'Profile', exact: true }).click();
   await expect(page.getByText('Welcome, guest', { exact: true }).first()).toBeVisible();
 
@@ -370,14 +491,16 @@ test('US8.12 decline discards guest saved test and keeps existing account tests'
 // 中文：US8.1 / AC8.1.1-AC8.1.5。测试先创建非时间顺序的收入和支出；用户动作是打开“记录档案”；
 // toBeVisible() 验证预期摘要文本已渲染；captureEvidence 是项目共享测试基础设施，不是 Epic 8 专属代码。
 test('US8.1 summarises mixed dated income and expenses without using array order', async ({ page }) => {
-  const { sourceId, categoryId, workCostCategoryId } = await defaultIds(page);
-  await addIncome(page, sourceId, '2026-01-10', '1000.00');
-  await addIncome(page, sourceId, '2026-02-10', '1200.00');
-  await addExpense(page, categoryId, '2026-01-15', '20.00');
-  await addExpense(page, categoryId, '2026-03-05', '30.00');
-  await addWorkCost(page, workCostCategoryId, '2026-08-31', '99.00');
+  const token = await completedAccountForUi(page);
+  const { sourceId, categoryId, workCostCategoryId } = await defaultIds(page, token);
+  await addIncome(page, sourceId, '2026-01-10', '1000.00', token);
+  await addIncome(page, sourceId, '2026-02-10', '1200.00', token);
+  await addExpense(page, categoryId, '2026-01-15', '20.00', token);
+  await addExpense(page, categoryId, '2026-03-05', '30.00', token);
+  await addWorkCost(page, workCostCategoryId, '2026-08-31', '99.00', token);
 
-  await openApp(page);
+  await page.goto('/');
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
   await openRecord(page);
 
   // EN: These locators assert the visible summary: distinct months, entry count,
@@ -396,11 +519,13 @@ test('US8.1 summarises mixed dated income and expenses without using array order
 // entries but only one represented calendar month.
 // 中文：US8.1 边界情况：同月的一笔收入和一笔支出算两条单笔记录，但只代表一个日历月份。
 test('US8.1 counts one represented month with multiple same-month entries', async ({ page }) => {
-  const { sourceId, categoryId } = await defaultIds(page);
-  await addIncome(page, sourceId, '2026-04-02', '900.00');
-  await addExpense(page, categoryId, '2026-04-25', '45.00');
+  const token = await completedAccountForUi(page);
+  const { sourceId, categoryId } = await defaultIds(page, token);
+  await addIncome(page, sourceId, '2026-04-02', '900.00', token);
+  await addExpense(page, categoryId, '2026-04-25', '45.00', token);
 
-  await openApp(page);
+  await page.goto('/');
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
   await openRecord(page);
 
   // EN: Accessibility-label assertions stay stable even when number and label
@@ -438,9 +563,14 @@ test('US8.1 handles an empty current record without an invalid latest date', asy
 // 中文：US8.2 / AC8.2.1-AC8.2.5。测试先加载已知场景，让现有住房测试流程产生结果；
 // Epic 8 只负责留存操作，以及“记录档案”里显示的留存摘要。
 test('US8.2 keeps a completed housing test only once in the current frontend session', async ({ page }) => {
-  await seedHousingReadyIncome(page);
+  const token = await completedAccountForUi(page);
+  const { sourceId } = await defaultIds(page, token);
+  await addIncome(page, sourceId, '2026-01-10', '10000.00', token);
+  await addIncome(page, sourceId, '2026-02-10', '10000.00', token);
+  await addIncome(page, sourceId, '2026-03-10', '10000.00', token);
 
-  await openApp(page);
+  await page.goto('/');
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
   await openRecord(page);
   await expect(page.getByText('No test kept yet', { exact: true })).toBeVisible();
 
@@ -454,7 +584,7 @@ test('US8.2 keeps a completed housing test only once in the current frontend ses
   await expect(page.getByRole('button', { name: 'Save test', exact: true })).toBeVisible();
   await expect(page.getByText('Add this result to Your record for this session.', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Save test', exact: true }).click();
-  await expect(page.getByText('Name (saved for this session only)', { exact: true })).toBeVisible();
+  await expect(page.getByText('Name this test', { exact: true })).toBeVisible();
   await page.locator('input:visible').last().fill('Epic 8 session check');
   await page.getByRole('button', { name: 'Save test', exact: true }).last().click();
   await expect(page.getByText('Saved for this session in House › Saved tests.', { exact: true })).toBeVisible();

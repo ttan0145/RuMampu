@@ -32,9 +32,11 @@ function KProg({ total, on }: { total: number; on: number }) {
   );
 }
 
-function IconBtn({ label, onPress, light }: { label: string; onPress: () => void; light?: boolean }) {
+function IconBtn({ label, onPress, light, accessibilityLabel }: {
+  label: string; onPress: () => void; light?: boolean; accessibilityLabel?: string;
+}) {
   return (
-    <Pressable onPress={onPress} style={{
+    <Pressable onPress={onPress} accessibilityLabel={accessibilityLabel} style={{
       minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 14,
       backgroundColor: light ? 'rgba(255,255,255,0.16)' : 'transparent',
     }}>
@@ -249,6 +251,16 @@ export function EntryFlow() {
     return (
       <View style={[st.wpage, { paddingTop: 20 + insets.top, paddingBottom: 22 + insets.bottom }]}>
         <KProg total={3} on={1} />
+        <View style={{ flexDirection: 'row', minHeight: 40, alignItems: 'center' }}>
+          <IconBtn
+            label="←"
+            accessibilityLabel={t('back')}
+            onPress={() => up(state => {
+              state.wstep = 0;
+              state.authMode = 'login';
+            })}
+          />
+        </View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
           <Ruma w={148} pose="wave" />
           <Text style={[st.hL, { textAlign: 'center' }]}>{t('wf_langq')}</Text>
@@ -282,7 +294,7 @@ export function EntryFlow() {
     <View style={[st.wpage, { paddingTop: 20 + insets.top, paddingBottom: 22 + insets.bottom }]}>
       <KProg total={3} on={2} />
       <View style={{ flexDirection: 'row', minHeight: 40, alignItems: 'center' }}>
-        <IconBtn label="←" onPress={() => up(state => { state.wstep = 1; })} />
+        <IconBtn label="←" accessibilityLabel={t('back')} onPress={() => up(state => { state.wstep = 1; })} />
       </View>
       <ScrollView contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
         <Ruma w={172} pose="happy" />
@@ -584,7 +596,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
       <View style={{ paddingHorizontal: 20, paddingTop: 16 + insets.top }}>
         <View style={{ flexDirection: 'row' }}>
           {!login ? (
-            <IconBtn light label="←" onPress={() => up(s => { s.authMode = 'login'; })} />
+            <IconBtn light label="←" accessibilityLabel={t('back')} onPress={() => up(s => { s.authMode = 'login'; })} />
           ) : <View style={{ width: 44, height: 44 }} />}
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
@@ -766,6 +778,17 @@ export function GetToKnow() {
   const insets = useSafeAreaInsets();
   const [amt, setAmt] = React.useState(S.lastMonth || '');
   const step = S.kstep || 0;
+  const backFromIntro = () => up(s => {
+    s.kstep = 0;
+    s.knew = false;
+    s.onboarded = false;
+    if (s.guest) {
+      s.wstep = 0;
+      s.authMode = 'login';
+    } else {
+      s.wstep = 2;
+    }
+  });
 
   const finish = async (save: boolean) => {
     const amount = save ? (parseFloat(amt) || 0) : 0;
@@ -814,7 +837,11 @@ export function GetToKnow() {
     <View style={[st.kpage, { paddingTop: 18 + insets.top, paddingBottom: 18 + insets.bottom }]}>
       {step ? <KProg total={2} on={step} /> : null}
       <View style={{ flexDirection: 'row', minHeight: 40, alignItems: 'center', justifyContent: 'space-between' }}>
-        {step ? <IconBtn label="←" onPress={() => up(s => { s.kstep = Math.max(0, (s.kstep || 0) - 1); })} /> : <View />}
+        {step ? (
+          <IconBtn label="←" accessibilityLabel={t('back')} onPress={() => up(s => { s.kstep = Math.max(0, (s.kstep || 0) - 1); })} />
+        ) : (
+          <IconBtn label="←" accessibilityLabel={t('back')} onPress={backFromIntro} />
+        )}
         {step ? <LineBtn label={t('k_skip')} onPress={() => finish(false)} /> : null}
       </View>
       {step === 0 ? (

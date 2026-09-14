@@ -3,14 +3,30 @@ from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.contrib.auth.tokens import default_token_generator
 from django.test import Client, TestCase, override_settings
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from openpyxl import load_workbook
 from rest_framework.authtoken.models import Token
 
 from apps.housing.models import HousingScenario, SavedHousingTest
-from finance.models import IncomeEntry
-from finance.models import GuestProfile
-from finance.services import ensure_default_sources
+from finance.models import (
+    ExpenseEntry,
+    GuestProfile,
+    IncomeCoverage,
+    IncomeEntry,
+    IncomeImportBatch,
+    IncomeImportRow,
+    UserAppState,
+    WorkCostEntry,
+)
+from finance.services import (
+    ensure_default_commitments,
+    ensure_default_expense_categories,
+    ensure_default_sources,
+    ensure_default_work_costs,
+)
 
 
 User = get_user_model()
@@ -55,6 +71,88 @@ class AuthApiRegressionTests(TestCase):
         self.assertEqual(unknown.status_code, 200)
         self.assertEqual(known.json(), unknown.json())
         self.assertEqual(len(mail.outbox), 1)
+
+    def test_password_reset_resend_sends_another_generic_message(self):
+        User.objects.create_user(
+            username="resend@example.com",
+            email="resend@example.com",
+            password="Passw0rd123",
+        )
+        client = Client()
+
+        first = client.post(
+            "/api/v1/auth/password-reset/",
+            data={"email": "resend@example.com"},
+            content_type="application/json",
+        )
+        second = client.post(
+            "/api/v1/auth/password-reset/",
+            data={"email": "resend@example.com"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.json(), second.json())
+        self.assertEqual(len(mail.outbox), 2)
+
+    def test_password_reset_confirm_changes_password_and_invalidates_tokens(self):
+        user = User.objects.create_user(
+            username="reset-confirm@example.com",
+            email="reset-confirm@example.com",
+            password="OldPassw0rd123",
+        )
+        token, _ = Token.objects.get_or_create(user=user)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        reset_token = default_token_generator.make_token(user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+        response = client.post(
+            "/api/v1/auth/password-reset/confirm/",
+            data={"uid": uid, "token": reset_token, "password": "NewPassw0rd123"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Token.objects.filter(user=user).exists())
+        old_login = Client().post(
+            "/api/v1/auth/login/",
+            data={"username": "reset-confirm@example.com", "password": "OldPassw0rd123"},
+            content_type="application/json",
+        )
+        new_login = Client().post(
+            "/api/v1/auth/login/",
+            data={"username": "reset-confirm@example.com", "password": "NewPassw0rd123"},
+            content_type="application/json",
+        )
+        self.assertEqual(old_login.status_code, 401)
+        self.assertEqual(new_login.status_code, 200)
+
+    def test_password_reset_confirm_enforces_password_strength(self):
+        user = User.objects.create_user(
+            username="reset-strength@example.com",
+            email="reset-strength@example.com",
+            password="OldPassw0rd123",
+        )
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        reset_token = default_token_generator.make_token(user)
+        client = Client()
+
+        too_short = client.post(
+            "/api/v1/auth/password-reset/confirm/",
+            data={"uid": uid, "token": reset_token, "password": "A1short"},
+            content_type="application/json",
+        )
+        no_number = client.post(
+            "/api/v1/auth/password-reset/confirm/",
+            data={"uid": uid, "token": reset_token, "password": "NoNumberHere"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(too_short.status_code, 400)
+        self.assertEqual(too_short.json()["error"]["code"], "password_too_short")
+        self.assertEqual(no_number.status_code, 400)
+        self.assertEqual(no_number.json()["error"]["code"], "password_needs_letters_numbers")
 
     def test_logout_invalidates_the_api_token(self):
         user = User.objects.create_user(
@@ -401,6 +499,56 @@ class AuthApiRegressionTests(TestCase):
             password="Passw0rd123",
         )
         profile = GuestProfile.objects.create(user=user, session_key="delete-profile")
+        ensure_default_sources(profile)
+        ensure_default_work_costs(profile)
+        ensure_default_commitments(profile)
+        ensure_default_expense_categories(profile)
+        source = profile.income_sources.get(slug="ehail")
+        period = profile.financial_periods.create(period_month=date(2026, 7, 1))
+        income = profile.income_entries.create(
+            period=period,
+            source=source,
+            income_date=date(2026, 7, 5),
+            gross_amount="1666.00",
+            entry_method=IncomeEntry.EntryMethod.MANUAL,
+        )
+        work_cost_item = profile.work_cost_items.get(slug="petrol")
+        work_cost = WorkCostEntry.objects.create(
+            profile=profile,
+            category=work_cost_item,
+            cost_date=date(2026, 7, 6),
+            amount="55.00",
+        )
+        commitment = profile.commitment_items.get(slug="rent")
+        commitment.monthly_amount = "750.00"
+        commitment.save(update_fields=["monthly_amount", "updated_at"])
+        expense_category = profile.expense_categories.get(slug="meals")
+        expense = ExpenseEntry.objects.create(
+            profile=profile,
+            category=expense_category,
+            expense_date=date(2026, 7, 7),
+            amount="18.50",
+        )
+        import_batch = IncomeImportBatch.objects.create(
+            profile=profile,
+            file_name="delete-import.csv",
+            status=IncomeImportBatch.Status.PREVIEW,
+        )
+        import_row = IncomeImportRow.objects.create(
+            batch=import_batch,
+            row_number=1,
+            raw_amount="1666",
+            raw_date="2026-07-05",
+            raw_source="E-hailing",
+            amount="1666.00",
+            income_date=date(2026, 7, 5),
+            source_name="E-hailing",
+        )
+        coverage = IncomeCoverage.objects.create(
+            profile=profile,
+            answer=IncomeCoverage.Answer.NO,
+        )
+        app_state = UserAppState.objects.create(user=user, cash_on_hand="123.00")
         scenario = HousingScenario.objects.create(
             user=user,
             property_price="250000.00",
@@ -448,6 +596,13 @@ class AuthApiRegressionTests(TestCase):
         self.assertEqual(response.status_code, 204)
         self.assertFalse(User.objects.filter(email="delete@example.com").exists())
         self.assertFalse(GuestProfile.objects.filter(pk=profile.pk).exists())
+        self.assertFalse(UserAppState.objects.filter(pk=app_state.pk).exists())
+        self.assertFalse(IncomeEntry.objects.filter(pk=income.pk).exists())
+        self.assertFalse(WorkCostEntry.objects.filter(pk=work_cost.pk).exists())
+        self.assertFalse(ExpenseEntry.objects.filter(pk=expense.pk).exists())
+        self.assertFalse(IncomeImportBatch.objects.filter(pk=import_batch.pk).exists())
+        self.assertFalse(IncomeImportRow.objects.filter(pk=import_row.pk).exists())
+        self.assertFalse(IncomeCoverage.objects.filter(pk=coverage.pk).exists())
         self.assertFalse(HousingScenario.objects.filter(pk=scenario.pk).exists())
         self.assertFalse(SavedHousingTest.objects.filter(name="Delete me").exists())
         self.assertTrue(User.objects.filter(pk=other.pk).exists())
@@ -483,6 +638,38 @@ class AuthApiRegressionTests(TestCase):
         client = Client(HTTP_X_RUMAMPU_CLIENT_ID="delete-guest-client")
         self.assertEqual(client.get("/api/v1/income/record/").status_code, 200)
         profile = GuestProfile.objects.get()
+        source = profile.income_sources.get(slug="ehail")
+        period = profile.financial_periods.create(period_month=date(2026, 8, 1))
+        income = profile.income_entries.create(
+            period=period,
+            source=source,
+            income_date=date(2026, 8, 1),
+            gross_amount="988.00",
+            entry_method=IncomeEntry.EntryMethod.MANUAL,
+        )
+        work_cost_item = profile.work_cost_items.get(slug="petrol")
+        work_cost = WorkCostEntry.objects.create(
+            profile=profile,
+            category=work_cost_item,
+            cost_date=date(2026, 8, 2),
+            amount="22.00",
+        )
+        expense_category = profile.expense_categories.get(slug="meals")
+        expense = ExpenseEntry.objects.create(
+            profile=profile,
+            category=expense_category,
+            expense_date=date(2026, 8, 3),
+            amount="12.00",
+        )
+        import_batch = IncomeImportBatch.objects.create(
+            profile=profile,
+            file_name="guest-delete.csv",
+            status=IncomeImportBatch.Status.PREVIEW,
+        )
+        coverage = IncomeCoverage.objects.create(
+            profile=profile,
+            answer=IncomeCoverage.Answer.NO,
+        )
         scenario = HousingScenario.objects.create(
             profile=profile,
             property_price="180000.00",
@@ -496,4 +683,9 @@ class AuthApiRegressionTests(TestCase):
 
         self.assertEqual(response.status_code, 204)
         self.assertFalse(GuestProfile.objects.filter(pk=profile.pk).exists())
+        self.assertFalse(IncomeEntry.objects.filter(pk=income.pk).exists())
+        self.assertFalse(WorkCostEntry.objects.filter(pk=work_cost.pk).exists())
+        self.assertFalse(ExpenseEntry.objects.filter(pk=expense.pk).exists())
+        self.assertFalse(IncomeImportBatch.objects.filter(pk=import_batch.pk).exists())
+        self.assertFalse(IncomeCoverage.objects.filter(pk=coverage.pk).exists())
         self.assertFalse(HousingScenario.objects.filter(pk=scenario.pk).exists())
