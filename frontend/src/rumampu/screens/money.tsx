@@ -14,6 +14,7 @@ import {
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { SvgXml } from 'react-native-svg';
 import { LOG_META, logClock, logRecent, logWhen } from '../log';
+import { ExLimitsBody } from './expenses';
 import * as ImagePicker from 'expo-image-picker';
 import { SaveFormat, manipulateAsync } from 'expo-image-manipulator';
 import { Platform } from 'react-native';
@@ -135,7 +136,7 @@ export function MoneyScreen() {
         <Text style={mo.motileVal}>{rm(commitTotal(S.data))}</Text>
         <Text style={mo.motileEm}>{t('mo_permo')}</Text>
       </Pressable>
-      <Pressable onPress={() => go('workcosts')} style={mo.motile}>
+      <Pressable onPress={() => go('expenses')} style={mo.motile}>
         <View style={mo.motileIc}><Ico name="wrench" size={18} /></View>
         <BodyS muted style={{ fontSize: 12 }}>{t('money_workcosts')}</BodyS>
         <Text style={mo.motileVal}>{rm(workCostTotal(S.data))}</Text>
@@ -224,8 +225,7 @@ export function MoneyScreen() {
           ))}
         </View>
       </View>
-      {group('mo_rec', [['income', 'money_income', 'banknote'], ['expenses', 'money_expenses', 'receipt']])}
-      {group('mo_setup', [['workcosts', 'money_workcosts', 'wrench'], ['commit', 'money_commit', 'calendar'], ['exlimits', 'ex_limits', 'gauge']])}
+      {group('mo_rec', [['income', 'money_income', 'banknote'], ['expenses', 'money_expenses', 'receipt'], ['commit', 'bl_title', 'calendar']])}
       {group('mo_savings', [['plan', 'pl_title', 'calday'], ['buffer', 'pr_buffer', 'ring']])}
       {group('mo_insights', [['pattern', 'money_pattern', 'bars'], ['coverage', 'money_coverage', 'search'], ['record', 'money_record', 'book']])}
     </ScreenShell>
@@ -1223,6 +1223,8 @@ export function WorkcostsScreen() {
  */
 export function CommitScreen() {
   const { S, t, monthName, up, toast, saveCommitmentAmount } = useApp();
+  /* v24: bills (commitments) and spending limits share one segmented screen. */
+  const [seg, setSeg] = React.useState<'bills' | 'limits'>('bills');
   const c = S.data.commitments;
   const added = new Set([...c.living, ...c.debts, ...c.savings].map(x => x.id));
   const presets = INCOME_API_ENABLED
@@ -1230,8 +1232,32 @@ export function CommitScreen() {
     : MOCK.commitPresets.filter(id => !added.has(id));
   const allMock = [...MOCK.commitments.living, ...MOCK.commitments.debts, ...MOCK.commitments.savings];
   const em = expByMonth(S.data);
+  const segBar = (
+    <View style={{ flexDirection: 'row', backgroundColor: '#EDF2F1', borderRadius: 14, padding: 4, gap: 4 }}>
+      {(['bills', 'limits'] as const).map(v => (
+        <Pressable key={v} onPress={() => setSeg(v)}
+          style={{
+            flex: 1, minHeight: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center',
+            backgroundColor: seg === v ? '#fff' : 'transparent',
+          }}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 13, color: seg === v ? C.ink : C.ink64 }}>
+            {t(v === 'bills' ? 'bl_bills' : 'bl_limits')}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+  if (seg === 'limits') {
+    return (
+      <ScreenShell back title={t('bl_title')}>
+        {segBar}
+        <ExLimitsBody />
+      </ScreenShell>
+    );
+  }
   return (
-    <ScreenShell back title={t('money_commit')}>
+    <ScreenShell back title={t('bl_title')}>
+      {segBar}
       {S.commitmentSync === 'loading' ? <NoteC><BodyS>{t('cm_sync_loading')}</BodyS></NoteC> : null}
       {S.commitmentSync === 'error' ? <NoteC><BodyS>{t('cm_sync_error')}</BodyS></NoteC> : null}
       {presets.length ? (

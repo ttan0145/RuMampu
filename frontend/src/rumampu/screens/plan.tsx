@@ -108,6 +108,8 @@ export function PlanScreen() {
   const potTotal = (v?.savedRm ?? 0) + S.potMoved;
   const monthsLeft = planMonthsLeft(S, commitTotal(S.data));
   const [howOpen, setHowOpen] = React.useState(false);
+  /* v24 first-glance rule: the calendar folds to this week; the pot stays in view. */
+  const [wholeMonth, setWholeMonth] = React.useState(false);
   const [resetArmed, setResetArmed] = React.useState(false);
 
   const toggle = (i: number) => {
@@ -190,8 +192,13 @@ export function PlanScreen() {
         ) : null}
         {paused ? <BodyS muted style={{ marginTop: 8 }}>{t('pl_paused_b')}</BodyS> : null}
         {monthEnding && !paused ? <BodyS muted style={{ marginTop: 8 }}>{t('pl_monthend')}</BodyS> : null}
+        <BodyS muted style={{ marginTop: 10, fontSize: 11 }}>
+          {wholeMonth ? t('pl_month') : t('pl_week')}
+        </BodyS>
         <View style={st.plgrid}>
           {p.amounts.map((a, i) => {
+            const wk = Math.floor(today / 7);
+            if (!wholeMonth && (i < wk * 7 || i >= wk * 7 + 7)) return null;
             const done = p.done[i];
             const skipped = !paused && !!p.skipped?.[i];
             const isToday = i === today;
@@ -217,6 +224,10 @@ export function PlanScreen() {
           })}
         </View>
         <BodyS muted style={{ marginTop: 8 }}>{t('pl_skip_hint')}</BodyS>
+        <BtnQuiet arrow={false} style={{ justifyContent: 'center', marginTop: 8 }}
+          onPress={() => setWholeMonth(w => !w)}>
+          <P style={{ textAlign: 'center' }}>{t(wholeMonth ? 'pl_showweek' : 'pl_showmonth')}</P>
+        </BtnQuiet>
         <BtnQuiet arrow={false} style={{ justifyContent: 'center', marginTop: 12 }}
           onPress={() => up(s => { const plan = planEnsure(s); plan.seed++; planRegen(plan); })}>
           <P style={{ textAlign: 'center' }}>{t('pl_shuffle')}</P>

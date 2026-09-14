@@ -448,7 +448,7 @@ export function ExpensesScreen() {
           <View style={exSt.hubIc}><Ico name="calsum" size={22} color="#fff" /></View>
           <Text style={{ fontFamily: DISP_FONT, fontSize: 15, lineHeight: 20, color: C.ink }}>{t('ex_see_sum')}</Text>
         </Pressable>
-        <Pressable onPress={() => go('exlimits')} style={exSt.hubtile}>
+        <Pressable onPress={() => go('commit')} style={exSt.hubtile}>
           <View style={exSt.hubIc}><Ico name="gauge" size={22} color="#fff" /></View>
           <Text style={{ fontFamily: DISP_FONT, fontSize: 15, lineHeight: 20, color: C.ink }}>{t('ex_set_lims')}</Text>
         </Pressable>
