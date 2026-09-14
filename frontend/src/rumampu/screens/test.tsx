@@ -20,7 +20,7 @@ import { monthsAgg, nf, rm } from '../calc';
 import { upfrontNeed } from '../fees';
 import { unrepresentedCoverageMonths } from '../money';
 import {
-  BodyS, Btn, BtnLine, Card, Chip, Chips, Display, Divider, EditList,
+  BodyS, Btn, BtnLine, Card, CardI, Chip, Chips, Display, Divider, EditList,
   Fig, FigRow, KV, NoteC, NumInput, P, Prov,
 } from '../ui';
 import { Ico } from '../svgs';
@@ -406,22 +406,24 @@ export function SavedtestsScreen() {
   };
   return (
     <ScreenShell back title={t('sv_title')}>
+      {/* v24 P1-3: the card opens that test's result; Edit sits inside the card. */}
       {S.keptTests.length ? S.keptTests.map((k, i) => (
         <View key={k.id || i} style={tx.txcard}>
-          {k.name ? <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: C.ink, marginBottom: 4 }}>{k.name}</Text> : null}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
-            <Text style={{ fontFamily: BODY_FONT, fontSize: 15, color: C.ink }}>
-              <Text style={{ fontFamily: DISP_FONT }}>{rm(k.pay)}</Text> {t('mo_permo')}
-            </Text>
-            <Fig value={t('cp_short', { s: k.s, n: k.n })} p="calc" cls="body-s" />
-          </View>
-          <BodyS muted style={{ marginTop: 4 }}>
-            {k.g ? `${t('gap_lbl')} ${rm(k.g)} · ` : ''}{k.createdAt ? new Date(k.createdAt).toLocaleDateString() : t('edit')}
-          </BodyS>
-          <View style={{ flexDirection: 'row', gap: 14, flexWrap: 'wrap', marginTop: 8 }}>
-            <BtnLine label={t('sv_open_l')} onPress={() => { void openSavedTest(i); }} />
-            <BtnLine label={t('sv_edit_l')} onPress={() => up(s => { s.svIdx = i; s.svDelArm = false; s.sheet = 'svedit'; })} />
-          </View>
+          <Pressable onPress={() => { void openSavedTest(i); }} accessibilityRole="button" style={{ gap: 4 }}>
+            {k.name ? <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: C.ink }}>{k.name}</Text> : null}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
+              <Text style={{ fontFamily: BODY_FONT, fontSize: 15, color: C.ink }}>
+                <Text style={{ fontFamily: DISP_FONT }}>{rm(k.pay)}</Text> {t('mo_permo')}
+              </Text>
+              <Fig value={t('cp_short', { s: k.s, n: k.n })} p="calc" cls="body-s" />
+            </View>
+            {k.propertyPrice ? <BodyS muted>{t('sv_price_l')} {rm(k.propertyPrice)}</BodyS> : null}
+            {k.g ? <BodyS muted>{t('gap_lbl')} {rm(k.g)}</BodyS> : null}
+            <Text style={{ fontFamily: SEMI_FONT, fontSize: 13, color: C.brand, marginTop: 2 }}>{t('sv_open_l')} →</Text>
+          </Pressable>
+          <View style={{ height: 1, backgroundColor: C.ink14, marginTop: 10, marginBottom: 2 }} />
+          <BtnLine label={t('sv_edit_l')} style={{ fontSize: 14.5 }}
+            onPress={() => up(s => { s.svIdx = i; s.svDelArm = false; s.sheet = 'svedit'; })} />
         </View>
       )) : (
         <Card><BodyS muted>{t('sv_none')}</BodyS></Card>
@@ -481,16 +483,6 @@ export function PrecheckScreen() {
   );
 }
 
-function comparisonPaymentsAround(currentCost: number): number[] {
-  const current = Math.max(0, Math.round((Number(currentCost) || 0) * 100) / 100);
-  const step = 200;
-  return [
-    Math.max(0, Math.round((current - step) * 100) / 100),
-    current,
-    Math.round((current + step) * 100) / 100,
-  ];
-}
-
 export function ResultScreen() {
   const { S, t, monthName, up, go, toast } = useApp();
   React.useEffect(() => {
@@ -518,10 +510,6 @@ export function ResultScreen() {
   const [shocked, setShocked] = React.useState<typeof base>(null);
   const [tryResult, setTryResult] = React.useState<typeof base>(null);
   const [customPay, setCustomPay] = React.useState('');
-  const shockIsCustom = ![0, 10, 20].includes(shock);
-  const [customShockOpen, setCustomShockOpen] = React.useState(shockIsCustom);
-  const [customShockText, setCustomShockText] = React.useState(shockIsCustom ? String(shock) : '');
-  const [customShockError, setCustomShockError] = React.useState('');
 
   /* Re-run the same scenario with the drop applied (backend-authoritative). */
   React.useEffect(() => {
@@ -593,100 +581,20 @@ export function ResultScreen() {
     </View>
   );
 
-  const applyCustomShock = () => {
-    const value = customShockText.trim();
-
-    // Accept 0-90 with up to 2 decimal places.
-    if (!/^\d+(\.\d{1,2})?$/.test(value)) {
-      setCustomShockError('Enter a percentage using up to 2 decimal places.');
-      return;
-    }
-
-    const next = Number(value);
-    if (!Number.isFinite(next) || next < 0 || next > 90) {
-      setCustomShockError('Enter a percentage from 0 to 90.');
-      return;
-    }
-
-    setCustomShockError('');
-    setCustomShockText(String(next));
-    up(x => { x.shock = next; });
-  };
-
+  /* v24: one quiet row on the chart card — the label and the three drops. */
   const shockChips = (
-    <View style={tx.shockSection}>
-      <Text style={tx.shockTitle}>{t('rx_drop')}</Text>
-
-      <View style={tx.shockChipRow}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 12 }}>
+      <BodyS muted>{t('rx_drop')}</BodyS>
+      <View style={{ flexDirection: 'row', gap: 6 }}>
         {[0, 10, 20].map(v => (
-          <Pressable
-            key={v}
-            onPress={() => {
-              setCustomShockOpen(false);
-              setCustomShockError('');
-              up(x => { x.shock = v; });
-            }}
-            style={[tx.rxchip, tx.shockChip, shock === v && !customShockOpen && tx.rxchipOn]}
-          >
-            <Text
-              style={{
-                fontFamily: SEMI_FONT,
-                fontSize: 13,
-                color: shock === v && !customShockOpen ? '#fff' : C.ink,
-              }}
-            >
+          <Pressable key={v} onPress={() => up(x => { x.shock = v; })}
+            style={[tx.rxchip, shock === v && tx.rxchipOn]}>
+            <Text style={{ fontFamily: SEMI_FONT, fontSize: 13, color: shock === v ? '#fff' : C.ink }}>
               {v ? `−${v}%` : '0%'}
             </Text>
           </Pressable>
         ))}
-
-        <Pressable
-          onPress={() => {
-            setCustomShockOpen(true);
-            setCustomShockError('');
-            if (shockIsCustom) setCustomShockText(String(shock));
-          }}
-          style={[tx.rxchip, tx.shockChip, (customShockOpen || shockIsCustom) && tx.rxchipOn]}
-        >
-          <Text
-            style={{
-              fontFamily: SEMI_FONT,
-              fontSize: 13,
-              color: customShockOpen || shockIsCustom ? '#fff' : C.ink,
-            }}
-          >
-            {t('rx_custom')}
-          </Text>
-        </Pressable>
       </View>
-
-      {customShockOpen ? (
-        <View style={tx.customShockBox}>
-          <BodyS muted>{t('sh_pct')}</BodyS>
-          <View style={tx.customShockInputRow}>
-            <TextInput
-              value={customShockText}
-              accessibilityLabel="Custom income shock percentage"
-              keyboardType="decimal-pad"
-              inputMode="decimal"
-              placeholder="e.g. 15.5"
-              placeholderTextColor={C.ink40}
-              onChangeText={value => {
-                setCustomShockText(value);
-                setCustomShockError('');
-              }}
-              onSubmitEditing={applyCustomShock}
-              style={tx.customShockInput}
-            />
-            <Text style={tx.customShockPercent}>%</Text>
-            <Pressable onPress={applyCustomShock} style={tx.customShockApply}>
-              <Text style={tx.customShockApplyText}>{t('done')}</Text>
-            </Pressable>
-          </View>
-          {customShockError ? <Text style={tx.customShockError}>{customShockError}</Text> : null}
-          <Text style={tx.customShockDisclaimer}>{t('sh_disclaimer')}</Text>
-        </View>
-      ) : null}
     </View>
   );
 
@@ -707,7 +615,7 @@ export function ResultScreen() {
         </View>
       ) : null}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-        {comparisonPaymentsAround(cost).map(v => (
+        {[1000, 1200, 1400].map(v => (
           <Pressable key={v} onPress={() => up(x => { x.tryPay = v; })}
             style={[tx.rxchip, { backgroundColor: '#fff' }, S.tryPay === v && tx.rxchipOn]}>
             <Text style={{ fontFamily: SEMI_FONT, fontSize: 13, color: S.tryPay === v ? '#fff' : C.ink }}>{rm(v)}</Text>
@@ -826,28 +734,17 @@ export function ResultScreen() {
         {legend}
         {shockChips}
       </View>
-      {s ? (
-        <Card gap={8}>
-          <Display cls="h-m">{t('rs_shortfall_breakdown')}</Display>
-          <KV k={t('rs_existing_shortfall')}>
-            <Fig value={`${result.existing_short_month_count} / ${n}`} p="calc" />
-          </KV>
-          <KV k={t('rs_housing_shortfall')}>
-            <Fig value={`${result.housing_created_short_month_count} / ${n}`} p="calc" />
-          </KV>
-          <BodyS muted>{t('rs_shortfall_breakdown_note')}</BodyS>
-        </Card>
-      ) : null}
       {tryCard}
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <View style={{ flex: 1 }}>
-          <Btn label={t('rx_keep')} onPress={keepTest} />
+      {S.viewTestName ? null : (
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Btn label={t('rx_keep')} onPress={keepTest} />
+          </View>
+          <Pressable onPress={() => go('house')} style={[tx.btnQuiet, { flex: 1, justifyContent: 'center' }]}>
+            <P>{t('rx_change')}</P>
+          </Pressable>
         </View>
-        <Pressable onPress={() => go('house')} style={[tx.btnQuiet, { flex: 1, justifyContent: 'center' }]}>
-          <P>{t('rx_change')}</P>
-        </Pressable>
-      </View>
-      <BodyS muted>{t('rs_keep_hint')}</BodyS>
+      )}
       <View style={{ flexDirection: 'row', gap: 12 }}>
         <Pressable onPress={() => go('range')} style={tx.hubtile}>
           <View style={tx.hubIc}><Ico name="band" size={22} color="#fff" /></View>
@@ -918,15 +815,17 @@ export function RangeScreen() {
         <BodyS muted>{t('rg_counted', { c: covered, n })}</BodyS>
       </Card>
       <Divider />
-      <Display cls="h-m">{t('rg_price_t')}</Display>
+      {/* v24 R8f: what "indicative" means lives behind the (i) on the heading. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Display cls="h-m">{t('rg_price_t')}</Display>
+        <CardI t="rg_price_t" b={['rg_ind']} p="assume" />
+      </View>
       <P>{t('rg_price', {
         r: h.rate,
         y: h.years,
         p: nf(cr.indicative_property_price_lower),
         q: nf(cr.indicative_property_price_upper),
       })}</P>
-      <FigRow p="assume" />
-      <BodyS muted>{cr.property_price_limitation || t('rg_ind')}</BodyS>
     </ScreenShell>
   );
 }
@@ -936,13 +835,10 @@ export function CompareScreen() {
   const baseResult = getHousingTestResult();
   const testedCost = baseResult?.tested_home_cost ?? 0;
   const scenarioId = getHousingScenario()?.id ?? baseResult?.scenario_id;
-  const [payments, setPayments] = React.useState<number[]>(() => comparisonPaymentsAround(testedCost));
+  /* v24 defaults; edits stay on this screen. */
+  const [payments, setPayments] = React.useState<number[]>([1000, 1200, 1400]);
   const [results, setResults] = React.useState<Record<number, Awaited<ReturnType<typeof runHousingTest>>>>({});
   const paymentsKey = payments.join('|');
-
-  React.useEffect(() => {
-    setPayments(comparisonPaymentsAround(testedCost));
-  }, [testedCost]);
 
   React.useEffect(() => {
     if (!scenarioId) return;
@@ -965,7 +861,6 @@ export function CompareScreen() {
         const n = result?.tested_months ?? 0;
         const shortCount = result?.short_month_count ?? 0;
         const gap = result?.largest_gap ?? 0;
-        const indicativePrice = result?.indicative_tested_property_price ?? 0;
         const rows = (result?.months ?? []).map(r => ({
           m: r.month - 1,
           surplus: r.available_for_home,
@@ -990,11 +885,6 @@ export function CompareScreen() {
                   <Prov p="calc" />
                 </View>
               </View>
-            </View>
-            <P>{t('cp_price', { payment: nf(p), price: nf(indicativePrice) })}</P>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <BodyS muted>{t('cp_price_note')}</BodyS>
-              <Prov p="assume" />
             </View>
             <View accessibilityLabel={`Payment ${i + 1} recorded-month chart`}>
               <Waterline rows={rows} cost={p} small monthName={monthName} />
@@ -1036,7 +926,6 @@ export function ShockScreen() {
 
   return (
     <ScreenShell back title={t('rs_shock')}>
-      <BodyS muted>{t('sh_disclaimer')}</BodyS>
       <Chips>
         {[0, 10, 20].map(v => (
           <Chip
@@ -1094,10 +983,12 @@ export function ShockScreen() {
           />
         </View>
       ) : null}
-      <View accessibilityLabel={`Income shock ${p}% result`}>
+      {/* v24 R8f: what the scenario assumes lives behind the (i) on the heading. */}
+      <View accessibilityLabel={`Income shock ${p}% result`}
+        style={{ flexDirection: 'row', alignItems: 'center' }}>
         <Display cls="h-l">{t('sh_head', { p, s: shortCount, n })}</Display>
+        <CardI t="rs_shock" b={['sh_note']} p="assume" />
       </View>
-      <FigRow p="assume" />
       {shortCount ? (
         <KV k={t('gap_lbl')}>
           <Fig value={rm(result?.largest_gap ?? 0)} p="calc" />
@@ -1106,7 +997,6 @@ export function ShockScreen() {
       <View accessibilityLabel={`Income shock ${p}% recorded-month chart`}>
         <Waterline rows={rows} cost={cost} lineLabel prov="assume" monthName={monthName} />
       </View>
-      <BodyS muted>{t('sh_note')}</BodyS>
     </ScreenShell>
   );
 }
