@@ -176,7 +176,7 @@ function QuickMenu() {
           }, 100),
           item(t('qk_expense'), <Ico name={QK_OUT_ICO} size={22} />, () => {
             up(s => { s.sheet = null; s.exMode = 'type'; });
-            go('expenses');
+            go('expadd');
           }, 50),
           item(t('qk_scan'), <Ico name="camera" size={22} />, () => up(s => { s.sheet = 'quick2'; }), 0),
         ]}
@@ -624,7 +624,6 @@ export function SheetHost() {
       </Modal>
     );
   }
-  if (sheet === 'howworks') return <PeekSheet pose="happy" title={t('how_title')} body={`${t('how_1')}\n\n${t('how_2')}\n\n${t('how_3')}`} onClose={close} doneLabel={t('done')} />;
 
   if (sheet === 'quick' || sheet === 'quick2') return <QuickMenu />;
   if (sheet === 'vflash') return <VillageFlash />;
