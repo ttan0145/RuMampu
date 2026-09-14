@@ -416,6 +416,7 @@ export function SheetHost() {
   if (sheet === 'plinfo') return <PeekSheet pose="happy" title={t('pl_title')} body={t('pl_note')} onClose={close} doneLabel={t('done')} />;
   if (sheet === 'potadd') return <PeekSheet pose="count" title={t('sp_add_t')} body={t('sp_add_b')} onClose={close} doneLabel={t('done')} />;
   if (sheet === 'mailhow') return <PeekSheet pose="happy" title={t('mh_title')} body={t('mh_body')} onClose={close} doneLabel={t('done')} />;
+  if (sheet === 'howworks') return <PeekSheet pose="happy" title={t('how_title')} body={`${t('how_1')}\n\n${t('how_2')}\n\n${t('how_3')}`} onClose={close} doneLabel={t('done')} />;
 
   if (sheet === 'quick' || sheet === 'quick2') return <QuickMenu />;
   if (sheet === 'vflash') return <VillageFlash />;

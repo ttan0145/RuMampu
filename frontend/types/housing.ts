@@ -137,7 +137,7 @@ export interface SavedHousingTestRecord {
 
 export interface SaveHousingTestPayload {
   name?: string;
-  scenario_id: number;
+  scenario_id?: number;
   monthly_payment: number;
   short_month_count: number;
   tested_months: number;

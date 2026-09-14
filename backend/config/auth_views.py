@@ -23,7 +23,12 @@ from rest_framework.views import APIView
 
 from apps.housing.models import SavedHousingTest
 from finance.models import UserAppState
-from finance.services import claim_guest_profile_for_user, profile_for_request
+from finance.services import (
+    discard_guest_record_for_request,
+    guest_transfer_status,
+    profile_for_request,
+    transfer_guest_record_to_user,
+)
 
 
 User = get_user_model()
@@ -303,10 +308,6 @@ class RegisterView(APIView):
         # create_user hashes the password; the raw password is never stored.
         user = User.objects.create_user(username=email, email=email, password=password)
 
-        # Preserve any RuMampu information entered before sign-up by moving the
-        # current anonymous profile under this account. Returning users always
-        # keep their existing account-owned profile instead.
-        claim_guest_profile_for_user(request, user)
         _app_state(user)
 
         # Registration also signs the user in. Subsequent API requests use this
@@ -346,9 +347,27 @@ class LoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        claim_guest_profile_for_user(request, user)
         token, _ = Token.objects.get_or_create(user=user)
         return Response(_auth_payload(user, token))
+
+
+class GuestTransferView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(guest_transfer_status(request))
+
+    @transaction.atomic
+    def post(self, request):
+        action = str(request.data.get("action", "")).strip().lower()
+        if action == "keep":
+            return Response(transfer_guest_record_to_user(request, request.user))
+        if action == "decline":
+            return Response(discard_guest_record_for_request(request))
+        return Response(
+            {"error": {"code": "invalid_guest_transfer_action", "message": "Choose whether to keep or discard the guest record."}},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
 
 class MeView(APIView):

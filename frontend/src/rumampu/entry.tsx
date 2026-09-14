@@ -6,9 +6,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
 import {
-  ApiAuthResponse, ApiError, completeAccountOnboarding, confirmPasswordReset, login as loginRequest, register as registerRequest, requestPasswordReset, savePreferredLanguage,
+  ApiAuthResponse, ApiError, completeAccountOnboarding, confirmPasswordReset, fetchGuestTransferStatus, login as loginRequest, register as registerRequest, requestPasswordReset, resolveGuestTransfer, rotateGuestClientId, savePreferredLanguage,
 } from './api';
-import { lastMonthIso, useApp } from './state';
+import { lastMonthIso, useApp, type KeptTest } from './state';
+import { createSavedHousingTest, fetchSavedHousingTests } from '../../services/housingService';
+import { SavedHousingTestRecord } from '../../types/housing';
 import { BODY_FONT, C, DISP_FONT } from './theme';
 import { Ruma, RumaFlat } from './ruma-view';
 import { BodyS } from './ui';
@@ -134,6 +136,77 @@ function LineBtn({ label, onPress, small }: { label: string; onPress: () => void
       }}>{label}</Text>
     </Pressable>
   );
+}
+
+function savedTestSignature(input: {
+  scenarioId?: number | null;
+  name?: string;
+  monthlyPayment: number;
+  shortMonthCount: number;
+  testedMonths: number;
+  largestGap: number;
+  incomeShockPercent?: number;
+  result?: unknown;
+}): string {
+  return JSON.stringify({
+    scenarioId: input.scenarioId ?? null,
+    name: input.name || '',
+    monthlyPayment: Math.round(Number(input.monthlyPayment) || 0),
+    shortMonthCount: Number(input.shortMonthCount) || 0,
+    testedMonths: Number(input.testedMonths) || 0,
+    largestGap: Math.round(Number(input.largestGap) || 0),
+    incomeShockPercent: Number(input.incomeShockPercent) || 0,
+    result: input.result || {},
+  });
+}
+
+function signatureFromRecord(record: SavedHousingTestRecord): string {
+  return savedTestSignature({
+    scenarioId: record.scenario_id,
+    name: record.name,
+    monthlyPayment: Number(record.monthly_payment),
+    shortMonthCount: Number(record.short_month_count),
+    testedMonths: Number(record.tested_months),
+    largestGap: Number(record.largest_gap),
+    incomeShockPercent: Number(record.income_shock_percent),
+    result: record.result,
+  });
+}
+
+function signatureFromKept(test: KeptTest): string {
+  return savedTestSignature({
+    scenarioId: test.scenarioId,
+    name: test.name,
+    monthlyPayment: test.pay,
+    shortMonthCount: test.s,
+    testedMonths: test.n,
+    largestGap: test.g,
+    incomeShockPercent: test.incomeShockPercent,
+    result: test.result,
+  });
+}
+
+async function persistGuestSavedTests(tests: KeptTest[]): Promise<void> {
+  const guestTests = tests.filter(test => !test.id && test.result && test.scenarioId);
+  if (!guestTests.length) return;
+
+  const existing = await fetchSavedHousingTests();
+  const seen = new Set(existing.map(signatureFromRecord));
+  for (const test of guestTests) {
+    const signature = signatureFromKept(test);
+    if (seen.has(signature)) continue;
+    const record = await createSavedHousingTest({
+      name: test.name,
+      scenario_id: test.scenarioId || undefined,
+      monthly_payment: Math.round(Number(test.pay) || 0),
+      short_month_count: Number(test.s) || 0,
+      tested_months: Number(test.n) || 0,
+      largest_gap: Math.round(Number(test.g) || 0),
+      income_shock_percent: Number(test.incomeShockPercent) || 0,
+      result: test.result as any,
+    });
+    seen.add(signatureFromRecord(record));
+  }
 }
 
 /* ---------- the entry flow ---------- */
@@ -297,6 +370,9 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
   const [accountStage, setAccountStage] = React.useState('Signing you in...');
   const [accountLoadError, setAccountLoadError] = React.useState('');
   const [pendingAuth, setPendingAuth] = React.useState<ApiAuthResponse | null>(null);
+  const [guestTransferAuth, setGuestTransferAuth] = React.useState<ApiAuthResponse | null>(null);
+  const [guestTransferLoading, setGuestTransferLoading] = React.useState(false);
+  const [guestTransferError, setGuestTransferError] = React.useState('');
   const forcedReset = Boolean(resetUid && resetToken);
   const login = !forcedReset && S.authMode === 'login';
   const amode: 'login' | 'signup' | 'forgot' | 'checkmail' | 'reset' = forcedReset ? 'reset' : S.authMode;
@@ -411,11 +487,41 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
       const auth = amode === 'signup'
         ? await registerRequest(cleanEmail, pw)
         : await loginRequest(cleanEmail, pw);
+      const transfer = await fetchGuestTransferStatus();
+      if (transfer.available) {
+        setGuestTransferAuth(auth);
+        setGuestTransferError('');
+        return;
+      }
       await finishAuthenticatedEntry(auth);
     } catch (error) {
       setAuthError(error instanceof ApiError ? error.message : 'Could not reach the RuMampu backend.');
     } finally {
       setAuthLoading(false);
+    }
+  };
+
+  const completeGuestTransfer = async (action: 'keep' | 'decline') => {
+    if (!guestTransferAuth || guestTransferLoading) return;
+    const guestSavedTests = S.keptTests.map(test => JSON.parse(JSON.stringify(test)) as KeptTest);
+    setGuestTransferLoading(true);
+    setGuestTransferError('');
+    try {
+      await resolveGuestTransfer(action);
+      if (action === 'keep') {
+        await persistGuestSavedTests(guestSavedTests);
+        up(s => { s.keptTests = []; });
+      } else {
+        up(s => { s.keptTests = []; });
+        await rotateGuestClientId();
+      }
+      const auth = guestTransferAuth;
+      setGuestTransferAuth(null);
+      await finishAuthenticatedEntry(auth);
+    } catch (error) {
+      setGuestTransferError(error instanceof ApiError ? error.message : t('gt_error'));
+    } finally {
+      setGuestTransferLoading(false);
     }
   };
 
@@ -518,7 +624,15 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
       </View>
       <View style={st.sheet2}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 20 + insets.bottom }}>
-          {amode === 'reset' ? (
+          {guestTransferAuth ? (
+            <View style={{ gap: 12 }}>
+              <Text style={st.h2}>{t('gt_title')}</Text>
+              <BodyS muted>{t('gt_body')}</BodyS>
+              {guestTransferError ? <Text style={st.authError}>{guestTransferError}</Text> : null}
+              <BtnP label={t('gt_keep')} onPress={() => void completeGuestTransfer('keep')} loading={guestTransferLoading} />
+              <BtnO label={t('gt_decline')} onPress={() => void completeGuestTransfer('decline')} />
+            </View>
+          ) : amode === 'reset' ? (
             <View style={{ gap: 10 }}>
               <Text style={st.h2}>{resetDone ? 'Password changed' : 'Set a new password'}</Text>
               {resetDone ? (
@@ -648,7 +762,7 @@ function JobTile({ id, bg, label, on, onPress }: { id: string; bg: string; label
 }
 
 export function GetToKnow() {
-  const { S, t, up, toast, saveIncomeEntry } = useApp();
+  const { S, t, up, toast, saveIncomeEntry, updateIncomeEntry } = useApp();
   const insets = useSafeAreaInsets();
   const [amt, setAmt] = React.useState(S.lastMonth || '');
   const step = S.kstep || 0;
@@ -672,11 +786,17 @@ export function GetToKnow() {
 
     try {
       if (save && amount > 0) {
+        const targetDate = lastMonthIso();
         const sourceId = S.data.sources[0]?.id;
-        await saveIncomeEntry({
-          amount, date: lastMonthIso(), sourceId,
-          entryMethod: 'historical_total', confirmOutlier: true,
-        });
+        const existing = S.data.income.find(entry => entry.method === 'historical_total' && entry.d.slice(0, 7) === targetDate.slice(0, 7));
+        if (existing?.id) {
+          await updateIncomeEntry(existing.id, { amount, date: targetDate, sourceId });
+        } else {
+          await saveIncomeEntry({
+            amount, date: targetDate, sourceId,
+            entryMethod: 'historical_total', confirmOutlier: true,
+          });
+        }
       }
       // Guests only complete this flow locally. Registered users persist the
       // completion flag so future logins and app restarts skip these pages.

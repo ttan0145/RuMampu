@@ -313,7 +313,10 @@ export interface Ctx {
   deleteIncomeEntry: (id: string) => Promise<void>;
   saveIncomeSource: (name: string) => Promise<string>;
   refreshIncomeRecord: () => Promise<void>;
-  refreshAccountData: (onProgress?: (progress: number, stage: string) => void) => Promise<void>;
+  refreshAccountData: (
+    onProgress?: (progress: number, stage: string) => void,
+    options?: { includeSavedTests?: boolean },
+  ) => Promise<void>;
   refreshSavedHousingTests: () => Promise<void>;
   signOut: () => Promise<void>;
   deleteCurrentRecord: () => Promise<void>;
@@ -724,9 +727,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [authReady, refreshWorkCosts]);
 
   React.useEffect(() => {
-    if (!INCOME_API_ENABLED || !authReady || S.guest) return;
+    if (!INCOME_API_ENABLED || !authReady || S.guest || !S.onboarded || !S.knew) return;
     void refreshSavedHousingTests().catch(() => undefined);
-  }, [authReady, S.guest, refreshSavedHousingTests]);
+  }, [authReady, S.guest, S.knew, S.onboarded, refreshSavedHousingTests]);
 
   const refreshAfterMoneyWrite = useCallback(() => {
     // Ignore any pre-write analyses; a successful write must not become a failed
@@ -1110,11 +1113,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const refreshAccountData = useCallback(async (
     onProgress?: (progress: number, stage: string) => void,
+    options?: { includeSavedTests?: boolean },
   ): Promise<void> => {
     if (!INCOME_API_ENABLED) {
       onProgress?.(100, 'Ready');
       return;
     }
+    const includeSavedTests = options?.includeSavedTests ?? true;
 
     // Authentication can change which profile is authoritative. Discard the
     // anonymous bootstrap promise so later reads cannot reuse stale guest data.
@@ -1187,10 +1192,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return result;
     };
 
-    await Promise.all([
+    const finalTasks = [
       trackedFinal(refreshWorkCosts(), 'Work costs loaded'),
-      trackedFinal(refreshSavedHousingTests(), 'Saved tests loaded'),
-    ]);
+    ];
+    if (includeSavedTests) {
+      finalTasks.push(trackedFinal(refreshSavedHousingTests(), 'Saved tests loaded'));
+    } else {
+      up(s => { s.keptTests = []; });
+    }
+    await Promise.all(finalTasks);
     onProgress?.(95, 'Preparing your dashboard...');
 
     // Yield once so the final state updates above can be committed before Home renders.
@@ -1228,9 +1238,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       next.splash = false;
       next.guest = true;
       next.onboarded = true;
+      next.knew = true;
       return next;
     });
-    await refreshAccountData();
+    await refreshAccountData(undefined, { includeSavedTests: false });
   }, [refreshAccountData]);
 
   const enterGuestMode = useCallback(async (): Promise<void> => {
@@ -1252,7 +1263,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
 
     // Load a clean anonymous profile using the newly rotated client id.
-    await refreshAccountData();
+    await refreshAccountData(undefined, { includeSavedTests: false });
   }, [refreshAccountData]);
 
   const toast = useCallback((msg: string, tone: 'success' | 'error' = 'success') => {

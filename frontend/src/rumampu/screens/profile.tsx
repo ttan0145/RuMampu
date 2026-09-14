@@ -18,7 +18,7 @@ export function ProfileScreen() {
 
   const startSignup = () => up(s => {
     s.onboarded = false;
-    s.wstep = 2;
+    s.wstep = 0;
     s.authMode = 'signup';
   });
   const downloadExport = async () => {
@@ -40,15 +40,16 @@ export function ProfileScreen() {
     }
   };
   const deleteRecord = async () => {
+    const wasGuest = S.guest;
     if (!deleteArmed) {
       setDeleteArmed(true);
-      toast(t(S.guest ? 'pf_delete_guest_confirm' : 'pf_delete_confirm'));
+      toast(t(wasGuest ? 'pf_delete_guest_confirm' : 'pf_delete_confirm'));
       return;
     }
     try {
       await deleteCurrentRecord();
       setDeleteArmed(false);
-      toast(t('pf_delete_done'));
+      toast(t(wasGuest ? 'pf_delete_done_guest' : 'pf_delete_done_account'));
     } catch {
       toast(t('pf_delete_failed'), 'error');
     }

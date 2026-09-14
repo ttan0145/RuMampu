@@ -529,7 +529,7 @@ function PlanComingSoon() {
 }
 
 export function HomeScreen() {
-  const { S, t, go } = useApp();
+  const { S, t, go, up } = useApp();
   const sp = recSpan(S.data);
 
   if (!sp) {
@@ -538,6 +538,7 @@ export function HomeScreen() {
     return (
       <ScreenShell brand>
         <Display cls="h-l">{t('inc_empty')}</Display>
+        <Btn label={t('how_title')} onPress={() => up(s => { s.sheet = 'howworks'; })} />
         <Btn label={t('inc_add')} onPress={() => go('income')} />
         <PlanComingSoon />
       </ScreenShell>
@@ -548,6 +549,7 @@ export function HomeScreen() {
     <ScreenShell brand>
       <HomeCards />
       <HouseTestRow />
+      <Btn label={t('how_title')} onPress={() => up(s => { s.sheet = 'howworks'; })} />
       <PlanComingSoon />
     </ScreenShell>
   );

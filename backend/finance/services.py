@@ -12,7 +12,9 @@ from .models import (
     ExpenseCategory,
     FinancialPeriod,
     GuestProfile,
+    IncomeCoverage,
     IncomeEntry,
+    IncomeImportBatch,
     IncomeSource,
     WorkCostItem,
 )
@@ -61,6 +63,20 @@ def profile_for_request(request) -> GuestProfile:
         existing = GuestProfile.objects.filter(user=user).first()
         if existing is not None:
             return existing
+        fallback_key = hashlib.sha256(f"user:{user.pk}".encode("utf-8")).hexdigest()[:40]
+        profile, created = GuestProfile.objects.get_or_create(
+            session_key=fallback_key,
+            defaults={"user": user},
+        )
+        if profile.user_id is None:
+            profile.user = user
+            profile.save(update_fields=["user", "last_active_at"])
+        if created:
+            ensure_default_sources(profile)
+            ensure_default_work_costs(profile)
+            ensure_default_commitments(profile)
+            ensure_default_expense_categories(profile)
+        return profile
 
     client_id = request.headers.get("X-RuMampu-Client-ID", "").strip()
 
@@ -88,6 +104,181 @@ def profile_for_request(request) -> GuestProfile:
         ensure_default_commitments(profile)
         ensure_default_expense_categories(profile)
     return profile
+
+
+def guest_profile_for_request(request) -> GuestProfile | None:
+    client_id = request.headers.get("X-RuMampu-Client-ID", "").strip()
+    if client_id:
+        profile_key = hashlib.sha256(client_id.encode("utf-8")).hexdigest()[:40]
+    else:
+        profile_key = request.session.session_key
+    if not profile_key:
+        return None
+    return GuestProfile.objects.filter(session_key=profile_key, user__isnull=True).first()
+
+
+def profile_has_user_record(profile: GuestProfile) -> bool:
+    if profile.income_entries.exists():
+        return True
+    if profile.work_cost_entries.exists():
+        return True
+    if profile.expense_entries.exists():
+        return True
+    if profile.commitment_items.filter(monthly_amount__gt=0).exists():
+        return True
+    if profile.income_import_batches.exists():
+        return True
+    if IncomeCoverage.objects.filter(profile=profile).exists():
+        return True
+    from apps.housing.models import HousingScenario
+
+    return HousingScenario.objects.filter(profile=profile).exists()
+
+
+def guest_transfer_status(request) -> dict:
+    profile = guest_profile_for_request(request)
+    available = profile is not None and profile_has_user_record(profile)
+    return {
+        "available": available,
+        "summary": {
+            "income_entries": profile.income_entries.count() if profile else 0,
+            "work_cost_entries": profile.work_cost_entries.count() if profile else 0,
+            "expense_entries": profile.expense_entries.count() if profile else 0,
+            "housing_scenarios": profile.housing_scenarios.count() if profile else 0,
+        },
+    }
+
+
+def _matching_source(target: GuestProfile, source: IncomeSource | None) -> IncomeSource | None:
+    if source is None:
+        return None
+    if source.slug:
+        found = target.income_sources.filter(slug=source.slug).first()
+        if found is not None:
+            return found
+    return IncomeSource.objects.create(
+        profile=target,
+        slug=source.slug if source.slug and not target.income_sources.filter(slug=source.slug).exists() else "",
+        name=source.name,
+        is_custom=source.is_custom,
+        is_active=source.is_active,
+    )
+
+
+def _matching_work_cost(target: GuestProfile, item: WorkCostItem) -> WorkCostItem:
+    if item.slug:
+        found = target.work_cost_items.filter(slug=item.slug).first()
+        if found is not None:
+            return found
+    return WorkCostItem.objects.create(
+        profile=target,
+        slug=item.slug if item.slug and not target.work_cost_items.filter(slug=item.slug).exists() else "",
+        name=item.name,
+        monthly_amount=item.monthly_amount,
+        is_custom=item.is_custom,
+        is_active=item.is_active,
+    )
+
+
+def _matching_expense_category(target: GuestProfile, category: ExpenseCategory) -> ExpenseCategory:
+    if category.slug:
+        found = target.expense_categories.filter(slug=category.slug).first()
+        if found is not None:
+            return found
+    return ExpenseCategory.objects.create(
+        profile=target,
+        slug=category.slug if category.slug and not target.expense_categories.filter(slug=category.slug).exists() else "",
+        name=category.name,
+        is_custom=category.is_custom,
+        is_active=category.is_active,
+    )
+
+
+@transaction.atomic
+def transfer_guest_record_to_user(request, user) -> dict:
+    guest = guest_profile_for_request(request)
+    if guest is None or not profile_has_user_record(guest):
+        return {"transferred": False, **guest_transfer_status(request)}
+
+    target = profile_for_request(request)
+    if target.pk == guest.pk:
+        return {"transferred": False, **guest_transfer_status(request)}
+
+    if not profile_has_user_record(target):
+        from apps.housing.models import HousingScenario
+
+        HousingScenario.objects.filter(profile=guest, user__isnull=True).update(profile=None, user=user)
+        target.delete()
+        guest.user = user
+        guest.save(update_fields=["user", "last_active_at"])
+        return {"transferred": True, "available": False, "summary": {}}
+
+    period_map = {}
+    for period in guest.financial_periods.all():
+        target_period, _ = FinancialPeriod.objects.get_or_create(
+            profile=target,
+            period_month=period.period_month,
+            defaults={"record_basis": period.record_basis},
+        )
+        period_map[period.pk] = target_period
+
+    source_map = {source.pk: _matching_source(target, source) for source in guest.income_sources.all()}
+    for entry in guest.income_entries.select_related("period", "source").all():
+        if entry.entry_method == IncomeEntry.EntryMethod.HISTORICAL_TOTAL and target.income_entries.filter(
+            period=period_map[entry.period_id],
+            entry_method=IncomeEntry.EntryMethod.HISTORICAL_TOTAL,
+        ).exists():
+            continue
+        entry.profile = target
+        entry.period = period_map[entry.period_id]
+        entry.source = source_map.get(entry.source_id)
+        entry.save(update_fields=["profile", "period", "source"])
+
+    cost_map = {item.pk: _matching_work_cost(target, item) for item in guest.work_cost_items.all()}
+    for entry in guest.work_cost_entries.select_related("category").all():
+        entry.profile = target
+        entry.category = cost_map[entry.category_id]
+        entry.save(update_fields=["profile", "category"])
+
+    category_map = {category.pk: _matching_expense_category(target, category) for category in guest.expense_categories.all()}
+    for entry in guest.expense_entries.select_related("category").all():
+        entry.profile = target
+        entry.category = category_map[entry.category_id]
+        entry.save(update_fields=["profile", "category"])
+
+    for item in guest.commitment_items.all():
+        target_item = target.commitment_items.filter(slug=item.slug).first() if item.slug else None
+        if target_item is None:
+            item.profile = target
+            item.save(update_fields=["profile"])
+        elif target_item.monthly_amount == 0 and item.monthly_amount != 0:
+            target_item.monthly_amount = item.monthly_amount
+            target_item.is_active = item.is_active
+            target_item.save(update_fields=["monthly_amount", "is_active", "updated_at"])
+
+    IncomeImportBatch.objects.filter(profile=guest).update(profile=target)
+    try:
+        coverage = guest.income_coverage
+    except IncomeCoverage.DoesNotExist:
+        coverage = None
+    if coverage is not None and not IncomeCoverage.objects.filter(profile=target).exists():
+        coverage.profile = target
+        coverage.save(update_fields=["profile"])
+
+    from apps.housing.models import HousingScenario
+
+    HousingScenario.objects.filter(profile=guest, user__isnull=True).update(profile=None, user=user)
+    guest.delete()
+    return {"transferred": True, "available": False, "summary": {}}
+
+
+@transaction.atomic
+def discard_guest_record_for_request(request) -> dict:
+    guest = guest_profile_for_request(request)
+    if guest is None:
+        return {"discarded": False, "available": False, "summary": {}}
+    guest.delete()
+    return {"discarded": True, "available": False, "summary": {}}
 
 
 # EN: Epic 1 default choices are created once per profile; custom choices remain profile-owned.
@@ -145,7 +336,9 @@ def claim_guest_profile_for_user(request, user) -> GuestProfile:
     if existing is not None:
         return existing
 
-    profile = profile_for_request(request)
+    profile = guest_profile_for_request(request)
+    if profile is None:
+        return profile_for_request(request)
     if profile.user_id is None:
         profile.user = user
         profile.save(update_fields=["user", "last_active_at"])
@@ -284,4 +477,3 @@ def update_historical_income_entry(
         gross_amount=gross_amount,
         source=None,
     )
-

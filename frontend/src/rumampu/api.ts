@@ -192,6 +192,18 @@ export interface ApiAuthResponse extends ApiAuthState {
   token: string;
 }
 
+export interface ApiGuestTransferStatus {
+  available: boolean;
+  transferred?: boolean;
+  discarded?: boolean;
+  summary: {
+    income_entries?: number;
+    work_cost_entries?: number;
+    expense_entries?: number;
+    housing_scenarios?: number;
+  };
+}
+
 let nativeAuthToken: string | null = null;
 let nativeAuthStorageLoaded = Platform.OS === 'web';
 const AUTH_TOKEN_KEY = 'rumampu_auth_token';
@@ -392,6 +404,17 @@ export function completeAccountOnboarding(): Promise<ApiAuthState> {
   return request<ApiAuthState>('/auth/me/', {
     method: 'PATCH',
     body: JSON.stringify({ onboarding_completed: true }),
+  });
+}
+
+export function fetchGuestTransferStatus(): Promise<ApiGuestTransferStatus> {
+  return request<ApiGuestTransferStatus>('/auth/guest-transfer/');
+}
+
+export function resolveGuestTransfer(action: 'keep' | 'decline'): Promise<ApiGuestTransferStatus> {
+  return request<ApiGuestTransferStatus>('/auth/guest-transfer/', {
+    method: 'POST',
+    body: JSON.stringify({ action }),
   });
 }
 
