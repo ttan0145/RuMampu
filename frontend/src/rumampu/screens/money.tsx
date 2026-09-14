@@ -1210,10 +1210,6 @@ export function PatternScreen() {
     void refreshIncomePattern().catch(() => undefined);
   }, [refreshIncomePattern]);
   const pattern = S.incomePattern;
-  const monthLabel = (value: string) => {
-    const month = Number(value.slice(5, 7)) - 1;
-    return `${monthName(month)} ${value.slice(0, 4)}`;
-  };
 
   if (!INCOME_API_ENABLED) {
     return (
@@ -1255,7 +1251,6 @@ export function PatternScreen() {
   const limited = pattern.history_depth === 'one_month'
     ? t('pt_limited_one')
     : pattern.history_depth === 'two_months' ? t('pt_limited_two') : null;
-  const lower = pattern.lower_income.months.map(monthLabel);
   return (
     <ScreenShell back title={t('money_pattern')}>
       {S.incomePatternSync === 'error' ? (
@@ -1266,7 +1261,7 @@ export function PatternScreen() {
       ) : null}
       <View>
         <Fig value={formatApiMoney(stats.average)} p="calc" cls="h-xl" />
-        <BodyS muted>{t('pt_avg')} · {t('pt_month_count', { n: pattern.recorded_month_count })}</BodyS>
+        <BodyS muted>{t('pt_avgn', { n: pattern.recorded_month_count })}</BodyS>
       </View>
       {limited ? <NoteC><BodyS>{limited}</BodyS></NoteC> : null}
       <BodyS muted>{t('pt_bymonth')}</BodyS>
@@ -1275,7 +1270,6 @@ export function PatternScreen() {
         monthName={monthName}
         accessibilityLabel={t('pt_chart_accessibility')}
       />
-      {pattern.months.length > 4 ? <BodyS muted>{t('pt_scroll')}</BodyS> : null}
       <StackS>
         <KV k={t('pt_med')}><Fig value={formatApiMoney(stats.median)} p="calc" /></KV>
         <Divider />
@@ -1283,12 +1277,28 @@ export function PatternScreen() {
         <Divider />
         <KV k={t('pt_low')}><Fig value={formatApiMoney(stats.lowest)} p="calc" /></KV>
         <Divider />
-        <KV k={t('pt_range_total')}><Fig value={formatApiMoney(stats.range)} p="calc" /></KV>
-        <Divider />
+        <KV k={t('pt_rng')}><Fig value={formatApiMoney(stats.range)} p="calc" /></KV>
       </StackS>
-      <BodyS muted>{t('pt_work_basis')}</BodyS>
-      <BodyS muted>{t('pt_rule')}</BodyS>
-      <BodyS>{lower.length ? t('pt_some', { m: lower.join(', ') }) : t('pt_none')}</BodyS>
+      {(() => {
+        /* v24 pt_quietx: the quietest recorded month, after work costs. */
+        const qm = [...pattern.months].reduce<typeof pattern.months[number] | null>(
+          (acc, m) => (acc == null || +m.usable_income < +acc.usable_income ? m : acc), null);
+        return qm ? (
+          <P>{t('pt_quietx', { m: `${monthName(+qm.month.slice(5, 7) - 1)}`, v: formatApiMoney(qm.usable_income) })}</P>
+        ) : null;
+      })()}
+      {(() => {
+        /* v24 pt_namex: the closing line embeds the Quiet months link at {L}. */
+        const [before, after] = t('pt_namex').split('{L}');
+        return (
+          <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: C.ink64 }}>
+            {before}
+            <Text onPress={() => go('coverage')}
+              style={{ color: C.brand, textDecorationLine: 'underline' }}>{t('money_coverage')}</Text>
+            {after}
+          </Text>
+        );
+      })()}
     </ScreenShell>
   );
 }
@@ -1318,47 +1328,81 @@ export function CoverageScreen() {
     || S.coverageSync === 'saving'
     || (S.coverageSync === 'error' && !confirmed);
   const monthList = (months: number[]) => months.map(month => monthName(month - 1)).join(', ');
+  /* v24: no Check button — an answer (and each month toggle) saves as it is made. */
+  const persist = (nextAnswer: ApiCoverageAnswer, months: number[]) => {
+    if (nextAnswer === 'yes' && months.length === 0) return;
+    void saveIncomeCoverage({ answer: nextAnswer, slowerMonths: months })
+      .catch(() => toast(t('cv_save_failed'), 'error'));
+  };
   const chooseAnswer = (next: ApiCoverageAnswer) => {
     setAnswer(next);
-    if (next !== 'yes') setSlowerMonths([]);
+    if (next !== 'yes') { setSlowerMonths([]); persist(next, []); }
   };
-  const checkCoverage = async () => {
-    if (!answer) return;
-    if (answer === 'yes' && slowerMonths.length === 0) {
-      toast(t('cv_select_required'), 'error');
-      return;
-    }
-    try {
-      await saveIncomeCoverage({ answer, slowerMonths });
-      toast(t('saved'));
-    } catch {
-      toast(t('cv_save_failed'), 'error');
-    }
+  const toggleMonth = (month: number) => {
+    setSlowerMonths(previous => {
+      const next = previous.includes(month)
+        ? previous.filter(value => value !== month)
+        : [...previous, month].sort((a, b) => a - b);
+      persist('yes', next);
+      return next;
+    });
   };
 
+  /* v24 .cvr callouts: gap (amber !), ok (green ✓), info (grey i). */
+  const Cvr = ({ kind, title, body, doLine }: {
+    kind: 'ok' | 'gap' | 'info'; title: string; body: string; doLine?: string;
+  }) => (
+    <View style={{
+      borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row',
+      gap: 12, alignItems: 'flex-start', borderWidth: 1.5,
+      backgroundColor: kind === 'ok' ? '#E6F5EA' : kind === 'gap' ? '#FFF4DE' : C.card,
+      borderColor: kind === 'ok' ? '#B9E0C4' : kind === 'gap' ? '#F2D58C' : C.ink14,
+    }}>
+      <View style={{
+        width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center',
+        backgroundColor: kind === 'ok' ? C.confirm : kind === 'gap' ? '#E0A800' : C.ink64,
+      }}>
+        <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700' }}>
+          {kind === 'ok' ? '✓' : kind === 'gap' ? '!' : 'i'}
+        </Text>
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 15, lineHeight: 19, color: C.ink }}>{title}</Text>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 13.5, lineHeight: 18, color: C.ink, marginTop: 4 }}>{body}</Text>
+        {doLine ? (
+          <Text style={{ fontFamily: SEMI_FONT, fontSize: 13.5, lineHeight: 18, color: '#7A5A00', marginTop: 8 }}>{doLine}</Text>
+        ) : null}
+      </View>
+    </View>
+  );
+
+  /* the recorded span for the callout wording, like v24's recSpan */
+  const span = monthsAgg(S.data);
+  const spanA = span.length ? monthName(span[0].m) : '';
+  const spanB = span.length ? monthName(span[span.length - 1].m) : '';
+
   let result: React.ReactNode = null;
-  if (showConfirmed && confirmed?.answer === 'yes') {
-    result = (
-      <StackS>
-        {confirmed.represented_slower_months.length ? (
-          <Card><BodyS>{t('cv_represented', { m: monthList(confirmed.represented_slower_months) })}</BodyS></Card>
-        ) : null}
-        {confirmed.unrepresented_slower_months.length ? (
-          <NoteC><BodyS>{t('cv_unrepresented', { m: monthList(confirmed.unrepresented_slower_months) })}</BodyS></NoteC>
-        ) : null}
-      </StackS>
+  if (showConfirmed && confirmed?.answer === 'yes' && span.length) {
+    const unseen = confirmed.unrepresented_slower_months;
+    result = unseen.length ? (
+      <Cvr kind="gap"
+        title={t('cvr_gap_t', { m: monthList(unseen) })}
+        body={t('cvr_gap', { m: monthList(unseen), a: spanA, b: spanB })}
+        doLine={t('cvr_gap_do', { m: monthList(unseen) })} />
+    ) : (
+      <Cvr kind="ok"
+        title={t('cvr_ok_t')}
+        body={t('cvr_ok', { slow: monthList(confirmed.slower_months), a: spanA, b: spanB })} />
     );
   } else if (showConfirmed && confirmed?.answer && confirmed.answer !== 'yes') {
-    const observation = confirmed.observation;
-    result = observation ? (
-      <Card>
-        <BodyS>{t('cv_observation', {
-          n: observation.recorded_month_count,
-          lo: formatApiMoney(observation.lowest),
-          hi: formatApiMoney(observation.highest),
-          range: formatApiMoney(observation.range),
-        })}</BodyS>
-      </Card>
+    const nets = span.map(r => r.net);
+    const avg = nets.reduce((x, y) => x + y, 0) / Math.max(1, nets.length);
+    const spread = nets.length ? Math.max(...nets) - Math.min(...nets) : 0;
+    const narrow = spread < avg * 0.12;
+    result = span.length ? (
+      <Cvr kind="info"
+        title={t('cvr_flat_t')}
+        body={narrow ? t('cv_narrow') : t('cv_varied', { a: spanA, b: spanB })} />
     ) : <NoteC><BodyS>{t('cv_no_history')}</BodyS></NoteC>;
   }
 
@@ -1383,7 +1427,11 @@ export function CoverageScreen() {
           ) : null}
         </NoteC>
       ) : null}
-      <Display cls="h-l">{t('cv_q')}</Display>
+      {/* v24 R8f: how the answer is used lives behind the (i) on the question. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Display cls="h-l">{t('cv_q')}</Display>
+        <CardI t="money_coverage" b={['cv_note']} />
+      </View>
       <Chips>
         {([['yes', 'cv_yes'], ['no', 'cv_no'], ['not_sure', 'cv_notsure']] as const).map(([value, key]) => (
           <Chip key={value} label={t(key)} brandOn={answer === value}
@@ -1394,40 +1442,35 @@ export function CoverageScreen() {
       </Chips>
       {answer === 'yes' ? (
         <>
-          <P>{t('cv_pick')}</P>
+          <BodyS muted>{t('cvr_pick_hint')}</BodyS>
+          {/* v24 .mgrid: four columns of month cells, brand when on. */}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {[...Array(12)].map((_, index) => {
               const month = index + 1;
               const on = slowerMonths.includes(month);
               return (
-                <View key={month} style={{ flexBasis: '22%', flexGrow: 1 }}>
-                  <Chip
-                    label={monthName(index)}
-                    brandOn={on}
-                    disabled={controlsDisabled}
-                    selectionRole="checkbox"
-                    onPress={() => setSlowerMonths(previous => (
-                      previous.includes(month)
-                        ? previous.filter(value => value !== month)
-                        : [...previous, month].sort((a, b) => a - b)
-                    ))}
-                  />
-                </View>
+                <Pressable key={month}
+                  disabled={controlsDisabled}
+                  accessibilityRole="checkbox" accessibilityState={{ checked: on }}
+                  onPress={() => toggleMonth(month)}
+                  style={{
+                    flexBasis: '22%', flexGrow: 1, minHeight: 48, borderRadius: 12,
+                    borderWidth: 1.5, alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: on ? C.brand : '#fff',
+                    borderColor: on ? C.brand : C.ink14,
+                  }}>
+                  <Text style={{
+                    fontFamily: on ? SEMI_FONT : BODY_FONT, fontSize: 15,
+                    color: on ? '#fff' : C.ink,
+                  }}>{monthName(index)}</Text>
+                </Pressable>
               );
             })}
           </View>
         </>
       ) : null}
-      {answer ? (
-        <Btn
-          label={S.coverageSync === 'saving' ? t('cv_checking') : t('cv_check')}
-          disabled={controlsDisabled}
-          onPress={() => { if (!controlsDisabled) void checkCoverage(); }}
-        />
-      ) : null}
       {S.coverageSync === 'error' && showConfirmed ? <BodyS muted>{t('cv_previous')}</BodyS> : null}
       {result}
-      <BodyS muted>{t('cv_note')}</BodyS>
     </ScreenShell>
   );
 }
