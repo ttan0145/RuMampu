@@ -481,6 +481,47 @@ export function SheetHost() {
     );
   }
 
+  /* v24 pothow: what the pot is actually made of (shield semantics: the plan's
+     declared savings plus what finished months moved in). */
+  if (sheet === 'pothow') {
+    const planPart = S.village?.savedRm ?? 0;
+    const moved = S.potMoved;
+    const kvRow = (lbl: string, v: number, bold?: boolean) => (
+      <View key={lbl} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 32 }}>
+        <Text style={{ fontFamily: bold ? DISP_FONT : BODY_FONT, fontSize: 13.5, color: C.ink }}>{lbl}</Text>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(v)}</Text>
+      </View>
+    );
+    return (
+      <Modal transparent animationType="none" visible onRequestClose={close}>
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={close}>
+            <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
+          </Pressable>
+          <View style={{ alignItems: 'center', marginBottom: -30, zIndex: 2 }}>
+            <Ruma w={96} pose="count" float={false} />
+          </View>
+          <View style={[
+            sheetSt.sheet, { paddingBottom: 26, paddingTop: 34 },
+            Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null,
+          ]}>
+            <SheetH3>{t('ph_title')}</SheetH3>
+            {kvRow(t('ph_plan'), planPart)}
+            {kvRow(t('ph_moved'), moved)}
+            <View style={{ height: 1, backgroundColor: C.ink14, marginVertical: 6 }} />
+            {kvRow(t('ph_total'), planPart + moved, true)}
+            <View style={{ marginTop: 6, alignItems: 'flex-start' }}>
+              <Text style={{ fontFamily: SEMI_FONT, fontSize: 11, color: C.ink64 }}>{PROV_G.user} {t('prov_user')}</Text>
+            </View>
+            <View style={{ marginTop: 14 }}>
+              <Btn label={t('done')} onPress={close} />
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
   /* v24 month filter sheet: which month the recent list shows. */
   if (sheet === 'incmonth' || sheet === 'exmonth') {
     const inc = sheet === 'incmonth';

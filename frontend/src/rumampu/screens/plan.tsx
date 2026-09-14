@@ -107,7 +107,6 @@ export function PlanScreen() {
   const monthEnding = p.n - (today + 1) <= 2;
   const potTotal = (v?.savedRm ?? 0) + S.potMoved;
   const monthsLeft = planMonthsLeft(S, commitTotal(S.data));
-  const [howOpen, setHowOpen] = React.useState(false);
   /* v24 first-glance rule: the calendar folds to this week; the pot stays in view. */
   const [wholeMonth, setWholeMonth] = React.useState(false);
   const [resetArmed, setResetArmed] = React.useState(false);
@@ -238,7 +237,13 @@ export function PlanScreen() {
         </BtnQuiet>
       </Card>
       <View>
-        <Text style={st.eyebrow}>{t('sp_pots')}</Text>
+        {/* v24 R7t: the (i) on the pots eyebrow opens the breakdown sheet. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={st.eyebrow}>{t('sp_pots')}</Text>
+          <Pressable onPress={() => up(s => { s.sheet = 'pothow'; })} style={st.vinfo} accessibilityLabel={t('ph_title')}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 11, color: C.ink64 }}>i</Text>
+          </Pressable>
+        </View>
         <Card gap={10}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 13 }}>
             <SvgXml xml={jarXml(p.target > 0 ? saved / p.target : 1)} width={44} height={44} />
@@ -251,20 +256,6 @@ export function PlanScreen() {
               <Prov p="user" />
             </View>
           </View>
-          {/* LeanKit 10.4.3: the pot shows its working. */}
-          <Pressable onPress={() => setHowOpen(o => !o)} style={{ minHeight: 32, justifyContent: 'center' }}>
-            <BodyS muted>{t('ph_title')} {howOpen ? '▴' : '▾'}</BodyS>
-          </Pressable>
-          {howOpen ? (
-            <View style={{ gap: 4 }}>
-              {([['ph_had', 0], ['ph_plan', v?.savedRm ?? 0], ['ph_moved', S.potMoved], ['ph_total', potTotal]] as const).map(([k, amt]) => (
-                <View key={k} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <BodyS muted>{t(k)}</BodyS>
-                  <BodyS style={{ fontVariant: ['tabular-nums'] }}>{rm(amt)}</BodyS>
-                </View>
-              ))}
-            </View>
-          ) : null}
           <Pressable onPress={() => up(s => { s.sheet = 'potadd'; })} style={st.potadd}>
             <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>+</Text>

@@ -9,7 +9,6 @@ import {
 } from '../plan';
 import { villageEnsure } from '../village';
 import { IsoIsland } from '../isosvg';
-import { Ico } from '../svgs';
 import { BODY_FONT, C, DISP_FONT } from '../theme';
 import { Btn, BodyS, Display } from '../ui';
 import { ScreenShell } from './shell';
@@ -424,25 +423,41 @@ export function PlanCard() {
         <View style={{ width: `${pct}%`, height: '100%', borderRadius: 5, backgroundColor: '#3F8A8E' }} />
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-        <BodyS muted>{t('pl_progress', { s: rm(saved), t: rm(p.target) })}</BodyS>
+        <BodyS muted>{t('pl_oftarget', { t: rm(p.target) })}</BodyS>
         <BodyS muted>{pct}%</BodyS>
       </View>
-      {/* v24: the pot stated on the home card (shield semantics: declared
-          savings plus what was moved in from finished months). */}
-      <Pressable onPress={() => go('plan')} style={{
-        flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10,
-        backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E3EAE8', borderRadius: 14,
-        paddingVertical: 8, paddingHorizontal: 12, minHeight: 52,
-      }}>
-        <Ico name="ring" size={20} color={C.brand} />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontFamily: DISP_FONT, fontSize: 13.5, color: C.ink }}>{t('sp_pot1')}</Text>
-          <BodyS muted style={{ fontSize: 11 }}>{t('sp_pot1h')}</BodyS>
-        </View>
-        <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: C.ink, fontVariant: ['tabular-nums'] }}>
-          {rm((v?.savedRm ?? 0) + S.potMoved)}
-        </Text>
-      </Pressable>
+      {/* v24 potmini: the pot, named, on Home — jar level and gap line against
+          the upfront need (shield semantics: declared savings + moved-in months). */}
+      {(() => {
+        const potTotal = (v?.savedRm ?? 0) + S.potMoved;
+        const need = upfrontNeed(S);
+        const gap = Math.max(0, need - potTotal);
+        const gapLine = !need ? t('sp_pot1h') : gap > 0 ? t('hm_togo', { g: rm(gap) }) : t('hm_ready');
+        const lvl = need > 0 ? Math.min(1, potTotal / need) : (potTotal > 0 ? 1 : 0);
+        const fh = 12.5 * lvl, fy = 19.5 - fh;
+        const jar = `<svg width="32" height="32" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<rect x="8" y="2.6" width="8" height="2.6" rx="1.2" fill="none" stroke="#4A9195" stroke-width="1.6"/>
+<path d="M6.5 7.2h11a1.5 1.5 0 0 1 1.5 1.5v10.3a2.5 2.5 0 0 1-2.5 2.5h-9a2.5 2.5 0 0 1-2.5-2.5V8.7a1.5 1.5 0 0 1 1.5-1.5z" fill="#fff" stroke="#4A9195" stroke-width="1.6"/>
+${lvl > 0 ? `<rect x="6.6" y="${fy}" width="10.8" height="${fh}" rx="1.4" fill="#4A9195" opacity=".8"/>` : ''}
+</svg>`;
+        return (
+          <Pressable onPress={() => go('plan')} style={{
+            flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10,
+            backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E3EAE8', borderRadius: 14,
+            paddingVertical: 8, paddingHorizontal: 12, minHeight: 52,
+          }}>
+            <SvgXml xml={jar} width={32} height={32} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ fontFamily: DISP_FONT, fontSize: 13.5, color: C.ink }}>{t('sp_pot1')}</Text>
+              <BodyS muted style={{ fontSize: 11 }} numberOfLines={1}>{gapLine}</BodyS>
+            </View>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: C.ink, fontVariant: ['tabular-nums'] }}>
+              {rm(potTotal)}
+            </Text>
+            <Text style={{ fontSize: 16, color: C.ink40 }}>{'›'}</Text>
+          </Pressable>
+        );
+      })()}
       <Text style={{
         fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.66, textTransform: 'uppercase',
         color: C.ink64, marginTop: 12,
