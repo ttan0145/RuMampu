@@ -13,6 +13,7 @@ import { Ico, Logo } from './svgs';
 import { Ruma } from './ruma-view';
 import { IsoHouse, IsoIsland } from './isosvg';
 import { ISO_TIERS, villagePlay } from './village';
+import { logIt } from './log';
 import { DatePickerField } from './date-picker';
 import { isValidMoneyText } from './validation';
 import { deleteSavedHousingTest, updateSavedHousingTest } from '../../services/housingService';
@@ -144,10 +145,12 @@ function QuickMenu() {
   const spGo = (kind: 'in' | 'out') => {
     up(s => {
       s.sheet = null;
-      if (kind === 'in') { s.incMode = 'scan'; s.incScan = { stage: 'pick', rows: [] }; }
-      else { s.exMode = 'scan'; s.scan = { stage: 'pick' }; }
+      if (kind === 'in') { s.incMode = 'scan'; s.incScan = { stage: 'pick', rows: [] }; s.scanAuto = true; }
+      else { s.exMode = 'scan'; s.scan = { stage: 'pick' }; s.scanAuto = true; }
     });
-    go(kind === 'in' ? 'income' : 'expenses');
+    /* The expense scan lives on its own route; landing on the expenses screen
+       with exMode 'scan' used to show the manual body under a Scan tab. */
+    go(kind === 'in' ? 'income' : 'expscan');
   };
 
   const item = (label: string, icon: React.ReactNode, onPress: () => void, delay: number) => (
@@ -249,7 +252,10 @@ function VStat({ label, value, hi, gain }: { label: string; value: number; hi?: 
 function VillageSheet() {
   const { S, t, up } = useApp();
   const { width } = useWindowDimensions();
-  const v = S.village || { cells: new Array(16).fill(0), pop: [], score: 0, best: 0, moves: 0, gain: 0, built: 0, msg: '' };
+  const v = S.village || {
+    cells: new Array(16).fill(0), pop: [], score: 0, best: 0, moves: 0, gain: 0, built: 0,
+    collection: 0, queued: 0, savedRm: 0, msg: '',
+  };
   const close = () => up(s => { s.sheet = null; });
   const play = (dir: 'l' | 'r' | 'u' | 'd') => up(s => { villagePlay(s, dir, tier => t('vl_built', { t: t('vl_t' + tier) })); });
 
@@ -264,7 +270,12 @@ function VillageSheet() {
 
   const n = v.cells.filter(Boolean).length;
   const best = Math.max(0, ...v.cells);
-  const stats = `${t('vl_builtn', { b: v.built })} · ${t('vl_onplot', { n })}${best ? ' · ' + t('vl_best', { t: t('vl_t' + best) }) : ''}`;
+  let stats = `${t('vl_builtn', { b: v.built })} · ${t('vl_onplot', { n })}${best ? ' · ' + t('vl_best', { t: t('vl_t' + best) }) : ''}`;
+  /* Epic 10 anchoring: the collection with its truthful ringgit total (the
+     istanas are decorative — the RM figure is the honest signal), plus any
+     houses waiting for space so a saved day never looks lost. */
+  if ((v.collection ?? 0) > 0) stats += `\n${t('vl_collect', { n: v.collection, a: rm(v.savedRm ?? 0) })}`;
+  if ((v.queued ?? 0) > 0) stats += `\n${t('vl_queue', { n: v.queued })}`;
   const isleW = Math.min(width, 390) - 60;
 
   return (
@@ -289,6 +300,8 @@ function VillageSheet() {
           {[1, 2, 3, 4, 5].map(i => (
             <BodyS key={i} style={{ marginTop: 3 }}>{i}. {t('vl_s' + i)}</BodyS>
           ))}
+          {/* LeanKit 10.8.2: what the village is, and what the app cannot know. */}
+          <BodyS muted style={{ marginTop: 6 }}>{t('sv_not_advice')}</BodyS>
         </View>
       ) : null}
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
@@ -310,6 +323,7 @@ function VillageSheet() {
           <IsoIsland cells={v.cells} width={isleW} />
         </View>
       </View>
+      <BodyS muted style={{ textAlign: 'center', marginTop: 4, fontSize: 11.5 }}>{t('vl_swipe')}</BodyS>
       <Text style={{
         fontFamily: DISP_FONT, minHeight: 18, textAlign: 'center', color: C.confirm,
         fontSize: 13, marginTop: 6,
@@ -327,7 +341,8 @@ function VillageSheet() {
           <View key={id} style={{ flex: 1, alignItems: 'center' }}>
             <IsoHouse tier={id} size={42} />
             <Text style={{ fontFamily: DISP_FONT, fontSize: 10.5, color: C.ink }}>{t('vl_t' + (i + 1))}</Text>
-            <Text style={{ fontFamily: BODY_FONT, fontSize: 10.5, color: C.ink64 }}>{Math.pow(2, i + 1)} pt</Text>
+            {/* 2^tier, matching villageMove's merge scoring. */}
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 10.5, color: C.ink64 }}>{Math.pow(2, i)} pt</Text>
           </View>
         ))}
       </View>
@@ -353,6 +368,8 @@ export function SheetHost() {
   const [editDate, setEditDate] = React.useState('');
   const [editSource, setEditSource] = React.useState('');
   const [editError, setEditError] = React.useState<'amount' | 'date' | 'source' | null>(null);
+  /* v24 dc_*: a changed business date is confirmed before it is saved. */
+  const [dateConfirm, setDateConfirm] = React.useState<{ f: string; g: string; orig: string } | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [limitA, setLimitA] = React.useState('');
   const [svName, setSvName] = React.useState('');
@@ -584,6 +601,7 @@ export function SheetHost() {
                 up(s => {
                   if (!s.svDelArm) { s.svDelArm = true; return; }
                   savedId = s.keptTests[s.svIdx]?.id;
+                  logIt(s, 'lg_test_del', { name: s.keptTests[s.svIdx]?.name || '' });
                   s.keptTests.splice(s.svIdx, 1);
                   s.svDelArm = false;
                   s.sheet = null;
@@ -603,11 +621,17 @@ export function SheetHost() {
 
   if (sheet.startsWith('incomeedit:')) {
     const editId = sheet.slice('incomeedit:'.length);
-    const save = async () => {
+    const dLbl = (v: string) => `${+v.slice(8, 10)} ${monthName(+v.slice(5, 7) - 1)}`;
+    const save = async (dateConfirmed = false) => {
       if (saving) return;
       if (!isValidMoneyText(editAmount) || Number(editAmount.trim()) < 0) { setEditError('amount'); return; }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(editDate)) { setEditError('date'); return; }
       if (!editSource) { setEditError('source'); return; }
+      const original = S.data.income.find(e => e.id === editId)?.d;
+      if (!dateConfirmed && original && original !== editDate) {
+        setDateConfirm({ f: dLbl(original), g: dLbl(editDate), orig: original });
+        return;
+      }
       setSaving(true);
       try {
         await updateIncomeEntry(editId, {
@@ -617,7 +641,11 @@ export function SheetHost() {
         });
         // Editing an existing entry does not change the total entry count.
         const entryCount = S.data.income.length;
-        up(state => { state.sheet = null; });
+        up(state => {
+          if (dateConfirm) logIt(state, 'lg_inc_date', { f: dateConfirm.f, g: dateConfirm.g });
+          state.sheet = null;
+        });
+        setDateConfirm(null);
         toast(t('entry_saved_n', { n: entryCount }));
       } catch {
         toast(t('inc_save_failed'));
@@ -628,6 +656,22 @@ export function SheetHost() {
     return (
       <SheetFrame onClose={close}>
         <SheetH3>{t('edit')} {t('money_income')}</SheetH3>
+        {(() => {
+          /* v24 ie_made: when the entry was recorded, distinct from the date
+             it is for. */
+          const created = S.data.income.find(e => e.id === editId)?.createdAt;
+          if (!created) return null;
+          const dd = new Date(created);
+          if (isNaN(dd.getTime())) return null;
+          return (
+            <BodyS muted style={{ fontSize: 11.5, marginBottom: 6 }}>
+              {t('ie_made', {
+                d: `${dd.getDate()} ${monthName(dd.getMonth())}`,
+                t: `${String(dd.getHours()).padStart(2, '0')}:${String(dd.getMinutes()).padStart(2, '0')}`,
+              })}
+            </BodyS>
+          );
+        })()}
         <View style={{ gap: 8 }}>
           <BodyS muted>{t('inc_amount')}</BodyS>
           <SheetInput
@@ -658,7 +702,18 @@ export function SheetHost() {
           {editError === 'amount' ? <BodyS>{t('inc_past_amount')}</BodyS> : null}
           {editError === 'date' ? <BodyS>{t('inc_invalid_date')}</BodyS> : null}
           {editError === 'source' ? <BodyS>{t('inc_source')}</BodyS> : null}
-          <Btn label={saving ? t('inc_saving') : t('done')} onPress={() => { void save(); }} />
+          {dateConfirm ? (
+            <View style={{ backgroundColor: '#FFF8E5', borderRadius: 12, padding: 12, gap: 8 }}>
+              <Text style={{ fontFamily: DISP_FONT, fontSize: 14, color: C.ink }}>{t('dc_title')}</Text>
+              <BodyS>{t('dc_body', { f: dateConfirm.f, g: dateConfirm.g })}</BodyS>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <BtnLine label={t('dc_yes')} onPress={() => { void save(true); }} />
+                <BtnLine label={t('dc_no', { f: dateConfirm.f })} onPress={() => { setEditDate(dateConfirm.orig); setDateConfirm(null); }} />
+              </View>
+            </View>
+          ) : (
+            <Btn label={saving ? t('inc_saving') : t('done')} onPress={() => { void save(); }} />
+          )}
           <View style={{ alignItems: 'center' }}>
             <BtnLine label={t('ie_del')} style={{ color: C.short, textDecorationColor: C.short, fontSize: 13.5 }}
               onPress={() => {
@@ -825,7 +880,13 @@ export function Splash() {
     });
   }, [out, up]);
 
+  /* Keyed on S.splash: a slow auth bootstrap can reset state and raise the
+     splash again after it already ended — without re-arming, the faded-out
+     splash would stay mounted at opacity 0 and swallow every tap. */
   React.useEffect(() => {
+    if (!S.splash) return;
+    ending.current = false;
+    out.setValue(1);
     Animated.timing(mark, {
       toValue: 1, duration: 800,
       easing: Easing.bezier(0.34, 1.45, 0.5, 1), useNativeDriver: true,
@@ -834,7 +895,7 @@ export function Splash() {
     Animated.timing(slg, { toValue: 1, duration: 500, delay: 720, easing: Easing.out(Easing.ease), useNativeDriver: true }).start();
     const timer = setTimeout(end, 3000);
     return () => clearTimeout(timer);
-  }, [mark, wm, slg, end]);
+  }, [S.splash, mark, wm, slg, out, end]);
 
   if (!S.splash) return null;
 

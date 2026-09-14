@@ -1,10 +1,12 @@
 import React from 'react';
-import { Animated, Easing, Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { getHousingTestResult } from '../../../services/housingSession';
 import { Route, useApp } from '../state';
-import { expByMonth, monthsAgg, recSpan, rm } from '../calc';
-import { planEnsure, planSaved, planToggle } from '../plan';
+import { commitTotal, expByMonth, monthsAgg, recSpan, rm } from '../calc';
+import {
+  planEnsure, planPhase, planResolveTarget, planSaved, planToggle, syncBufferTarget, upfrontNeed,
+} from '../plan';
 import { villageEnsure } from '../village';
 import { IsoIsland } from '../isosvg';
 import { BODY_FONT, C, DISP_FONT } from '../theme';
@@ -15,9 +17,6 @@ import { ScreenShell } from './shell';
 /* v22 home: total-saving hero + last-month income/expense card, a slim
    house-test row, then the saving-plan card with the village island. */
 
-function upfrontNeed(data: { house: { deposit: number }; upfront: { a: number }[] }): number {
-  return data.house.deposit + data.upfront.reduce((a, c) => a + (+c.a || 0), 0);
-}
 
 function arrowXml(up: boolean, color: string): string {
   return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">${up ? '<path d="M12 19V5M5 12l7-7 7 7"/>' : '<path d="M12 5v14M5 12l7 7 7-7"/>'}</svg>`;
@@ -29,9 +28,49 @@ function Blob({ size, style, color }: { size: number; style: object; color: stri
   return <View pointerEvents="none" style={[{ position: 'absolute', width: size, height: size, borderRadius: size / 2, backgroundColor: color }, style]} />;
 }
 
+/* v24 balpanel — month by month: in, out (work costs and bills), left. */
+function BalPanel() {
+  const { S, t, monthName } = useApp();
+  const keyOf = (d: string) => (+d.slice(0, 4)) * 12 + (+d.slice(5, 7) - 1);
+  const months = new Map<number, { inc: number; out: number }>();
+  for (const e of S.data.income) {
+    const k = keyOf(e.d);
+    const m = months.get(k) ?? { inc: 0, out: 0 };
+    m.inc += +e.a || 0;
+    months.set(k, m);
+  }
+  for (const e of S.data.workCostEntries) {
+    const k = keyOf(e.d);
+    if (!months.has(k)) continue;
+    months.get(k)!.out += +e.a || 0;
+  }
+  const commit = commitTotal(S.data);
+  const rows = [...months.entries()].sort((a, b) => b[0] - a[0]).slice(0, 6);
+  return (
+    <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.22)', gap: 6 }}>
+      {rows.length > 1 ? rows.map(([k, m]) => (
+        <View key={k} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 12.5, color: '#fff', width: 42 }}>{monthName(k % 12)}</Text>
+          <Text style={bp.cell}>{t('hm_bal_in')} {rm(m.inc)}</Text>
+          <Text style={bp.cell}>{t('hm_bal_out')} {rm(m.out + commit)}</Text>
+          <Text style={[bp.cell, { fontFamily: DISP_FONT }]}>{t('hm_bal_left')} {rm(m.inc - m.out - commit)}</Text>
+        </View>
+      )) : (
+        <Text style={bp.cell}>{t('hm_bal_none')}</Text>
+      )}
+      <Text style={[bp.cell, { fontSize: 10.5, lineHeight: 14, opacity: 0.8 }]}>{t('hm_bal_note')}</Text>
+    </View>
+  );
+}
+
+const bp = StyleSheet.create({
+  cell: { fontFamily: BODY_FONT, fontSize: 11.5, color: 'rgba(255,255,255,0.9)', flexShrink: 1 },
+});
+
 /* .hero + .hero2 — the dark balance cards. */
 function HomeCards() {
-  const { S, t, monthName, go } = useApp();
+  const { S, t, monthName } = useApp();
+  const [balOpen, setBalOpen] = React.useState(false);
 
   const monthKeyOf = (d: string) =>
     (+d.slice(0, 4)) * 12 + (+d.slice(5, 7) - 1);
@@ -69,12 +108,15 @@ function HomeCards() {
     ? monthName(key % 12)
     : '';
 
-  const gap = Math.max(
-    0,
-    upfrontNeed(S.data) - S.data.cashOnHand
-  );
+  const workCosts =
+    key != null
+      ? S.data.workCostEntries
+          .filter(e => monthKeyOf(e.d) === key)
+          .reduce((sum, e) => sum + (+e.a || 0), 0)
+      : 0;
 
-  const saving = income - ex;
+  /* Figma B1: the hero is what's left after work costs and bills. */
+  const saving = income - workCosts - commitTotal(S.data);
 
   return (
     <View>
@@ -114,41 +156,20 @@ function HomeCards() {
             marginTop: 8,
           }}
         >
-          <View
+          <Text
             style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 6,
+              fontFamily: BODY_FONT,
+              fontSize: 12.5,
+              lineHeight: 16,
+              color: 'rgba(255,255,255,0.88)',
               flexShrink: 1,
             }}
           >
-            <View
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor:
-                  gap > 0 ? C.caution : C.confirm,
-              }}
-            />
-
-            <Text
-              style={{
-                fontFamily: BODY_FONT,
-                fontSize: 12.5,
-                lineHeight: 16,
-                color: 'rgba(255,255,255,0.88)',
-                flexShrink: 1,
-              }}
-            >
-              {gap > 0
-                ? t('hm_togo', { g: rm(gap) })
-                : t('hm_ready')}
-            </Text>
-          </View>
+            {t('hm_after')}{mn ? ' \u00b7 ' + mn : ''}
+          </Text>
 
           <Pressable
-            onPress={() => go('upfront')}
+            onPress={() => setBalOpen(o => !o)}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -183,11 +204,12 @@ function HomeCards() {
                   fontSize: 15,
                 }}
               >
-                ↓
+                {balOpen ? '↑' : '↓'}
               </Text>
             </View>
           </Pressable>
         </View>
+        {balOpen ? <BalPanel /> : null}
       </View>
 
       <View
@@ -326,10 +348,36 @@ export function PlanCard() {
   const { S, t, up, monthName, go, toast } = useApp();
   const { width } = useWindowDimensions();
   const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+  const result = getHousingTestResult();
   React.useEffect(() => {
-    if (!S.plan || S.plan.key !== monthKey) up(s => { planEnsure(s); villageEnsure(s); });
-  }, [S.plan, monthKey, up]);
+    if (!S.plan || S.plan.key !== monthKey || !S.village) up(s => { planEnsure(s); villageEnsure(s); });
+  }, [S.plan, S.village, monthKey, up]);
+  React.useEffect(() => {
+    up(s => { syncBufferTarget(s, result); planResolveTarget(s, result); });
+  }, [result, up]);
   if (!S.plan || S.plan.key !== monthKey || !S.village) return null;
+
+  /* Epic 10: the card follows the phase. Before a target honestly exists
+     (setup/explain) home shows a slim hand-off to the plan screen. */
+  const phase = planPhase(S, result);
+  if (phase === 'setup' || phase === 'explain') {
+    return (
+      <Pressable onPress={() => go('plan')} style={st.plcard}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink }}>{t('pl_title')}</Text>
+          <BodyS muted>›</BodyS>
+        </View>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 18, lineHeight: 23, color: C.ink, marginTop: 8 }}>
+          {t(phase === 'setup' ? 'p10_setup_t' : 'p10_explain_t')}
+        </Text>
+        <BodyS muted style={{ marginTop: 3 }}>
+          {t(phase === 'setup' ? 'p10_setup_btn' : 'p10_explain_btn')}
+        </BodyS>
+      </Pressable>
+    );
+  }
+  const inBuffer = phase === 'buffer';
+  const b = S.buffer;
 
   const p = S.plan;
   const v = S.village;
@@ -340,14 +388,16 @@ export function PlanCard() {
   const mx = Math.max(1, ...p.amounts);
   const nCells = v.cells.filter(Boolean).length;
   const best = Math.max(0, ...v.cells);
-  const stats = `${t('vl_builtn', { b: v.built })} · ${t('vl_onplot', { n: nCells })}${best ? ' · ' + t('vl_best', { t: t('vl_t' + best) }) : ''}`;
+  let stats = `${t('vl_builtn', { b: v.built })} · ${t('vl_onplot', { n: nCells })}${best ? ' · ' + t('vl_best', { t: t('vl_t' + best) }) : ''}`;
+  if ((v.collection ?? 0) > 0) stats += ` · ${t('vl_collect', { n: v.collection, a: rm(v.savedRm ?? 0) })}`;
+  if ((v.queued ?? 0) > 0) stats += ` · ${t('vl_queue', { n: v.queued })}`;
 
   const toggleToday = () => {
     const wasDone = p.done[today];
     up(s => { planToggle(s, today); });
     toast(wasDone
       ? t('pl_untoast', { a: rm(p.amounts[today]) })
-      : t('pl_toast', { a: rm(p.amounts[today]), c: rm(S.data.cashOnHand + p.amounts[today]) }));
+      : t('pl_toast', { a: rm(p.amounts[today]), c: rm((S.village?.savedRm ?? 0) + p.amounts[today]) }));
   };
 
   return (
@@ -389,141 +439,24 @@ export function PlanCard() {
           }} />
         ))}
       </View>
-      <View style={{ alignItems: 'center', marginTop: 10 }}>
-        <IsoIsland cells={v.cells} width={Math.min(width, 390) - 72} />
-      </View>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 6 }}>
-        <BodyS muted style={{ flexShrink: 1 }}>{stats}</BodyS>
-        <Pressable onPress={() => up(s => { villageEnsure(s).msg = ''; s.vHelp = false; s.sheet = 'vflash'; })} style={st.plbtn}>
-          <Text style={st.plbtnTxt}>▶ {t('vl_play')}</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-/* Stage curtains — flat red drapes with a valance and a spotlight beam,
-   stretched over the covered card. */
-const CURTAIN_XML = `<svg viewBox="0 0 400 300" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="400" height="300" fill="#A82B23"/>
-<g fill="#8F211B">
-  <rect x="24" width="14" height="300"/><rect x="62" width="10" height="300"/>
-  <rect x="104" width="16" height="300"/><rect x="150" width="10" height="300"/>
-  <rect x="188" width="14" height="300"/><rect x="232" width="10" height="300"/>
-  <rect x="272" width="16" height="300"/><rect x="318" width="10" height="300"/>
-  <rect x="356" width="14" height="300"/>
-</g>
-<g fill="#C43B31">
-  <rect x="44" width="8" height="300"/><rect x="86" width="8" height="300"/>
-  <rect x="132" width="8" height="300"/><rect x="170" width="8" height="300"/>
-  <rect x="212" width="8" height="300"/><rect x="252" width="8" height="300"/>
-  <rect x="298" width="8" height="300"/><rect x="338" width="8" height="300"/>
-  <rect x="378" width="8" height="300"/>
-</g>
-<polygon points="168,0 232,0 320,300 80,300" fill="#FFDFC9" opacity="0.30"/>
-<polygon points="182,0 218,0 276,300 124,300" fill="#FFEBDD" opacity="0.28"/>
-<path d="M0 0 C 60 4 90 30 96 74 C 78 96 60 108 48 156 C 34 108 20 92 0 84 Z" fill="#B7332A"/>
-<path d="M0 0 C 52 6 78 28 84 66 C 66 88 52 100 42 140 C 30 98 18 84 0 74 Z" fill="#992620"/>
-<path d="M400 0 C 340 4 310 30 304 74 C 322 96 340 108 352 156 C 366 108 380 92 400 84 Z" fill="#B7332A"/>
-<path d="M400 0 C 348 6 322 28 316 66 C 334 88 348 100 358 140 C 370 98 382 84 400 74 Z" fill="#992620"/>
-<path d="M0 0 H400 V22 C 356 50 312 52 300 26 C 274 56 236 58 200 30 C 164 58 126 56 100 26 C 88 52 44 50 0 22 Z" fill="#8F211B"/>
-<path d="M0 0 H400 V14 C 352 40 310 42 300 18 C 272 46 234 48 200 22 C 166 48 128 46 100 18 C 90 42 48 40 0 14 Z" fill="#C43B31"/>
-</svg>`;
-
-/* A little wax crayon (pointing right); tip and wrapper share the shade. */
-function crayonXml(color: string, dark: string): string {
-  return `<svg viewBox="0 0 44 12" xmlns="http://www.w3.org/2000/svg">
-<polygon points="1,6 9,1.5 9,10.5" fill="${dark}"/>
-<rect x="9" y="1.5" width="31" height="9" rx="2.5" fill="${color}"/>
-<rect x="13" y="1.5" width="5" height="9" fill="${dark}" opacity="0.5"/>
-<rect x="34" y="1.5" width="4.5" height="9" fill="${dark}" opacity="0.5"/>
-</svg>`;
-}
-
-function Crayon({ color, dark, w = 40, style }: { color: string; dark: string; w?: number; style: object }) {
-  return <SvgXml xml={crayonXml(color, dark)} width={w} height={w * 12 / 44} style={style as never} />;
-}
-
-/* A twinkling star for the curtain overlay. */
-function Twinkle({ style, delay, size = 13 }: { style: object; delay: number; size?: number }) {
-  const anim = React.useRef(new Animated.Value(0)).current;
-  React.useEffect(() => {
-    const loop = Animated.loop(Animated.sequence([
-      Animated.delay(delay),
-      Animated.timing(anim, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      Animated.timing(anim, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-    ]));
-    loop.start();
-    return () => loop.stop();
-  }, [anim, delay]);
-  return (
-    <Animated.Text style={[{
-      position: 'absolute', color: '#FEC844', fontSize: size,
-      opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] }),
-      transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.75, 1.15] }) }],
-    }, style]}>✦</Animated.Text>
-  );
-}
-
-/* "Coming soon" stage cover for the saving-plan section: red curtains, a
-   spotlight, and Ruma holding up its wooden coming-soon sign with a happy
-   little wiggle. The card underneath stays dimmed and untouchable until the
-   feature ships. */
-function PlanComingSoon() {
-  const { t } = useApp();
-  const sway = React.useRef(new Animated.Value(0)).current;
-  React.useEffect(() => {
-    const loop = Animated.loop(Animated.sequence([
-      Animated.timing(sway, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      Animated.timing(sway, { toValue: 0, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-    ]));
-    loop.start();
-    return () => loop.stop();
-  }, [sway]);
-
-  return (
-    <View style={{ position: 'relative' }}>
-      {/* the real card gives the cover its height; it sleeps behind the curtain */}
-      <View pointerEvents="none" style={{ opacity: 0.22 }}>
-        <PlanCard />
-      </View>
-      <View style={st.curtainWrap} pointerEvents="auto">
-        <SvgXml xml={CURTAIN_XML} width="100%" height="100%" style={StyleSheet.absoluteFillObject as never} />
-        <Twinkle style={{ left: '14%', top: 26 }} delay={0} />
-        <Twinkle style={{ right: '15%', top: 44 }} delay={700} size={10} />
-        <Twinkle style={{ left: '22%', bottom: 54 }} delay={1300} size={11} />
-        <Twinkle style={{ right: '24%', bottom: 84 }} delay={400} size={9} />
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 22 }}>
-          {/* Ruma + placard wiggle together, pivoting near the paws. */}
-          <Animated.View style={{
-            alignItems: 'center',
-            transform: [
-              { translateY: sway.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) },
-              { rotate: sway.interpolate({ inputRange: [0, 1], outputRange: ['-2.5deg', '2.5deg'] }) },
-            ],
-          }}>
-            {/* Ruma's own sign-holding pose; the plank is blank in the
-               artwork, so the coming-soon lettering is painted onto it. */}
-            {/* The finished artwork: Ruma holds the crayon-lettered sign in
-               one paw and the crayon that wrote it in the other; the rest of
-               the crayon box lies scattered on the stage floor. */}
-            <View style={{ width: 212, height: 240, position: 'relative' }}>
-              <Image
-                source={require('../../../assets/ruma/ruma-sign.png')}
-                style={{ width: 212, height: 233 }}
-                resizeMode="contain"
-              />
-              <Crayon color="#4A9195" dark="#35696C" w={38}
-                style={{ position: 'absolute', left: 4, top: 224, transform: [{ rotate: '-9deg' }] }} />
-              <Crayon color="#F4C64D" dark="#C79612" w={34}
-                style={{ position: 'absolute', left: 38, top: 231, transform: [{ rotate: '17deg' }] }} />
-              <Crayon color="#D9663D" dark="#A8452B" w={36}
-                style={{ position: 'absolute', left: 158, top: 228, transform: [{ rotate: '-15deg' }] }} />
-            </View>
-          </Animated.View>
-          <Text style={st.soonSub}>{t('pl_title')} · {t('vl_title')}</Text>
-        </View>
-      </View>
+      {inBuffer ? (
+        /* Shield phase: a filled meter, no tiles — the game opens later. */
+        <BodyS muted style={{ marginTop: 10 }}>
+          {t('p10_shield_t')} · {rm(b?.saved ?? 0)} / {rm(b?.target ?? 0)} · {t('p10_target_from')}
+        </BodyS>
+      ) : (
+        <>
+          <View style={{ alignItems: 'center', marginTop: 10 }}>
+            <IsoIsland cells={v.cells} width={Math.min(width, 390) - 72} />
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 6 }}>
+            <BodyS muted style={{ flexShrink: 1 }}>{stats}</BodyS>
+            <Pressable onPress={() => up(s => { villageEnsure(s).msg = ''; s.vHelp = false; s.sheet = 'vflash'; })} style={st.plbtn}>
+              <Text style={st.plbtnTxt}>▶ {t('vl_play')}</Text>
+            </Pressable>
+          </View>
+        </>
+      )}
     </View>
   );
 }
@@ -533,14 +466,12 @@ export function HomeScreen() {
   const sp = recSpan(S.data);
 
   if (!sp) {
-    /* Empty record: keep the start prompt, but the coming-soon stage still
-       shows — the saving plan is local and doesn't need recorded income. */
+    /* Empty record: keep the start prompt; the plan card below hands off to
+       a house test (setup phase) until a real target exists. */
     return (
       <ScreenShell brand>
         <Display cls="h-l">{t('inc_empty')}</Display>
-        <Btn label={t('how_title')} onPress={() => up(s => { s.sheet = 'howworks'; })} />
         <Btn label={t('inc_add')} onPress={() => go('income')} />
-        <PlanComingSoon />
       </ScreenShell>
     );
   }
@@ -549,8 +480,7 @@ export function HomeScreen() {
     <ScreenShell brand>
       <HomeCards />
       <HouseTestRow />
-      <Btn label={t('how_title')} onPress={() => up(s => { s.sheet = 'howworks'; })} />
-      <PlanComingSoon />
+      <PlanCard />
     </ScreenShell>
   );
 }
@@ -586,12 +516,4 @@ const st = StyleSheet.create({
   },
   plbtnTxt: { fontFamily: DISP_FONT, fontSize: 13.5, color: '#fff' },
   plbar: { height: 10, borderRadius: 5, backgroundColor: C.ink14, overflow: 'hidden', marginTop: 12 },
-  curtainWrap: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 18, overflow: 'hidden',
-    borderWidth: 1.5, borderColor: '#8F211B',
-    shadowColor: 'rgba(120,20,15,1)', shadowOpacity: 0.3, shadowRadius: 18, shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
-  },
-  soonSub: { fontFamily: BODY_FONT, fontSize: 12.5, color: 'rgba(255,235,221,0.92)' },
 });

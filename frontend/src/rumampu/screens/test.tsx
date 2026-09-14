@@ -15,6 +15,7 @@ import {
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { useApp } from '../state';
+import { logIt } from '../log';
 import { monthsAgg, nf, rm } from '../calc';
 import { unrepresentedCoverageMonths } from '../money';
 import {
@@ -73,6 +74,7 @@ function useRunTest() {
         setHousingTestResult(housingTest);
         up(state => {
           state.testRan = true;
+          state.viewTestName = null;
           state.tryPay = null;
           state.shock = 0;
           state.howOpen = false;
@@ -182,7 +184,7 @@ export function HouseBody() {
                 onChangeText={v => {
                   setPriceTxt(v);
                   const nn = parseFloat(v);
-                  up(s => { s.data.house.price = isFinite(nn) && nn > 0 ? nn : null; });
+                  up(s => { s.data.house.price = isFinite(nn) && nn > 0 ? nn : null; if (isFinite(nn) && nn > 0) logIt(s, 'lg_price', { a: rm(nn) }, 'price'); });
                 }}
                 keyboardType="number-pad"
                 inputMode="numeric"
@@ -273,7 +275,48 @@ export function HousehomeScreen() {
         ))}
       </View>
       {tab === 'prep' ? <PrepareBody /> : <HouseBody />}
+      <HouseCostsRow />
     </ScreenShell>
+  );
+}
+
+/* B3 — the published-figures entry under the hub (US11). The range line
+   appears once the data has loaded; the row itself never blocks on it. */
+function HouseCostsRow() {
+  const { S, t, go, loadHouseCosts } = useApp();
+  React.useEffect(() => { void loadHouseCosts(); }, [loadHouseCosts]);
+  const stateData = S.houseCosts?.states[S.hcState];
+  let range: string | null = null;
+  if (stateData?.income) {
+    const yearsAll = Object.values(stateData.types.all ?? {})
+      .map(([, median]) => median / (stateData.income! * 12));
+    if (yearsAll.length) {
+      range = t('hc_span', {
+        a: Math.min(...yearsAll).toFixed(1),
+        b: Math.max(...yearsAll).toFixed(1),
+        s: stateData.name,
+      });
+    }
+  }
+  return (
+    <Pressable onPress={() => go('homecosts')} style={tx.hcrow}>
+      <View style={tx.hcrowIc}>
+        <SvgXml xml={`<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#3F7A7E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 20h16"/><path d="M6 20v-7"/><path d="M11 20V9"/><path d="M16 20V5"/></svg>`} width={20} height={20} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 14.5, lineHeight: 18, color: C.ink }}>{t('hh_cost')}</Text>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 12, lineHeight: 15, color: C.ink64, marginTop: 2 }}>{t('hh_cost_d')}</Text>
+        {range ? (
+          <View style={{ marginTop: 6, gap: 4 }}>
+            <View style={{ height: 6, borderRadius: 3, backgroundColor: C.ink14, overflow: 'hidden' }}>
+              <View style={{ width: '55%', height: '100%', borderRadius: 3, backgroundColor: '#8FBC8F' }} />
+            </View>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, color: C.ink64 }}>{range}</Text>
+          </View>
+        ) : null}
+      </View>
+      <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
+    </Pressable>
   );
 }
 
@@ -304,6 +347,7 @@ export function SavedtestsScreen() {
       setHousingTestResult(result as any);
       up(s => {
         s.testRan = true;
+        s.viewTestName = s.keptTests[idx]?.name || null;
         s.tryPay = null;
         s.shock = Number((result as any).income_shock_percent) || 0;
         s.howOpen = false;
@@ -417,6 +461,21 @@ export function ResultScreen() {
   const base = getHousingTestResult();
   const scenarioId = getHousingScenario()?.id ?? base?.scenario_id;
   const shock = S.shock;
+  /* v24: name the saved test being shown, with a way back to my own test. */
+  const viewingBanner = S.viewTestName ? (
+    <Pressable
+      onPress={() => { up(s => { s.viewTestName = null; }); go('savedtests'); }}
+      style={{
+        flexDirection: 'row', alignItems: 'center', gap: 10,
+        backgroundColor: '#EDF2F1', borderRadius: 14, paddingVertical: 10, paddingHorizontal: 14, minHeight: 54,
+      }}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 11, color: C.ink64 }}>{t('rx_viewing')}</Text>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 14.5, color: C.ink }} numberOfLines={1}>{S.viewTestName}</Text>
+      </View>
+      <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink64 }}>{t('rx_unview')}</Text>
+    </Pressable>
+  ) : null;
   const [shocked, setShocked] = React.useState<typeof base>(null);
   const [tryResult, setTryResult] = React.useState<typeof base>(null);
   const [customPay, setCustomPay] = React.useState('');
@@ -683,6 +742,7 @@ export function ResultScreen() {
           propertyPrice: h.price || null,
           incomeShockPercent: result.income_shock_percent,
         });
+        logIt(x2, 'lg_test_save', { name: x2.svDraft });
       }
       x2.sheet = 'savename';
     });
@@ -719,6 +779,7 @@ export function ResultScreen() {
 
   return (
     <ScreenShell back title={t('rs_title')}>
+      {viewingBanner}
       {verdict}
       {caveat}
       <View style={tx.txcard}>
@@ -767,34 +828,58 @@ export function ResultScreen() {
 }
 
 export function RangeScreen() {
-  const { S, t, up } = useApp();
+  const { S, t } = useApp();
   const result = getHousingTestResult();
   const cr = result?.carrying_range;
-  if (!cr) return <ScreenShell back title={t('rs_range')}><View /></ScreenShell>;
+  if (!cr || !result) return <ScreenShell back title={t('rs_range')}><View /></ScreenShell>;
 
+  /* v24 rework: the band said in words as well as drawn — what every month
+     carried, what half the months carried, and where the tested payment sits. */
   const h = S.data.house;
-  const loValue = cr.lower_monthly_amount;
-  const hiValue = cr.upper_monthly_amount;
+  const lo = cr.lower_monthly_amount;
+  const hi = cr.upper_monthly_amount;
   const you = cr.tested_monthly_home_cost;
-  const lo = loValue * 0.8;
-  const hiS = Math.max(hiValue, you, loValue + 1) * 1.15;
-  const pos = (v: number) => Math.min(100, Math.max(0, (v - lo) / (hiS - lo) * 100));
+  const months = result.months ?? [];
+  const n = months.length;
+  const covered = months.filter(m => (Number(m.available_for_home) || 0) >= you).length;
+  const where = you <= lo ? t('rg_w_below', { p: rm(you), a: rm(lo) })
+    : you <= hi ? t('rg_w_mid', { p: rm(you), a: rm(lo), b: rm(hi) })
+    : t('rg_w_above', { p: rm(you), b: rm(hi) });
+
+  /* rangeChart: a track from zero, the carried band, and the tested marker. */
+  const W = 330, TOP = 44, BAR = 22;
+  const axisY = TOP + BAR + 26;
+  const max = Math.max(hi, you, 1) * 1.18;
+  const x = (v: number) => 6 + Math.min(1, Math.max(0, v / max)) * (W - 12);
+  const tick = (v: number) =>
+    `<line x1="${x(v).toFixed(1)}" y1="${axisY}" x2="${x(v).toFixed(1)}" y2="${axisY + 5}" stroke="#3C5152" stroke-opacity=".4" stroke-width="1.2"/>` +
+    `<text x="${x(v).toFixed(1)}" y="${axisY + 18}" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="10.5" fill="rgba(60,81,82,.64)">${v ? nf(v) : '0'}</text>`;
+  const chartXml = `<svg viewBox="0 0 ${W} 142" xmlns="http://www.w3.org/2000/svg">` +
+    `<line x1="6" y1="${axisY}" x2="${W - 6}" y2="${axisY}" stroke="#3C5152" stroke-opacity=".28" stroke-width="1.2"/>` +
+    tick(0) + tick(max / 2) + tick(max) +
+    `<rect x="6" y="${TOP}" width="${W - 12}" height="${BAR}" rx="${BAR / 2}" fill="rgba(60,81,82,.14)"/>` +
+    `<rect x="${x(lo).toFixed(1)}" y="${TOP}" width="${(x(hi) - x(lo)).toFixed(1)}" height="${BAR}" rx="${BAR / 2}" fill="#4A9195" opacity=".85"/>` +
+    `<line x1="${x(you).toFixed(1)}" y1="${TOP - 6}" x2="${x(you).toFixed(1)}" y2="${TOP + BAR + 6}" stroke="#B54F2B" stroke-width="2.5"/>` +
+    `<text x="${x(lo).toFixed(1)}" y="${TOP + BAR + 16}" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="10" fill="rgba(60,81,82,.64)">${t('rg_end_lo')}</text>` +
+    `<text x="${x(hi).toFixed(1)}" y="${TOP - 26}" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="10" fill="rgba(60,81,82,.64)">${t('rg_end_hi')}</text>` +
+    `<text x="${x(you).toFixed(1)}" y="${TOP - 10}" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="700" fill="#B54F2B">${t('rg_k_you')}</text>` +
+    `</svg>`;
 
   return (
     <ScreenShell back title={t('rs_range')}>
-      <Display cls="h-l">{t('rg_lead', { a: nf(loValue), b: nf(hiValue) })}</Display>
-      <FigRow p="calc" />
-      <Band
-        loPct={pos(loValue)} hiPct={pos(hiValue)} pinPct={pos(you)}
-        pinTop={rm(you)} pinBottom={t('rg_pin')} prov="calc"
-      />
-      <BtnLine label={t('rg_how')} onPress={() => up(s => { s.rgHowOpen = !s.rgHowOpen; })} />
-      {S.rgHowOpen ? (
-        <Card>
-          <BodyS>{t('rg_how_body', { a: nf(loValue), b: nf(hiValue) })}</BodyS>
-        </Card>
-      ) : null}
+      <BodyS muted>{t('rg_intro')}</BodyS>
+      <SvgXml xml={chartXml} width="100%" />
+      <Card gap={8}>
+        <KV k={t('rg_row_lo')}><Display cls="h-m">{rm(lo)}</Display></KV>
+        <KV k={t('rg_row_hi')}><Display cls="h-m">{rm(hi)}</Display></KV>
+        <Divider />
+        <KV k={t('rg_row_you')}><Display cls="h-m">{rm(you)}</Display></KV>
+        <FigRow p="calc" />
+        <P style={{ fontSize: 14 }}>{where}</P>
+        <BodyS muted>{t('rg_counted', { c: covered, n })}</BodyS>
+      </Card>
       <Divider />
+      <Display cls="h-m">{t('rg_price_t')}</Display>
       <P>{t('rg_price', {
         r: h.rate,
         y: h.years,
@@ -1023,6 +1108,15 @@ const tx = StyleSheet.create({
     backgroundColor: '#fff',
     shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
     elevation: 2,
+  },
+  hcrow: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: '#fff',
+    borderWidth: 1.5, borderColor: '#E3EAE8', borderRadius: 18,
+    paddingVertical: 12, paddingHorizontal: 14,
+  },
+  hcrowIc: {
+    width: 40, height: 40, borderRadius: 12, backgroundColor: '#E4EFEC',
+    alignItems: 'center', justifyContent: 'center',
   },
   savedchip: {
     flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.card,

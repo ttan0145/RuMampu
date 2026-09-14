@@ -37,8 +37,10 @@ import {
   updateCommitment as updateCommitmentRequest,
   updateWorkCostEntry as updateWorkCostEntryRequest,
 } from './api';
-import { fetchSavedHousingTests as fetchSavedHousingTestsRequest } from '../../services/housingService';
-import { SavedHousingTestRecord } from '../../types/housing';
+import { fetchHouseCosts as fetchHouseCostsRequest, fetchSavedHousingTests as fetchSavedHousingTestsRequest } from '../../services/housingService';
+import { HouseCostType, HouseCostsResponse, SavedHousingTestRecord } from '../../types/housing';
+import { logIt } from './log';
+import { rm, rmx } from './calc';
 
 /* Central app state — mirrors the prototype's `S` object and navigation model. */
 
@@ -46,7 +48,7 @@ export type Route =
   | 'home' | 'plan' | 'money' | 'income' | 'incomeimport' | 'workcosts' | 'commit' | 'pattern' | 'coverage' | 'record'
   | 'expenses' | 'expadd' | 'expscan' | 'expmonths' | 'exlimits'
   | 'house' | 'homecost' | 'precheck' | 'result' | 'range' | 'compare' | 'shock'
-  | 'househome' | 'savedtests' | 'profile'
+  | 'househome' | 'savedtests' | 'profile' | 'homecosts' | 'acctdetails'
   // EN: Epic 7 preview routes are registered for future Iteration 3 work; this
   // does not make them an Iteration 1 implementation.
   // 中文：Epic 7 预览路由为未来 Iteration 3 工作保留；这不代表它们是 Iteration 1 实现。
@@ -61,6 +63,7 @@ export const TAB_OF: Record<Route, Tab> = {
   coverage: 'money', record: 'money', expenses: 'money', expadd: 'money', expscan: 'money',
   expmonths: 'money', exlimits: 'money',
   house: 'test', homecost: 'test', precheck: 'test', result: 'test', range: 'test',
+  homecosts: 'test', acctdetails: 'profile',
   compare: 'test', shock: 'test',
   plan: 'money', profile: 'profile', prepare: 'test', upfront: 'test', buffer: 'money', docs: 'test',
   pv_switch: 'test', pv_month: 'test', pv_compare: 'test',
@@ -84,15 +87,39 @@ export interface KeptTest {
   incomeShockPercent?: number;
 }
 
-/* v22 saving plan: the month's target split into uneven daily amounts. */
+/* v22 saving plan: the month's target split into uneven daily amounts.
+   LeanKit 10.9: skipped days redistribute and are never "missed"; a paused
+   month counts nothing as missed and resumes where it stopped. */
 export interface PlanState {
   key: string; target: number; n: number; amounts: number[]; done: boolean[]; seed: number;
+  skipped?: boolean[]; paused?: boolean;
 }
 
 /* v22 saving village: a 4x4 merge board (2048-style) that grows with the plan. */
 export interface VillageState {
   cells: number[]; pop: number[]; score: number; best: number; moves: number; gain: number; built: number;
+  /* Epic 10: istanas graduate off the grid into a permanent collection, and a
+     full board queues new houses instead of silently dropping a saved day.
+     savedRm is the truthful ringgit total behind the game — the only honest
+     signal on screen; istanas themselves are decorative. */
+  collection: number; queued: number; savedRm: number;
   msg?: string;
+}
+
+/* Epic 10 buffer shield: savings toward the house test's starting-liquidity
+   trough. Fills before the village game opens; spending it is the shield
+   working, so the tone of every transition is recorded here, not in a view. */
+export interface BufferState {
+  saved: number;
+  /* Savings beyond the target — still the user's money, spills into Phase 2. */
+  overflow: number;
+  /* null until a house test exists; 0 is a valid target (bf_zero). */
+  target: number | null;
+  /* tested_home_cost the target came from, to notice when the house changed. */
+  houseCost: number | null;
+  /* Set when a house change moved the target, so the user can be told. */
+  prevTarget: number | null;
+  msg: 'used' | 'moved' | null;
 }
 
 export type EntryPer = 'day' | 'week' | 'month';
@@ -149,9 +176,30 @@ export interface AppState {
   /* v22 saving plan + village game. */
   plan: PlanState | null;
   village: VillageState | null;
+  buffer: BufferState | null;
   vHelp: boolean;
   /* v22 misc UI state. */
   moView: 'tiles' | 'list';
+  /* US11 what homes cost here: published NAPIC figures, cached per session. */
+  houseCosts: HouseCostsResponse | null;
+  houseCostsSync: 'idle' | 'loading' | 'ready' | 'error';
+  hcState: string;
+  hcType: HouseCostType;
+  /* v24 upfront: the first-home stamp exemption flag, which saved test the
+     figures work from, and the renovation switch. */
+  firstHome: boolean;
+  ufTest: number | null;
+  ufReno: boolean;
+  /* v24: name shown while the Result screen displays a saved test. */
+  viewTestName: string | null;
+  /* Quick-menu shortcut: open the camera as soon as the scan screen mounts. */
+  scanAuto: boolean;
+  /* LeanKit 10.10.3: leftovers from finished months, moved into the pot only
+     by the user's own control. Keys are YYYY-MM of months already added. */
+  potMoved: number;
+  potMovedMonths: string[];
+  /* v24 activity log — what changed and when (session-only). */
+  log: { ts: number; k: string; v: Record<string, string | number>; field: string | null }[];
   houseTab: 'test' | 'prep';
   tryPay: number | null;
   tryCust: boolean;
@@ -221,8 +269,10 @@ function initialState(): AppState {
     onboard: 0, onboarded: false, splash: true,
     wstep: 0, authMode: 'login', acctMade: false, fgMail: '', guest: false, mergeGuestOnSignup: false,
     knew: false, kstep: 0, jobs: ['taxi'], ownJobs: [], lastMonth: '',
-    plan: null, village: null, vHelp: false,
+    plan: null, village: null, buffer: null, vHelp: false,
     moView: 'tiles', houseTab: 'test',
+    houseCosts: null, houseCostsSync: 'idle', hcState: 'sgr', hcType: 'all', firstHome: false,
+    potMoved: 0, potMovedMonths: [], ufTest: null, ufReno: false, viewTestName: null, scanAuto: false, log: [],
     tryPay: null, tryCust: false, depMode: null,
     incPick: false, incMode: 'type', incScan: { stage: 'pick', rows: [] }, incCsv: { stage: 'pick' }, incEdit: null,
     exMode: 'type', exCsv: { stage: 'pick' }, exEdit: null,
@@ -344,6 +394,7 @@ export interface Ctx {
     merchant?: string;
     confirmReceipt?: boolean;
   }) => Promise<void>;
+  loadHouseCosts: () => Promise<void>;
   toast: (msg: string, tone?: 'success' | 'error') => void;
   toastMsg: { msg: string; key: number; tone: 'success' | 'error' } | null;
 }
@@ -865,6 +916,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
         s.data.income.sort((x, y) => (x.d < y.d ? -1 : 1));
         s.workCostSummary = localWorkCostSummary(s.data, s.workCostSelectedMonth);
+        logIt(s, 'lg_inc_add', { a: rm(input.amount) });
       });
       return 'saved';
     }
@@ -881,6 +933,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
         s.data.income.sort((x, y) => (x.d < y.d ? -1 : 1));
         s.incomeSync = 'ready';
+        logIt(s, 'lg_inc_add', { a: rm(Number(entry.amount)) });
       });
       refreshAfterMoneyWrite();
       return 'saved';
@@ -920,6 +973,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         s.incomeSync = 'ready';
         s.incomePatternSync = 'idle';
         s.coverageSync = 'idle';
+        logIt(s, 'lg_inc_edit', { a: rm(Number(entry.amount)) });
       });
       refreshAfterMoneyWrite();
     } catch (error) {
@@ -941,10 +995,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       await deleteIncomeEntryRequest(id);
       up(s => {
+        const gone = s.data.income.find(entry => entry.id === id);
         s.data.income = s.data.income.filter(entry => entry.id !== id);
         s.incomeSync = 'ready';
         s.incomePatternSync = 'idle';
         s.coverageSync = 'idle';
+        logIt(s, 'lg_inc_del', gone ? { a: rm(gone.a) } : {});
       });
       refreshAfterMoneyWrite();
     } catch (error) {
@@ -1006,11 +1062,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           d: input.date,
         });
         s.workCostSummary = localWorkCostSummary(s.data, s.workCostSelectedMonth);
+        logIt(s, 'lg_wc_log', { a: rm(input.amount) });
       });
       return;
     }
     const entry = await createWorkCostEntryRequest(input);
-    up(s => { applyConfirmedWorkCost(s, entry); });
+    up(s => {
+      applyConfirmedWorkCost(s, entry);
+      logIt(s, 'lg_wc_log', { a: rm(Number(entry.amount)), c: entry.category_name ?? '' });
+    });
     refreshAfterMoneyWrite();
   }, [refreshAfterMoneyWrite, up]);
 
@@ -1049,6 +1109,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const existing = all.find(commitment => commitment.id === id);
         if (existing) existing.a = Number(item.monthly_amount);
         s.commitmentSync = 'ready';
+        logIt(s, 'lg_cm_set', { a: rm(Number(item.monthly_amount)) }, `cm:${id}`);
       });
     } catch (error) {
       up(s => { s.commitmentSync = 'error'; });
@@ -1099,6 +1160,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           method: input.entryMethod || 'manual',
           merchant: input.merchant,
         });
+        logIt(s, input.entryMethod === 'receipt' ? 'lg_exp_scan' : 'lg_exp_add', { a: rmx(input.amount) });
       });
       return;
     }
@@ -1113,6 +1175,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           merchant: entry.merchant,
         });
         s.expenseSync = 'ready';
+        logIt(s, entry.entry_method === 'receipt' ? 'lg_exp_scan' : 'lg_exp_add', { a: rmx(Number(entry.amount)) });
       });
     } catch (error) {
       up(s => { s.expenseSync = 'error'; });
@@ -1275,6 +1338,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await refreshAccountData(undefined, { includeSavedTests: false });
   }, [refreshAccountData]);
 
+  /* US11: published house-cost figures — fetched once per session, cached.
+     The in-flight guard lives in a ref because setState updaters are not
+     applied synchronously. */
+  const houseCostsInflight = useRef(false);
+  const loadHouseCosts = useCallback(async (): Promise<void> => {
+    if (houseCostsInflight.current) return;
+    houseCostsInflight.current = true;
+    setS(prev => (prev.houseCostsSync === 'ready' ? prev : { ...prev, houseCostsSync: 'loading' }));
+    try {
+      const data = await fetchHouseCostsRequest();
+      setS(prev => ({
+        ...prev,
+        houseCosts: data,
+        houseCostsSync: 'ready',
+        hcState: data.states[prev.hcState] ? prev.hcState : (Object.keys(data.states)[0] ?? prev.hcState),
+      }));
+    } catch {
+      houseCostsInflight.current = false;
+      setS(prev => ({ ...prev, houseCostsSync: 'error' }));
+    }
+  }, []);
+
   const toast = useCallback((msg: string, tone: 'success' | 'error' = 'success') => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToastMsg({ msg, key: Date.now(), tone });
@@ -1285,13 +1370,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     S, authReady, up, t, monthName, go, goTab, backNav,
     saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
-    saveCommitmentAmount, toast, toastMsg,
+    saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   }), [
     S, authReady, up, t, monthName, go, goTab, backNav,
     saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
-    saveCommitmentAmount, toast, toastMsg,
+    saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   ]);
 

@@ -1,14 +1,15 @@
 import React from 'react';
-import { Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getHousingTestResult } from '../../../services/housingSession';
 import { useApp } from '../state';
 import { nf, rm } from '../calc';
 import { useHousingCalculation } from '../useHousingCalculation';
+import { upfrontFees, upfrontNeed } from '../fees';
 import {
-  Badge, BodyS, Btn, BtnLine, BtnQuiet, Card, Display, Divider, EditList,
+  Badge, BodyS, Btn, BtnLine, BtnQuiet, Card, Display, Divider, EditList, NumInput,
   Fig, FigRow, IcLab, KV, NoteC, P, Prov,
 } from '../ui';
-import { C } from '../theme';
+import { BODY_FONT, C, DISP_FONT } from '../theme';
 import { Waterline } from '../charts';
 import { ScreenShell } from './shell';
 
@@ -42,16 +43,99 @@ export function PrepareScreen() {
 }
 
 export function UpfrontScreen() {
-  const { S, t, up } = useApp();
-  const calculation = useHousingCalculation(S.data);
-  const dep = S.data.house.deposit;
-  const need = calculation?.upfront_required ?? 0;
-  const have = calculation?.cash_on_hand ?? 0;
-  const gap = calculation?.upfront_gap ?? 0;
+  const { S, t, up, toast } = useApp();
+  const f = upfrontFees(S);
+  const src = f.src;
+  const dep = src.price ? src.dep : S.data.house.deposit;
+  const need = upfrontNeed(S);
+  const have = S.data.cashOnHand;
+  const gap = Math.max(0, need - have);
+  const loan = Math.max(0, src.price - src.dep);
+  const earnest = S.data.upfront.find(x => x.id === 'earnest') ?? { a: 0, ex: 0 };
+  const bal = Math.max(0, dep - (+earnest.a || 0));
+  const stampNote = f.exempt ? t('uf_exempt') : (S.firstHome && src.price > 500000 ? t('uf_noexempt') : '');
   const scale = Math.max(need, have, 1) * 1.12;
   const pct = (v: number) => v / scale * 100;
+  const [pick, setPick] = React.useState(false);
+  const [aboutOpen, setAboutOpen] = React.useState(false);
+  const testsWithPrice = S.keptTests
+    .map((k, i) => ({ k, i }))
+    .filter(x => x.k.propertyPrice != null && Number(x.k.propertyPrice) > 0);
+
+  const setItem = (id: string, n: number) => up(s => {
+    const it = s.data.upfront.find(x => x.id === id);
+    if (it) it.a = Math.max(0, n);
+  });
+
+  const Row = ({ label, kind, note, children }: {
+    label: string; kind: 'user' | 'calc' | 'official' | 'assume'; note?: string; children: React.ReactNode;
+  }) => (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, minHeight: 44, paddingVertical: 6 }}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <P style={{ fontSize: 14.5 }}>{label}</P>
+        <Prov p={kind} />
+        {note ? <BodyS muted style={{ fontSize: 11.5, marginTop: 2 }}>{note}</BodyS> : null}
+      </View>
+      {children}
+    </View>
+  );
+  const Amt = ({ v }: { v: number }) => (
+    <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(v)}</Text>
+  );
+  const Input = ({ id }: { id: string }) => {
+    const it = S.data.upfront.find(x => x.id === id) ?? { a: 0, ex: 0 };
+    return (
+      <View style={{ width: 110 }}>
+        <NumInput value={+it.a || ''} placeholder={String(it.ex ?? 0)} decimal={false} alignRight
+          onNum={n => setItem(id, n)} accessibilityLabel={t((it as { k?: string }).k || '')} />
+      </View>
+    );
+  };
+  const Switch = ({ on, onPress, label, note }: { on: boolean; onPress: () => void; label: string; note?: string }) => (
+    <Pressable onPress={onPress} accessibilityRole="switch" accessibilityState={{ checked: on }}
+      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: 48 }}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <P style={{ fontSize: 14.5 }}>{label}</P>
+        {note ? <BodyS muted style={{ fontSize: 11.5, marginTop: 2 }}>{note}</BodyS> : null}
+      </View>
+      <View style={{
+        width: 46, height: 28, borderRadius: 14, padding: 3,
+        backgroundColor: on ? C.brand : C.ink14,
+        alignItems: on ? 'flex-end' : 'flex-start', justifyContent: 'center',
+      }}>
+        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' }} />
+      </View>
+    </Pressable>
+  );
+  const Stage = ({ n, k, note, children }: { n: number; k: string; note?: string; children: React.ReactNode }) => (
+    <View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 12, color: '#fff' }}>{n}</Text>
+        </View>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.99, textTransform: 'uppercase', color: C.ink64 }}>{t(k)}</Text>
+      </View>
+      {note ? <BodyS muted style={{ fontSize: 11.5, marginTop: 4 }}>{note}</BodyS> : null}
+      <Card gap={0} style={{ marginTop: 8 }}>{children}</Card>
+    </View>
+  );
+
   return (
     <ScreenShell back title={t('pr_upfront')}>
+      {/* v24: name the tested price these figures come from, and let the user switch. */}
+      {src.price ? (
+        <Pressable onPress={() => testsWithPrice.length > 1 && setPick(true)} style={pr.ufsrc}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <BodyS muted style={{ fontSize: 11 }}>{t('uf_for')}</BodyS>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 14.5, color: C.ink }} numberOfLines={1}>
+              {src.name ? `${src.name} \u00b7 ${rm(src.price)}` : `${rm(src.price)} \u00b7 ${t('uf_for_house')}`}
+            </Text>
+          </View>
+          {testsWithPrice.length > 1 ? <BodyS muted>{t('uf_switch')} {'\u25be'}</BodyS> : null}
+        </Pressable>
+      ) : (
+        <NoteC><BodyS>{t('uf_notest')}</BodyS></NoteC>
+      )}
       <KV k={t('uf_have')}><Fig value={rm(have)} p="user" cls="h-l" /></KV>
       <KV k={t('uf_need')}><Fig value={rm(need)} p="calc" cls="h-l" /></KV>
       <KV k={t('uf_gap')}><Fig value={rm(gap)} p="calc" cls="h-l" /></KV>
@@ -89,13 +173,92 @@ export function UpfrontScreen() {
       ) : (
         <KV k={t('uf_dep')}><Fig value={rm(dep)} p="user" /></KV>
       )}
-      <Card gap={8}>
-        <EditList decimal list={S.data.upfront} onNum={(i, n) => up(s => { s.data.upfront[i].a = n; })} />
+      {/* v24: the first-home stamp exemption, with the rule it applies. */}
+      <Card gap={4}>
+        <Switch on={S.firstHome} onPress={() => up(s => { s.firstHome = !s.firstHome; })}
+          label={t('uf_first')} note={t('uf_first_h')} />
       </Card>
-      <BodyS muted>{t('dc_src')}</BodyS>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.99, textTransform: 'uppercase', color: C.ink64 }}>
+          {t('uf_steps')}
+        </Text>
+        <Pressable onPress={() => setAboutOpen(o => !o)} hitSlop={8} accessibilityLabel="info"
+          style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: C.ink40, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 11, color: C.ink64 }}>i</Text>
+        </Pressable>
+      </View>
+      {aboutOpen ? (
+        <View style={{ gap: 4 }}>
+          {['uf_steps_h', 'uf_baldp_h', 'uf_spa_h_g', 'uf_val_h_g', 'uf_stamp_src', 'uf_legal_src', 'uf_val_src', 'uf_first_src', 'uf_scope'].map(k => (
+            <BodyS key={k} muted style={{ fontSize: 11.5 }}>{t(k)}</BodyS>
+          ))}
+        </View>
+      ) : null}
+      <Stage n={1} k="uf_s1">
+        <Row label={t('uf_earn')} kind="user" note={t('uf_earn_h')}><Input id="earnest" /></Row>
+      </Stage>
+      <Stage n={2} k="uf_s2">
+        {src.price ? (
+          <>
+            <Row label={t('uf_baldp')} kind="calc" note={t('uf_baldp_h')}><Amt v={bal} /></Row>
+            <Row label={t('uf_spa')} kind="official" note={t('uf_spa_h', { p: rm(src.price) })}><Amt v={f.spa} /></Row>
+            <Row label={t('uf_stampT')} kind="official" note={stampNote || t('uf_stampT_h', { p: rm(src.price) })}><Amt v={f.t} /></Row>
+            <Row label={t('uf_loanlegal')} kind="official" note={t('uf_loanlegal_h', { p: rm(loan) })}><Amt v={f.loanLegal} /></Row>
+            <Row label={t('uf_stampL')} kind="official" note={stampNote || t('uf_stampL_h', { p: rm(loan) })}><Amt v={f.l} /></Row>
+            <Row label={t('uf_val')} kind="assume" note={t('uf_val_h', { p: rm(src.price) })}><Amt v={f.val} /></Row>
+            <Row label={t('uf_mrta')} kind="user" note={t('uf_mrta_h')}><Input id="mrta" /></Row>
+          </>
+        ) : (
+          <Row label={t('uf_mrta')} kind="user" note={t('uf_mrta_h')}><Input id="mrta" /></Row>
+        )}
+      </Stage>
+      <Stage n={3} k="uf_s3" note={t('uf_s3_h')}>
+        <Row label={t('uf_util')} kind="user" note={t('uf_util_h')}><Input id="util" /></Row>
+        <Row label={t('uf_strata')} kind="user" note={t('uf_strata_h')}><Input id="strata" /></Row>
+        <Row label={t('uf_furn')} kind="user" note={t('uf_furn_h')}><Input id="furn" /></Row>
+        <Switch on={S.ufReno} onPress={() => up(s => { s.ufReno = !s.ufReno; })} label={t('uf_reno_sw')} />
+        {S.ufReno ? <Row label={t('uf_reno')} kind="user" note={t('uf_reno_h')}><Input id="reno" /></Row> : null}
+      </Stage>
+      {pick ? (
+        <Modal transparent animationType="none" visible onRequestClose={() => setPick(false)}>
+          <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setPick(false)}>
+              <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
+            </Pressable>
+            <View style={[pr.sheet, Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null]}>
+              <Text style={{ fontFamily: DISP_FONT, fontSize: 19, color: C.ink }}>{t('uf_pick_t')}</Text>
+              <BodyS muted style={{ marginTop: 4 }}>{t('uf_pick_h')}</BodyS>
+              <View style={{ marginTop: 10, gap: 4 }}>
+                {testsWithPrice.map(({ k, i }) => (
+                  <Pressable key={i} onPress={() => { up(s => { s.ufTest = i; }); setPick(false); toast(t('saved')); }}
+                    style={[pr.opt, S.ufTest === i && { backgroundColor: C.card }]}>
+                    <P style={{ fontSize: 15 }}>{k.name || rm(Number(k.propertyPrice) || 0)}</P>
+                    <BodyS muted>{rm(Number(k.propertyPrice) || 0)}</BodyS>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </ScreenShell>
   );
 }
+
+const pr = StyleSheet.create({
+  ufsrc: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#EDF2F1', borderRadius: 14, paddingVertical: 10, paddingHorizontal: 14, minHeight: 54,
+  },
+  sheet: {
+    backgroundColor: C.paper, borderTopLeftRadius: 22, borderTopRightRadius: 22,
+    paddingHorizontal: 18, paddingTop: 16, paddingBottom: 26,
+  },
+  opt: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    minHeight: 48, paddingHorizontal: 12, borderRadius: 12,
+  },
+});
 
 export function BufferScreen() {
   const { t, monthName, goTab } = useApp();

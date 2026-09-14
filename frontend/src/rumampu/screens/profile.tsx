@@ -103,11 +103,11 @@ export function ProfileScreen() {
         </View>
       ) : (
         <View style={st.mocard}>
-          <Pressable onPress={() => toast(t('pf_prev'))} style={st.morow}>
+          <Pressable onPress={() => go('acctdetails')} style={st.morow}>
             <IcLab name="band"><P style={{ fontSize: 15 }}>{t('pf_acct')}</P></IcLab>
             <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
           </Pressable>
-          <Pressable onPress={() => toast(t('pf_prev'))} style={[st.morow, st.morowLine]}>
+          <Pressable onPress={() => go('acctdetails')} style={[st.morow, st.morowLine]}>
             <IcLab name="ring"><P style={{ fontSize: 15 }}>{t('pf_pw')}</P></IcLab>
             <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
           </Pressable>

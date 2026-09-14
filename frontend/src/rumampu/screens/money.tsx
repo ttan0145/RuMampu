@@ -13,6 +13,12 @@ import {
 } from '../ui';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { SvgXml } from 'react-native-svg';
+import { LOG_META, logClock, logRecent, logWhen } from '../log';
+import { ExLimitsBody } from './expenses';
+import * as ImagePicker from 'expo-image-picker';
+import { SaveFormat, manipulateAsync } from 'expo-image-manipulator';
+import { Platform } from 'react-native';
+import { scanIncomeStatement } from '../api';
 import { Ico } from '../svgs';
 import { SrcIcon } from '../icons';
 import { Ruma } from '../ruma-view';
@@ -130,7 +136,7 @@ export function MoneyScreen() {
         <Text style={mo.motileVal}>{rm(commitTotal(S.data))}</Text>
         <Text style={mo.motileEm}>{t('mo_permo')}</Text>
       </Pressable>
-      <Pressable onPress={() => go('workcosts')} style={mo.motile}>
+      <Pressable onPress={() => go('expenses')} style={mo.motile}>
         <View style={mo.motileIc}><Ico name="wrench" size={18} /></View>
         <BodyS muted style={{ fontSize: 12 }}>{t('money_workcosts')}</BodyS>
         <Text style={mo.motileVal}>{rm(workCostTotal(S.data))}</Text>
@@ -219,8 +225,7 @@ export function MoneyScreen() {
           ))}
         </View>
       </View>
-      {group('mo_rec', [['income', 'money_income', 'banknote'], ['expenses', 'money_expenses', 'receipt']])}
-      {group('mo_setup', [['workcosts', 'money_workcosts', 'wrench'], ['commit', 'money_commit', 'calendar'], ['exlimits', 'ex_limits', 'gauge']])}
+      {group('mo_rec', [['income', 'money_income', 'banknote'], ['expenses', 'money_expenses', 'receipt'], ['commit', 'bl_title', 'calendar']])}
       {group('mo_savings', [['plan', 'pl_title', 'calday'], ['buffer', 'pr_buffer', 'ring']])}
       {group('mo_insights', [['pattern', 'money_pattern', 'bars'], ['coverage', 'money_coverage', 'search'], ['record', 'money_record', 'book']])}
     </ScreenShell>
@@ -357,6 +362,70 @@ function SessionStatus({ label }: { label: string }) {
   );
 }
 
+/* v24 R18: what changed, newest first, over the last 72 hours — on a screen
+   called Your record, this IS the record. */
+function WhatChanged() {
+  const { S, t } = useApp();
+  const [all, setAll] = React.useState(false);
+  const entries = logRecent(S);
+  const SHOWN = 5;
+  const shown = all ? entries : entries.slice(0, SHOWN);
+  return (
+    <View style={{ gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <SectionTitle>{t('lg_title')}</SectionTitle>
+        <Prov p="user" />
+      </View>
+      <Card gap={6}>
+        {entries.length ? (
+          <>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <BodyS muted style={{ fontSize: 11 }}>{t('lgc_what')}</BodyS>
+              <BodyS muted style={{ fontSize: 11 }}>{t('lgc_amt')}</BodyS>
+            </View>
+            {shown.map((x, idx) => {
+              const m = LOG_META[x.k];
+              const v = x.v || {};
+              const amt = v.a != null ? String(v.a) : (v.n != null ? t('lg_nent', { n: v.n }) : '');
+              const cat = String(v.c ?? v.s ?? v.name ?? (v.f != null && v.g != null ? t('lg_fromto', { f: v.f, g: v.g }) : ''));
+              return (
+                <View key={x.ts + '-' + idx} style={{ borderTopWidth: idx ? 1 : 0, borderTopColor: C.ink14, paddingTop: idx ? 6 : 0, gap: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {m ? (
+                      <Text style={{
+                        fontFamily: SEMI_FONT, fontSize: 10.5, color: C.ink64, backgroundColor: '#EDF2F1',
+                        borderRadius: 7, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden',
+                      }}>{t(m[0])}</Text>
+                    ) : null}
+                    <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink, flex: 1 }} numberOfLines={1}>
+                      {m ? t(m[1]) : t(x.k, v)}
+                    </Text>
+                    <Text style={{ fontFamily: DISP_FONT, fontSize: 12.5, color: C.ink, fontVariant: ['tabular-nums'] }}>
+                      {amt || t('lg_dash')}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+                    <BodyS muted style={{ fontSize: 11, flexShrink: 1 }} numberOfLines={1}>{cat || t('lg_dash')}</BodyS>
+                    <BodyS muted style={{ fontSize: 11 }}>{logWhen(x.ts, t)} {'\u00b7'} {logClock(x.ts)}</BodyS>
+                  </View>
+                </View>
+              );
+            })}
+            {entries.length > SHOWN ? (
+              <Pressable onPress={() => setAll(o => !o)} style={{ minHeight: 36, justifyContent: 'center' }}>
+                <BodyS style={{ color: C.brand }}>{all ? t('lg_less') : t('lg_more', { n: entries.length - SHOWN })}</BodyS>
+              </Pressable>
+            ) : null}
+          </>
+        ) : (
+          <BodyS muted>{t('lg_none')}</BodyS>
+        )}
+        <BodyS muted style={{ fontSize: 10.5 }}>{t('lg_window')}</BodyS>
+      </Card>
+    </View>
+  );
+}
+
 export function RecordScreen() {
   // EN: Your Record is the US8.1/US8.2 screen. It reads current AppProvider
   // state and does not add account persistence or login behaviour.
@@ -396,6 +465,7 @@ export function RecordScreen() {
         </View>
       </Card>
 
+      <WhatChanged />
       <View style={{ gap: 8 }}>
         <SectionTitle>{t('rc_tests')}</SectionTitle>
         {/* EN: AC8.2.3 displays kept tests from S.keptTests, the current frontend session state. */}
@@ -444,7 +514,9 @@ function IncomeScanBody() {
   const [amts, setAmts] = React.useState<Record<number, string>>({});
   const [adding, setAdding] = React.useState(false);
 
-  const startScan = () => {
+  /* Sample rows keep the demo path; a real photo goes through the Groq
+     statement reader on the backend and nothing is saved until confirmed. */
+  const sampleScan = () => {
     up(s => { s.incScan = { stage: 'reading', rows: [] }; });
     setTimeout(() => {
       up(s => {
@@ -471,6 +543,63 @@ function IncomeScanBody() {
         };
       });
     }, 1500);
+  };
+
+  /* Quick-menu shortcut: Add → Scan a receipt → Income goes straight to
+     the camera instead of stopping at the picker step. */
+  const scanAuto = S.scanAuto;
+  React.useEffect(() => {
+    if (!scanAuto || S.incMode !== 'scan' || sc.stage !== 'pick') return;
+    up(s => { s.scanAuto = false; });
+    void realScan('camera');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanAuto]);
+
+  const realScan = async (source: 'camera' | 'library') => {
+    try {
+      if (source === 'camera' && Platform.OS !== 'web') {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) { toast(t('ex_image_failed'), 'error'); return; }
+      }
+      const res = source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ quality: 0.8 })
+        : await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
+      if (res.canceled || !res.assets.length) return;
+      const asset = res.assets[0];
+      const resized = await manipulateAsync(
+        asset.uri,
+        asset.width && asset.width > 1280 ? [{ resize: { width: 1280 } }] : [],
+        { compress: 0.7, format: SaveFormat.JPEG, base64: true },
+      );
+      if (!resized.base64) { toast(t('ex_image_failed'), 'error'); return; }
+      up(s => { s.incScan = { stage: 'reading', rows: [] }; });
+      const result = await scanIncomeStatement(resized.base64, 'image/jpeg');
+      const today = new Date();
+      const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      up(s => {
+        if (s.incMode !== 'scan') return;
+        if (!result.is_earnings || !result.rows.length) {
+          s.incScan = { stage: 'pick', rows: [] };
+          return;
+        }
+        const fallback = s.data.sources.find(x => x.k === 'src_ehail' || x.id === 'ehail')?.id
+          || s.incomeDraft.s || s.data.sources[0]?.id || '';
+        s.incScan = {
+          stage: 'confirm',
+          rows: result.rows.map(r => ({
+            on: true,
+            d: r.date || todayIso,
+            s: fallback,
+            a: Number(r.amount) || 0,
+            low: r.low_confidence || !r.date,
+          })),
+        };
+      });
+      if (!result.is_earnings || !result.rows.length) toast(t('sc_notearn'), 'error');
+    } catch {
+      up(s => { s.incScan = { stage: 'pick', rows: [] }; });
+      toast(t('ex_scan_failed'), 'error');
+    }
   };
 
   const srcName = (id: string) => {
@@ -568,10 +697,12 @@ function IncomeScanBody() {
 
   return (
     <InSec last>
-      <Drop icon="scan" title={t('sc_pick')} hint={t('sc_hint')} onPress={startScan}
-        badge={<Badge label={t('ex_preview')} />} />
+      <Drop icon="scan" title={t('sc_pick')} hint={t('sc_hint')} onPress={() => { void realScan('library'); }} />
+      <View style={{ marginTop: 10 }}>
+        <Btn label={t('ex_take_photo')} onPress={() => { void realScan('camera'); }} />
+      </View>
       <View style={{ alignItems: 'center', marginTop: 8 }}>
-        <BtnLine label={t('sc_sample')} style={{ fontSize: 13.5 }} onPress={startScan} />
+        <BtnLine label={t('sc_sample')} style={{ fontSize: 13.5 }} onPress={sampleScan} />
       </View>
     </InSec>
   );
@@ -1092,6 +1223,8 @@ export function WorkcostsScreen() {
  */
 export function CommitScreen() {
   const { S, t, monthName, up, toast, saveCommitmentAmount } = useApp();
+  /* v24: bills (commitments) and spending limits share one segmented screen. */
+  const [seg, setSeg] = React.useState<'bills' | 'limits'>('bills');
   const c = S.data.commitments;
   const added = new Set([...c.living, ...c.debts, ...c.savings].map(x => x.id));
   const presets = INCOME_API_ENABLED
@@ -1099,8 +1232,32 @@ export function CommitScreen() {
     : MOCK.commitPresets.filter(id => !added.has(id));
   const allMock = [...MOCK.commitments.living, ...MOCK.commitments.debts, ...MOCK.commitments.savings];
   const em = expByMonth(S.data);
+  const segBar = (
+    <View style={{ flexDirection: 'row', backgroundColor: '#EDF2F1', borderRadius: 14, padding: 4, gap: 4 }}>
+      {(['bills', 'limits'] as const).map(v => (
+        <Pressable key={v} onPress={() => setSeg(v)}
+          style={{
+            flex: 1, minHeight: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center',
+            backgroundColor: seg === v ? '#fff' : 'transparent',
+          }}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 13, color: seg === v ? C.ink : C.ink64 }}>
+            {t(v === 'bills' ? 'bl_bills' : 'bl_limits')}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+  if (seg === 'limits') {
+    return (
+      <ScreenShell back title={t('bl_title')}>
+        {segBar}
+        <ExLimitsBody />
+      </ScreenShell>
+    );
+  }
   return (
-    <ScreenShell back title={t('money_commit')}>
+    <ScreenShell back title={t('bl_title')}>
+      {segBar}
       {S.commitmentSync === 'loading' ? <NoteC><BodyS>{t('cm_sync_loading')}</BodyS></NoteC> : null}
       {S.commitmentSync === 'error' ? <NoteC><BodyS>{t('cm_sync_error')}</BodyS></NoteC> : null}
       {presets.length ? (
