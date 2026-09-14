@@ -92,7 +92,28 @@ export interface PlanState {
 /* v22 saving village: a 4x4 merge board (2048-style) that grows with the plan. */
 export interface VillageState {
   cells: number[]; pop: number[]; score: number; best: number; moves: number; gain: number; built: number;
+  /* Epic 10: istanas graduate off the grid into a permanent collection, and a
+     full board queues new houses instead of silently dropping a saved day.
+     savedRm is the truthful ringgit total behind the game — the only honest
+     signal on screen; istanas themselves are decorative. */
+  collection: number; queued: number; savedRm: number;
   msg?: string;
+}
+
+/* Epic 10 buffer shield: savings toward the house test's starting-liquidity
+   trough. Fills before the village game opens; spending it is the shield
+   working, so the tone of every transition is recorded here, not in a view. */
+export interface BufferState {
+  saved: number;
+  /* Savings beyond the target — still the user's money, spills into Phase 2. */
+  overflow: number;
+  /* null until a house test exists; 0 is a valid target (bf_zero). */
+  target: number | null;
+  /* tested_home_cost the target came from, to notice when the house changed. */
+  houseCost: number | null;
+  /* Set when a house change moved the target, so the user can be told. */
+  prevTarget: number | null;
+  msg: 'used' | 'moved' | null;
 }
 
 export type EntryPer = 'day' | 'week' | 'month';
@@ -149,6 +170,7 @@ export interface AppState {
   /* v22 saving plan + village game. */
   plan: PlanState | null;
   village: VillageState | null;
+  buffer: BufferState | null;
   vHelp: boolean;
   /* v22 misc UI state. */
   moView: 'tiles' | 'list';
@@ -221,7 +243,7 @@ function initialState(): AppState {
     onboard: 0, onboarded: false, splash: true,
     wstep: 0, authMode: 'login', acctMade: false, fgMail: '', guest: false, mergeGuestOnSignup: false,
     knew: false, kstep: 0, jobs: ['taxi'], ownJobs: [], lastMonth: '',
-    plan: null, village: null, vHelp: false,
+    plan: null, village: null, buffer: null, vHelp: false,
     moView: 'tiles', houseTab: 'test',
     tryPay: null, tryCust: false, depMode: null,
     incPick: false, incMode: 'type', incScan: { stage: 'pick', rows: [] }, incCsv: { stage: 'pick' }, incEdit: null,

@@ -249,7 +249,10 @@ function VStat({ label, value, hi, gain }: { label: string; value: number; hi?: 
 function VillageSheet() {
   const { S, t, up } = useApp();
   const { width } = useWindowDimensions();
-  const v = S.village || { cells: new Array(16).fill(0), pop: [], score: 0, best: 0, moves: 0, gain: 0, built: 0, msg: '' };
+  const v = S.village || {
+    cells: new Array(16).fill(0), pop: [], score: 0, best: 0, moves: 0, gain: 0, built: 0,
+    collection: 0, queued: 0, savedRm: 0, msg: '',
+  };
   const close = () => up(s => { s.sheet = null; });
   const play = (dir: 'l' | 'r' | 'u' | 'd') => up(s => { villagePlay(s, dir, tier => t('vl_built', { t: t('vl_t' + tier) })); });
 
@@ -264,7 +267,12 @@ function VillageSheet() {
 
   const n = v.cells.filter(Boolean).length;
   const best = Math.max(0, ...v.cells);
-  const stats = `${t('vl_builtn', { b: v.built })} · ${t('vl_onplot', { n })}${best ? ' · ' + t('vl_best', { t: t('vl_t' + best) }) : ''}`;
+  let stats = `${t('vl_builtn', { b: v.built })} · ${t('vl_onplot', { n })}${best ? ' · ' + t('vl_best', { t: t('vl_t' + best) }) : ''}`;
+  /* Epic 10 anchoring: the collection with its truthful ringgit total (the
+     istanas are decorative — the RM figure is the honest signal), plus any
+     houses waiting for space so a saved day never looks lost. */
+  if ((v.collection ?? 0) > 0) stats += `\n${t('vl_collect', { n: v.collection, a: rm(v.savedRm ?? 0) })}`;
+  if ((v.queued ?? 0) > 0) stats += `\n${t('vl_queue', { n: v.queued })}`;
   const isleW = Math.min(width, 390) - 60;
 
   return (
@@ -327,7 +335,8 @@ function VillageSheet() {
           <View key={id} style={{ flex: 1, alignItems: 'center' }}>
             <IsoHouse tier={id} size={42} />
             <Text style={{ fontFamily: DISP_FONT, fontSize: 10.5, color: C.ink }}>{t('vl_t' + (i + 1))}</Text>
-            <Text style={{ fontFamily: BODY_FONT, fontSize: 10.5, color: C.ink64 }}>{Math.pow(2, i + 1)} pt</Text>
+            {/* 2^tier, matching villageMove's merge scoring. */}
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 10.5, color: C.ink64 }}>{Math.pow(2, i)} pt</Text>
           </View>
         ))}
       </View>
