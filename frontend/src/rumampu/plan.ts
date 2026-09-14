@@ -22,8 +22,10 @@ export function planEnsure(s: AppState): PlanState {
 export function planRegen(p: PlanState): void {
   const idx: number[] = [];
   let fixed = 0;
+  const skipped = p.skipped ?? [];
   for (let i = 0; i < p.n; i++) {
     if (p.done[i]) fixed += p.amounts[i];
+    else if (skipped[i]) p.amounts[i] = 0;  /* 10.9.1: spread over the rest */
     else idx.push(i);
   }
   if (!idx.length) return;
@@ -46,9 +48,13 @@ export function planSaved(p: PlanState): number {
 
 export function planToggle(s: AppState, i: number): void {
   const p = planEnsure(s);
+  if (p.paused) return;             /* 10.9.2: a paused month changes nothing */
+  if (p.skipped?.[i]) return;       /* unskip first, then save */
   p.done[i] = !p.done[i];
   const amount = p.amounts[i];
-  s.data.cashOnHand += p.done[i] ? amount : -amount;
+  /* LeanKit 10.3 Amendment 1: a tick is savings the user DECLARED — the app
+     cannot verify money moved, so it never silently changes the balance the
+     house test reads. The declared total lives in savedRm and the buffer. */
   /* The truthful lifetime total behind the game (US10.8 anchoring). */
   const vv = villageEnsure(s);
   vv.savedRm = Math.max(0, vv.savedRm + (p.done[i] ? amount : -amount));
@@ -62,6 +68,51 @@ export function planToggle(s: AppState, i: number): void {
   }
   if (p.done[i]) villageSpawn(s);
   else villageRemove(s);
+}
+
+/* LeanKit 10.9.1 — toggle a day between skipped and planned. Its amount is
+   redistributed across the remaining unskipped, unsaved days. */
+export function planSkip(s: AppState, i: number): void {
+  const p = planEnsure(s);
+  if (p.paused || p.done[i]) return;
+  if (!p.skipped) p.skipped = new Array(p.n).fill(false);
+  p.skipped[i] = !p.skipped[i];
+  planRegen(p);
+}
+
+/* LeanKit 10.9.2 — pause/resume; nothing counts as missed while paused. */
+export function planPause(s: AppState): void {
+  const p = planEnsure(s);
+  p.paused = !p.paused;
+}
+
+/* LeanKit 10.11 — reset this month's plan; the record, the village and the
+   declared savings are untouched. */
+export function planReset(s: AppState): void {
+  s.plan = null;
+  planEnsure(s);
+}
+
+/* LeanKit 10.10.3 — what a finished month left (the remaining-balance
+   formula), listed for the user to move into the pot by their own control. */
+export function planMonthsLeft(s: AppState, commitMonthly: number): { key: string; left: number }[] {
+  const now = new Date();
+  const thisKey = now.getFullYear() * 12 + now.getMonth();
+  const keyOf = (d: string) => (+d.slice(0, 4)) * 12 + (+d.slice(5, 7) - 1);
+  const months = new Map<number, number>();
+  for (const e of s.data.income) {
+    const k = keyOf(e.d);
+    if (k < thisKey) months.set(k, (months.get(k) ?? 0) + (+e.a || 0));
+  }
+  for (const e of s.data.workCostEntries) {
+    const k = keyOf(e.d);
+    if (months.has(k)) months.set(k, (months.get(k) ?? 0) - (+e.a || 0));
+  }
+  return [...months.entries()]
+    .map(([k, v]) => ({ key: `${Math.floor(k / 12)}-${String((k % 12) + 1).padStart(2, '0')}`, left: Math.round(v - commitMonthly) }))
+    .filter(m => m.left > 0 && !s.potMovedMonths.includes(m.key))
+    .sort((a, b) => b.key.localeCompare(a.key))
+    .slice(0, 3);
 }
 
 /* ---- Epic 10: buffer shield & phased savings --------------------------------

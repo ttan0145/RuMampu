@@ -207,7 +207,7 @@ export function ExpensesScreen() {
         if (!cat) { setError('save'); setSaving(false); return; }
         await saveWorkCostEntry({ amount: a, date: dd, categoryId: cat });
         up(s => { s.expDraft = { a: '', c: s.expDraft.c, d: dd, per: s.expDraft.per }; });
-        toast(t('wk_saved', { m: monthName(key % 12) }));
+        toast(t('wk_saved'));
         setSaving(false);
         return;
       }

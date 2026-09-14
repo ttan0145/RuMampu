@@ -297,6 +297,8 @@ function VillageSheet() {
           {[1, 2, 3, 4, 5].map(i => (
             <BodyS key={i} style={{ marginTop: 3 }}>{i}. {t('vl_s' + i)}</BodyS>
           ))}
+          {/* LeanKit 10.8.2: what the village is, and what the app cannot know. */}
+          <BodyS muted style={{ marginTop: 6 }}>{t('sv_not_advice')}</BodyS>
         </View>
       ) : null}
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
@@ -834,7 +836,13 @@ export function Splash() {
     });
   }, [out, up]);
 
+  /* Keyed on S.splash: a slow auth bootstrap can reset state and raise the
+     splash again after it already ended — without re-arming, the faded-out
+     splash would stay mounted at opacity 0 and swallow every tap. */
   React.useEffect(() => {
+    if (!S.splash) return;
+    ending.current = false;
+    out.setValue(1);
     Animated.timing(mark, {
       toValue: 1, duration: 800,
       easing: Easing.bezier(0.34, 1.45, 0.5, 1), useNativeDriver: true,
@@ -843,7 +851,7 @@ export function Splash() {
     Animated.timing(slg, { toValue: 1, duration: 500, delay: 720, easing: Easing.out(Easing.ease), useNativeDriver: true }).start();
     const timer = setTimeout(end, 3000);
     return () => clearTimeout(timer);
-  }, [mark, wm, slg, end]);
+  }, [S.splash, mark, wm, slg, out, end]);
 
   if (!S.splash) return null;
 

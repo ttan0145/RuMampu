@@ -85,9 +85,12 @@ export interface KeptTest {
   incomeShockPercent?: number;
 }
 
-/* v22 saving plan: the month's target split into uneven daily amounts. */
+/* v22 saving plan: the month's target split into uneven daily amounts.
+   LeanKit 10.9: skipped days redistribute and are never "missed"; a paused
+   month counts nothing as missed and resumes where it stopped. */
 export interface PlanState {
   key: string; target: number; n: number; amounts: number[]; done: boolean[]; seed: number;
+  skipped?: boolean[]; paused?: boolean;
 }
 
 /* v22 saving village: a 4x4 merge board (2048-style) that grows with the plan. */
@@ -182,6 +185,10 @@ export interface AppState {
   hcType: HouseCostType;
   /* US5.2 before you move in: the first-home flag for the SJKP context. */
   firstHome: boolean;
+  /* LeanKit 10.10.3: leftovers from finished months, moved into the pot only
+     by the user's own control. Keys are YYYY-MM of months already added. */
+  potMoved: number;
+  potMovedMonths: string[];
   houseTab: 'test' | 'prep';
   tryPay: number | null;
   tryCust: boolean;
@@ -254,6 +261,7 @@ function initialState(): AppState {
     plan: null, village: null, buffer: null, vHelp: false,
     moView: 'tiles', houseTab: 'test',
     houseCosts: null, houseCostsSync: 'idle', hcState: 'sgr', hcType: 'all', firstHome: false,
+    potMoved: 0, potMovedMonths: [],
     tryPay: null, tryCust: false, depMode: null,
     incPick: false, incMode: 'type', incScan: { stage: 'pick', rows: [] }, incCsv: { stage: 'pick' }, incEdit: null,
     exMode: 'type', exCsv: { stage: 'pick' }, exEdit: null,

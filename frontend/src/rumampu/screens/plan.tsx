@@ -4,9 +4,10 @@ import { SvgXml } from 'react-native-svg';
 import { useApp } from '../state';
 import { rm } from '../calc';
 import {
-  bufferEnsure, feasibilityGap, planEnsure, planPhase, planRegen, planResolveTarget, planSaved,
-  planToggle, syncBufferTarget, upfrontNeed,
+  bufferEnsure, feasibilityGap, planEnsure, planMonthsLeft, planPause, planPhase, planRegen,
+  planReset, planResolveTarget, planSaved, planSkip, planToggle, syncBufferTarget, upfrontNeed,
 } from '../plan';
+import { commitTotal } from '../calc';
 import { villageEnsure } from '../village';
 import { getHousingTestResult } from '../../../services/housingSession';
 import { BODY_FONT, C, DISP_FONT } from '../theme';
@@ -40,7 +41,7 @@ ${lvl > 0 ? `<rect x="3" y="${y}" width="18" height="${h}" fill="#3F8A8E" clip-p
 }
 
 export function PlanScreen() {
-  const { S, t, up, go, toast } = useApp();
+  const { S, t, up, go, toast, monthName } = useApp();
   const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
   const result = getHousingTestResult();
   React.useEffect(() => {
@@ -101,12 +102,21 @@ export function PlanScreen() {
   const bPct = bTarget > 0 ? Math.min(100, Math.round((b?.saved ?? 0) / bTarget * 100)) : 100;
   const upShort = Math.max(0, upfrontNeed(S.data) - S.data.cashOnHand);
 
+  const paused = !!p.paused;
+  const monthEnding = p.n - (today + 1) <= 2;
+  const potTotal = (v?.savedRm ?? 0) + S.potMoved;
+  const monthsLeft = planMonthsLeft(S, commitTotal(S.data));
+  const [howOpen, setHowOpen] = React.useState(false);
+  const [resetArmed, setResetArmed] = React.useState(false);
+
   const toggle = (i: number) => {
+    if (paused) return;
+    if (p.skipped?.[i]) { up(s => { planSkip(s, i); }); return; }
     const wasDone = p.done[i];
     up(s => { planToggle(s, i); });
     toast(wasDone
       ? t('pl_untoast', { a: rm(p.amounts[i]) })
-      : t('pl_toast', { a: rm(p.amounts[i]), c: rm(S.data.cashOnHand + p.amounts[i]) }));
+      : t('pl_toast', { a: rm(p.amounts[i]), c: rm((S.village?.savedRm ?? 0) + p.amounts[i]) }));
   };
 
   return (
@@ -177,31 +187,42 @@ export function PlanScreen() {
             {inBuffer ? t('p10_shield_done') : t('pl_reached')}
           </Text>
         ) : null}
+        {paused ? <BodyS muted style={{ marginTop: 8 }}>{t('pl_paused_b')}</BodyS> : null}
+        {monthEnding && !paused ? <BodyS muted style={{ marginTop: 8 }}>{t('pl_monthend')}</BodyS> : null}
         <View style={st.plgrid}>
           {p.amounts.map((a, i) => {
             const done = p.done[i];
+            const skipped = !paused && !!p.skipped?.[i];
             const isToday = i === today;
-            const miss = i < today && !done;
+            const miss = !paused && i < today && !done && !skipped;
             return (
               <Pressable key={i} onPress={() => toggle(i)}
+                onLongPress={() => { if (!paused && !done) up(s => { planSkip(s, i); }); }}
                 accessibilityRole="button"
                 accessibilityState={{ selected: done }}
                 style={[st.plday,
                   miss && { borderStyle: 'dashed', borderColor: C.caution, backgroundColor: '#FFF8E5' },
+                  skipped && { backgroundColor: C.ink14, borderColor: C.ink14 },
                   isToday && { borderColor: C.ink, borderWidth: 2 },
                   done && { backgroundColor: C.brand, borderColor: C.brand },
+                  paused && { opacity: 0.55 },
                 ]}>
                 <Text style={{ fontFamily: BODY_FONT, fontSize: 10, lineHeight: 12, color: done ? 'rgba(255,255,255,0.8)' : C.ink64 }}>{i + 1}</Text>
-                <Text style={{ fontFamily: DISP_FONT, fontSize: 12.5, lineHeight: 15, color: done ? '#fff' : C.ink, fontVariant: ['tabular-nums'] }}>
-                  {done ? '✓ ' : ''}{a}
+                <Text style={{ fontFamily: DISP_FONT, fontSize: 12.5, lineHeight: 15, color: done ? '#fff' : skipped ? C.ink64 : C.ink, fontVariant: ['tabular-nums'] }}>
+                  {done ? '✓ ' : ''}{skipped ? '–' : a}
                 </Text>
               </Pressable>
             );
           })}
         </View>
+        <BodyS muted style={{ marginTop: 8 }}>{t('pl_skip_hint')}</BodyS>
         <BtnQuiet arrow={false} style={{ justifyContent: 'center', marginTop: 12 }}
           onPress={() => up(s => { const plan = planEnsure(s); plan.seed++; planRegen(plan); })}>
           <P style={{ textAlign: 'center' }}>{t('pl_shuffle')}</P>
+        </BtnQuiet>
+        <BtnQuiet arrow={false} style={{ justifyContent: 'center', marginTop: 8 }}
+          onPress={() => up(s => { planPause(s); })}>
+          <P style={{ textAlign: 'center' }}>{t(paused ? 'pl_resume' : 'pl_pause')}</P>
         </BtnQuiet>
       </Card>
       <View>
@@ -214,10 +235,24 @@ export function PlanScreen() {
               <Text style={{ fontFamily: BODY_FONT, fontSize: 12, lineHeight: 16, color: C.ink64, marginTop: 1 }}>{t('sp_pot1h')}</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={{ fontFamily: DISP_FONT, fontSize: 20, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(saved)}</Text>
+              <Text style={{ fontFamily: DISP_FONT, fontSize: 20, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(potTotal)}</Text>
               <Prov p="user" />
             </View>
           </View>
+          {/* LeanKit 10.4.3: the pot shows its working. */}
+          <Pressable onPress={() => setHowOpen(o => !o)} style={{ minHeight: 32, justifyContent: 'center' }}>
+            <BodyS muted>{t('ph_title')} {howOpen ? '▴' : '▾'}</BodyS>
+          </Pressable>
+          {howOpen ? (
+            <View style={{ gap: 4 }}>
+              {([['ph_had', 0], ['ph_plan', v?.savedRm ?? 0], ['ph_moved', S.potMoved], ['ph_total', potTotal]] as const).map(([k, amt]) => (
+                <View key={k} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <BodyS muted>{t(k)}</BodyS>
+                  <BodyS style={{ fontVariant: ['tabular-nums'] }}>{rm(amt)}</BodyS>
+                </View>
+              ))}
+            </View>
+          ) : null}
           <Pressable onPress={() => up(s => { s.sheet = 'potadd'; })} style={st.potadd}>
             <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700' }}>+</Text>
@@ -226,6 +261,34 @@ export function PlanScreen() {
           </Pressable>
         </Card>
       </View>
+      {/* LeanKit 10.10.3: what finished months left, moved in only by my control. */}
+      <View>
+        <Text style={st.eyebrow}>{t('pm_title')}</Text>
+        <Card gap={8}>
+          {monthsLeft.length ? monthsLeft.map(m => (
+            <View key={m.key} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: 40 }}>
+              <P style={{ fontSize: 14 }}>{monthName(+m.key.slice(5) - 1)} {m.key.slice(0, 4)}</P>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(m.left)}</Text>
+                <Pressable onPress={() => { up(s => { s.potMoved += m.left; s.potMovedMonths.push(m.key); }); toast(t('pm_added')); }}
+                  style={st.pmadd}>
+                  <Text style={{ fontFamily: DISP_FONT, fontSize: 12.5, color: '#fff' }}>{t('pm_add')}</Text>
+                </Pressable>
+              </View>
+            </View>
+          )) : <BodyS muted>{t('pm_none')}</BodyS>}
+        </Card>
+      </View>
+      {/* LeanKit 10.11: reset with confirmation; record, village, savings kept. */}
+      <BtnQuiet arrow={false} style={{ justifyContent: 'center' }}
+        onPress={() => {
+          if (!resetArmed) { setResetArmed(true); toast(t('pl_reset_arm')); return; }
+          setResetArmed(false);
+          up(s => { planReset(s); });
+          toast(t('pl_reset_done'));
+        }}>
+        <P style={{ textAlign: 'center', color: resetArmed ? C.short : C.ink }}>{t('pl_reset')}</P>
+      </BtnQuiet>
       {/* sv_not_advice — rendered on both phases (buffer and village). */}
       <BodyS muted style={{ textAlign: 'center', paddingHorizontal: 8 }}>{t('sv_not_advice')}</BodyS>
     </ScreenShell>
@@ -243,6 +306,10 @@ const st = StyleSheet.create({
   },
   ofTarget: { fontFamily: BODY_FONT, fontWeight: '400', fontSize: 14, color: C.ink64 },
   plbar: { height: 10, borderRadius: 5, backgroundColor: C.ink14, overflow: 'hidden', marginTop: 8 },
+  pmadd: {
+    minHeight: 32, paddingHorizontal: 14, borderRadius: 16, backgroundColor: C.brand,
+    alignItems: 'center', justifyContent: 'center',
+  },
   plgrid: {
     flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12,
   },

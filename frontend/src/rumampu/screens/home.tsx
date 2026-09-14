@@ -356,7 +356,7 @@ export function PlanCard() {
     up(s => { planToggle(s, today); });
     toast(wasDone
       ? t('pl_untoast', { a: rm(p.amounts[today]) })
-      : t('pl_toast', { a: rm(p.amounts[today]), c: rm(S.data.cashOnHand + p.amounts[today]) }));
+      : t('pl_toast', { a: rm(p.amounts[today]), c: rm((S.village?.savedRm ?? 0) + p.amounts[today]) }));
   };
 
   return (
