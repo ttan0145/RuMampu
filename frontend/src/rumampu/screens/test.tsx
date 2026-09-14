@@ -828,34 +828,58 @@ export function ResultScreen() {
 }
 
 export function RangeScreen() {
-  const { S, t, up } = useApp();
+  const { S, t } = useApp();
   const result = getHousingTestResult();
   const cr = result?.carrying_range;
-  if (!cr) return <ScreenShell back title={t('rs_range')}><View /></ScreenShell>;
+  if (!cr || !result) return <ScreenShell back title={t('rs_range')}><View /></ScreenShell>;
 
+  /* v24 rework: the band said in words as well as drawn — what every month
+     carried, what half the months carried, and where the tested payment sits. */
   const h = S.data.house;
-  const loValue = cr.lower_monthly_amount;
-  const hiValue = cr.upper_monthly_amount;
+  const lo = cr.lower_monthly_amount;
+  const hi = cr.upper_monthly_amount;
   const you = cr.tested_monthly_home_cost;
-  const lo = loValue * 0.8;
-  const hiS = Math.max(hiValue, you, loValue + 1) * 1.15;
-  const pos = (v: number) => Math.min(100, Math.max(0, (v - lo) / (hiS - lo) * 100));
+  const months = result.months ?? [];
+  const n = months.length;
+  const covered = months.filter(m => (Number(m.available_for_home) || 0) >= you).length;
+  const where = you <= lo ? t('rg_w_below', { p: rm(you), a: rm(lo) })
+    : you <= hi ? t('rg_w_mid', { p: rm(you), a: rm(lo), b: rm(hi) })
+    : t('rg_w_above', { p: rm(you), b: rm(hi) });
+
+  /* rangeChart: a track from zero, the carried band, and the tested marker. */
+  const W = 330, TOP = 44, BAR = 22;
+  const axisY = TOP + BAR + 26;
+  const max = Math.max(hi, you, 1) * 1.18;
+  const x = (v: number) => 6 + Math.min(1, Math.max(0, v / max)) * (W - 12);
+  const tick = (v: number) =>
+    `<line x1="${x(v).toFixed(1)}" y1="${axisY}" x2="${x(v).toFixed(1)}" y2="${axisY + 5}" stroke="#3C5152" stroke-opacity=".4" stroke-width="1.2"/>` +
+    `<text x="${x(v).toFixed(1)}" y="${axisY + 18}" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="10.5" fill="rgba(60,81,82,.64)">${v ? nf(v) : '0'}</text>`;
+  const chartXml = `<svg viewBox="0 0 ${W} 142" xmlns="http://www.w3.org/2000/svg">` +
+    `<line x1="6" y1="${axisY}" x2="${W - 6}" y2="${axisY}" stroke="#3C5152" stroke-opacity=".28" stroke-width="1.2"/>` +
+    tick(0) + tick(max / 2) + tick(max) +
+    `<rect x="6" y="${TOP}" width="${W - 12}" height="${BAR}" rx="${BAR / 2}" fill="rgba(60,81,82,.14)"/>` +
+    `<rect x="${x(lo).toFixed(1)}" y="${TOP}" width="${(x(hi) - x(lo)).toFixed(1)}" height="${BAR}" rx="${BAR / 2}" fill="#4A9195" opacity=".85"/>` +
+    `<line x1="${x(you).toFixed(1)}" y1="${TOP - 6}" x2="${x(you).toFixed(1)}" y2="${TOP + BAR + 6}" stroke="#B54F2B" stroke-width="2.5"/>` +
+    `<text x="${x(lo).toFixed(1)}" y="${TOP + BAR + 16}" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="10" fill="rgba(60,81,82,.64)">${t('rg_end_lo')}</text>` +
+    `<text x="${x(hi).toFixed(1)}" y="${TOP - 26}" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="10" fill="rgba(60,81,82,.64)">${t('rg_end_hi')}</text>` +
+    `<text x="${x(you).toFixed(1)}" y="${TOP - 10}" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="11" font-weight="700" fill="#B54F2B">${t('rg_k_you')}</text>` +
+    `</svg>`;
 
   return (
     <ScreenShell back title={t('rs_range')}>
-      <Display cls="h-l">{t('rg_lead', { a: nf(loValue), b: nf(hiValue) })}</Display>
-      <FigRow p="calc" />
-      <Band
-        loPct={pos(loValue)} hiPct={pos(hiValue)} pinPct={pos(you)}
-        pinTop={rm(you)} pinBottom={t('rg_pin')} prov="calc"
-      />
-      <BtnLine label={t('rg_how')} onPress={() => up(s => { s.rgHowOpen = !s.rgHowOpen; })} />
-      {S.rgHowOpen ? (
-        <Card>
-          <BodyS>{t('rg_how_body', { a: nf(loValue), b: nf(hiValue) })}</BodyS>
-        </Card>
-      ) : null}
+      <BodyS muted>{t('rg_intro')}</BodyS>
+      <SvgXml xml={chartXml} width="100%" />
+      <Card gap={8}>
+        <KV k={t('rg_row_lo')}><Display cls="h-m">{rm(lo)}</Display></KV>
+        <KV k={t('rg_row_hi')}><Display cls="h-m">{rm(hi)}</Display></KV>
+        <Divider />
+        <KV k={t('rg_row_you')}><Display cls="h-m">{rm(you)}</Display></KV>
+        <FigRow p="calc" />
+        <P style={{ fontSize: 14 }}>{where}</P>
+        <BodyS muted>{t('rg_counted', { c: covered, n })}</BodyS>
+      </Card>
       <Divider />
+      <Display cls="h-m">{t('rg_price_t')}</Display>
       <P>{t('rg_price', {
         r: h.rate,
         y: h.years,
