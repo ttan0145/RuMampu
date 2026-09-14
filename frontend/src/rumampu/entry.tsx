@@ -32,11 +32,9 @@ function KProg({ total, on }: { total: number; on: number }) {
   );
 }
 
-function IconBtn({ label, onPress, light, accessibilityLabel }: {
-  label: string; onPress: () => void; light?: boolean; accessibilityLabel?: string;
-}) {
+function IconBtn({ label, onPress, light }: { label: string; onPress: () => void; light?: boolean }) {
   return (
-    <Pressable onPress={onPress} accessibilityLabel={accessibilityLabel} style={{
+    <Pressable onPress={onPress} style={{
       minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 14,
       backgroundColor: light ? 'rgba(255,255,255,0.16)' : 'transparent',
     }}>
@@ -251,16 +249,6 @@ export function EntryFlow() {
     return (
       <View style={[st.wpage, { paddingTop: 20 + insets.top, paddingBottom: 22 + insets.bottom }]}>
         <KProg total={3} on={1} />
-        <View style={{ flexDirection: 'row', minHeight: 40, alignItems: 'center' }}>
-          <IconBtn
-            label="←"
-            accessibilityLabel={t('back')}
-            onPress={() => up(state => {
-              state.wstep = 0;
-              state.authMode = 'login';
-            })}
-          />
-        </View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
           <Ruma w={148} pose="wave" />
           <Text style={[st.hL, { textAlign: 'center' }]}>{t('wf_langq')}</Text>
@@ -294,7 +282,7 @@ export function EntryFlow() {
     <View style={[st.wpage, { paddingTop: 20 + insets.top, paddingBottom: 22 + insets.bottom }]}>
       <KProg total={3} on={2} />
       <View style={{ flexDirection: 'row', minHeight: 40, alignItems: 'center' }}>
-        <IconBtn label="←" accessibilityLabel={t('back')} onPress={() => up(state => { state.wstep = 1; })} />
+        <IconBtn label="←" onPress={() => up(state => { state.wstep = 1; })} />
       </View>
       <ScrollView contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
         <Ruma w={172} pose="happy" />
@@ -382,6 +370,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
   const [accountStage, setAccountStage] = React.useState('Signing you in...');
   const [accountLoadError, setAccountLoadError] = React.useState('');
   const [pendingAuth, setPendingAuth] = React.useState<ApiAuthResponse | null>(null);
+  const [pendingLoadBeforeOnboarding, setPendingLoadBeforeOnboarding] = React.useState(false);
   const [guestTransferAuth, setGuestTransferAuth] = React.useState<ApiAuthResponse | null>(null);
   const [guestTransferLoading, setGuestTransferLoading] = React.useState(false);
   const [guestTransferError, setGuestTransferError] = React.useState('');
@@ -391,10 +380,16 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
 
   React.useEffect(() => { setAuthError(''); }, [amode]);
 
-  const finishAuthenticatedEntry = async (auth: ApiAuthResponse) => {
-    // Authentication and account loading are deliberately separate. As soon as
-    // credentials succeed, leave the login form. Returning accounts then get a
-    // real progress screen while all dashboard data is prepared.
+  const finishAuthenticatedEntry = async (
+    auth: ApiAuthResponse,
+    options: { loadBeforeOnboarding?: boolean } = {},
+  ) => {
+    const loadBeforeOnboarding = Boolean(options.loadBeforeOnboarding);
+
+    // Authentication and account loading are deliberately separate. Returning
+    // accounts load their dashboard immediately. If a guest has just chosen to
+    // keep their data during sign-up, we also show the loading screen once so
+    // the claimed guest data is prepared before continuing onboarding.
     up(s => {
       s.guest = false;
       s.acctMade = false;
@@ -403,34 +398,46 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
       if (auth.preferred_language) s.lang = auth.preferred_language;
 
       if (!auth.onboarding_completed) {
-        // A new/incomplete account continues onboarding instead of loading Home.
         s.onboarded = false;
         s.wstep = auth.preferred_language ? 2 : 1;
       }
     });
 
-    if (!auth.onboarding_completed) return;
+    if (!auth.onboarding_completed && !loadBeforeOnboarding) return;
 
     setPendingAuth(auth);
+    setPendingLoadBeforeOnboarding(loadBeforeOnboarding);
     setAccountLoading(true);
     setAccountLoadError('');
     setAccountProgress(10);
-    setAccountStage('Signed in successfully');
+    setAccountStage(loadBeforeOnboarding ? 'Keeping your guest data...' : 'Signed in successfully');
 
     try {
       await refreshAccountData((progress, stage) => {
         setAccountProgress(progress);
         setAccountStage(stage);
       });
+
       up(s => {
         s.guest = false;
-        s.knew = true;
-        s.onboarded = true;
-        s.wstep = 0;
+        if (auth.onboarding_completed) {
+          s.knew = true;
+          s.onboarded = true;
+          s.wstep = 0;
+        } else {
+          // The account is new, so after loading the claimed guest data we
+          // continue the normal first-time onboarding flow.
+          s.knew = false;
+          s.onboarded = false;
+          s.kstep = 0;
+          s.wstep = auth.preferred_language ? 2 : 1;
+        }
         if (auth.preferred_language) s.lang = auth.preferred_language;
       });
+
       setAccountLoading(false);
       setPendingAuth(null);
+      setPendingLoadBeforeOnboarding(false);
     } catch (error) {
       setAccountLoadError(error instanceof ApiError
         ? error.message
@@ -443,13 +450,16 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
     setAccountLoadError('');
     setAccountProgress(10);
     setAccountStage('Trying again...');
-    await finishAuthenticatedEntry(pendingAuth);
+    await finishAuthenticatedEntry(pendingAuth, {
+      loadBeforeOnboarding: pendingLoadBeforeOnboarding,
+    });
   };
 
   const logoutFromLoading = async () => {
     await signOut();
     setAccountLoading(false);
     setPendingAuth(null);
+    setPendingLoadBeforeOnboarding(false);
     setAccountLoadError('');
     setAccountProgress(0);
   };
@@ -529,7 +539,9 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
       }
       const auth = guestTransferAuth;
       setGuestTransferAuth(null);
-      await finishAuthenticatedEntry(auth);
+      await finishAuthenticatedEntry(auth, {
+        loadBeforeOnboarding: action === 'keep',
+      });
     } catch (error) {
       setGuestTransferError(error instanceof ApiError ? error.message : t('gt_error'));
     } finally {
@@ -596,7 +608,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
       <View style={{ paddingHorizontal: 20, paddingTop: 16 + insets.top }}>
         <View style={{ flexDirection: 'row' }}>
           {!login ? (
-            <IconBtn light label="←" accessibilityLabel={t('back')} onPress={() => up(s => { s.authMode = 'login'; })} />
+            <IconBtn light label="←" onPress={() => up(s => { s.authMode = 'login'; })} />
           ) : <View style={{ width: 44, height: 44 }} />}
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
@@ -777,21 +789,25 @@ export function GetToKnow() {
   const { S, t, up, toast, saveIncomeEntry, updateIncomeEntry } = useApp();
   const insets = useSafeAreaInsets();
   const [amt, setAmt] = React.useState(S.lastMonth || '');
+  const [finishing, setFinishing] = React.useState(false);
+  const [finishProgress, setFinishProgress] = React.useState(20);
+  const [finishStage, setFinishStage] = React.useState('Saving your details...');
   const step = S.kstep || 0;
-  const backFromIntro = () => up(s => {
-    s.kstep = 0;
-    s.knew = false;
-    s.onboarded = false;
-    if (s.guest) {
-      s.wstep = 0;
-      s.authMode = 'login';
-    } else {
-      s.wstep = 2;
-    }
-  });
 
   const finish = async (save: boolean) => {
+    if (finishing) return;
+
     const amount = save ? (parseFloat(amt) || 0) : 0;
+    const showLoading = S.guest && step >= 2;
+    if (showLoading) {
+      setFinishing(true);
+      setFinishProgress(20);
+      setFinishStage('Saving your details...');
+    }
+
+    // Keep the user's setup choices in local state immediately, but do not mark
+    // onboarding as complete until the final save attempt has finished. This
+    // allows the guest loading screen to remain visible while the request runs.
     up(s => {
       if (save) {
         /* Preferred sources float to the top of the picker; unknown picks become custom names later. */
@@ -803,12 +819,16 @@ export function GetToKnow() {
         if (s.data.sources.length) s.incomeDraft.s = s.data.sources[0].id;
         s.lastMonth = amt;
       }
-      s.knew = true;
       s.sheet = null;
     });
 
     try {
       if (save && amount > 0) {
+        if (showLoading) {
+          setFinishProgress(45);
+          setFinishStage('Saving your previous month income...');
+        }
+
         const targetDate = lastMonthIso();
         const sourceId = S.data.sources[0]?.id;
         const existing = S.data.income.find(entry => entry.method === 'historical_total' && entry.d.slice(0, 7) === targetDate.slice(0, 7));
@@ -821,27 +841,57 @@ export function GetToKnow() {
           });
         }
       }
-      // Guests only complete this flow locally. Registered users persist the
+
+      if (showLoading) {
+        setFinishProgress(82);
+        setFinishStage('Getting RuMampu ready...');
+      }
+
+      // Guests complete this flow locally. Registered users persist the
       // completion flag so future logins and app restarts skip these pages.
       if (!S.guest) await completeAccountOnboarding();
+
+      // Give the guest a visible transition instead of instantly jumping from
+      // the income question to Home after the network request completes.
+      if (showLoading) {
+        await new Promise(resolve => setTimeout(resolve, 350));
+        setFinishProgress(100);
+      }
+
+      up(s => {
+        s.knew = true;
+        s.sheet = null;
+      });
       if (save) toast(t('k_saved'));
     } catch {
-      // The setup UI is already complete locally. If the network write fails,
-      // the backend flag remains false and the user will be asked again later
-      // rather than silently losing first-time setup state.
+      // Preserve the existing behaviour: setup can still finish locally if the
+      // network write fails. The next interaction can retry the backend write.
+      up(s => {
+        s.knew = true;
+        s.sheet = null;
+      });
       if (save) toast(t('k_saved'));
+    } finally {
+      setFinishing(false);
     }
   };
+
+  if (finishing) {
+    return (
+      <AccountLoadingScreen
+        progress={finishProgress}
+        stage={finishStage}
+        onRetry={() => {}}
+        onLogout={() => {}}
+      />
+    );
+  }
 
   return (
     <View style={[st.kpage, { paddingTop: 18 + insets.top, paddingBottom: 18 + insets.bottom }]}>
       {step ? <KProg total={2} on={step} /> : null}
       <View style={{ flexDirection: 'row', minHeight: 40, alignItems: 'center', justifyContent: 'space-between' }}>
-        {step ? (
-          <IconBtn label="←" accessibilityLabel={t('back')} onPress={() => up(s => { s.kstep = Math.max(0, (s.kstep || 0) - 1); })} />
-        ) : (
-          <IconBtn label="←" accessibilityLabel={t('back')} onPress={backFromIntro} />
-        )}
+        {step ? <IconBtn label="←" onPress={() => up(s => { s.kstep = Math.max(0, (s.kstep || 0) - 1); })} /> : <View />}
         {step ? <LineBtn label={t('k_skip')} onPress={() => finish(false)} /> : null}
       </View>
       {step === 0 ? (

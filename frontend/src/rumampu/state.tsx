@@ -138,6 +138,9 @@ export interface AppState {
   acctMade: boolean;
   fgMail: string;
   guest: boolean;
+  /* When a guest chooses Sign up from Profile, this records their explicit
+     choice to move the current guest record into the new account. */
+  mergeGuestOnSignup: boolean;
   knew: boolean;
   kstep: number;
   jobs: string[];
@@ -216,7 +219,7 @@ function initialState(): AppState {
     route: 'home',
     stack: [],
     onboard: 0, onboarded: false, splash: true,
-    wstep: 0, authMode: 'login', acctMade: false, fgMail: '', guest: false,
+    wstep: 0, authMode: 'login', acctMade: false, fgMail: '', guest: false, mergeGuestOnSignup: false,
     knew: false, kstep: 0, jobs: ['taxi'], ownJobs: [], lastMonth: '',
     plan: null, village: null, vHelp: false,
     moView: 'tiles', houseTab: 'test',
@@ -653,7 +656,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!s.guest) s.keptTests = records.map(keptTestFromRecord);
       });
     } catch (error) {
-      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) return;
+      // housingService throws services/api.ApiError, which is a different class
+      // from src/rumampu/api.ApiError. Check the HTTP status structurally so
+      // guest-only 401/403 responses never crash the app.
+      const status = typeof error === 'object' && error !== null && 'status' in error
+        ? Number((error as { status?: unknown }).status)
+        : undefined;
+      if (status === 401 || status === 403) return;
       throw error;
     }
   }, [up]);

@@ -361,10 +361,10 @@ export async function login(identifier: string, password: string): Promise<ApiAu
   return result;
 }
 
-export async function register(email: string, password: string): Promise<ApiAuthResponse> {
+export async function register(email: string, password: string, mergeGuestData = false): Promise<ApiAuthResponse> {
   const result = await request<ApiAuthResponse>('/auth/register/', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, merge_guest_data: mergeGuestData }),
   });
   await storeAuthToken(result.token);
   return result;

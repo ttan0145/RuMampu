@@ -308,6 +308,11 @@ class RegisterView(APIView):
         # create_user hashes the password; the raw password is never stored.
         user = User.objects.create_user(username=email, email=email, password=password)
 
+        # Guest data is claimed only after explicit consent from the Profile
+        # sign-up flow. A normal sign-up starts with a clean account profile.
+        merge_guest_data = request.data.get("merge_guest_data", False) is True
+        if merge_guest_data:
+            claim_guest_profile_for_user(request, user)
         _app_state(user)
 
         # Registration also signs the user in. Subsequent API requests use this
