@@ -265,6 +265,7 @@ const ICONS: Record<string, string> = {
   calendar: '<rect x="3" y="4.5" width="18" height="17" rx="2"/><path d="M16 2.5v4M8 2.5v4M3 10.5h18M8 15h3"/>',
   receipt: '<path d="M6 2.8h12v18.4l-2-1.6-2 1.6-2-1.6-2 1.6-2-1.6-2 1.6z"/><path d="M9 8h6M9 12h6"/>',
   bars: '<path d="M5.5 20V13M12 20V4.5M18.5 20v-9.5"/>',
+  house: '<path d="M3.5 10.5 12 3.5l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="m9.3 14.8 2 2 3.6-4.2"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M16.3 16.3L21 21"/>',
   book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2.5H20v19H6.5A2.5 2.5 0 0 1 4 19V5a2.5 2.5 0 0 1 2.5-2.5z"/>',
   wallet: '<rect x="2.5" y="5.5" width="19" height="14.5" rx="2.5"/><path d="M2.5 10h19"/><circle cx="16.8" cy="15" r="1.3"/>',

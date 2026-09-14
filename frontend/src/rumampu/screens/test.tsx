@@ -12,11 +12,12 @@ import {
   getHousingScenario, getHousingTestResult, getPreHousingResult,
   setHousingScenario, setHousingTestResult, setPreHousingResult,
 } from '../../../services/housingSession';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View, type DimensionValue } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { useApp } from '../state';
 import { logIt } from '../log';
 import { monthsAgg, nf, rm } from '../calc';
+import { upfrontNeed } from '../fees';
 import { unrepresentedCoverageMonths } from '../money';
 import {
   BodyS, Btn, BtnLine, Card, Chip, Chips, Display, Divider, EditList,
@@ -27,7 +28,6 @@ import { Ruma } from '../ruma-view';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { Band, Waterline } from '../charts';
 import { ScreenShell } from './shell';
-import { PrepareBody } from './prepare';
 import { useHousingCalculation } from '../useHousingCalculation';
 import { ApiError } from '../../../services/api';
 
@@ -254,8 +254,63 @@ export function HouseBody() {
 
 /* v22 House tab home: saved-tests chip, test / prepare segments. */
 export function HousehomeScreen() {
-  const { S, t, up, go } = useApp();
-  const tab = S.houseTab || 'test';
+  const { S, t, go, loadHouseCosts } = useApp();
+  React.useEffect(() => { void loadHouseCosts(); }, [loadHouseCosts]);
+
+  /* v24 hcMonthsStrip: recorded months → test outcome per month. */
+  const monthsStrip = (() => {
+    const n = monthsAgg(S.data).length;
+    if (!n) return { label: t('hc_first') };
+    const result = S.testRan ? getHousingTestResult() : null;
+    if (!result) return { label: t('hc_months', { n }) };
+    const segs = result.months.map(m => m.post_housing_residual >= 0);
+    const k = segs.filter(ok => !ok).length;
+    return {
+      label: k ? t('hc_short', { k, n: segs.length }) : t('hc_carry', { k: segs.length, n: segs.length }),
+      segs,
+    };
+  })();
+
+  /* v24 hcCostStrip: the state's cheapest and dearest place in years, on a 0-10 scale. */
+  const costStrip = (() => {
+    const stateData = S.houseCosts?.states[S.hcState];
+    if (!stateData?.income) return { label: t('fh_none') };
+    const years = Object.values(stateData.types.all ?? {})
+      .map(([, median]) => median / (stateData.income! * 12));
+    if (!years.length) return { label: t('fh_none') };
+    const lo = Math.min(...years), hi = Math.max(...years);
+    const pos = (y: number) => Math.max(1, Math.min(97, y / 10 * 100));
+    return { label: t('hc_span', { a: lo.toFixed(1), b: hi.toFixed(1), s: stateData.name }), a: pos(lo), b: pos(hi) };
+  })();
+
+  /* v24 hcPrepStrip: the pot against the upfront need. */
+  const prepStrip = (() => {
+    const need = upfrontNeed(S);
+    const have = S.data.cashOnHand;
+    if (!need) return { label: t('hc_needprice') };
+    const pct = Math.min(100, Math.round(have / need * 100));
+    return { label: have > 0 ? t('hc_pot', { a: rm(have), b: rm(need) }) : t('hc_pot0'), pct };
+  })();
+
+  const card = (to: Parameters<typeof go>[0], icon: string, title: string, desc: string, strip: React.ReactNode) => (
+    <Pressable key={to} onPress={() => go(to)} style={tx.hcard}>
+      <View style={tx.hblob} pointerEvents="none" />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, width: '100%' }}>
+        <View style={tx.hcardIc}><Ico name={icon} size={24} color={C.brand} /></View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 17, lineHeight: 22, color: C.ink }}>{t(title)}</Text>
+          <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: C.ink64, marginTop: 3 }}>{t(desc)}</Text>
+        </View>
+        <Text style={{ fontSize: 20, color: C.ink40 }}>{'›'}</Text>
+      </View>
+      {strip}
+    </Pressable>
+  );
+
+  const stripLbl = (label: string) => (
+    <Text style={{ fontFamily: SEMI_FONT, fontSize: 12, color: C.ink64 }}>{label}</Text>
+  );
+
   return (
     <ScreenShell greet title={t('tab_test')} right={
       <Pressable onPress={() => go('savedtests')} style={tx.savedchip} accessibilityLabel={t('sv_title')}>
@@ -266,64 +321,55 @@ export function HousehomeScreen() {
         ) : null}
       </Pressable>
     }>
-      <View style={tx.inseg}>
-        {([['test', 'hh_test'], ['prep', 'hh_prep']] as const).map(([v, k]) => (
-          <Pressable key={v} onPress={() => up(s => { s.houseTab = v; })}
-            style={[tx.insegBtn, tab === v && tx.insegBtnOn]}>
-            <Text style={{ fontFamily: DISP_FONT, fontSize: 13, color: tab === v ? C.ink : C.ink64 }}>{t(k)}</Text>
-          </Pressable>
-        ))}
-      </View>
-      {tab === 'prep' ? <PrepareBody /> : <HouseBody />}
-      <HouseCostsRow />
-    </ScreenShell>
-  );
-}
-
-/* B3 — the published-figures entry under the hub (US11). The range line
-   appears once the data has loaded; the row itself never blocks on it. */
-function HouseCostsRow() {
-  const { S, t, go, loadHouseCosts } = useApp();
-  React.useEffect(() => { void loadHouseCosts(); }, [loadHouseCosts]);
-  const stateData = S.houseCosts?.states[S.hcState];
-  let range: string | null = null;
-  if (stateData?.income) {
-    const yearsAll = Object.values(stateData.types.all ?? {})
-      .map(([, median]) => median / (stateData.income! * 12));
-    if (yearsAll.length) {
-      range = t('hc_span', {
-        a: Math.min(...yearsAll).toFixed(1),
-        b: Math.max(...yearsAll).toFixed(1),
-        s: stateData.name,
-      });
-    }
-  }
-  return (
-    <Pressable onPress={() => go('homecosts')} style={tx.hcrow}>
-      <View style={tx.hcrowIc}>
-        <SvgXml xml={`<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#3F7A7E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 20h16"/><path d="M6 20v-7"/><path d="M11 20V9"/><path d="M16 20V5"/></svg>`} width={20} height={20} />
-      </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ fontFamily: DISP_FONT, fontSize: 14.5, lineHeight: 18, color: C.ink }}>{t('hh_cost')}</Text>
-        <Text style={{ fontFamily: BODY_FONT, fontSize: 12, lineHeight: 15, color: C.ink64, marginTop: 2 }}>{t('hh_cost_d')}</Text>
-        {range ? (
-          <View style={{ marginTop: 6, gap: 4 }}>
-            <View style={{ height: 6, borderRadius: 3, backgroundColor: C.ink14, overflow: 'hidden' }}>
-              <View style={{ width: '55%', height: '100%', borderRadius: 3, backgroundColor: '#8FBC8F' }} />
+      {card('house', 'house', 'hh_test', 'hh_test_d', (
+        <View style={{ gap: 7, width: '100%' }}>
+          {monthsStrip.segs ? (
+            <View style={{ flexDirection: 'row', gap: 4, height: 8 }}>
+              {monthsStrip.segs.map((ok, i) => (
+                <View key={i} style={{ flex: 1, borderRadius: 3, backgroundColor: ok ? C.brand : C.short }} />
+              ))}
             </View>
-            <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, color: C.ink64 }}>{range}</Text>
-          </View>
-        ) : null}
-      </View>
-      <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
-    </Pressable>
+          ) : null}
+          {stripLbl(monthsStrip.label)}
+        </View>
+      ))}
+      {card('homecosts', 'bars', 'hh_cost', 'hh_cost_d', (
+        <View style={{ gap: 7, width: '100%' }}>
+          {costStrip.a != null ? (
+            <View style={{ position: 'relative', height: 8, borderRadius: 5, backgroundColor: C.ink14 }}>
+              <View style={{
+                position: 'absolute', top: 0, bottom: 0, borderRadius: 5, backgroundColor: C.brand, opacity: 0.55,
+                left: `${costStrip.a}%` as DimensionValue, width: `${Math.max(2, (costStrip.b ?? 0) - costStrip.a)}%` as DimensionValue,
+              }} />
+              {[costStrip.a, costStrip.b ?? 0].map((p, i) => (
+                <View key={i} style={{
+                  position: 'absolute', top: -3, width: 3, height: 14, borderRadius: 2, backgroundColor: C.ink,
+                  left: `${p}%` as DimensionValue,
+                }} />
+              ))}
+            </View>
+          ) : null}
+          {stripLbl(costStrip.label)}
+        </View>
+      ))}
+      {card('prepare', 'wallet', 'hh_prep', 'hh_prep_d', (
+        <View style={{ gap: 7, width: '100%' }}>
+          {prepStrip.pct != null ? (
+            <View style={{ height: 8, borderRadius: 5, backgroundColor: C.ink14, overflow: 'hidden' }}>
+              <View style={{ width: `${prepStrip.pct}%` as DimensionValue, height: '100%', borderRadius: 5, backgroundColor: C.brand }} />
+            </View>
+          ) : null}
+          {stripLbl(prepStrip.label)}
+        </View>
+      ))}
+    </ScreenShell>
   );
 }
 
 export function HouseScreen() {
   const { t } = useApp();
   return (
-    <ScreenShell back title={t('th_title')}>
+    <ScreenShell back title={t('hh_test')}>
       <HouseBody />
     </ScreenShell>
   );
@@ -400,22 +446,15 @@ export function HomecostScreen() {
       </Pressable>
       {S.tcOpen ? (
         <Card gap={8}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ fontFamily: BODY_FONT, fontSize: 15, color: C.ink }}>{t('tc_inst')}</Text>
-              <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: C.ink64 }}>{t('tc_inst_desc')}</Text>
-            </View>
-            <Text style={{ fontSize: 18, fontFamily: DISP_FONT, color: C.ink }}>{rm(inst)}</Text>
-          </View>
+          <KV k={t('tc_inst')}>
+            <Fig value={rm(inst)} p={S.data.house.knownPayment != null ? 'user' : 'calc'} />
+          </KV>
           <EditList
             decimal
-            list={S.data.homeCosts.map(c => ({
-              ...c,
-              p: undefined,
-              description: t(`${c.k}_desc`),
-            }))}
+            list={S.data.homeCosts.map(c => ({ ...c, p: undefined }))}
             onNum={(i, n) => up(s => { s.data.homeCosts[i].a = n; })}
           />
+          <FigRow p="assume" />
         </Card>
       ) : null}
       <Btn label={t(running ? 'housing_running' : 'tc_run') + (running ? '' : ' →')} disabled={running} onPress={run} />
@@ -1108,6 +1147,19 @@ const tx = StyleSheet.create({
     backgroundColor: '#fff',
     shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
     elevation: 2,
+  },
+  hcard: {
+    width: '100%', backgroundColor: C.card, borderRadius: 18,
+    paddingVertical: 18, paddingHorizontal: 16, minHeight: 92,
+    justifyContent: 'center', gap: 14, position: 'relative', overflow: 'hidden',
+  },
+  hblob: {
+    position: 'absolute', right: -42, top: -46, width: 120, height: 120,
+    borderRadius: 60, backgroundColor: C.brand, opacity: 0.07,
+  },
+  hcardIc: {
+    width: 46, height: 46, borderRadius: 15, backgroundColor: C.paper,
+    alignItems: 'center', justifyContent: 'center',
   },
   hcrow: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: '#fff',

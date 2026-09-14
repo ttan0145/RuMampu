@@ -24,8 +24,8 @@ import { DatePickerField } from '../date-picker';
 import { INCOME_API_ENABLED, scanReceipt } from '../api';
 import { getPickedReceipt, setPickedReceipt } from '../../../services/receiptSession';
 
-const SHOW_SPENDING_LIMITS = false;
-const SHOW_EXPENSE_COMPLETENESS = false;
+/* v24 shows month completeness (full/partial, dashed bars) everywhere. */
+const SHOW_EXPENSE_COMPLETENESS = true;
 
 function useCatLabel() {
   const { S, t } = useApp();
@@ -483,7 +483,9 @@ export function ExpMonthsScreen() {
           </Text>
         ))}
       </View>
-      <View style={{ marginTop: 2, alignItems: 'flex-start' }}><Prov p="user" /></View>
+      <View style={{ marginTop: 2, flexDirection: 'row', alignItems: 'center' }}>
+        <CardI t="ex_monthly" b={['ex_rule']} p="user" />
+      </View>
     </View>
   );
 
@@ -506,14 +508,12 @@ export function ExpMonthsScreen() {
           <Display cls="h-m">{monthName(m) + ' ' + y}</Display>
           <Text style={{ fontSize: 16, color: C.ink }}>{open ? '−' : '+'}</Text>
         </Pressable>
-        <View style={{ gap: 6, alignItems: 'flex-start' }}>
-          {SHOW_EXPENSE_COMPLETENESS ? (
-            v.days.size >= EXP_FULL_DAYS ? (
-              <BodyS muted>{t('ex_full') + (incomeKeys.has(k) ? ' · ' + t('ex_used') : '')}</BodyS>
-            ) : (
-              <FromR label={t(v.days.size === 1 ? 'ex_partial_one' : 'ex_partial', { d: v.days.size })} />
-            )
-          ) : null}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          {v.days.size >= EXP_FULL_DAYS ? (
+            <BodyS muted style={{ flexShrink: 1 }}>{t('ex_full') + (incomeKeys.has(k) ? ' · ' + t('ex_used') : '')}</BodyS>
+          ) : (
+            <FromR label={t(v.days.size === 1 ? 'ex_partial_one' : 'ex_partial', { d: v.days.size })} />
+          )}
           <Fig value={rm(v.total)} p="user" />
         </View>
         {detail}
@@ -525,7 +525,6 @@ export function ExpMonthsScreen() {
     <ScreenShell back title={t('ex_monthly')}>
       {chart}
       {rows}
-      {SHOW_EXPENSE_COMPLETENESS ? <BodyS muted>{t('ex_rule')}</BodyS> : null}
     </ScreenShell>
   );
 }
@@ -539,20 +538,23 @@ export function ExLimitsBody() {
   const monthTotal = [...totals.values()].reduce((a, b) => a + b, 0);
   const lims = S.data.expenseLimits;
 
-  const row = (label: string, spend: number, id: string) => {
+  /* v24 R8c: one row per limit inside one card — name and spend, then the limit
+     field (an empty field with an example placeholder says "nothing set"), then
+     the bar. One provenance chip for the card, not two per row. */
+  const LIM_EX: Record<string, number> = { total: 1500, meals: 250, groc: 300, transp: 120, family: 300, other: 100 };
+  const row = (label: string, spend: number, id: string, first: boolean) => {
     const lim = +lims[id] || 0;
     return (
-      <Card key={id} gap={8}>
+      <View key={id} style={{ gap: 6, paddingVertical: 10, borderTopWidth: first ? 0 : 1, borderTopColor: C.ink14 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <P>{label}</P>
-          <Fig value={rm(spend)} p="user" cls="body-s" />
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(spend)}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <View style={{ flex: 1, gap: 2 }}>
-            <BodyS muted>{t('lm_limit')}</BodyS>
-            <Prov p="user" />
-          </View>
-          <NumInput value={lims[id] || 0} onNum={n => up(s => { s.data.expenseLimits[id] = Math.max(0, n); logIt(s, id === 'total' ? 'lg_limit_total' : 'lg_limit', { a: rm(Math.max(0, n)) }, `lim:${id}`); })} alignRight />
+          <BodyS muted style={{ flex: 1 }}>{t('lm_limit')}</BodyS>
+          <NumInput value={lims[id] || ''} placeholder={String(LIM_EX[id] || 300)}
+            accessibilityLabel={`${label} ${t('lm_limit')}`}
+            onNum={n => up(s => { s.data.expenseLimits[id] = Math.max(0, n); logIt(s, id === 'total' ? 'lg_limit_total' : 'lg_limit', { a: rm(Math.max(0, n)) }, `lim:${id}`); })} alignRight />
         </View>
         {lim > 0 ? (
           <>
@@ -562,22 +564,20 @@ export function ExLimitsBody() {
               <Prov p="calc" />
             </View>
           </>
-        ) : (
-          <FromR label={t('lm_none')} />
-        )}
-      </Card>
+        ) : null}
+      </View>
     );
   };
 
   const catRows = S.data.expenseCats.filter(c => totals.get(c.id) || lims[c.id])
-    .map(c => row(c.custom ? c.name || '' : t(c.k || ''), totals.get(c.id) || 0, c.id));
+    .map((c, i) => row(c.custom ? c.name || '' : t(c.k || ''), totals.get(c.id) || 0, c.id, false));
 
   return (
-    <>
-      <BodyS muted>{t('lm_note')}</BodyS>
-      {row(t('lm_total') + ' · ' + (ek != null ? monthName(ek % 12) : ''), monthTotal, 'total')}
+    <Card gap={0}>
+      {row(t('lm_total') + ' · ' + (ek != null ? monthName(ek % 12) : ''), monthTotal, 'total', true)}
       {catRows}
-    </>
+      <View style={{ paddingTop: 6, alignItems: 'flex-start' }}><Prov p="user" /></View>
+    </Card>
   );
 }
 
@@ -647,15 +647,12 @@ export function ExpAddScreen() {
         </View>
         <View style={{ gap: 6 }}>
           <BodyS muted>{t('inc_date')}</BodyS>
-          <DayShortcutPicker
+          <DatePickerField
             value={d.d}
-            tint="out"
+            mode="date"
             monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
             maximumDate={new Date()}
             onChange={v => { setError(null); up(s => { s.expDraft.d = v; }); }}
-            todayLabel={t('inc_today')}
-            yesterdayLabel={t('inc_yday')}
-            pickLabel={t('inc_pick')}
           />
         </View>
         {error ? <BodyS>{t(`ex_${error === 'amount' ? 'amount_positive' : error === 'date' ? 'date_invalid' : 'save_failed'}`)}</BodyS> : null}
