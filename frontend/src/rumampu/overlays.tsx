@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
 import { TAB_OF, Tab, useApp } from './state';
 import { STRINGS, Lang } from './strings';
-import { monthKeysOf, monthsAgg, pickMonth, rm } from './calc';
+import { actualMonths, commitFor, commitSwap, monthKeysOf, monthsAgg, pickMonth, rm } from './calc';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from './theme';
 import { Btn, BtnLine, BodyS, EditList, NumInput, PROV_G } from './ui';
 import { Ico, Logo } from './svgs';
@@ -413,6 +413,71 @@ export function SheetHost() {
             onPress={() => up(s => { s.lang = l; s.sheet = null; })} />
         ))}
       </SheetFrame>
+    );
+  }
+
+  /* v24 blswap: the working behind a fully recorded month, from the total's (i). */
+  if (sheet === 'blswap') {
+    const catNm = (id: string) => {
+      const x = S.data.expenseCats.find(z => z.id === id);
+      return x ? (x.custom ? x.name || '' : t(x.k || '')) : id;
+    };
+    const months = actualMonths(S.data)
+      .map(r => ({ r, sw: commitSwap(S.data, r.y * 12 + r.m) }))
+      .filter(({ sw }) => sw != null);
+    return (
+      <Modal transparent animationType="none" visible onRequestClose={close}>
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={close}>
+            <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
+          </Pressable>
+          <View style={{ alignItems: 'center', marginBottom: -30, zIndex: 2 }}>
+            <Ruma w={96} pose="count" float={false} />
+          </View>
+          <View style={[
+            sheetSt.sheet, { paddingBottom: 26, paddingTop: 34 },
+            Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null,
+          ]}>
+            <SheetH3>{t('cm_total')}</SheetH3>
+            <View style={{ gap: 8, marginTop: 6 }}>
+              {months.map(({ r, sw }) => {
+                const k = r.y * 12 + r.m;
+                return (
+                  <View key={k} style={{ gap: 8 }}>
+                    <BodyS>{t('ex_feeds', { m: monthName(r.m) })}</BodyS>
+                    {sw!.lines.map(l => (
+                      <View key={l.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                        <View style={{ flexShrink: 1 }}>
+                          <BodyS>{l.custom ? l.name || '' : t(l.k || '')}</BodyS>
+                          <BodyS muted style={{ fontSize: 11.5 }}>{t('cm_wasest', { a: rm(l.est) })}</BodyS>
+                        </View>
+                        <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(l.spent)}</Text>
+                      </View>
+                    ))}
+                    {sw!.loose > 0 ? (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                        <View style={{ flexShrink: 1 }}>
+                          <BodyS>{t('cm_noline')}</BodyS>
+                          <BodyS muted style={{ fontSize: 11.5 }}>{sw!.looseCats.map(catNm).join(', ')}</BodyS>
+                        </View>
+                        <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(sw!.loose)}</Text>
+                      </View>
+                    ) : null}
+                    <View style={{ height: 1, backgroundColor: C.ink14, marginVertical: 6 }} />
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                      <BodyS>{t('cm_usedfor', { m: monthName(r.m) })}</BodyS>
+                      <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(commitFor(S.data, k))}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+            <View style={{ marginTop: 14 }}>
+              <Btn label={t('done')} onPress={close} />
+            </View>
+          </View>
+        </View>
+      </Modal>
     );
   }
 

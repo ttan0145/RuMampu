@@ -197,3 +197,35 @@ export function pickMonth(sel: number | null, arrs: { d: string }[][]): { key: n
   if (!ks.length) return { key: null, keys: ks };
   return { key: (sel != null && ks.includes(sel)) ? sel : ks[0], keys: ks };
 }
+
+/* v24: which expense categories a daily-varying commitment line stands in for. */
+export const DV_CATS: Record<string, string[]> = { food: ['meals', 'groc'], family: ['family'] };
+
+export interface CommitSwapLine { id: string; k?: string; name?: string; custom?: boolean; est: number; spent: number; cats: string[] }
+export interface CommitSwapResult {
+  lines: CommitSwapLine[]; replaced: number; matched: number;
+  loose: number; looseCats: string[]; total: number;
+}
+
+/* v24: the working behind a fully recorded month — which estimates were
+   replaced by what was actually spent. looseCats holds category ids. */
+export function commitSwap(data: AppData, key: number): CommitSwapResult | null {
+  const e = expByMonth(data).get(key);
+  if (!e || e.days.size < EXP_FULL_DAYS) return null;
+  const cats = expCatTotals(data, key);
+  const c = data.commitments;
+  const lines: CommitSwapLine[] = [];
+  const claimed = new Set<string>();
+  let replaced = 0, matched = 0;
+  for (const x of [...c.living, ...c.debts, ...c.savings]) {
+    if (!x.dv) continue;
+    const ids = DV_CATS[x.id] || [];
+    let spent = 0;
+    for (const id of ids) { spent += (+(cats.get(id) || 0)); claimed.add(id); }
+    replaced += (+x.a || 0); matched += spent;
+    lines.push({ id: x.id, k: x.k, name: x.name, custom: x.custom, est: +x.a || 0, spent, cats: ids });
+  }
+  let loose = 0; const looseCats: string[] = [];
+  for (const [id, v] of cats) if (!claimed.has(id)) { loose += v; looseCats.push(id); }
+  return { lines, replaced, matched, loose, looseCats, total: e.total };
+}

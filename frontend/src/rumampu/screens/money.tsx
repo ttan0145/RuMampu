@@ -5,12 +5,12 @@ import { MOCK } from '../mock';
 import { ApiCoverageAnswer, INCOME_API_ENABLED } from '../api';
 import { formatApiMoney } from '../money';
 import {
-  actualMonths, commitTotal, expByMonth, monthsAgg, nf, pickMonth, recordSummary, rm,
+  actualMonths, commitSwap, commitTotal, expByMonth, monthsAgg, nf, pickMonth, recordSummary, rm,
 } from '../calc';
 import {
   Badge, BodyS, Btn, BtnLine, BtnQuiet, Card, Chip, Chips, Display, Divider, EditList,
   Fig, IcLab, KV, NoteC, P, Prov, StackS, TextField,
-  CardI, MonthBtn,
+  CardI, FigRow, MonthBtn,
 } from '../ui';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { SvgXml } from 'react-native-svg';
@@ -1106,20 +1106,23 @@ export function CommitScreen() {
     ? []
     : MOCK.commitPresets.filter(id => !added.has(id));
   const allMock = [...MOCK.commitments.living, ...MOCK.commitments.debts, ...MOCK.commitments.savings];
-  const em = expByMonth(S.data);
+  /* v24 R8f: the tabs carry the (i), and it explains whichever half is showing. */
   const segBar = (
-    <View style={{ flexDirection: 'row', backgroundColor: '#EDF2F1', borderRadius: 14, padding: 4, gap: 4 }}>
-      {(['bills', 'limits'] as const).map(v => (
-        <Pressable key={v} onPress={() => setSeg(v)}
-          style={{
-            flex: 1, minHeight: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center',
-            backgroundColor: seg === v ? '#fff' : 'transparent',
-          }}>
-          <Text style={{ fontFamily: DISP_FONT, fontSize: 13, color: seg === v ? C.ink : C.ink64 }}>
-            {t(v === 'bills' ? 'bl_bills' : 'bl_limits')}
-          </Text>
-        </Pressable>
-      ))}
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: '#EDF2F1', borderRadius: 14, padding: 4, gap: 4 }}>
+        {(['bills', 'limits'] as const).map(v => (
+          <Pressable key={v} onPress={() => setSeg(v)}
+            style={{
+              flex: 1, minHeight: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center',
+              backgroundColor: seg === v ? '#fff' : 'transparent',
+            }}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 13, color: seg === v ? C.ink : C.ink64 }}>
+              {t(v === 'bills' ? 'bl_t1' : 'bl_t2')}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      <CardI t="bl_title" b={[seg === 'limits' ? 'bl_b_h' : 'bl_a_h']} />
     </View>
   );
   if (seg === 'limits') {
@@ -1153,9 +1156,10 @@ export function CommitScreen() {
           })}
         </Chips>
       ) : null}
-      {(['living', 'debts', 'savings'] as const).map(sec => (
+      {/* v24: two sections only — living and debts; savings feeds totals but has no card. */}
+      {(['living', 'debts'] as const).map(sec => (
         <Card key={sec} gap={8}>
-          <BodyS muted>{t(sec === 'living' ? 'cm_living' : sec === 'debts' ? 'cm_debts' : 'cm_savings')}</BodyS>
+          <BodyS muted>{t(sec === 'living' ? 'cm_living' : 'cm_debts')}</BodyS>
           <EditList
             decimal
             list={c[sec]}
@@ -1167,19 +1171,28 @@ export function CommitScreen() {
               void saveCommitmentAmount(id, n).catch(() => toast(t('cm_save_failed')));
             }}
           />
+          <FigRow p="user" />
         </Card>
       ))}
-      <KV k={t('cm_total')}><Fig value={rm(commitTotal(S.data))} p="calc" /></KV>
-      {actualMonths(S.data).map(r => {
-        const e = em.get(r.y * 12 + r.m)!;
-        return (
-          <Card key={r.y * 12 + r.m}>
-            <Text style={{ fontSize: 13, lineHeight: 18, color: C.ink }}>
-              {t('ex_feeds', { m: monthName(r.m), x: nf(e.total) })} <Prov p="user" />
-            </Text>
-          </Card>
-        );
-      })}
+      {/* v24: the working behind a fully recorded month lives one tap away, on the total. */}
+      <Card>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 15, color: C.ink }}>{t('cm_total')}</Text>
+            {actualMonths(S.data).some(r => commitSwap(S.data, r.y * 12 + r.m)) ? (
+              <Pressable onPress={() => up(s => { s.sheet = 'blswap'; })}
+                accessibilityLabel={t('ci_more')} hitSlop={8}
+                style={{
+                  width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: C.ink40,
+                  alignItems: 'center', justifyContent: 'center', marginLeft: 8,
+                }}>
+                <Text style={{ fontFamily: DISP_FONT, fontSize: 11, color: C.ink64 }}>i</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          <Fig value={rm(commitTotal(S.data))} p="calc" />
+        </View>
+      </Card>
     </ScreenShell>
   );
 }
