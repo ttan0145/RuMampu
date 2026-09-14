@@ -321,6 +321,7 @@ function VillageSheet() {
           <IsoIsland cells={v.cells} width={isleW} />
         </View>
       </View>
+      <BodyS muted style={{ textAlign: 'center', marginTop: 4, fontSize: 11.5 }}>{t('vl_swipe')}</BodyS>
       <Text style={{
         fontFamily: DISP_FONT, minHeight: 18, textAlign: 'center', color: C.confirm,
         fontSize: 13, marginTop: 6,
@@ -365,6 +366,8 @@ export function SheetHost() {
   const [editDate, setEditDate] = React.useState('');
   const [editSource, setEditSource] = React.useState('');
   const [editError, setEditError] = React.useState<'amount' | 'date' | 'source' | null>(null);
+  /* v24 dc_*: a changed business date is confirmed before it is saved. */
+  const [dateConfirm, setDateConfirm] = React.useState<{ f: string; g: string; orig: string } | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [limitA, setLimitA] = React.useState('');
   const [svName, setSvName] = React.useState('');
@@ -616,11 +619,17 @@ export function SheetHost() {
 
   if (sheet.startsWith('incomeedit:')) {
     const editId = sheet.slice('incomeedit:'.length);
-    const save = async () => {
+    const dLbl = (v: string) => `${+v.slice(8, 10)} ${monthName(+v.slice(5, 7) - 1)}`;
+    const save = async (dateConfirmed = false) => {
       if (saving) return;
       if (!isValidMoneyText(editAmount) || Number(editAmount.trim()) < 0) { setEditError('amount'); return; }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(editDate)) { setEditError('date'); return; }
       if (!editSource) { setEditError('source'); return; }
+      const original = S.data.income.find(e => e.id === editId)?.d;
+      if (!dateConfirmed && original && original !== editDate) {
+        setDateConfirm({ f: dLbl(original), g: dLbl(editDate), orig: original });
+        return;
+      }
       setSaving(true);
       try {
         await updateIncomeEntry(editId, {
@@ -630,7 +639,11 @@ export function SheetHost() {
         });
         // Editing an existing entry does not change the total entry count.
         const entryCount = S.data.income.length;
-        up(state => { state.sheet = null; });
+        up(state => {
+          if (dateConfirm) logIt(state, 'lg_inc_date', { f: dateConfirm.f, g: dateConfirm.g });
+          state.sheet = null;
+        });
+        setDateConfirm(null);
         toast(t('entry_saved_n', { n: entryCount }));
       } catch {
         toast(t('inc_save_failed'));
@@ -641,6 +654,22 @@ export function SheetHost() {
     return (
       <SheetFrame onClose={close}>
         <SheetH3>{t('edit')} {t('money_income')}</SheetH3>
+        {(() => {
+          /* v24 ie_made: when the entry was recorded, distinct from the date
+             it is for. */
+          const created = S.data.income.find(e => e.id === editId)?.createdAt;
+          if (!created) return null;
+          const dd = new Date(created);
+          if (isNaN(dd.getTime())) return null;
+          return (
+            <BodyS muted style={{ fontSize: 11.5, marginBottom: 6 }}>
+              {t('ie_made', {
+                d: `${dd.getDate()} ${monthName(dd.getMonth())}`,
+                t: `${String(dd.getHours()).padStart(2, '0')}:${String(dd.getMinutes()).padStart(2, '0')}`,
+              })}
+            </BodyS>
+          );
+        })()}
         <View style={{ gap: 8 }}>
           <BodyS muted>{t('inc_amount')}</BodyS>
           <SheetInput
@@ -671,7 +700,18 @@ export function SheetHost() {
           {editError === 'amount' ? <BodyS>{t('inc_past_amount')}</BodyS> : null}
           {editError === 'date' ? <BodyS>{t('inc_invalid_date')}</BodyS> : null}
           {editError === 'source' ? <BodyS>{t('inc_source')}</BodyS> : null}
-          <Btn label={saving ? t('inc_saving') : t('done')} onPress={() => { void save(); }} />
+          {dateConfirm ? (
+            <View style={{ backgroundColor: '#FFF8E5', borderRadius: 12, padding: 12, gap: 8 }}>
+              <Text style={{ fontFamily: DISP_FONT, fontSize: 14, color: C.ink }}>{t('dc_title')}</Text>
+              <BodyS>{t('dc_body', { f: dateConfirm.f, g: dateConfirm.g })}</BodyS>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <BtnLine label={t('dc_yes')} onPress={() => { void save(true); }} />
+                <BtnLine label={t('dc_no', { f: dateConfirm.f })} onPress={() => { setEditDate(dateConfirm.orig); setDateConfirm(null); }} />
+              </View>
+            </View>
+          ) : (
+            <Btn label={saving ? t('inc_saving') : t('done')} onPress={() => { void save(); }} />
+          )}
           <View style={{ alignItems: 'center' }}>
             <BtnLine label={t('ie_del')} style={{ color: C.short, textDecorationColor: C.short, fontSize: 13.5 }}
               onPress={() => {

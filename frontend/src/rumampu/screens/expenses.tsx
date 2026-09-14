@@ -298,7 +298,10 @@ export function ExpensesScreen() {
         <Pressable onPress={() => setForWork(w => !w)}
           accessibilityRole="switch" accessibilityState={{ checked: forWork }}
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, gap: 10 }}>
-          <InLbl>{t('ex_forwork')}</InLbl>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <InLbl>{t('ex_forwork')}</InLbl>
+            <BodyS muted style={{ fontSize: 11.5, marginTop: 2 }}>{t('ex_work_h')}</BodyS>
+          </View>
           <View style={{
             width: 46, height: 28, borderRadius: 14, padding: 3,
             backgroundColor: forWork ? C.brand : C.ink14,
@@ -349,10 +352,24 @@ export function ExpensesScreen() {
 
   const recent = ex.slice(0, 6);
 
+  /* v24: work costs get their own table on the same month — a separate
+     record of what it cost to earn, never mixed with daily spending. */
+  const wcName = (e: { categoryId: string; categoryName?: string }) => {
+    if (e.categoryName) return e.categoryName;
+    const cat = S.data.workCostCategories.find(x => x.id === e.categoryId);
+    return cat ? (cat.custom ? cat.name || '' : t(cat.k || '')) : e.categoryId;
+  };
+  const wlist = S.data.workCostEntries
+    .filter(e => (+e.d.slice(0, 4)) * 12 + (+e.d.slice(5, 7) - 1) === curKey)
+    .sort((a, b) => (a.d < b.d ? 1 : -1))
+    .slice(0, 8);
+  const wcSum = wlist.reduce((a, e) => a + (+e.a || 0), 0);
+
   let bycat: React.ReactNode = null;
   {
     const totals = expCatTotals(S.data, curKey);
-    const ent = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+    const ent: [string, number][] = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+    if (wcSum > 0) ent.push(['__wc', wcSum]);
     const mx = Math.max(1, ...ent.map(([, v]) => v));
     if (ent.length) {
       bycat = (
@@ -364,7 +381,7 @@ export function ExpensesScreen() {
           {ent.map(([c, v], i) => (
             <View key={c} style={{ marginVertical: 7 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <BodyS>{cats(c)}</BodyS>
+                <BodyS>{c === '__wc' ? t('wc_bycat') : cats(c)}</BodyS>
                 <Text style={{ fontFamily: DISP_FONT, fontSize: 13, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(v)}</Text>
               </View>
               <View style={{ height: 7, borderRadius: 4, backgroundColor: C.ink14, marginTop: 3, overflow: 'hidden' }}>
@@ -407,6 +424,22 @@ export function ExpensesScreen() {
           ))}
         </View>
       ) : null}
+      <View style={[exSt.cardTint, { paddingVertical: 4 }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 40 }}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink }}>{t('wc_tbl')}</Text>
+          <Prov p="user" />
+        </View>
+        {wlist.length ? wlist.map((e, idx) => (
+          <InRow key={e.id} first={idx === 0} tint="out"
+            icon={<Ico name="wrench" size={18} color="#B54F2B" />}
+            title={wcName(e)}
+            sub={`${+e.d.slice(8, 10)} ${monthName(+e.d.slice(5, 7) - 1)}`}
+            amount={rmx(e.a)} />
+        )) : (
+          <BodyS muted style={{ paddingBottom: 12 }}>{t('wc_tbl_none')}</BodyS>
+        )}
+        {wlist.length ? <BodyS muted style={{ fontSize: 11, paddingBottom: 8 }}>{t('wc_bynote')}</BodyS> : null}
+      </View>
       {bycat}
       <View style={{ flexDirection: 'row', gap: 12 }}>
         <Pressable onPress={() => go('expmonths')} style={exSt.hubtile}>

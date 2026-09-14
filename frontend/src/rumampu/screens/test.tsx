@@ -74,6 +74,7 @@ function useRunTest() {
         setHousingTestResult(housingTest);
         up(state => {
           state.testRan = true;
+          state.viewTestName = null;
           state.tryPay = null;
           state.shock = 0;
           state.howOpen = false;
@@ -346,6 +347,7 @@ export function SavedtestsScreen() {
       setHousingTestResult(result as any);
       up(s => {
         s.testRan = true;
+        s.viewTestName = s.keptTests[idx]?.name || null;
         s.tryPay = null;
         s.shock = Number((result as any).income_shock_percent) || 0;
         s.howOpen = false;
@@ -459,6 +461,21 @@ export function ResultScreen() {
   const base = getHousingTestResult();
   const scenarioId = getHousingScenario()?.id ?? base?.scenario_id;
   const shock = S.shock;
+  /* v24: name the saved test being shown, with a way back to my own test. */
+  const viewingBanner = S.viewTestName ? (
+    <Pressable
+      onPress={() => { up(s => { s.viewTestName = null; }); go('savedtests'); }}
+      style={{
+        flexDirection: 'row', alignItems: 'center', gap: 10,
+        backgroundColor: '#EDF2F1', borderRadius: 14, paddingVertical: 10, paddingHorizontal: 14, minHeight: 54,
+      }}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 11, color: C.ink64 }}>{t('rx_viewing')}</Text>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 14.5, color: C.ink }} numberOfLines={1}>{S.viewTestName}</Text>
+      </View>
+      <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink64 }}>{t('rx_unview')}</Text>
+    </Pressable>
+  ) : null;
   const [shocked, setShocked] = React.useState<typeof base>(null);
   const [tryResult, setTryResult] = React.useState<typeof base>(null);
   const [customPay, setCustomPay] = React.useState('');
@@ -762,6 +779,7 @@ export function ResultScreen() {
 
   return (
     <ScreenShell back title={t('rs_title')}>
+      {viewingBanner}
       {verdict}
       {caveat}
       <View style={tx.txcard}>

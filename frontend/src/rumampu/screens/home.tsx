@@ -28,9 +28,49 @@ function Blob({ size, style, color }: { size: number; style: object; color: stri
   return <View pointerEvents="none" style={[{ position: 'absolute', width: size, height: size, borderRadius: size / 2, backgroundColor: color }, style]} />;
 }
 
+/* v24 balpanel — month by month: in, out (work costs and bills), left. */
+function BalPanel() {
+  const { S, t, monthName } = useApp();
+  const keyOf = (d: string) => (+d.slice(0, 4)) * 12 + (+d.slice(5, 7) - 1);
+  const months = new Map<number, { inc: number; out: number }>();
+  for (const e of S.data.income) {
+    const k = keyOf(e.d);
+    const m = months.get(k) ?? { inc: 0, out: 0 };
+    m.inc += +e.a || 0;
+    months.set(k, m);
+  }
+  for (const e of S.data.workCostEntries) {
+    const k = keyOf(e.d);
+    if (!months.has(k)) continue;
+    months.get(k)!.out += +e.a || 0;
+  }
+  const commit = commitTotal(S.data);
+  const rows = [...months.entries()].sort((a, b) => b[0] - a[0]).slice(0, 6);
+  return (
+    <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.22)', gap: 6 }}>
+      {rows.length > 1 ? rows.map(([k, m]) => (
+        <View key={k} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 12.5, color: '#fff', width: 42 }}>{monthName(k % 12)}</Text>
+          <Text style={bp.cell}>{t('hm_bal_in')} {rm(m.inc)}</Text>
+          <Text style={bp.cell}>{t('hm_bal_out')} {rm(m.out + commit)}</Text>
+          <Text style={[bp.cell, { fontFamily: DISP_FONT }]}>{t('hm_bal_left')} {rm(m.inc - m.out - commit)}</Text>
+        </View>
+      )) : (
+        <Text style={bp.cell}>{t('hm_bal_none')}</Text>
+      )}
+      <Text style={[bp.cell, { fontSize: 10.5, lineHeight: 14, opacity: 0.8 }]}>{t('hm_bal_note')}</Text>
+    </View>
+  );
+}
+
+const bp = StyleSheet.create({
+  cell: { fontFamily: BODY_FONT, fontSize: 11.5, color: 'rgba(255,255,255,0.9)', flexShrink: 1 },
+});
+
 /* .hero + .hero2 — the dark balance cards. */
 function HomeCards() {
-  const { S, t, monthName, go } = useApp();
+  const { S, t, monthName } = useApp();
+  const [balOpen, setBalOpen] = React.useState(false);
 
   const monthKeyOf = (d: string) =>
     (+d.slice(0, 4)) * 12 + (+d.slice(5, 7) - 1);
@@ -129,7 +169,7 @@ function HomeCards() {
           </Text>
 
           <Pressable
-            onPress={() => go('expmonths')}
+            onPress={() => setBalOpen(o => !o)}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -164,11 +204,12 @@ function HomeCards() {
                   fontSize: 15,
                 }}
               >
-                ↓
+                {balOpen ? '↑' : '↓'}
               </Text>
             </View>
           </Pressable>
         </View>
+        {balOpen ? <BalPanel /> : null}
       </View>
 
       <View
