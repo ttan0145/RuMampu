@@ -792,7 +792,7 @@ export function IncomeScreen() {
         {/* v24 R7 item 3: bulk entry for a whole past month stays, as a quiet link. */}
         <View style={{ alignItems: 'center', marginTop: 8 }}>
           <BtnLine label={t('inc_past')} style={{ fontSize: 13.5 }}
-            onPress={() => up(s => { s.sheet = 'pastmonth'; })} />
+            onPress={() => up(s => { s.pastT = 'inc'; s.sheet = 'pastmonth'; })} />
         </View>
       </InSec>
     </>

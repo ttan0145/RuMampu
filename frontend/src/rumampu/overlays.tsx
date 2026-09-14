@@ -355,7 +355,7 @@ function VillageSheet() {
 export function SheetHost() {
   const {
     S, t, up, monthName, saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource,
-    saveWorkCostCategory, saveExpenseCategory, refreshSavedHousingTests, toast,
+    saveWorkCostCategory, saveExpenseCategory, saveExpenseEntry, refreshSavedHousingTests, toast,
   } = useApp();
   const sheet = S.sheet;
   const close = () => up(s => { s.sheet = null; });
@@ -814,6 +814,8 @@ export function SheetHost() {
 
   if (sheet === 'pastmonth' || sheet.startsWith('pastmonth:')) {
     const editId = sheet.startsWith('pastmonth:') ? sheet.slice('pastmonth:'.length) : null;
+    /* v24: the same sheet serves expenses (S.pastT === 'ex') with a plain dated entry. */
+    const forEx = !editId && S.pastT === 'ex';
     const sel = pastM ?? suggestedPastMonth(S.data.income.map(entry => entry.d));
     const save = async () => {
       if (saving) return;
@@ -822,6 +824,20 @@ export function SheetHost() {
       if (!isValidMoneyText(pastA)) { setPastError('cash'); return; }
       const a = Number(pastA.trim());
       if (a < 0) { setPastError('amount'); return; }
+      if (forEx) {
+        if (!(a > 0)) { setPastError('amount'); return; }
+        setSaving(true);
+        try {
+          await saveExpenseEntry({ amount: a, date: sel + '-15', categoryId: S.expDraft.c || S.data.expenseCats[0]?.id || '' });
+          up(s => { s.sheet = null; });
+          toast(t('saved'));
+        } catch {
+          toast(t('ex_save_failed'));
+        } finally {
+          setSaving(false);
+        }
+        return;
+      }
       if (S.data.income.some(entry => entry.id !== editId && entry.d.slice(0, 7) === sel)) {
         setPastError('exists');
         return;
@@ -855,8 +871,8 @@ export function SheetHost() {
         <SheetH3>{editId ? `${t('edit')} ${t('inc_month_total')}` : t('inc_past')}</SheetH3>
         <View style={{ gap: 8 }}>
           <BodyS muted>{t('inc_past_hint')}</BodyS>
-          <BodyS muted>{t('inc_past_no_min')}</BodyS>
-          <BodyS muted>{t('inc_past_month')}</BodyS>
+          {forEx ? null : <BodyS muted>{t('inc_past_no_min')}</BodyS>}
+          {forEx ? null : <BodyS muted>{t('inc_past_month')}</BodyS>}
           <DatePickerField
             value={sel}
             mode="month"

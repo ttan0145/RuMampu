@@ -5,11 +5,12 @@ import { SaveFormat, manipulateAsync } from 'expo-image-manipulator';
 import { useApp } from '../state';
 import { logIt } from '../log';
 import {
-  EXP_FULL_DAYS, expByMonth, expCatTotals, latestExpMonth, monthsAgg, nf, rm, rmx,
+  EXP_FULL_DAYS, expByMonth, expCatTotals, latestExpMonth, monthsAgg, nf, pickMonth, rm, rmx,
 } from '../calc';
 import {
   Badge, BodyS, Btn, BtnLine, BtnQuiet, Card, Chip, Chips, Display, Fig, FromR,
   IcLab, KV, NoteC, NumInput, P, Prov, StackS, TextField,
+  CardI, MonthBtn,
 } from '../ui';
 import { C, CHART_COLS, DISP_FONT } from '../theme';
 import { Ico } from '../svgs';
@@ -183,11 +184,11 @@ export function ExpensesScreen() {
   const per = d.per || 'day';
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<'amount' | 'date' | 'save' | null>(null);
-  const ex = [...S.data.expenses].sort((a, b) => (a.d < b.d ? 1 : -1));
   const now = new Date();
-  const curKey = ex.length
-    ? (+ex[0].d.slice(0, 4)) * 12 + (+ex[0].d.slice(5, 7) - 1)
-    : now.getFullYear() * 12 + now.getMonth();
+  /* v24 R7g: one month drives the whole screen, chosen at the top and defaulting
+     to the newest month that holds anything at all. */
+  const mpk = pickMonth(S.exMonth, [S.data.expenses, S.data.workCostEntries]);
+  const curKey = mpk.key != null ? mpk.key : now.getFullYear() * 12 + now.getMonth();
   const cur = expByMonth(S.data).get(curKey) || { total: 0, days: new Set<string>() };
   const lim = +S.data.expenseLimits.total || 0;
   const pct = lim ? Math.min(100, Math.round(cur.total / lim * 100)) : 0;
@@ -255,52 +256,28 @@ export function ExpensesScreen() {
 
   const manual = (
     <>
-      <InHero tint="out" pillLabel={t('io_out')} question={t('ex_q_' + per)} decimal
+      {/* v24 R7 item 3: one amount and one date. */}
+      <InHero tint="out" pillLabel={t('io_out')} question={t('r7_ex_q')} decimal
         value={d.a}
         onChangeText={v => { setError(null); up(s => { s.expDraft.a = v; }); }} />
       <InSec>
         <InLbl>{t('inc_q_when')}</InLbl>
-        <PerSeg per={per} labels={p => t('perx_' + p)} tint="out"
-          onPer={p => up(s => { s.expDraft.per = p; })} />
-        <BodyS muted style={{ marginTop: 10, marginBottom: 6 }}>
-          {per === 'month' ? t('inc_monthof') : per === 'week' ? `${t('inc_weekend')} · ${t('inc_weekany')}` : t('inc_date')}
-        </BodyS>
-        {per === 'month' ? (
-          <DatePickerField
-            value={d.d.slice(0, 7)}
-            mode="month"
-            monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
-            maximumDate={new Date()}
-            onChange={v => { setError(null); up(s => { s.expDraft.d = v + '-15'; }); }}
-          />
-        ) : per === 'day' ? (
-          <DayShortcutPicker
-            value={d.d}
-            tint="out"
-            monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
-            todayLabel={t('inc_today')}
-            yesterdayLabel={t('inc_yday')}
-            pickLabel={t('inc_pick')}
-            maximumDate={new Date()}
-            onChange={v => { setError(null); up(s => { s.expDraft.d = v; }); }}
-          />
-        ) : (
-          <DatePickerField
-            value={d.d}
-            mode="date"
-            monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
-            maximumDate={new Date()}
-            onChange={v => { setError(null); up(s => { s.expDraft.d = v; }); }}
-          />
-        )}
+        <DatePickerField
+          value={d.d}
+          mode="date"
+          monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
+          maximumDate={new Date()}
+          onChange={v => { setError(null); up(s => { s.expDraft.d = v; }); }}
+        />
       </InSec>
       <InSec>
+        {/* v24 R8b: the switch comes before the categories; the explanation is behind the (i). */}
         <Pressable onPress={() => setForWork(w => !w)}
           accessibilityRole="switch" accessibilityState={{ checked: forWork }}
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, gap: 10 }}>
-          <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
             <InLbl>{t('ex_forwork')}</InLbl>
-            <BodyS muted style={{ fontSize: 11.5, marginTop: 2 }}>{t('ex_work_h')}</BodyS>
+            <CardI t="ex_forwork" b={['ex_work_h']} p="user" />
           </View>
           <View style={{
             width: 46, height: 28, borderRadius: 14, padding: 3,
@@ -346,11 +323,20 @@ export function ExpensesScreen() {
           style={({ pressed }) => [exSt.btnOut, (pressed || saving) && { opacity: 0.85 }]}>
           <Text style={{ color: '#fff', fontFamily: DISP_FONT, fontSize: 19 }}>{saving ? t('ex_saving') : t('ex_add')}</Text>
         </Pressable>
+        {/* v24 R7 item 3: bulk entry for a whole past month stays, as a quiet link. */}
+        <View style={{ alignItems: 'center', marginTop: 8 }}>
+          <BtnLine label={t('inc_past')} style={{ fontSize: 13.5 }}
+            onPress={() => up(s => { s.pastT = 'ex'; s.sheet = 'pastmonth'; })} />
+        </View>
       </InSec>
     </>
   );
 
-  const recent = ex.slice(0, 6);
+  /* v24: the recent list shows the chosen month only, newest date first. */
+  const recent = [...S.data.expenses]
+    .filter(e => (+e.d.slice(0, 4)) * 12 + (+e.d.slice(5, 7) - 1) === curKey)
+    .sort((a, b) => (a.d < b.d ? 1 : -1))
+    .slice(0, 8);
 
   /* v24: work costs get their own table on the same month — a separate
      record of what it cost to earn, never mixed with daily spending. */
@@ -359,11 +345,10 @@ export function ExpensesScreen() {
     const cat = S.data.workCostCategories.find(x => x.id === e.categoryId);
     return cat ? (cat.custom ? cat.name || '' : t(cat.k || '')) : e.categoryId;
   };
-  const wlist = S.data.workCostEntries
-    .filter(e => (+e.d.slice(0, 4)) * 12 + (+e.d.slice(5, 7) - 1) === curKey)
-    .sort((a, b) => (a.d < b.d ? 1 : -1))
-    .slice(0, 8);
-  const wcSum = wlist.reduce((a, e) => a + (+e.a || 0), 0);
+  const wmonth = S.data.workCostEntries
+    .filter(e => (+e.d.slice(0, 4)) * 12 + (+e.d.slice(5, 7) - 1) === curKey);
+  const wlist = [...wmonth].sort((a, b) => (a.d < b.d ? 1 : -1)).slice(0, 8);
+  const wcSum = wmonth.reduce((a, e) => a + (+e.a || 0), 0);
 
   let bycat: React.ReactNode = null;
   {
@@ -374,9 +359,9 @@ export function ExpensesScreen() {
     if (ent.length) {
       bycat = (
         <View style={exSt.cardTint}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 36 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 36 }}>
             <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink }}>{t('ex_bycat')}</Text>
-            <Prov p="calc" />
+            <CardI t="ex_bycat" b={['wc_bynote', 'ex_rule']} p="calc" />
           </View>
           {ent.map(([c, v], i) => (
             <View key={c} style={{ marginVertical: 7 }}>
@@ -410,7 +395,9 @@ export function ExpensesScreen() {
           }} />
         {S.exMode === 'csv' ? <ExpenseCsvBody /> : manual}
       </InCard>
-      {recent.length ? (
+      {S.data.expenses.length ? (
+        <>
+        <MonthBtn act="exmonth" monthKey={mpk.key} />
         <View style={[exSt.cardTint, { paddingVertical: 4 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 40 }}>
             <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink }}>{t('ex_recent')}</Text>
@@ -425,6 +412,7 @@ export function ExpensesScreen() {
               amount={rmx(e.a)} />
           ))}
         </View>
+        </>
       ) : null}
       <View style={[exSt.cardTint, { paddingVertical: 4 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 40 }}>
@@ -440,7 +428,6 @@ export function ExpensesScreen() {
         )) : (
           <BodyS muted style={{ paddingBottom: 12 }}>{t('wc_tbl_none')}</BodyS>
         )}
-        {wlist.length ? <BodyS muted style={{ fontSize: 11, paddingBottom: 8 }}>{t('wc_bynote')}</BodyS> : null}
       </View>
       {bycat}
       <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -453,7 +440,6 @@ export function ExpensesScreen() {
           <Text style={{ fontFamily: DISP_FONT, fontSize: 15, lineHeight: 20, color: C.ink }}>{t('ex_set_lims')}</Text>
         </Pressable>
       </View>
-      <BodyS muted>{t('ex_rule')}</BodyS>
     </ScreenShell>
   );
 }

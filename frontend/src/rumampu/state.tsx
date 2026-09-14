@@ -194,6 +194,8 @@ export interface AppState {
   viewTestName: string | null;
   /* Quick-menu shortcut: open the camera as soon as the scan screen mounts. */
   scanAuto: boolean;
+  /* v24: the past-month sheet serves income or expenses depending on who opened it. */
+  pastT: 'inc' | 'ex';
   /* v24 cardI: the (i) info sheet's content — title key, body keys, the
      provenance kind explained, and optional pre-formatted extra lines. */
   cardInfo: { t: string; b: string[]; p?: string; x?: string[] } | null;
@@ -278,7 +280,7 @@ function initialState(): AppState {
     plan: null, village: null, buffer: null, vHelp: false,
     moView: 'tiles', houseTab: 'test',
     houseCosts: null, houseCostsSync: 'idle', hcState: 'sgr', hcType: 'all', firstHome: false,
-    potMoved: 0, potMovedMonths: [], ufTest: null, ufReno: false, viewTestName: null, scanAuto: false, cardInfo: null, log: [],
+    potMoved: 0, potMovedMonths: [], ufTest: null, ufReno: false, viewTestName: null, scanAuto: false, pastT: 'inc', cardInfo: null, log: [],
     tryPay: null, tryCust: false, depMode: null,
     incPick: false, incMode: 'type', incScan: { stage: 'pick', rows: [] }, incCsv: { stage: 'pick' }, incEdit: null,
     exMode: 'type', exCsv: { stage: 'pick' }, exEdit: null,
