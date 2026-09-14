@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { getHousingTestResult } from '../../../services/housingSession';
 import { useApp } from '../state';
 import { nf, rm } from '../calc';
@@ -8,7 +8,7 @@ import {
   Badge, BodyS, Btn, BtnLine, BtnQuiet, Card, Display, Divider, EditList,
   Fig, FigRow, IcLab, KV, NoteC, P, Prov,
 } from '../ui';
-import { C } from '../theme';
+import { BODY_FONT, C } from '../theme';
 import { Waterline } from '../charts';
 import { ScreenShell } from './shell';
 
@@ -89,6 +89,23 @@ export function UpfrontScreen() {
       ) : (
         <KV k={t('uf_dep')}><Fig value={rm(dep)} p="user" /></KV>
       )}
+      {/* Figma B26: the first-home flag, context for the SJKP criteria list. */}
+      <Pressable onPress={() => up(s => { s.firstHome = !s.firstHome; })}
+        accessibilityRole="switch" accessibilityState={{ checked: S.firstHome }}
+        style={{
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          minHeight: 52, backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E3EAE8',
+          borderRadius: 16, paddingHorizontal: 14,
+        }}>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 15, color: C.ink }}>{t('up_first')}</Text>
+        <View style={{
+          width: 46, height: 28, borderRadius: 14, padding: 3,
+          backgroundColor: S.firstHome ? C.brand : C.ink14,
+          alignItems: S.firstHome ? 'flex-end' : 'flex-start', justifyContent: 'center',
+        }}>
+          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' }} />
+        </View>
+      </Pressable>
       <Card gap={8}>
         <EditList decimal list={S.data.upfront} onNum={(i, n) => up(s => { s.data.upfront[i].a = n; })} />
       </Card>

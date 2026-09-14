@@ -13,6 +13,7 @@ import {
 } from '../ui';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { SvgXml } from 'react-native-svg';
+import { ExLimitsBody } from './expenses';
 import { Ico } from '../svgs';
 import { SrcIcon } from '../icons';
 import { Ruma } from '../ruma-view';
@@ -1092,6 +1093,8 @@ export function WorkcostsScreen() {
  */
 export function CommitScreen() {
   const { S, t, monthName, up, toast, saveCommitmentAmount } = useApp();
+  /* Figma B9: bills (commitments) and spending limits share one screen. */
+  const [seg, setSeg] = React.useState<'bills' | 'limits'>('bills');
   const c = S.data.commitments;
   const added = new Set([...c.living, ...c.debts, ...c.savings].map(x => x.id));
   const presets = INCOME_API_ENABLED
@@ -1099,8 +1102,32 @@ export function CommitScreen() {
     : MOCK.commitPresets.filter(id => !added.has(id));
   const allMock = [...MOCK.commitments.living, ...MOCK.commitments.debts, ...MOCK.commitments.savings];
   const em = expByMonth(S.data);
+  const segBar = (
+    <View style={{ flexDirection: 'row', backgroundColor: '#EDF2F1', borderRadius: 14, padding: 4, gap: 4 }}>
+      {(['bills', 'limits'] as const).map(v => (
+        <Pressable key={v} onPress={() => setSeg(v)}
+          style={{
+            flex: 1, minHeight: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center',
+            backgroundColor: seg === v ? '#fff' : 'transparent',
+          }}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 13, color: seg === v ? C.ink : C.ink64 }}>
+            {t(v === 'bills' ? 'bl_bills' : 'bl_limits')}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+  if (seg === 'limits') {
+    return (
+      <ScreenShell back title={t('bl_title')}>
+        {segBar}
+        <ExLimitsBody />
+      </ScreenShell>
+    );
+  }
   return (
-    <ScreenShell back title={t('money_commit')}>
+    <ScreenShell back title={t('bl_title')}>
+      {segBar}
       {S.commitmentSync === 'loading' ? <NoteC><BodyS>{t('cm_sync_loading')}</BodyS></NoteC> : null}
       {S.commitmentSync === 'error' ? <NoteC><BodyS>{t('cm_sync_error')}</BodyS></NoteC> : null}
       {presets.length ? (

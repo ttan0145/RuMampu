@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-na
 import { SvgXml } from 'react-native-svg';
 import { getHousingTestResult } from '../../../services/housingSession';
 import { Route, useApp } from '../state';
-import { expByMonth, monthsAgg, recSpan, rm } from '../calc';
+import { commitTotal, expByMonth, monthsAgg, recSpan, rm } from '../calc';
 import {
   planEnsure, planPhase, planResolveTarget, planSaved, planToggle, syncBufferTarget, upfrontNeed,
 } from '../plan';
@@ -68,12 +68,15 @@ function HomeCards() {
     ? monthName(key % 12)
     : '';
 
-  const gap = Math.max(
-    0,
-    upfrontNeed(S.data) - S.data.cashOnHand
-  );
+  const workCosts =
+    key != null
+      ? S.data.workCostEntries
+          .filter(e => monthKeyOf(e.d) === key)
+          .reduce((sum, e) => sum + (+e.a || 0), 0)
+      : 0;
 
-  const saving = income - ex;
+  /* Figma B1: the hero is what's left after work costs and bills. */
+  const saving = income - workCosts - commitTotal(S.data);
 
   return (
     <View>
@@ -113,41 +116,20 @@ function HomeCards() {
             marginTop: 8,
           }}
         >
-          <View
+          <Text
             style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 6,
+              fontFamily: BODY_FONT,
+              fontSize: 12.5,
+              lineHeight: 16,
+              color: 'rgba(255,255,255,0.88)',
               flexShrink: 1,
             }}
           >
-            <View
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor:
-                  gap > 0 ? C.caution : C.confirm,
-              }}
-            />
-
-            <Text
-              style={{
-                fontFamily: BODY_FONT,
-                fontSize: 12.5,
-                lineHeight: 16,
-                color: 'rgba(255,255,255,0.88)',
-                flexShrink: 1,
-              }}
-            >
-              {gap > 0
-                ? t('hm_togo', { g: rm(gap) })
-                : t('hm_ready')}
-            </Text>
-          </View>
+            {t('hm_after')}{mn ? ' \u00b7 ' + mn : ''}
+          </Text>
 
           <Pressable
-            onPress={() => go('upfront')}
+            onPress={() => go('expmonths')}
             style={{
               flexDirection: 'row',
               alignItems: 'center',

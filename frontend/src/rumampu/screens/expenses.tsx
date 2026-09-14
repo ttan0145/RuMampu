@@ -173,8 +173,11 @@ function ExpenseCsvBody() {
  * 中文：US1.5/US1.6 记录并汇总日常支出。v22 将其重构为暖色记录卡片。
  */
 export function ExpensesScreen() {
-  const { S, t, monthName, go, up, toast, saveExpenseEntry } = useApp();
+  const { S, t, monthName, go, up, toast, saveExpenseEntry, saveWorkCostEntry } = useApp();
   const cats = useCatLabel();
+  /* Figma B6: a work expense records into Work costs, not daily spending. */
+  const [forWork, setForWork] = React.useState(false);
+  const [workCat, setWorkCat] = React.useState<string | null>(null);
   const d = S.expDraft;
   const per = d.per || 'day';
   const [saving, setSaving] = React.useState(false);
@@ -199,6 +202,15 @@ export function ExpensesScreen() {
     setSaving(true);
     setError(null);
     try {
+      if (forWork) {
+        const cat = workCat ?? S.data.workCostCategories[0]?.id;
+        if (!cat) { setError('save'); setSaving(false); return; }
+        await saveWorkCostEntry({ amount: a, date: dd, categoryId: cat });
+        up(s => { s.expDraft = { a: '', c: s.expDraft.c, d: dd, per: s.expDraft.per }; });
+        toast(t('wk_saved', { m: monthName(key % 12) }));
+        setSaving(false);
+        return;
+      }
       await saveExpenseEntry({ amount: a, date: dd, categoryId: d.c });
       up(s => { s.expDraft = { a: '', c: s.expDraft.c, d: dd, per: s.expDraft.per }; });
       toast(t('ex_saved', { m: monthName(key % 12), x: nf(total) }));
@@ -282,7 +294,31 @@ export function ExpensesScreen() {
         )}
       </InSec>
       <InSec>
+        <Pressable onPress={() => setForWork(w => !w)}
+          accessibilityRole="switch" accessibilityState={{ checked: forWork }}
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, gap: 10 }}>
+          <InLbl>{t('ex_forwork')}</InLbl>
+          <View style={{
+            width: 46, height: 28, borderRadius: 14, padding: 3,
+            backgroundColor: forWork ? C.brand : C.ink14,
+            alignItems: forWork ? 'flex-end' : 'flex-start', justifyContent: 'center',
+          }}>
+            <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' }} />
+          </View>
+        </Pressable>
+      </InSec>
+      <InSec>
         <InLbl>{t('ex_q_cat')}</InLbl>
+        {forWork ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {S.data.workCostCategories.map(x => (
+              <InChip key={x.id} tint="out"
+                label={x.custom ? x.name || '' : t(x.k || '')}
+                on={(workCat ?? S.data.workCostCategories[0]?.id) === x.id}
+                onPress={() => setWorkCat(x.id)} />
+            ))}
+          </View>
+        ) : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {S.data.expenseCats.map(x => (
             <InChip key={x.id} tint="out"
@@ -294,6 +330,7 @@ export function ExpensesScreen() {
           <InChip dashed tint="out" label={t('xc_own').replace(/^\+\s*|^＋\s*/, '')}
             onPress={() => up(s => { s.sheet = 'xcown'; })} />
         </View>
+        )}
       </InSec>
       {error ? (
         <InSec>
@@ -471,7 +508,9 @@ export function ExpMonthsScreen() {
   );
 }
 
-export function ExLimitsScreen() {
+/* Body shared by the standalone limits screen and the merged
+   Bills-and-limits screen (Figma B9). */
+export function ExLimitsBody() {
   const { S, t, monthName, up } = useApp();
   const ek = latestExpMonth(S.data);
   const totals = ek != null ? expCatTotals(S.data, ek) : new Map<string, number>();
@@ -512,10 +551,19 @@ export function ExLimitsScreen() {
     .map(c => row(c.custom ? c.name || '' : t(c.k || ''), totals.get(c.id) || 0, c.id));
 
   return (
-    <ScreenShell back title={t('ex_limits')}>
+    <>
       <BodyS muted>{t('lm_note')}</BodyS>
       {row(t('lm_total') + ' · ' + (ek != null ? monthName(ek % 12) : ''), monthTotal, 'total')}
       {catRows}
+    </>
+  );
+}
+
+export function ExLimitsScreen() {
+  const { t } = useApp();
+  return (
+    <ScreenShell back title={t('ex_limits')}>
+      <ExLimitsBody />
     </ScreenShell>
   );
 }

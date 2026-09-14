@@ -37,8 +37,8 @@ import {
   updateCommitment as updateCommitmentRequest,
   updateWorkCostEntry as updateWorkCostEntryRequest,
 } from './api';
-import { fetchSavedHousingTests as fetchSavedHousingTestsRequest } from '../../services/housingService';
-import { SavedHousingTestRecord } from '../../types/housing';
+import { fetchHouseCosts as fetchHouseCostsRequest, fetchSavedHousingTests as fetchSavedHousingTestsRequest } from '../../services/housingService';
+import { HouseCostType, HouseCostsResponse, SavedHousingTestRecord } from '../../types/housing';
 
 /* Central app state — mirrors the prototype's `S` object and navigation model. */
 
@@ -46,7 +46,7 @@ export type Route =
   | 'home' | 'plan' | 'money' | 'income' | 'incomeimport' | 'workcosts' | 'commit' | 'pattern' | 'coverage' | 'record'
   | 'expenses' | 'expadd' | 'expscan' | 'expmonths' | 'exlimits'
   | 'house' | 'homecost' | 'precheck' | 'result' | 'range' | 'compare' | 'shock'
-  | 'househome' | 'savedtests' | 'profile'
+  | 'househome' | 'savedtests' | 'profile' | 'homecosts' | 'acctdetails'
   // EN: Epic 7 preview routes are registered for future Iteration 3 work; this
   // does not make them an Iteration 1 implementation.
   // 中文：Epic 7 预览路由为未来 Iteration 3 工作保留；这不代表它们是 Iteration 1 实现。
@@ -61,6 +61,7 @@ export const TAB_OF: Record<Route, Tab> = {
   coverage: 'money', record: 'money', expenses: 'money', expadd: 'money', expscan: 'money',
   expmonths: 'money', exlimits: 'money',
   house: 'test', homecost: 'test', precheck: 'test', result: 'test', range: 'test',
+  homecosts: 'test', acctdetails: 'profile',
   compare: 'test', shock: 'test',
   plan: 'money', profile: 'profile', prepare: 'test', upfront: 'test', buffer: 'money', docs: 'test',
   pv_switch: 'test', pv_month: 'test', pv_compare: 'test',
@@ -174,6 +175,13 @@ export interface AppState {
   vHelp: boolean;
   /* v22 misc UI state. */
   moView: 'tiles' | 'list';
+  /* US11 what homes cost here: published NAPIC figures, cached per session. */
+  houseCosts: HouseCostsResponse | null;
+  houseCostsSync: 'idle' | 'loading' | 'ready' | 'error';
+  hcState: string;
+  hcType: HouseCostType;
+  /* US5.2 before you move in: the first-home flag for the SJKP context. */
+  firstHome: boolean;
   houseTab: 'test' | 'prep';
   tryPay: number | null;
   tryCust: boolean;
@@ -245,6 +253,7 @@ function initialState(): AppState {
     knew: false, kstep: 0, jobs: ['taxi'], ownJobs: [], lastMonth: '',
     plan: null, village: null, buffer: null, vHelp: false,
     moView: 'tiles', houseTab: 'test',
+    houseCosts: null, houseCostsSync: 'idle', hcState: 'sgr', hcType: 'all', firstHome: false,
     tryPay: null, tryCust: false, depMode: null,
     incPick: false, incMode: 'type', incScan: { stage: 'pick', rows: [] }, incCsv: { stage: 'pick' }, incEdit: null,
     exMode: 'type', exCsv: { stage: 'pick' }, exEdit: null,
@@ -366,6 +375,7 @@ export interface Ctx {
     merchant?: string;
     confirmReceipt?: boolean;
   }) => Promise<void>;
+  loadHouseCosts: () => Promise<void>;
   toast: (msg: string, tone?: 'success' | 'error') => void;
   toastMsg: { msg: string; key: number; tone: 'success' | 'error' } | null;
 }
@@ -1297,6 +1307,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await refreshAccountData(undefined, { includeSavedTests: false });
   }, [refreshAccountData]);
 
+  /* US11: published house-cost figures — fetched once per session, cached.
+     The in-flight guard lives in a ref because setState updaters are not
+     applied synchronously. */
+  const houseCostsInflight = useRef(false);
+  const loadHouseCosts = useCallback(async (): Promise<void> => {
+    if (houseCostsInflight.current) return;
+    houseCostsInflight.current = true;
+    setS(prev => (prev.houseCostsSync === 'ready' ? prev : { ...prev, houseCostsSync: 'loading' }));
+    try {
+      const data = await fetchHouseCostsRequest();
+      setS(prev => ({
+        ...prev,
+        houseCosts: data,
+        houseCostsSync: 'ready',
+        hcState: data.states[prev.hcState] ? prev.hcState : (Object.keys(data.states)[0] ?? prev.hcState),
+      }));
+    } catch {
+      houseCostsInflight.current = false;
+      setS(prev => ({ ...prev, houseCostsSync: 'error' }));
+    }
+  }, []);
+
   const toast = useCallback((msg: string, tone: 'success' | 'error' = 'success') => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToastMsg({ msg, key: Date.now(), tone });
@@ -1307,13 +1339,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     S, authReady, up, t, monthName, go, goTab, backNav,
     saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
-    saveCommitmentAmount, toast, toastMsg,
+    saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   }), [
     S, authReady, up, t, monthName, go, goTab, backNav,
     saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
-    saveCommitmentAmount, toast, toastMsg,
+    saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   ]);
 

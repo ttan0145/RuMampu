@@ -273,7 +273,48 @@ export function HousehomeScreen() {
         ))}
       </View>
       {tab === 'prep' ? <PrepareBody /> : <HouseBody />}
+      <HouseCostsRow />
     </ScreenShell>
+  );
+}
+
+/* B3 — the published-figures entry under the hub (US11). The range line
+   appears once the data has loaded; the row itself never blocks on it. */
+function HouseCostsRow() {
+  const { S, t, go, loadHouseCosts } = useApp();
+  React.useEffect(() => { void loadHouseCosts(); }, [loadHouseCosts]);
+  const stateData = S.houseCosts?.states[S.hcState];
+  let range: string | null = null;
+  if (stateData?.income) {
+    const yearsAll = Object.values(stateData.types.all ?? {})
+      .map(([, median]) => median / (stateData.income! * 12));
+    if (yearsAll.length) {
+      range = t('hh_costs_range', {
+        a: Math.min(...yearsAll).toFixed(1),
+        b: Math.max(...yearsAll).toFixed(1),
+        s: stateData.name,
+      });
+    }
+  }
+  return (
+    <Pressable onPress={() => go('homecosts')} style={tx.hcrow}>
+      <View style={tx.hcrowIc}>
+        <SvgXml xml={`<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#3F7A7E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 20h16"/><path d="M6 20v-7"/><path d="M11 20V9"/><path d="M16 20V5"/></svg>`} width={20} height={20} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 14.5, lineHeight: 18, color: C.ink }}>{t('hh_costs')}</Text>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 12, lineHeight: 15, color: C.ink64, marginTop: 2 }}>{t('hh_costs_sub')}</Text>
+        {range ? (
+          <View style={{ marginTop: 6, gap: 4 }}>
+            <View style={{ height: 6, borderRadius: 3, backgroundColor: C.ink14, overflow: 'hidden' }}>
+              <View style={{ width: '55%', height: '100%', borderRadius: 3, backgroundColor: '#8FBC8F' }} />
+            </View>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, color: C.ink64 }}>{range}</Text>
+          </View>
+        ) : null}
+      </View>
+      <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
+    </Pressable>
   );
 }
 
@@ -1023,6 +1064,15 @@ const tx = StyleSheet.create({
     backgroundColor: '#fff',
     shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
     elevation: 2,
+  },
+  hcrow: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: '#fff',
+    borderWidth: 1.5, borderColor: '#E3EAE8', borderRadius: 18,
+    paddingVertical: 12, paddingHorizontal: 14,
+  },
+  hcrowIc: {
+    width: 40, height: 40, borderRadius: 12, backgroundColor: '#E4EFEC',
+    alignItems: 'center', justifyContent: 'center',
   },
   savedchip: {
     flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.card,
