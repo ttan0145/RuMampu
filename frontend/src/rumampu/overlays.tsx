@@ -13,6 +13,7 @@ import { Ico, Logo } from './svgs';
 import { Ruma } from './ruma-view';
 import { IsoHouse, IsoIsland } from './isosvg';
 import { ISO_TIERS, villagePlay } from './village';
+import { logIt } from './log';
 import { DatePickerField } from './date-picker';
 import { isValidMoneyText } from './validation';
 import { deleteSavedHousingTest, updateSavedHousingTest } from '../../services/housingService';
@@ -595,6 +596,7 @@ export function SheetHost() {
                 up(s => {
                   if (!s.svDelArm) { s.svDelArm = true; return; }
                   savedId = s.keptTests[s.svIdx]?.id;
+                  logIt(s, 'lg_test_del', { name: s.keptTests[s.svIdx]?.name || '' });
                   s.keptTests.splice(s.svIdx, 1);
                   s.svDelArm = false;
                   s.sheet = null;

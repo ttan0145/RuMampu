@@ -39,6 +39,8 @@ import {
 } from './api';
 import { fetchHouseCosts as fetchHouseCostsRequest, fetchSavedHousingTests as fetchSavedHousingTestsRequest } from '../../services/housingService';
 import { HouseCostType, HouseCostsResponse, SavedHousingTestRecord } from '../../types/housing';
+import { logIt } from './log';
+import { rm, rmx } from './calc';
 
 /* Central app state — mirrors the prototype's `S` object and navigation model. */
 
@@ -192,6 +194,8 @@ export interface AppState {
      by the user's own control. Keys are YYYY-MM of months already added. */
   potMoved: number;
   potMovedMonths: string[];
+  /* v24 activity log — what changed and when (session-only). */
+  log: { ts: number; k: string; v: Record<string, string | number>; field: string | null }[];
   houseTab: 'test' | 'prep';
   tryPay: number | null;
   tryCust: boolean;
@@ -264,7 +268,7 @@ function initialState(): AppState {
     plan: null, village: null, buffer: null, vHelp: false,
     moView: 'tiles', houseTab: 'test',
     houseCosts: null, houseCostsSync: 'idle', hcState: 'sgr', hcType: 'all', firstHome: false,
-    potMoved: 0, potMovedMonths: [], ufTest: null, ufReno: false,
+    potMoved: 0, potMovedMonths: [], ufTest: null, ufReno: false, log: [],
     tryPay: null, tryCust: false, depMode: null,
     incPick: false, incMode: 'type', incScan: { stage: 'pick', rows: [] }, incCsv: { stage: 'pick' }, incEdit: null,
     exMode: 'type', exCsv: { stage: 'pick' }, exEdit: null,
@@ -908,6 +912,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
         s.data.income.sort((x, y) => (x.d < y.d ? -1 : 1));
         s.workCostSummary = localWorkCostSummary(s.data, s.workCostSelectedMonth);
+        logIt(s, 'lg_inc_add', { a: rm(input.amount) });
       });
       return 'saved';
     }
@@ -924,6 +929,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
         s.data.income.sort((x, y) => (x.d < y.d ? -1 : 1));
         s.incomeSync = 'ready';
+        logIt(s, 'lg_inc_add', { a: rm(Number(entry.amount)) });
       });
       refreshAfterMoneyWrite();
       return 'saved';
@@ -963,6 +969,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         s.incomeSync = 'ready';
         s.incomePatternSync = 'idle';
         s.coverageSync = 'idle';
+        logIt(s, 'lg_inc_edit', { a: rm(Number(entry.amount)) });
       });
       refreshAfterMoneyWrite();
     } catch (error) {
@@ -984,10 +991,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       await deleteIncomeEntryRequest(id);
       up(s => {
+        const gone = s.data.income.find(entry => entry.id === id);
         s.data.income = s.data.income.filter(entry => entry.id !== id);
         s.incomeSync = 'ready';
         s.incomePatternSync = 'idle';
         s.coverageSync = 'idle';
+        logIt(s, 'lg_inc_del', gone ? { a: rm(gone.a) } : {});
       });
       refreshAfterMoneyWrite();
     } catch (error) {
@@ -1049,11 +1058,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           d: input.date,
         });
         s.workCostSummary = localWorkCostSummary(s.data, s.workCostSelectedMonth);
+        logIt(s, 'lg_wc_log', { a: rm(input.amount) });
       });
       return;
     }
     const entry = await createWorkCostEntryRequest(input);
-    up(s => { applyConfirmedWorkCost(s, entry); });
+    up(s => {
+      applyConfirmedWorkCost(s, entry);
+      logIt(s, 'lg_wc_log', { a: rm(Number(entry.amount)), c: entry.category_name ?? '' });
+    });
     refreshAfterMoneyWrite();
   }, [refreshAfterMoneyWrite, up]);
 
@@ -1092,6 +1105,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const existing = all.find(commitment => commitment.id === id);
         if (existing) existing.a = Number(item.monthly_amount);
         s.commitmentSync = 'ready';
+        logIt(s, 'lg_cm_set', { a: rm(Number(item.monthly_amount)) }, `cm:${id}`);
       });
     } catch (error) {
       up(s => { s.commitmentSync = 'error'; });
@@ -1142,6 +1156,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           method: input.entryMethod || 'manual',
           merchant: input.merchant,
         });
+        logIt(s, input.entryMethod === 'receipt' ? 'lg_exp_scan' : 'lg_exp_add', { a: rmx(input.amount) });
       });
       return;
     }
@@ -1156,6 +1171,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           merchant: entry.merchant,
         });
         s.expenseSync = 'ready';
+        logIt(s, entry.entry_method === 'receipt' ? 'lg_exp_scan' : 'lg_exp_add', { a: rmx(Number(entry.amount)) });
       });
     } catch (error) {
       up(s => { s.expenseSync = 'error'; });

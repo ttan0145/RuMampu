@@ -9,6 +9,7 @@ import {
 } from '../plan';
 import { commitTotal } from '../calc';
 import { villageEnsure } from '../village';
+import { logIt } from '../log';
 import { getHousingTestResult } from '../../../services/housingSession';
 import { BODY_FONT, C, DISP_FONT } from '../theme';
 import { BodyS, Btn, BtnQuiet, Card, Display, P, Prov, Row } from '../ui';
@@ -270,7 +271,7 @@ export function PlanScreen() {
               <P style={{ fontSize: 14 }}>{monthName(+m.key.slice(5) - 1)} {m.key.slice(0, 4)}</P>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(m.left)}</Text>
-                <Pressable onPress={() => { up(s => { s.potMoved += m.left; s.potMovedMonths.push(m.key); }); toast(t('pm_added')); }}
+                <Pressable onPress={() => { up(s => { s.potMoved += m.left; s.potMovedMonths.push(m.key); logIt(s, 'lg_pot_add', { a: rm(m.left) }); }); toast(t('pm_added')); }}
                   style={st.pmadd}>
                   <Text style={{ fontFamily: DISP_FONT, fontSize: 12.5, color: '#fff' }}>{t('pm_add')}</Text>
                 </Pressable>

@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, Text, TextInput, View, type DimensionValu
 import * as ImagePicker from 'expo-image-picker';
 import { SaveFormat, manipulateAsync } from 'expo-image-manipulator';
 import { useApp } from '../state';
+import { logIt } from '../log';
 import {
   EXP_FULL_DAYS, expByMonth, expCatTotals, latestExpMonth, monthsAgg, nf, rm, rmx,
 } from '../calc';
@@ -530,7 +531,7 @@ export function ExLimitsBody() {
             <BodyS muted>{t('lm_limit')}</BodyS>
             <Prov p="user" />
           </View>
-          <NumInput value={lims[id] || 0} onNum={n => up(s => { s.data.expenseLimits[id] = Math.max(0, n); })} alignRight />
+          <NumInput value={lims[id] || 0} onNum={n => up(s => { s.data.expenseLimits[id] = Math.max(0, n); logIt(s, id === 'total' ? 'lg_limit_total' : 'lg_limit', { a: rm(Math.max(0, n)) }, `lim:${id}`); })} alignRight />
         </View>
         {lim > 0 ? (
           <>

@@ -13,6 +13,7 @@ import {
 } from '../ui';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { SvgXml } from 'react-native-svg';
+import { LOG_META, logClock, logRecent, logWhen } from '../log';
 import { Ico } from '../svgs';
 import { SrcIcon } from '../icons';
 import { Ruma } from '../ruma-view';
@@ -357,6 +358,70 @@ function SessionStatus({ label }: { label: string }) {
   );
 }
 
+/* v24 R18: what changed, newest first, over the last 72 hours — on a screen
+   called Your record, this IS the record. */
+function WhatChanged() {
+  const { S, t } = useApp();
+  const [all, setAll] = React.useState(false);
+  const entries = logRecent(S);
+  const SHOWN = 5;
+  const shown = all ? entries : entries.slice(0, SHOWN);
+  return (
+    <View style={{ gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <SectionTitle>{t('lg_title')}</SectionTitle>
+        <Prov p="user" />
+      </View>
+      <Card gap={6}>
+        {entries.length ? (
+          <>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <BodyS muted style={{ fontSize: 11 }}>{t('lgc_what')}</BodyS>
+              <BodyS muted style={{ fontSize: 11 }}>{t('lgc_amt')}</BodyS>
+            </View>
+            {shown.map((x, idx) => {
+              const m = LOG_META[x.k];
+              const v = x.v || {};
+              const amt = v.a != null ? String(v.a) : (v.n != null ? t('lg_nent', { n: v.n }) : '');
+              const cat = String(v.c ?? v.s ?? v.name ?? (v.f != null && v.g != null ? t('lg_fromto', { f: v.f, g: v.g }) : ''));
+              return (
+                <View key={x.ts + '-' + idx} style={{ borderTopWidth: idx ? 1 : 0, borderTopColor: C.ink14, paddingTop: idx ? 6 : 0, gap: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {m ? (
+                      <Text style={{
+                        fontFamily: SEMI_FONT, fontSize: 10.5, color: C.ink64, backgroundColor: '#EDF2F1',
+                        borderRadius: 7, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden',
+                      }}>{t(m[0])}</Text>
+                    ) : null}
+                    <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink, flex: 1 }} numberOfLines={1}>
+                      {m ? t(m[1]) : t(x.k, v)}
+                    </Text>
+                    <Text style={{ fontFamily: DISP_FONT, fontSize: 12.5, color: C.ink, fontVariant: ['tabular-nums'] }}>
+                      {amt || t('lg_dash')}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+                    <BodyS muted style={{ fontSize: 11, flexShrink: 1 }} numberOfLines={1}>{cat || t('lg_dash')}</BodyS>
+                    <BodyS muted style={{ fontSize: 11 }}>{logWhen(x.ts, t)} {'\u00b7'} {logClock(x.ts)}</BodyS>
+                  </View>
+                </View>
+              );
+            })}
+            {entries.length > SHOWN ? (
+              <Pressable onPress={() => setAll(o => !o)} style={{ minHeight: 36, justifyContent: 'center' }}>
+                <BodyS style={{ color: C.brand }}>{all ? t('lg_less') : t('lg_more', { n: entries.length - SHOWN })}</BodyS>
+              </Pressable>
+            ) : null}
+          </>
+        ) : (
+          <BodyS muted>{t('lg_none')}</BodyS>
+        )}
+        <BodyS muted style={{ fontSize: 10.5 }}>{t('lg_window')}</BodyS>
+      </Card>
+    </View>
+  );
+}
+
 export function RecordScreen() {
   // EN: Your Record is the US8.1/US8.2 screen. It reads current AppProvider
   // state and does not add account persistence or login behaviour.
@@ -396,6 +461,7 @@ export function RecordScreen() {
         </View>
       </Card>
 
+      <WhatChanged />
       <View style={{ gap: 8 }}>
         <SectionTitle>{t('rc_tests')}</SectionTitle>
         {/* EN: AC8.2.3 displays kept tests from S.keptTests, the current frontend session state. */}

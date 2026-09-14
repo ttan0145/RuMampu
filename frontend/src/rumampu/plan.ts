@@ -3,6 +3,8 @@ import { villageEnsure, villageRemove, villageSpawn } from './village';
 import { HousingTestResult } from '../../types/housing';
 import { getHousingTestResult } from '../../services/housingSession';
 import { upfrontNeed } from './fees';
+import { logIt } from './log';
+import { rm } from './calc';
 
 /* v22 saving plan — the month's target split into small, uneven daily amounts
    that add up exactly. Ported verbatim from the prototype: same seeded PRNG so
@@ -59,6 +61,7 @@ export function planToggle(s: AppState, i: number): void {
   /* The truthful lifetime total behind the game (US10.8 anchoring). */
   const vv = villageEnsure(s);
   vv.savedRm = Math.max(0, vv.savedRm + (p.done[i] ? amount : -amount));
+  logIt(s, p.done[i] ? 'lg_saved_day' : 'lg_unsaved_day', { a: rm(amount) });
   /* Epic 10: while the shield is filling, saved days feed the buffer, not the
      game. Setup/explain/village (and pre-Epic-10 sessions) keep the village
      mechanic exactly as before. */

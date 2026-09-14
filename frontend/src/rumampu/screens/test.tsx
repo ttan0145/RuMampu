@@ -15,6 +15,7 @@ import {
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { useApp } from '../state';
+import { logIt } from '../log';
 import { monthsAgg, nf, rm } from '../calc';
 import { unrepresentedCoverageMonths } from '../money';
 import {
@@ -182,7 +183,7 @@ export function HouseBody() {
                 onChangeText={v => {
                   setPriceTxt(v);
                   const nn = parseFloat(v);
-                  up(s => { s.data.house.price = isFinite(nn) && nn > 0 ? nn : null; });
+                  up(s => { s.data.house.price = isFinite(nn) && nn > 0 ? nn : null; if (isFinite(nn) && nn > 0) logIt(s, 'lg_price', { a: rm(nn) }, 'price'); });
                 }}
                 keyboardType="number-pad"
                 inputMode="numeric"
@@ -724,6 +725,7 @@ export function ResultScreen() {
           propertyPrice: h.price || null,
           incomeShockPercent: result.income_shock_percent,
         });
+        logIt(x2, 'lg_test_save', { name: x2.svDraft });
       }
       x2.sheet = 'savename';
     });
