@@ -8,6 +8,7 @@ import { upfrontFees, upfrontNeed } from '../fees';
 import {
   Badge, BodyS, Btn, BtnLine, BtnQuiet, Card, Display, Divider, EditList, NumInput,
   Fig, FigRow, IcLab, KV, NoteC, P, Prov,
+  CardI,
 } from '../ui';
 import { BODY_FONT, C, DISP_FONT } from '../theme';
 import { Waterline } from '../charts';
@@ -57,7 +58,6 @@ export function UpfrontScreen() {
   const scale = Math.max(need, have, 1) * 1.12;
   const pct = (v: number) => v / scale * 100;
   const [pick, setPick] = React.useState(false);
-  const [aboutOpen, setAboutOpen] = React.useState(false);
   const testsWithPrice = S.keptTests
     .map((k, i) => ({ k, i }))
     .filter(x => x.k.propertyPrice != null && Number(x.k.propertyPrice) > 0);
@@ -67,12 +67,18 @@ export function UpfrontScreen() {
     if (it) it.a = Math.max(0, n);
   });
 
-  const Row = ({ label, kind, note, children }: {
-    label: string; kind: 'user' | 'calc' | 'official' | 'assume'; note?: string; children: React.ReactNode;
+  /* v24 R8f: a row that needs explaining carries an (i), not a paragraph. Short
+     factual notes (like the exemption) stay on the row. */
+  const Row = ({ label, kind, note, info, children }: {
+    label: string; kind: 'user' | 'calc' | 'official' | 'assume'; note?: string;
+    info?: React.ReactNode; children: React.ReactNode;
   }) => (
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, minHeight: 44, paddingVertical: 6 }}>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <P style={{ fontSize: 14.5 }}>{label}</P>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <P style={{ fontSize: 14.5 }}>{label}</P>
+          {info}
+        </View>
         <Prov p={kind} />
         {note ? <BodyS muted style={{ fontSize: 11.5, marginTop: 2 }}>{note}</BodyS> : null}
       </View>
@@ -91,12 +97,12 @@ export function UpfrontScreen() {
       </View>
     );
   };
-  const Switch = ({ on, onPress, label, note }: { on: boolean; onPress: () => void; label: string; note?: string }) => (
+  const Switch = ({ on, onPress, label, info }: { on: boolean; onPress: () => void; label: string; info?: React.ReactNode }) => (
     <Pressable onPress={onPress} accessibilityRole="switch" accessibilityState={{ checked: on }}
       style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: 48 }}>
-      <View style={{ flex: 1, minWidth: 0 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
         <P style={{ fontSize: 14.5 }}>{label}</P>
-        {note ? <BodyS muted style={{ fontSize: 11.5, marginTop: 2 }}>{note}</BodyS> : null}
+        {info}
       </View>
       <View style={{
         width: 46, height: 28, borderRadius: 14, padding: 3,
@@ -107,15 +113,15 @@ export function UpfrontScreen() {
       </View>
     </Pressable>
   );
-  const Stage = ({ n, k, note, children }: { n: number; k: string; note?: string; children: React.ReactNode }) => (
+  const Stage = ({ n, k, info, children }: { n: number; k: string; info?: React.ReactNode; children: React.ReactNode }) => (
     <View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ fontFamily: DISP_FONT, fontSize: 12, color: '#fff' }}>{n}</Text>
         </View>
         <Text style={{ fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.99, textTransform: 'uppercase', color: C.ink64 }}>{t(k)}</Text>
+        {info}
       </View>
-      {note ? <BodyS muted style={{ fontSize: 11.5, marginTop: 4 }}>{note}</BodyS> : null}
       <Card gap={0} style={{ marginTop: 8 }}>{children}</Card>
     </View>
   );
@@ -165,59 +171,44 @@ export function UpfrontScreen() {
         </View>
         <View style={{ marginTop: 6, alignItems: 'flex-start' }}><Prov p="calc" /></View>
       </View>
-      {dep === 0 ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <BodyS muted>{t('uf_dep0')}</BodyS>
-          <Prov p="user" />
-        </View>
-      ) : (
-        <KV k={t('uf_dep')}><Fig value={rm(dep)} p="user" /></KV>
-      )}
+      {dep === 0 ? null : <KV k={t('uf_dep')}><Fig value={rm(dep)} p="user" /></KV>}
       {/* v24: the first-home stamp exemption, with the rule it applies. */}
       <Card gap={4}>
         <Switch on={S.firstHome} onPress={() => up(s => { s.firstHome = !s.firstHome; })}
-          label={t('uf_first')} note={t('uf_first_h')} />
+          label={t('uf_first')} info={<CardI t="uf_first" b={['uf_first_h', 'uf_first_src']} p="official" />} />
       </Card>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <Text style={{ fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.99, textTransform: 'uppercase', color: C.ink64 }}>
           {t('uf_steps')}
         </Text>
-        <Pressable onPress={() => setAboutOpen(o => !o)} hitSlop={8} accessibilityLabel="info"
-          style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: C.ink40, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ fontFamily: DISP_FONT, fontSize: 11, color: C.ink64 }}>i</Text>
-        </Pressable>
+        <CardI t="uf_steps"
+          b={['uf_steps_h', 'uf_baldp_h', 'uf_spa_h_g', 'uf_val_h_g', 'uf_dep0', 'uf_stamp_src', 'uf_legal_src', 'uf_val_src', 'uf_scope']}
+          p="calc" />
       </View>
-      {aboutOpen ? (
-        <View style={{ gap: 4 }}>
-          {['uf_steps_h', 'uf_baldp_h', 'uf_spa_h_g', 'uf_val_h_g', 'uf_stamp_src', 'uf_legal_src', 'uf_val_src', 'uf_first_src', 'uf_scope'].map(k => (
-            <BodyS key={k} muted style={{ fontSize: 11.5 }}>{t(k)}</BodyS>
-          ))}
-        </View>
-      ) : null}
       <Stage n={1} k="uf_s1">
-        <Row label={t('uf_earn')} kind="user" note={t('uf_earn_h')}><Input id="earnest" /></Row>
+        <Row label={t('uf_earn')} kind="user" info={<CardI t="uf_earn" b={['uf_earn_h']} p="user" />}><Input id="earnest" /></Row>
       </Stage>
       <Stage n={2} k="uf_s2">
         {src.price ? (
           <>
-            <Row label={t('uf_baldp')} kind="calc" note={t('uf_baldp_h')}><Amt v={bal} /></Row>
-            <Row label={t('uf_spa')} kind="official" note={t('uf_spa_h', { p: rm(src.price) })}><Amt v={f.spa} /></Row>
+            <Row label={t('uf_baldp')} kind="calc"><Amt v={bal} /></Row>
+            <Row label={t('uf_spa')} kind="official"><Amt v={f.spa} /></Row>
             <Row label={t('uf_stampT')} kind="official" note={stampNote || t('uf_stampT_h', { p: rm(src.price) })}><Amt v={f.t} /></Row>
-            <Row label={t('uf_loanlegal')} kind="official" note={t('uf_loanlegal_h', { p: rm(loan) })}><Amt v={f.loanLegal} /></Row>
+            <Row label={t('uf_loanlegal')} kind="official"><Amt v={f.loanLegal} /></Row>
             <Row label={t('uf_stampL')} kind="official" note={stampNote || t('uf_stampL_h', { p: rm(loan) })}><Amt v={f.l} /></Row>
-            <Row label={t('uf_val')} kind="assume" note={t('uf_val_h', { p: rm(src.price) })}><Amt v={f.val} /></Row>
-            <Row label={t('uf_mrta')} kind="user" note={t('uf_mrta_h')}><Input id="mrta" /></Row>
+            <Row label={t('uf_val')} kind="assume"><Amt v={f.val} /></Row>
+            <Row label={t('uf_mrta')} kind="user" info={<CardI t="uf_mrta" b={['uf_mrta_h']} p="user" />}><Input id="mrta" /></Row>
           </>
         ) : (
-          <Row label={t('uf_mrta')} kind="user" note={t('uf_mrta_h')}><Input id="mrta" /></Row>
+          <Row label={t('uf_mrta')} kind="user" info={<CardI t="uf_mrta" b={['uf_mrta_h']} p="user" />}><Input id="mrta" /></Row>
         )}
       </Stage>
-      <Stage n={3} k="uf_s3" note={t('uf_s3_h')}>
-        <Row label={t('uf_util')} kind="user" note={t('uf_util_h')}><Input id="util" /></Row>
-        <Row label={t('uf_strata')} kind="user" note={t('uf_strata_h')}><Input id="strata" /></Row>
-        <Row label={t('uf_furn')} kind="user" note={t('uf_furn_h')}><Input id="furn" /></Row>
+      <Stage n={3} k="uf_s3" info={<CardI t="uf_s3" b={['uf_s3_h']} p="user" />}>
+        <Row label={t('uf_util')} kind="user" info={<CardI t="uf_util" b={['uf_util_h']} p="user" />}><Input id="util" /></Row>
+        <Row label={t('uf_strata')} kind="user" info={<CardI t="uf_strata" b={['uf_strata_h']} p="user" />}><Input id="strata" /></Row>
+        <Row label={t('uf_furn')} kind="user" info={<CardI t="uf_furn" b={['uf_furn_h']} p="user" />}><Input id="furn" /></Row>
         <Switch on={S.ufReno} onPress={() => up(s => { s.ufReno = !s.ufReno; })} label={t('uf_reno_sw')} />
-        {S.ufReno ? <Row label={t('uf_reno')} kind="user" note={t('uf_reno_h')}><Input id="reno" /></Row> : null}
+        {S.ufReno ? <Row label={t('uf_reno')} kind="user" info={<CardI t="uf_reno" b={['uf_reno_h']} p="user" />}><Input id="reno" /></Row> : null}
       </Stage>
       {pick ? (
         <Modal transparent animationType="none" visible onRequestClose={() => setPick(false)}>
@@ -283,7 +274,11 @@ export function BufferScreen() {
   const last = rows[rows.length - 1];
   return (
     <ScreenShell back title={t('pr_buffer')}>
-      <Fig value={rm(liquidity.required_amount)} p="calc" cls="h-xl" />
+      {/* v24 R8i: the definition stays on screen; the basis moves behind the (i). */}
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Fig value={rm(liquidity.required_amount)} p="calc" cls="h-xl" />
+        <CardI t="pr_buffer" b={[]} p="calc" x={[t('bf_basis', { a: monthName(first.m), b: monthName(last.m) })]} />
+      </View>
       <BodyS muted>{t('bf_def')}</BodyS>
       {liquidity.required_amount === 0 ? (
         <NoteC>
@@ -318,7 +313,6 @@ export function BufferScreen() {
         </View>
         <View style={{ marginTop: 2, alignItems: 'flex-start' }}><Prov p="calc" /></View>
       </View>
-      <BodyS muted>{t('bf_basis', { a: monthName(first.m), b: monthName(last.m) })}</BodyS>
     </ScreenShell>
   );
 }
@@ -339,19 +333,12 @@ export function DocsScreen() {
         {['dc_bank', 'dc_ehail', 'dc_statdec', 'dc_epf', 'dc_commitlist'].map(check)}
       </Card>
       <Card gap={8}>
-        <BodyS muted>{t('dc_sjkp')}</BodyS>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <BodyS muted style={{ flexShrink: 1 }}>{t('dc_sjkp')}</BodyS>
+          <CardI t="pr_docs" b={['dc_src', 'dc_plain']} p="official" />
+        </View>
         {['dc_sj1', 'dc_sj2', 'dc_sj3'].map(k => <BodyS key={k}>· {t(k)}</BodyS>)}
-        <FigRow p="official" />
-        <BodyS muted>{t('dc_src')}</BodyS>
-        <Divider />
-        <BtnLine
-          label={t('dc_65') + ' ' + (S.dcOpen ? '−' : '+')}
-          style={{ textDecorationLine: 'none' }}
-          onPress={() => up(s => { s.dcOpen = !s.dcOpen; })}
-        />
-        {S.dcOpen ? <BodyS muted>{t('dc_65_note')}</BodyS> : null}
       </Card>
-      <BodyS>{t('dc_plain')}</BodyS>
     </ScreenShell>
   );
 }
