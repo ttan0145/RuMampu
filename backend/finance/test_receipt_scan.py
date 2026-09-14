@@ -4,7 +4,6 @@ from unittest.mock import patch
 
 from django.test import Client, TestCase
 
-from . import receipt_service
 from .receipt_service import ReceiptScanError, normalise_result
 
 
@@ -124,33 +123,3 @@ class NormaliseResultTests(TestCase):
                 "category_slug": None,
             },
         )
-
-
-class IncomeScanNormaliseTests(TestCase):
-    def test_rows_are_clamped_and_totals_dropped(self):
-        data = {
-            "is_earnings": True,
-            "rows": [
-                {"date": "2026-09-13", "amount": "112.00", "confident": True},
-                {"date": "not-a-date", "amount": 64, "confident": False},
-                {"date": None, "amount": "-5", "confident": True},
-                {"date": "2026-09-08", "amount": None},
-            ],
-        }
-        out = receipt_service.normalise_income_result(data)
-        self.assertTrue(out["is_earnings"])
-        self.assertEqual(len(out["rows"]), 2)
-        self.assertEqual(str(out["rows"][0]["amount"]), "112.00")
-        self.assertFalse(out["rows"][0]["low_confidence"])
-        self.assertIsNone(out["rows"][1]["date"])
-        self.assertTrue(out["rows"][1]["low_confidence"])
-
-    def test_not_earnings_is_empty(self):
-        out = receipt_service.normalise_income_result({"is_earnings": False, "rows": []})
-        self.assertEqual(out, {"is_earnings": False, "rows": []})
-
-    def test_no_valid_rows_means_not_earnings(self):
-        out = receipt_service.normalise_income_result(
-            {"is_earnings": True, "rows": [{"date": None, "amount": "abc"}]}
-        )
-        self.assertFalse(out["is_earnings"])

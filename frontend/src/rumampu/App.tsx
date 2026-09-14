@@ -23,8 +23,6 @@ import {
   BufferScreen, DocsScreen, PrepareScreen, PvCompareScreen, PvMonthScreen, PvSwitchScreen, UpfrontScreen,
 } from './screens/prepare';
 import { ImportIncomeScreen } from './screens/imports';
-import { HomeCostsScreen } from './screens/homecosts';
-import { AcctDetailsScreen } from './screens/acctdetails';
 
 const SCREENS: Record<Route, React.ComponentType> = {
   home: HomeScreen, plan: PlanScreen,
@@ -36,7 +34,6 @@ const SCREENS: Record<Route, React.ComponentType> = {
   house: HouseScreen, homecost: HomecostScreen, precheck: PrecheckScreen, result: ResultScreen,
   range: RangeScreen, compare: CompareScreen, shock: ShockScreen,
   househome: HousehomeScreen, savedtests: SavedtestsScreen, profile: ProfileScreen,
-  homecosts: HomeCostsScreen, acctdetails: AcctDetailsScreen,
   prepare: PrepareScreen, upfront: UpfrontScreen, buffer: BufferScreen, docs: DocsScreen,
   pv_switch: PvSwitchScreen, pv_month: PvMonthScreen, pv_compare: PvCompareScreen,
 };

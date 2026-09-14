@@ -11,12 +11,7 @@ export interface IncomeEntry {
   /** Server creation time, used to keep Recent entries aligned with actual additions. */
   createdAt?: string;
 }
-export interface CostItem {
-  id: string; k?: string; a: number; custom?: boolean; name?: string; dv?: boolean; p?: string;
-  /* v24 upfront: faint example behind an empty field, payment stage (3 = move
-     in), and sw marks the renovation row that sits behind its own switch. */
-  ex?: number; stage?: number; sw?: boolean;
-}
+export interface CostItem { id: string; k?: string; a: number; custom?: boolean; name?: string; dv?: boolean; p?: string }
 export interface WorkCostCategory { id: string; k?: string; custom?: boolean; name?: string; legacyMonthlyAmount?: number }
 export interface WorkCostEntry { id: string; categoryId: string; categoryName?: string; a: number; d: string }
 export interface Commitments { living: CostItem[]; debts: CostItem[]; savings: CostItem[] }
@@ -84,15 +79,7 @@ export const MOCK: AppData = {
   ],
   cashOnHand: 0,
   upfront: [
-    /* v24: only amounts with no published figure are entered by the user, with
-       no default. Legal, valuation and stamp duty are worked out from the
-       price by the fee functions in fees.ts. */
-    {id:'earnest',k:'uf_earn',a:0,p:'user',ex:5000},
-    {id:'mrta',k:'uf_mrta',a:0,p:'user',ex:12000},
-    {id:'util',k:'uf_util',a:0,p:'user',ex:900,stage:3},
-    {id:'strata',k:'uf_strata',a:0,p:'user',ex:1200,stage:3},
-    {id:'furn',k:'uf_furn',a:0,p:'user',ex:6000,stage:3},
-    {id:'reno',k:'uf_reno',a:0,p:'user',ex:15000,stage:3,sw:true}
+    {id:'legal',k:'uf_legal',a:2700,p:'assume'},{id:'stampT',k:'uf_stampT',a:4000,p:'official'},{id:'stampL',k:'uf_stampL',a:1250,p:'official'},{id:'val',k:'uf_val',a:800,p:'assume'},{id:'disb',k:'uf_disb',a:1500,p:'assume'},{id:'move',k:'uf_move',a:800,p:'assume'},{id:'basic',k:'uf_basic',a:2000,p:'assume'}
   ],
   comparePayments: [],
   expenseCats: [

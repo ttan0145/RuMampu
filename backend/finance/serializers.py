@@ -574,19 +574,6 @@ class ReceiptScanRequestSerializer(serializers.Serializer):
     )
 
 
-class IncomeScanRowSerializer(serializers.Serializer):
-    date = serializers.DateField(allow_null=True)
-    amount = serializers.DecimalField(
-        max_digits=12, decimal_places=2, coerce_to_string=True,
-    )
-    low_confidence = serializers.BooleanField()
-
-
-class IncomeScanResultSerializer(serializers.Serializer):
-    is_earnings = serializers.BooleanField()
-    rows = IncomeScanRowSerializer(many=True)
-
-
 class ReceiptScanResultSerializer(serializers.Serializer):
     is_receipt = serializers.BooleanField()
     merchant = serializers.CharField(allow_null=True)

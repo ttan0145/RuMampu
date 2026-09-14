@@ -137,28 +137,17 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
-
-if DEBUG:
-    # A phone (or browser) on the same Wi-Fi loads the dev bundle from the
-    # Mac's LAN IP, so its origin is that IP — which changes per network.
-    # Allow any IPv4 origin on the two Expo dev ports, in DEBUG only.
-    CORS_ALLOWED_ORIGIN_REGEXES = [
-        r"^http://(?:\d{1,3}\.){3}\d{1,3}:(?:8081|19006)$",
-    ]
 CORS_ALLOW_HEADERS = (
     *default_headers,
     "x-rumampu-client-id",
 )
 CORS_EXPOSE_HEADERS = ("Content-Disposition",)
 
-# SameSite=None is required for the deployed cross-site frontend, but browsers
-# only accept it on Secure (HTTPS) cookies. On plain-HTTP DEBUG runs (local dev,
-# CI browser tests) the cookie would be silently dropped, so fall back to Lax.
-SESSION_COOKIE_SAMESITE = "Lax" if DEBUG else "None"
+SESSION_COOKIE_SAMESITE = "None"
 SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_HTTPONLY = True
 
-CSRF_COOKIE_SAMESITE = "Lax" if DEBUG else "None"
+CSRF_COOKIE_SAMESITE = "None"
 CSRF_COOKIE_SECURE = not DEBUG
 CSRF_TRUSTED_ORIGINS = [
     "https://rumampu-frontend.vercel.app",

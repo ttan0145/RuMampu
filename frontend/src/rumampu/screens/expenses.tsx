@@ -3,7 +3,6 @@ import { Image, Pressable, StyleSheet, Text, TextInput, View, type DimensionValu
 import * as ImagePicker from 'expo-image-picker';
 import { SaveFormat, manipulateAsync } from 'expo-image-manipulator';
 import { useApp } from '../state';
-import { logIt } from '../log';
 import {
   EXP_FULL_DAYS, expByMonth, expCatTotals, latestExpMonth, monthsAgg, nf, rm, rmx,
 } from '../calc';
@@ -174,11 +173,8 @@ function ExpenseCsvBody() {
  * 中文：US1.5/US1.6 记录并汇总日常支出。v22 将其重构为暖色记录卡片。
  */
 export function ExpensesScreen() {
-  const { S, t, monthName, go, up, toast, saveExpenseEntry, saveWorkCostEntry } = useApp();
+  const { S, t, monthName, go, up, toast, saveExpenseEntry } = useApp();
   const cats = useCatLabel();
-  /* Figma B6: a work expense records into Work costs, not daily spending. */
-  const [forWork, setForWork] = React.useState(false);
-  const [workCat, setWorkCat] = React.useState<string | null>(null);
   const d = S.expDraft;
   const per = d.per || 'day';
   const [saving, setSaving] = React.useState(false);
@@ -203,15 +199,6 @@ export function ExpensesScreen() {
     setSaving(true);
     setError(null);
     try {
-      if (forWork) {
-        const cat = workCat ?? S.data.workCostCategories[0]?.id;
-        if (!cat) { setError('save'); setSaving(false); return; }
-        await saveWorkCostEntry({ amount: a, date: dd, categoryId: cat });
-        up(s => { s.expDraft = { a: '', c: s.expDraft.c, d: dd, per: s.expDraft.per }; });
-        toast(t('wk_saved'));
-        setSaving(false);
-        return;
-      }
       await saveExpenseEntry({ amount: a, date: dd, categoryId: d.c });
       up(s => { s.expDraft = { a: '', c: s.expDraft.c, d: dd, per: s.expDraft.per }; });
       toast(t('ex_saved', { m: monthName(key % 12), x: nf(total) }));
@@ -295,34 +282,7 @@ export function ExpensesScreen() {
         )}
       </InSec>
       <InSec>
-        <Pressable onPress={() => setForWork(w => !w)}
-          accessibilityRole="switch" accessibilityState={{ checked: forWork }}
-          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, gap: 10 }}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <InLbl>{t('ex_forwork')}</InLbl>
-            <BodyS muted style={{ fontSize: 11.5, marginTop: 2 }}>{t('ex_work_h')}</BodyS>
-          </View>
-          <View style={{
-            width: 46, height: 28, borderRadius: 14, padding: 3,
-            backgroundColor: forWork ? C.brand : C.ink14,
-            alignItems: forWork ? 'flex-end' : 'flex-start', justifyContent: 'center',
-          }}>
-            <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' }} />
-          </View>
-        </Pressable>
-      </InSec>
-      <InSec>
         <InLbl>{t('ex_q_cat')}</InLbl>
-        {forWork ? (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {S.data.workCostCategories.map(x => (
-              <InChip key={x.id} tint="out"
-                label={x.custom ? x.name || '' : t(x.k || '')}
-                on={(workCat ?? S.data.workCostCategories[0]?.id) === x.id}
-                onPress={() => setWorkCat(x.id)} />
-            ))}
-          </View>
-        ) : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {S.data.expenseCats.map(x => (
             <InChip key={x.id} tint="out"
@@ -334,7 +294,6 @@ export function ExpensesScreen() {
           <InChip dashed tint="out" label={t('xc_own').replace(/^\+\s*|^＋\s*/, '')}
             onPress={() => up(s => { s.sheet = 'xcown'; })} />
         </View>
-        )}
       </InSec>
       {error ? (
         <InSec>
@@ -352,24 +311,10 @@ export function ExpensesScreen() {
 
   const recent = ex.slice(0, 6);
 
-  /* v24: work costs get their own table on the same month — a separate
-     record of what it cost to earn, never mixed with daily spending. */
-  const wcName = (e: { categoryId: string; categoryName?: string }) => {
-    if (e.categoryName) return e.categoryName;
-    const cat = S.data.workCostCategories.find(x => x.id === e.categoryId);
-    return cat ? (cat.custom ? cat.name || '' : t(cat.k || '')) : e.categoryId;
-  };
-  const wlist = S.data.workCostEntries
-    .filter(e => (+e.d.slice(0, 4)) * 12 + (+e.d.slice(5, 7) - 1) === curKey)
-    .sort((a, b) => (a.d < b.d ? 1 : -1))
-    .slice(0, 8);
-  const wcSum = wlist.reduce((a, e) => a + (+e.a || 0), 0);
-
   let bycat: React.ReactNode = null;
   {
     const totals = expCatTotals(S.data, curKey);
-    const ent: [string, number][] = [...totals.entries()].sort((a, b) => b[1] - a[1]);
-    if (wcSum > 0) ent.push(['__wc', wcSum]);
+    const ent = [...totals.entries()].sort((a, b) => b[1] - a[1]);
     const mx = Math.max(1, ...ent.map(([, v]) => v));
     if (ent.length) {
       bycat = (
@@ -381,7 +326,7 @@ export function ExpensesScreen() {
           {ent.map(([c, v], i) => (
             <View key={c} style={{ marginVertical: 7 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <BodyS>{c === '__wc' ? t('wc_bycat') : cats(c)}</BodyS>
+                <BodyS>{cats(c)}</BodyS>
                 <Text style={{ fontFamily: DISP_FONT, fontSize: 13, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(v)}</Text>
               </View>
               <View style={{ height: 7, borderRadius: 4, backgroundColor: C.ink14, marginTop: 3, overflow: 'hidden' }}>
@@ -400,9 +345,7 @@ export function ExpensesScreen() {
       {S.expenseSync === 'error' ? <NoteC><BodyS>{t('ex_sync_error')}</BodyS></NoteC> : null}
       {summary}
       <InCard>
-        {/* 'scan' is a separate route; shown here it would pair a Scan tab
-            with the manual body, so it never stays selected on this screen. */}
-        <InSeg mode={S.exMode === 'scan' ? 'type' : S.exMode} tint="out"
+        <InSeg mode={S.exMode} tint="out"
           labels={[['type', t('im_type')], ['scan', t('im_scan')], ['csv', t('im_csv')]]}
           onMode={m => {
             if (m === 'scan') { up(s => { s.scan = { stage: 'pick' }; }); go('expscan'); return; }
@@ -426,29 +369,13 @@ export function ExpensesScreen() {
           ))}
         </View>
       ) : null}
-      <View style={[exSt.cardTint, { paddingVertical: 4 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 40 }}>
-          <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink }}>{t('wc_tbl')}</Text>
-          <Prov p="user" />
-        </View>
-        {wlist.length ? wlist.map((e, idx) => (
-          <InRow key={e.id} first={idx === 0} tint="out"
-            icon={<Ico name="wrench" size={18} color="#B54F2B" />}
-            title={wcName(e)}
-            sub={`${+e.d.slice(8, 10)} ${monthName(+e.d.slice(5, 7) - 1)}`}
-            amount={rmx(e.a)} />
-        )) : (
-          <BodyS muted style={{ paddingBottom: 12 }}>{t('wc_tbl_none')}</BodyS>
-        )}
-        {wlist.length ? <BodyS muted style={{ fontSize: 11, paddingBottom: 8 }}>{t('wc_bynote')}</BodyS> : null}
-      </View>
       {bycat}
       <View style={{ flexDirection: 'row', gap: 12 }}>
         <Pressable onPress={() => go('expmonths')} style={exSt.hubtile}>
           <View style={exSt.hubIc}><Ico name="calsum" size={22} color="#fff" /></View>
           <Text style={{ fontFamily: DISP_FONT, fontSize: 15, lineHeight: 20, color: C.ink }}>{t('ex_see_sum')}</Text>
         </Pressable>
-        <Pressable onPress={() => go('commit')} style={exSt.hubtile}>
+        <Pressable onPress={() => go('exlimits')} style={exSt.hubtile}>
           <View style={exSt.hubIc}><Ico name="gauge" size={22} color="#fff" /></View>
           <Text style={{ fontFamily: DISP_FONT, fontSize: 15, lineHeight: 20, color: C.ink }}>{t('ex_set_lims')}</Text>
         </Pressable>
@@ -544,9 +471,7 @@ export function ExpMonthsScreen() {
   );
 }
 
-/* Body shared by the standalone limits screen and the merged
-   Bills-and-limits screen (Figma B9). */
-export function ExLimitsBody() {
+export function ExLimitsScreen() {
   const { S, t, monthName, up } = useApp();
   const ek = latestExpMonth(S.data);
   const totals = ek != null ? expCatTotals(S.data, ek) : new Map<string, number>();
@@ -566,7 +491,7 @@ export function ExLimitsBody() {
             <BodyS muted>{t('lm_limit')}</BodyS>
             <Prov p="user" />
           </View>
-          <NumInput value={lims[id] || 0} onNum={n => up(s => { s.data.expenseLimits[id] = Math.max(0, n); logIt(s, id === 'total' ? 'lg_limit_total' : 'lg_limit', { a: rm(Math.max(0, n)) }, `lim:${id}`); })} alignRight />
+          <NumInput value={lims[id] || 0} onNum={n => up(s => { s.data.expenseLimits[id] = Math.max(0, n); })} alignRight />
         </View>
         {lim > 0 ? (
           <>
@@ -587,19 +512,10 @@ export function ExLimitsBody() {
     .map(c => row(c.custom ? c.name || '' : t(c.k || ''), totals.get(c.id) || 0, c.id));
 
   return (
-    <>
+    <ScreenShell back title={t('ex_limits')}>
       <BodyS muted>{t('lm_note')}</BodyS>
       {row(t('lm_total') + ' · ' + (ek != null ? monthName(ek % 12) : ''), monthTotal, 'total')}
       {catRows}
-    </>
-  );
-}
-
-export function ExLimitsScreen() {
-  const { t } = useApp();
-  return (
-    <ScreenShell back title={t('ex_limits')}>
-      <ExLimitsBody />
     </ScreenShell>
   );
 }
@@ -764,16 +680,6 @@ export function ExpScanScreen() {
     })();
     return () => { active = false; };
   }, [S.route, st, up]);
-
-  /* Quick-menu shortcut: Add → Scan a receipt → Expense goes straight to
-     the camera instead of stopping at the picker step. */
-  const scanAuto = S.scanAuto;
-  React.useEffect(() => {
-    if (S.route !== 'expscan' || !scanAuto) return;
-    up(s => { s.scanAuto = false; });
-    void pickPhoto('camera');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scanAuto]);
 
   const pickPhoto = async (source: 'camera' | 'library') => {
     setError(null);

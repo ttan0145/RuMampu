@@ -6,81 +6,24 @@ import { AppState, VillageState } from './state';
 
 export const ISO_TIERS = ['pondok', 'kampung', 'teres', 'kondo', 'istana'] as const;
 
-/* Epic 10 non-negotiables, spelled out as flags so adding a streak or a decay
-   timer means consciously flipping one here — not accidental design drift.
-   The game can't be won by playing, only by saving; saving is never taxed and
-   the board never manufactures loss. */
-export const VILLAGE_RULES = {
-  streaks: false,
-  decay: false,
-  lossAnimations: false,
-  guiltNudges: false,
-  mergesOptional: true,
-} as const;
-
 export function villageEnsure(s: AppState): VillageState {
-  if (!s.village) {
-    s.village = {
-      cells: new Array(16).fill(0), pop: [], score: 0, best: 0, moves: 0, gain: 0, built: 0,
-      collection: 0, queued: 0, savedRm: 0,
-    };
-  }
-  /* Sessions persisted before Epic 10 lack the new counters. */
-  if (s.village.collection == null) s.village.collection = 0;
-  if (s.village.queued == null) s.village.queued = 0;
-  if (s.village.savedRm == null) s.village.savedRm = 0;
+  if (!s.village) s.village = { cells: new Array(16).fill(0), pop: [], score: 0, best: 0, moves: 0, gain: 0, built: 0 };
   return s.village;
 }
 
-/* Epic 10 buffer lock: once a real buffer target exists, the village only
-   progresses while the shield is full. A dip pauses progress (new houses
-   queue) but never touches existing tiles — the app won't help someone drain
-   their safety net into a deposit. Pre-Epic-10 sessions have no buffer. */
-export function canProgressVillage(s: AppState): boolean {
-  const b = s.buffer;
-  if (!b || b.target === null) return true;
-  return b.saved >= b.target;
-}
-
-/* A saved day always registers. If the board is full — or the buffer lock is
-   on — the house waits in the queue instead of silently vanishing, so a
-   saving never reads as "didn't count." */
 export function villageSpawn(s: AppState): boolean {
   const v = villageEnsure(s);
   const empty = v.cells.map((c, i) => (c ? -1 : i)).filter(i => i >= 0);
-  v.built++;
-  if (!empty.length || !canProgressVillage(s)) {
-    v.queued++;
-    v.pop = [];
-    return true;
-  }
+  if (!empty.length) return false;
   const i = empty[Math.floor(Math.random() * empty.length)];
   v.cells[i] = 1;
   v.pop = [i];
+  v.built++;
   return true;
-}
-
-/* Place waiting houses as squares free up. */
-export function villagePlaceQueued(s: AppState): void {
-  const v = villageEnsure(s);
-  while (v.queued > 0 && canProgressVillage(s)) {
-    const empty = v.cells.map((c, i) => (c ? -1 : i)).filter(i => i >= 0);
-    if (!empty.length) return;
-    const i = empty[Math.floor(Math.random() * empty.length)];
-    v.cells[i] = 1;
-    v.queued--;
-    v.pop = [...v.pop, i];
-  }
 }
 
 export function villageRemove(s: AppState): void {
   const v = villageEnsure(s);
-  if (v.queued > 0) {
-    v.queued--;
-    v.built = Math.max(0, v.built - 1);
-    v.pop = [];
-    return;
-  }
   const i = v.cells.indexOf(1);
   if (i >= 0) { v.cells[i] = 0; v.built = Math.max(0, v.built - 1); }
   v.pop = [];
@@ -103,20 +46,10 @@ export function villageMove(s: AppState, dir: 'l' | 'r' | 'u' | 'd'): number {
     const out: number[] = [];
     for (let k = 0; k < vals.length; k++) {
       if (k + 1 < vals.length && vals[k] === vals[k + 1] && vals[k] < ISO_TIERS.length) {
-        const next = vals[k] + 1;
-        best = Math.max(best, next);
-        /* 2^tier scoring: kampung 2, teres 4, kondo 8, istana 16. */
-        gain += Math.pow(2, next - 1);
-        if (next === ISO_TIERS.length) {
-          /* Epic 10: a new istana graduates off the grid into the permanent
-             collection — the grid is the workshop, the collection the record,
-             so the board never fills with unmergeable terminal tiles. */
-          v.collection++;
-          pop.push(idxs[out.length]);
-        } else {
-          out.push(next);
-          pop.push(idxs[out.length - 1]);
-        }
+        out.push(vals[k] + 1);
+        pop.push(idxs[out.length - 1]);
+        best = Math.max(best, vals[k] + 1);
+        gain += Math.pow(2, vals[k] + 1);
         k++;
       } else out.push(vals[k]);
     }
@@ -137,6 +70,5 @@ export function villagePlay(s: AppState, dir: 'l' | 'r' | 'u' | 'd', builtLabel:
   v.moves++;
   v.score += v.gain;
   v.best = Math.max(v.best, v.score);
-  villagePlaceQueued(s);
   return true;
 }
