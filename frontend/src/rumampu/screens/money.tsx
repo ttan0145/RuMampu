@@ -14,6 +14,10 @@ import {
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { SvgXml } from 'react-native-svg';
 import { LOG_META, logClock, logRecent, logWhen } from '../log';
+import * as ImagePicker from 'expo-image-picker';
+import { SaveFormat, manipulateAsync } from 'expo-image-manipulator';
+import { Platform } from 'react-native';
+import { scanIncomeStatement } from '../api';
 import { Ico } from '../svgs';
 import { SrcIcon } from '../icons';
 import { Ruma } from '../ruma-view';
@@ -510,7 +514,9 @@ function IncomeScanBody() {
   const [amts, setAmts] = React.useState<Record<number, string>>({});
   const [adding, setAdding] = React.useState(false);
 
-  const startScan = () => {
+  /* Sample rows keep the demo path; a real photo goes through the Groq
+     statement reader on the backend and nothing is saved until confirmed. */
+  const sampleScan = () => {
     up(s => { s.incScan = { stage: 'reading', rows: [] }; });
     setTimeout(() => {
       up(s => {
@@ -537,6 +543,53 @@ function IncomeScanBody() {
         };
       });
     }, 1500);
+  };
+
+  const realScan = async (source: 'camera' | 'library') => {
+    try {
+      if (source === 'camera' && Platform.OS !== 'web') {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) { toast(t('ex_image_failed'), 'error'); return; }
+      }
+      const res = source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ quality: 0.8 })
+        : await ImagePicker.launchImageLibraryAsync({ quality: 0.8 });
+      if (res.canceled || !res.assets.length) return;
+      const asset = res.assets[0];
+      const resized = await manipulateAsync(
+        asset.uri,
+        asset.width && asset.width > 1280 ? [{ resize: { width: 1280 } }] : [],
+        { compress: 0.7, format: SaveFormat.JPEG, base64: true },
+      );
+      if (!resized.base64) { toast(t('ex_image_failed'), 'error'); return; }
+      up(s => { s.incScan = { stage: 'reading', rows: [] }; });
+      const result = await scanIncomeStatement(resized.base64, 'image/jpeg');
+      const today = new Date();
+      const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      up(s => {
+        if (s.incMode !== 'scan') return;
+        if (!result.is_earnings || !result.rows.length) {
+          s.incScan = { stage: 'pick', rows: [] };
+          return;
+        }
+        const fallback = s.data.sources.find(x => x.k === 'src_ehail' || x.id === 'ehail')?.id
+          || s.incomeDraft.s || s.data.sources[0]?.id || '';
+        s.incScan = {
+          stage: 'confirm',
+          rows: result.rows.map(r => ({
+            on: true,
+            d: r.date || todayIso,
+            s: fallback,
+            a: Number(r.amount) || 0,
+            low: r.low_confidence || !r.date,
+          })),
+        };
+      });
+      if (!result.is_earnings || !result.rows.length) toast(t('sc_notearn'), 'error');
+    } catch {
+      up(s => { s.incScan = { stage: 'pick', rows: [] }; });
+      toast(t('ex_scan_failed'), 'error');
+    }
   };
 
   const srcName = (id: string) => {
@@ -634,10 +687,12 @@ function IncomeScanBody() {
 
   return (
     <InSec last>
-      <Drop icon="scan" title={t('sc_pick')} hint={t('sc_hint')} onPress={startScan}
-        badge={<Badge label={t('ex_preview')} />} />
+      <Drop icon="scan" title={t('sc_pick')} hint={t('sc_hint')} onPress={() => { void realScan('library'); }} />
+      <View style={{ marginTop: 10 }}>
+        <Btn label={t('ex_take_photo')} onPress={() => { void realScan('camera'); }} />
+      </View>
       <View style={{ alignItems: 'center', marginTop: 8 }}>
-        <BtnLine label={t('sc_sample')} style={{ fontSize: 13.5 }} onPress={startScan} />
+        <BtnLine label={t('sc_sample')} style={{ fontSize: 13.5 }} onPress={sampleScan} />
       </View>
     </InSec>
   );

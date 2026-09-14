@@ -148,7 +148,9 @@ function QuickMenu() {
       if (kind === 'in') { s.incMode = 'scan'; s.incScan = { stage: 'pick', rows: [] }; }
       else { s.exMode = 'scan'; s.scan = { stage: 'pick' }; }
     });
-    go(kind === 'in' ? 'income' : 'expenses');
+    /* The expense scan lives on its own route; landing on the expenses screen
+       with exMode 'scan' used to show the manual body under a Scan tab. */
+    go(kind === 'in' ? 'income' : 'expscan');
   };
 
   const item = (label: string, icon: React.ReactNode, onPress: () => void, delay: number) => (

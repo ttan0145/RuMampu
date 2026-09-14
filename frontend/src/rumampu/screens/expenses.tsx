@@ -400,7 +400,9 @@ export function ExpensesScreen() {
       {S.expenseSync === 'error' ? <NoteC><BodyS>{t('ex_sync_error')}</BodyS></NoteC> : null}
       {summary}
       <InCard>
-        <InSeg mode={S.exMode} tint="out"
+        {/* 'scan' is a separate route; shown here it would pair a Scan tab
+            with the manual body, so it never stays selected on this screen. */}
+        <InSeg mode={S.exMode === 'scan' ? 'type' : S.exMode} tint="out"
           labels={[['type', t('im_type')], ['scan', t('im_scan')], ['csv', t('im_csv')]]}
           onMode={m => {
             if (m === 'scan') { up(s => { s.scan = { stage: 'pick' }; }); go('expscan'); return; }

@@ -692,6 +692,24 @@ export function scanReceipt(imageBase64: string, mediaType: string): Promise<Api
   });
 }
 
+export interface ApiIncomeScanRow {
+  date: string | null;
+  amount: string;
+  low_confidence: boolean;
+}
+
+export interface ApiIncomeScanResult {
+  is_earnings: boolean;
+  rows: ApiIncomeScanRow[];
+}
+
+export function scanIncomeStatement(imageBase64: string, mediaType: string): Promise<ApiIncomeScanResult> {
+  return request<ApiIncomeScanResult>('/income/scan/', {
+    method: 'POST',
+    body: JSON.stringify({ image_base64: imageBase64, media_type: mediaType }),
+  });
+}
+
 export function createExpense(input: {
   amount: number;
   date: string;

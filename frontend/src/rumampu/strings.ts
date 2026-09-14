@@ -338,6 +338,7 @@ en: {
   pl_reset: 'Reset this month\u2019s plan',
   pl_reset_arm: 'Tap again to reset \u2014 your record, village and declared savings are kept.',
   pl_reset_done: 'Plan reset. Record, village and savings kept.',
+  sc_notearn: 'No earnings could be read from that image. Try a clearer screenshot of your earnings page.',
   /* v24 carrying-range rework. */
   rg_alt: 'Your recorded months carried {a} to {b} a month. You tested {p}.',
   rg_counted: 'Counted: {c} of {n} recorded months.',
@@ -1434,6 +1435,7 @@ ms: {
   pl_reset: 'Tetapkan semula pelan bulan ini',
   pl_reset_arm: 'Ketik lagi untuk tetapkan semula \u2014 rekod, kampung dan simpanan anda kekal.',
   pl_reset_done: 'Pelan ditetapkan semula. Rekod, kampung dan simpanan kekal.',
+  sc_notearn: 'Tiada pendapatan dapat dibaca daripada imej itu. Cuba tangkapan skrin halaman pendapatan yang lebih jelas.',
   /* v24 carrying-range rework. */
   rg_alt: 'Bulan direkod anda membawa {a} hingga {b} sebulan. Anda menguji {p}.',
   rg_counted: 'Dikira: {c} daripada {n} bulan direkod.',
@@ -2529,6 +2531,7 @@ zh: {
   pl_reset: '重置本月计划',
   pl_reset_arm: '再点一次确认重置 \u2014 你的记录、村庄和储蓄都会保留。',
   pl_reset_done: '计划已重置。记录、村庄和储蓄保留。',
+  sc_notearn: '无法从这张图片读取任何收入。请试试更清晰的收入页面截图。',
   /* v24 carrying-range rework. */
   rg_alt: '你已记录的月份承担过每月 {a} 至 {b}。你测试的是 {p}。',
   rg_counted: '已计入：{n} 个已记录月份中的 {c} 个。',

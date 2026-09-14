@@ -32,6 +32,7 @@ from .serializers import (
     IncomeImportRowUpdateSerializer,
     IncomeImportUploadSerializer,
     IncomeRecordSerializer,
+    IncomeScanResultSerializer,
     IncomeSourceCreateSerializer,
     IncomeSourceSerializer,
     ReceiptScanRequestSerializer,
@@ -491,6 +492,39 @@ class ExpenseEntryListCreateView(APIView):
             user_confirmed=True,
         )
         return Response(ExpenseEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+
+class IncomeScanView(APIView):
+    @extend_schema(
+        operation_id="income_statement_scan",
+        summary="Read an earnings statement photo into draft income rows",
+        description=(
+            "Sends the photo to a vision model and returns one draft row per "
+            "earning found. Nothing is saved; the user reviews the rows and "
+            "records them through the normal income-entry endpoint."
+        ),
+        tags=["Income"],
+        request=ReceiptScanRequestSerializer,
+        responses={
+            200: IncomeScanResultSerializer,
+            400: ApiErrorSerializer,
+            502: OpenApiResponse(ApiErrorSerializer, description="The vision model call failed."),
+            503: OpenApiResponse(ApiErrorSerializer, description="No GROQ_API_KEY configured."),
+        },
+    )
+    def post(self, request):
+        profile_for_request(request)
+        serializer = ReceiptScanRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        try:
+            result = receipt_service.scan_income(data["image_base64"], data["media_type"])
+        except receipt_service.ReceiptScanError as exc:
+            return Response(
+                {"error": {"code": exc.code, "message": exc.message}},
+                status=exc.status,
+            )
+        return Response(IncomeScanResultSerializer(result).data)
 
 
 class ExpenseReceiptScanView(APIView):
