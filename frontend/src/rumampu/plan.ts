@@ -2,6 +2,7 @@ import { AppState, BufferState, PlanState } from './state';
 import { villageEnsure, villageRemove, villageSpawn } from './village';
 import { HousingTestResult } from '../../types/housing';
 import { getHousingTestResult } from '../../services/housingSession';
+import { upfrontNeed } from './fees';
 
 /* v22 saving plan — the month's target split into small, uneven daily amounts
    that add up exactly. Ported verbatim from the prototype: same seeded PRNG so
@@ -157,10 +158,9 @@ export function bufferTargetOf(result: HousingTestResult): number {
   return Math.max(0, Math.round(Number(result.starting_liquidity?.required_amount) || 0));
 }
 
-/* Upfront cash still owed — the village phase's target. */
-export function upfrontNeed(data: AppState['data']): number {
-  return data.house.deposit + data.upfront.reduce((a, c) => a + (+c.a || 0), 0);
-}
+/* Upfront cash still owed — the village phase's target. The v24 fee engine
+   works legal, valuation and stamp duty out from the tested price. */
+export { upfrontNeed } from './fees';
 
 export function bufferEnsure(s: AppState): BufferState {
   if (!s.buffer) {
@@ -240,7 +240,7 @@ export function planResolveTarget(s: AppState, result: HousingTestResult | null)
   const done = planSaved(p);
   const desired = phase === 'buffer'
     ? Math.max(0, (bufferEnsure(s).target ?? 0) - bufferEnsure(s).saved + done)
-    : Math.max(0, upfrontNeed(s.data) - s.data.cashOnHand + done);
+    : Math.max(0, upfrontNeed(s) - s.data.cashOnHand + done);
   if (p.target !== desired) {
     p.target = desired;
     planRegen(p);

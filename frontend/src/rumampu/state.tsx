@@ -183,8 +183,11 @@ export interface AppState {
   houseCostsSync: 'idle' | 'loading' | 'ready' | 'error';
   hcState: string;
   hcType: HouseCostType;
-  /* US5.2 before you move in: the first-home flag for the SJKP context. */
+  /* v24 upfront: the first-home stamp exemption flag, which saved test the
+     figures work from, and the renovation switch. */
   firstHome: boolean;
+  ufTest: number | null;
+  ufReno: boolean;
   /* LeanKit 10.10.3: leftovers from finished months, moved into the pot only
      by the user's own control. Keys are YYYY-MM of months already added. */
   potMoved: number;
@@ -261,7 +264,7 @@ function initialState(): AppState {
     plan: null, village: null, buffer: null, vHelp: false,
     moView: 'tiles', houseTab: 'test',
     houseCosts: null, houseCostsSync: 'idle', hcState: 'sgr', hcType: 'all', firstHome: false,
-    potMoved: 0, potMovedMonths: [],
+    potMoved: 0, potMovedMonths: [], ufTest: null, ufReno: false,
     tryPay: null, tryCust: false, depMode: null,
     incPick: false, incMode: 'type', incScan: { stage: 'pick', rows: [] }, incCsv: { stage: 'pick' }, incEdit: null,
     exMode: 'type', exCsv: { stage: 'pick' }, exEdit: null,

@@ -100,7 +100,7 @@ export function PlanScreen() {
   const inBuffer = phase === 'buffer';
   const bTarget = b?.target ?? 0;
   const bPct = bTarget > 0 ? Math.min(100, Math.round((b?.saved ?? 0) / bTarget * 100)) : 100;
-  const upShort = Math.max(0, upfrontNeed(S.data) - S.data.cashOnHand);
+  const upShort = Math.max(0, upfrontNeed(S) - S.data.cashOnHand);
 
   const paused = !!p.paused;
   const monthEnding = p.n - (today + 1) <= 2;
@@ -151,7 +151,7 @@ export function PlanScreen() {
           <Display cls="h-m">{t('p10_done_t')}</Display>
           <P style={{ color: C.ink64 }}>
             {t('p10_done', {
-              d: rm(upfrontNeed(S.data)),
+              d: rm(upfrontNeed(S)),
               b: rm(bTarget),
               m: rm(Math.round(Number(result.tested_home_cost) || 0)),
             })}
