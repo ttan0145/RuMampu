@@ -4,8 +4,8 @@ import { SvgXml } from 'react-native-svg';
 import { useApp } from '../state';
 import { rm } from '../calc';
 import {
-  bufferEnsure, feasibilityGap, planEnsure, planMonthsLeft, planPause, planPhase, planRegen,
-  planReset, planResolveTarget, planSaved, planSkip, planToggle, syncBufferTarget, upfrontNeed,
+  bufferEnsure, feasibilityGap, planEnsure, planMonthsLeft, planPause, planPhase,
+  planReset, planResolveTarget, planSaved, planShuffleLeft, planSkip, planToggle, syncBufferTarget, upfrontNeed,
 } from '../plan';
 import { commitTotal } from '../calc';
 import { villageEnsure } from '../village';
@@ -60,6 +60,12 @@ export function PlanScreen() {
     up(s => { bufferEnsure(s).msg = null; });
   }, [bufMsg]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* Local UI state must be declared before any early return, or the phase
+     branches below would call a different number of hooks between renders
+     ("Rendered more hooks than during the previous render"). */
+  const [wholeMonth, setWholeMonth] = React.useState(false);
+  const [resetArmed, setResetArmed] = React.useState(false);
+
   if (!S.plan || S.plan.key !== monthKey) return <ScreenShell back title={t('pl_title')}><View /></ScreenShell>;
 
   const phase = planPhase(S, result);
@@ -107,9 +113,6 @@ export function PlanScreen() {
   const monthEnding = p.n - (today + 1) <= 2;
   const potTotal = (v?.savedRm ?? 0) + S.potMoved;
   const monthsLeft = planMonthsLeft(S, commitTotal(S.data));
-  /* v24 first-glance rule: the calendar folds to this week; the pot stays in view. */
-  const [wholeMonth, setWholeMonth] = React.useState(false);
-  const [resetArmed, setResetArmed] = React.useState(false);
 
   const toggle = (i: number) => {
     if (paused) return;
@@ -228,7 +231,7 @@ export function PlanScreen() {
           <P style={{ textAlign: 'center' }}>{t(wholeMonth ? 'pl_showweek' : 'pl_showmonth')}</P>
         </BtnQuiet>
         <BtnQuiet arrow={false} style={{ justifyContent: 'center', marginTop: 12 }}
-          onPress={() => up(s => { const plan = planEnsure(s); plan.seed++; planRegen(plan); })}>
+          onPress={() => up(s => { planShuffleLeft(s, today); })}>
           <P style={{ textAlign: 'center' }}>{t('pl_shuffle')}</P>
         </BtnQuiet>
         <BtnQuiet arrow={false} style={{ justifyContent: 'center', marginTop: 8 }}
