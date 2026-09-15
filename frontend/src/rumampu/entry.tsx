@@ -791,7 +791,10 @@ export function GetToKnow() {
   const finish = async (save: boolean) => {
     if (finishing) return;
 
-    const amount = save ? (parseFloat(amt) || 0) : 0;
+    /* The placeholder reads "e.g. 3,000", and web and Android keypads offer a
+       comma, so "3,000" must mean three thousand, not three (parseFloat stops
+       at the comma). Thousands separators and spaces are not part of the number. */
+    const amount = save ? (parseFloat(String(amt).replace(/[,\s]/g, '')) || 0) : 0;
     const showLoading = S.guest && step >= 2;
     if (showLoading) {
       setFinishing(true);
