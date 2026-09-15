@@ -119,6 +119,70 @@ class AssistantServiceTests(TestCase):
         self.assertIn("Bahasa Melayu", system["content"])
         self.assertEqual(captured["messages"][-1]["content"], "berapa gaji saya bulan lepas?")
 
+    def test_prompt_names_controls_in_the_apps_language(self):
+        """With the app in Chinese, the map must carry the Chinese labels the
+        user actually sees, never the English ones (user report 15 Sep)."""
+        profile = _make_profile("labels-tests")
+        from . import assistant_service
+
+        captured: dict = {}
+
+        def fake_completion(model, messages):
+            captured["messages"] = messages
+            return "answer"
+
+        labels = {"add_income": "添加收入", "tab_money": "钱", "income_page": "收入", "bogus": "ignored"}
+        with patch.object(assistant_service, "_completion", side_effect=fake_completion):
+            assistant_service.answer_chat(
+                profile,
+                [{"role": "user", "content": "我要怎么添加收入？"}],
+                ui_language="zh",
+                ui_labels=labels,
+            )
+        system = captured["messages"][0]["content"]
+        self.assertIn("添加收入", system)
+        self.assertNotIn("Add income", system)
+        self.assertNotIn("ignored", system)
+        self.assertIn("shown in Chinese", system)
+        self.assertIn("EXACTLY as they appear", system)
+
+    def test_prompt_falls_back_to_english_labels(self):
+        profile = _make_profile("labels-default")
+        from . import assistant_service
+
+        captured: dict = {}
+        with patch.object(assistant_service, "_completion", side_effect=lambda m, msgs: captured.update(messages=msgs) or "ok"):
+            assistant_service.answer_chat(profile, [{"role": "user", "content": "hi"}])
+        self.assertIn("Add income", captured["messages"][0]["content"])
+
+    def test_reply_is_stripped_of_markdown(self):
+        profile = _make_profile("markdown-tests")
+        from . import assistant_service
+
+        raw = "### Your income\n\n**RM 1,400** this month – so far.  \n* First `item`\n* Second item\n\n\n\nThat is *all*."
+        with patch.object(assistant_service, "_completion", return_value=raw):
+            reply = assistant_service.answer_chat(profile, [{"role": "user", "content": "hi"}])
+        self.assertEqual(
+            reply,
+            "Your income\n\nRM 1,400 this month, so far.\n- First item\n- Second item\n\nThat is all.",
+        )
+
+    def test_view_passes_labels_through(self):
+        with patch(
+            "finance.views.assistant_service.answer_chat",
+            return_value="ok",
+        ) as mock_chat:
+            payload = {
+                "messages": [{"role": "user", "content": "hi"}],
+                "language": "zh",
+                "ui_labels": {"add_income": "添加收入"},
+            }
+            response = Client().post(
+                "/api/v1/assistant/chat/", data=json.dumps(payload), content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(mock_chat.call_args.kwargs["ui_labels"], {"add_income": "添加收入"})
+
 
 class SnapshotTests(TestCase):
     def test_empty_profile_snapshot_is_honest(self):

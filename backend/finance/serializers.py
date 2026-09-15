@@ -608,6 +608,18 @@ class AssistantMessageSerializer(serializers.Serializer):
 class AssistantChatRequestSerializer(serializers.Serializer):
     messages = AssistantMessageSerializer(many=True, min_length=1, max_length=24)
     language = serializers.ChoiceField(choices=["en", "ms", "zh"], default="en")
+    # The on-screen labels in the app's current language (see
+    # assistant_service.DEFAULT_UI_LABELS for the keys). Optional: older
+    # clients that send nothing get the English labels.
+    ui_labels = serializers.DictField(
+        child=serializers.CharField(max_length=60, trim_whitespace=True),
+        required=False,
+    )
+
+    def validate_ui_labels(self, value):
+        if len(value) > 60:
+            raise serializers.ValidationError("Too many labels.")
+        return value
 
     def validate_messages(self, value):
         if value[-1]["role"] != "user":

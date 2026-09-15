@@ -90,6 +90,24 @@ export function AssistantFab() {
   );
 }
 
+/* The exact on-screen labels in the current language, so the assistant names
+   buttons, tabs and pages the way the user sees them (in Chinese it must say
+   添加收入, not "Add income"). Keys match the backend's DEFAULT_UI_LABELS. */
+function uiLabels(t: (k: string) => string): Record<string, string> {
+  return {
+    tab_home: t('tab_home'), tab_money: t('tab_money'), tab_house: t('tab_test'), tab_profile: t('tab_profile'),
+    quick_income: t('qk_income'), quick_expense: t('qk_expense'), quick_scan: t('qk_scan'),
+    income_page: t('money_income'), add_income: t('inc_add'),
+    tab_manual: t('im_type'), tab_scan: t('im_scan'), tab_import: t('im_csv'),
+    expenses_page: t('money_expenses'), add_expense: t('ex_add'),
+    work_costs: t('money_workcosts'), commitments: t('money_commit'), income_pattern: t('money_pattern'),
+    quiet_months: t('money_coverage'), your_record: t('money_record'), saving_plan: t('pl_title'),
+    test_house: t('hh_test'), run_test: t('tx_run'), result: t('rs_title'), save_test: t('rx_keep'),
+    saved_tests: t('sv_title'), house_costs: t('hh_costs'), prepare: t('hh_prep'),
+    language: t('pf_lang'), ask: t('ai_title'),
+  };
+}
+
 export function AssistantSheet() {
   const { S, t, up, toast } = useApp();
   const insets = useSafeAreaInsets();
@@ -107,7 +125,7 @@ export function AssistantSheet() {
     setSending(true);
     up(s => { s.assistantMsgs.push({ role: 'user', content }); });
     try {
-      const { reply } = await assistantChat(history, S.lang);
+      const { reply } = await assistantChat(history, S.lang, uiLabels(t));
       up(s => { s.assistantMsgs.push({ role: 'assistant', content: reply }); });
     } catch (error) {
       const limited = error instanceof ApiError && error.code === 'assistant_rate_limited';

@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import re
 from typing import Any
 
 from django.core.cache import cache
@@ -25,21 +26,82 @@ MAX_HISTORY_MESSAGES = 12
 
 LANGUAGE_NAMES = {"en": "English", "ms": "Bahasa Melayu", "zh": "Chinese"}
 
-APP_MAP = (
-    "RuMampu pages and where to find things:\n"
-    "- Home tab: summary of the record and the latest housing-test headline.\n"
-    "- Money tab: Income (add weekly earnings or a past month's total), "
-    "Work costs (monthly costs of earning), Commitments (living costs, debt "
-    "repayments, savings), Daily expenses (record spending manually or scan a "
-    "receipt; also Monthly summary and Spending limits), Income pattern "
-    "(average, median, highest, lowest by month), Coverage check (mark "
-    "usually-slower months), Your record (entry counts and kept tests).\n"
-    "- Test tab: The house (price, deposit, rate, tenure), Total monthly cost "
-    "(instalment plus other home costs), then Run the test for the Result; "
-    "from the Result: Carrying range, Compare payments, If income drops.\n"
-    "- Prepare tab: shown as coming soon in this version.\n"
-    "- The language button (EN/MS/ZH) is at the top right of every page."
+# The controls the assistant may name. The app sends these labels exactly as
+# they appear on screen in the current UI language, so the model repeats what
+# the user sees instead of translating or guessing a button name. The English
+# set is the fallback for clients that send nothing.
+DEFAULT_UI_LABELS = {
+    "tab_home": "Home",
+    "tab_money": "Money",
+    "tab_house": "House",
+    "tab_profile": "Profile",
+    "add_button": "+",
+    "quick_income": "Income",
+    "quick_expense": "Expense",
+    "quick_scan": "Scan a receipt",
+    "income_page": "Income",
+    "add_income": "Add income",
+    "tab_manual": "Manual",
+    "tab_scan": "Scan",
+    "tab_import": "Import",
+    "expenses_page": "Daily expenses",
+    "add_expense": "Add expense",
+    "work_costs": "Work costs",
+    "commitments": "Commitments",
+    "income_pattern": "Income pattern",
+    "quiet_months": "Quiet months",
+    "your_record": "Your record",
+    "saving_plan": "Saving plan",
+    "test_house": "Test a house",
+    "run_test": "Run the test",
+    "result": "Result",
+    "save_test": "Save test",
+    "saved_tests": "Saved tests",
+    "house_costs": "House costs",
+    "prepare": "Prepare for a house",
+    "language": "Language",
+    "ask": "Ask RuMampu",
+}
+
+# The current (v24) screen layout. Every placeholder is a label above, so the
+# map reads in the user's own language once the app's labels are filled in.
+APP_MAP_TEMPLATE = (
+    "RUMAMPU'S SCREENS, with every button, tab and page named exactly as the user sees it:\n"
+    "- Bottom tabs: {tab_home}, {tab_money}, {tab_house}, {tab_profile}. The round {add_button} button in the middle of the bar opens a menu with {quick_income}, {quick_expense} and {quick_scan}.\n"
+    "- {tab_home}: the remaining balance, this month's income and spending, the house-test headline, and the {saving_plan} card.\n"
+    "- {tab_money}: {income_page} (three tabs: {tab_manual}, {tab_scan}, {tab_import}; the {add_income} button saves one entry; a small link below it adds a whole past month), {expenses_page} (the same three tabs; the {add_expense} button; a switch marks the spend as a work cost; spending limits and a monthly summary), {work_costs}, {commitments}, {income_pattern}, {quiet_months}, {your_record}, and {saving_plan} (daily amounts, tick a day when saved; the upfront target can be spread over 6, 12, 24 or 36 months).\n"
+    "- {tab_house}: {test_house} (property price, deposit, instalment, other monthly costs, then {run_test} opens the {result}; from the result: {save_test}, carrying range, compare payments, if income drops), {saved_tests}, {house_costs} (published prices by area, in years of a typical family's income), {prepare} (upfront cash, cash buffer, documents).\n"
+    "- {tab_profile}: the account, {language} (English, Bahasa Melayu, 中文), export and delete.\n"
+    "- {ask} is the floating robot bubble that stays on every screen."
 )
+
+
+def _app_map(ui_labels: dict[str, str] | None) -> str:
+    labels = dict(DEFAULT_UI_LABELS)
+    for key, value in (ui_labels or {}).items():
+        if key in labels and isinstance(value, str) and value.strip():
+            labels[key] = value.strip()
+    return APP_MAP_TEMPLATE.format(**labels)
+
+
+_MD_BOLD = re.compile(r"(\*\*|__)(.+?)\1", re.S)
+_MD_ITALIC = re.compile(r"(?<![\w*])\*(?!\s)([^*\n]+?)\*(?![\w*])")
+_MD_HEADING = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+", re.M)
+_MD_BULLET = re.compile(r"^([ \t]*)[*•][ \t]+", re.M)
+
+
+def _plain_text(text: str) -> str:
+    """Strip the markdown the model still emits despite the prompt: the app
+    renders replies as plain text, so asterisks and hashes would show."""
+    text = _MD_BOLD.sub(r"\2", text)
+    text = _MD_ITALIC.sub(r"\1", text)
+    text = text.replace("`", "")
+    text = _MD_HEADING.sub("", text)
+    text = _MD_BULLET.sub(r"\1- ", text)
+    text = re.sub(r"[ \t]+[—–][ \t]+", ", ", text)  # a spaced dash mid-sentence reads as a comma
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 class AssistantError(Exception):
@@ -166,11 +228,12 @@ HONESTY:
 TONE AND FRAMING:
 - Simple, warm, everyday language. Short answers — usually under 120 words. Amounts as RM 1,234.
 - Never mention the record's internal JSON field names (like income_months or work_costs) — describe things with everyday words and RuMampu's page names.
-- Plain text only: no markdown, no asterisks, no headings. For a short list, start lines with "- ".
+- Plain text only: no markdown, no asterisks, no headings, and no dashes as punctuation inside a sentence (use a comma or a full stop). For a short list, start lines with "- ".
 - You give explanations of the user's own numbers, never guarantees, predictions, loan-approval judgements, or professional financial advice. If asked "will the bank approve me" or "should I buy", explain what the record shows and say the decision and the bank's answer are outside RuMampu.
 
 LANGUAGE:
-- Users may write in English, Bahasa Melayu (including colloquial shortforms and Manglish), or Chinese. Reply in the language the user wrote in. If unclear, reply in {ui_language}.
+- The app is currently shown in {ui_language}. Reply in {ui_language}. Only if the user clearly writes in a different one of English, Bahasa Melayu (including shortforms and Manglish) or Chinese, reply in that language instead.
+- Buttons, tabs and pages: write them EXACTLY as they appear in the screen map below, character for character, because that is the text on the user's screen. Never translate a label into another language, never add an English name in brackets after it, and never invent a button or page that is not in the map. If a step has no label in the map, describe what to do in plain words.
 
 {app_map}
 
@@ -215,13 +278,14 @@ def answer_chat(
     profile: GuestProfile,
     messages: list[dict[str, str]],
     ui_language: str = "en",
+    ui_labels: dict[str, str] | None = None,
 ) -> str:
     _enforce_daily_limit(profile)
     snapshot = build_financial_snapshot(profile)
     system = SYSTEM_TEMPLATE.format(
         today=datetime.date.today().isoformat(),
         ui_language=LANGUAGE_NAMES.get(ui_language, "English"),
-        app_map=APP_MAP,
+        app_map=_app_map(ui_labels),
         snapshot=json.dumps(snapshot, ensure_ascii=False, default=str),
     )
     model = os.getenv("GROQ_CHAT_MODEL", DEFAULT_CHAT_MODEL).strip() or DEFAULT_CHAT_MODEL
@@ -239,6 +303,7 @@ def answer_chat(
             "The assistant is unavailable right now. Try again shortly.",
             502,
         ) from exc
+    reply = _plain_text(reply)
     if not reply:
         raise AssistantError(
             "assistant_failed",
