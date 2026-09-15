@@ -15,15 +15,23 @@ const CONFIGURED_ROOT = (
     : process.env.EXPO_PUBLIC_API_URL
 ) || 'http://localhost:8000/api/v1';
 
-/* On web, the page and the API run on the same machine, so the API host is
-   whatever host the page itself was loaded from — localhost on the Mac, the
-   LAN IP on a phone. This survives the Mac's IP changing without touching
-   .env. Native (Expo Go) has no page host and keeps the configured URL. */
+/* Local web development only: the dev server and Django run on the same
+   machine, so the API host follows the host the page was loaded from —
+   localhost on the Mac, the LAN IP on a phone. This survives the Mac's IP
+   changing without touching .env. It applies ONLY when the page host is
+   localhost or a private LAN address; on a deployed domain (Vercel) the
+   configured backend URL is used untouched, because the frontend and the
+   backend live on different hosts there. Native keeps the configured URL. */
+function isLocalDevHost(host: string): boolean {
+  if (host === 'localhost' || host === '127.0.0.1') return true;
+  // Private IPv4 ranges: 10.x.x.x, 192.168.x.x, 172.16-31.x.x
+  return /^(10|192\.168|172\.(1[6-9]|2\d|3[01]))(\.\d{1,3}){2,3}$/.test(host);
+}
 function resolveApiRoot(): string {
   if (Platform.OS !== 'web' || process.env.EXPO_PUBLIC_E2E === '1') return CONFIGURED_ROOT;
   try {
     const pageHost = window.location.hostname;
-    if (!pageHost) return CONFIGURED_ROOT;
+    if (!pageHost || !isLocalDevHost(pageHost)) return CONFIGURED_ROOT;
     const url = new URL(CONFIGURED_ROOT);
     url.hostname = pageHost;
     return url.toString().replace(/\/$/, '');
