@@ -23,13 +23,14 @@ export function planEnsure(s: AppState): PlanState {
   return s.plan;
 }
 
-export function planRegen(p: PlanState): void {
+export function planRegen(p: PlanState, fromDay = 0): void {
   const idx: number[] = [];
   let fixed = 0;
   const skipped = p.skipped ?? [];
   for (let i = 0; i < p.n; i++) {
     if (p.done[i]) fixed += p.amounts[i];
     else if (skipped[i]) p.amounts[i] = 0;  /* 10.9.1: spread over the rest */
+    else if (i < fromDay) p.amounts[i] = 0; /* re-planned: a passed day asks nothing */
     else idx.push(i);
   }
   if (!idx.length) return;
@@ -44,6 +45,18 @@ export function planRegen(p: PlanState): void {
   const order = raw.map((x, i) => [x - fl[i], i] as [number, number]).sort((a, b) => b[0] - a[0]);
   for (let k = 0; k < left; k++) fl[order[k % order.length][1]]++;
   idx.forEach((i, k) => { p.amounts[i] = fl[k]; });
+}
+
+
+/* Shuffle the days left: the remaining need (target minus what is already
+   ticked) re-splits across today and the days after it. Ticked days keep
+   their amounts; passed un-ticked days drop to zero — the month re-plans
+   around where the user actually stands, instead of re-rolling days that
+   are already gone. */
+export function planShuffleLeft(s: AppState, today: number): void {
+  const p = planEnsure(s);
+  p.seed++;
+  planRegen(p, Math.max(0, Math.min(today, p.n - 1)));
 }
 
 export function planSaved(p: PlanState): number {
