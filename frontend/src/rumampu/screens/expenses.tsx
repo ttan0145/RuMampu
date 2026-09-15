@@ -566,7 +566,12 @@ export function ExLimitsBody() {
       <View key={id} style={{ gap: 6, paddingVertical: 10, borderTopWidth: first ? 0 : 1, borderTopColor: C.ink14 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <P>{label}</P>
-          <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(spend)}</Text>
+          <Text style={{
+            fontFamily: DISP_FONT,
+            fontSize: 15,
+            color: spend === 0 ? C.ink64 : C.ink,
+            fontVariant: ['tabular-nums'],
+          }}>{rm(spend)}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <BodyS muted style={{ flex: 1 }}>{t('lm_limit')}</BodyS>
