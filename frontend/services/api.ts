@@ -1,10 +1,4 @@
-import { apiIdentityHeaders } from '../src/rumampu/api';
-
-const API_ROOT = (
-  process.env.EXPO_PUBLIC_E2E === '1'
-    ? process.env.EXPO_PUBLIC_PLAYWRIGHT_API_URL
-    : process.env.EXPO_PUBLIC_API_URL
-) || 'http://localhost:8000/api/v1';
+import { apiIdentityHeaders, API_ROOT } from '../src/rumampu/api';
 
 export class ApiError extends Error {
   status: number;
@@ -18,20 +12,38 @@ export class ApiError extends Error {
   }
 }
 
+/* Same 25s guard as the main client: a stalled write (e.g. running a house
+   test on a slow hotspot) becomes a caught timeout instead of a button that
+   spins forever. */
+export const REQUEST_TIMEOUT_MS = 25000;
+
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const identityHeaders = await apiIdentityHeaders();
   const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData;
 
-  const response = await fetch(`${API_ROOT}${path}`, {
-    ...init,
-    credentials: 'omit',
-    headers: {
-      Accept: 'application/json',
-      ...(init.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
-      ...identityHeaders,
-      ...(init.headers || {}),
-    },
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(`${API_ROOT}${path}`, {
+      ...init,
+      credentials: 'omit',
+      signal: init.signal ?? controller.signal,
+      headers: {
+        Accept: 'application/json',
+        ...(init.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
+        ...identityHeaders,
+        ...(init.headers || {}),
+      },
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.', 0, null);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 
   const text = await response.text();
   const body = text ? JSON.parse(text) : null;

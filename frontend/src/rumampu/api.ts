@@ -40,7 +40,10 @@ function resolveApiRoot(): string {
   }
 }
 
-const API_ROOT = resolveApiRoot();
+/* Single source of truth for the API host. The housing service imports this so
+   it can never resolve to a different host than the main client (which caused
+   house-test requests to silently miss the backend). */
+export const API_ROOT = resolveApiRoot();
 
 export interface ApiIncomeSource {
   id: number;
@@ -353,10 +356,31 @@ export async function apiIdentityHeaders(): Promise<Record<string, string>> {
   };
 }
 
+/* No fetch should hang forever: on a slow network (phone hotspot to a remote
+   database) a write can stall with no response, leaving a "Calculating…" or
+   "Saving…" button spinning indefinitely. A 25s abort turns that into a normal
+   caught error the caller can show instead. */
+export const REQUEST_TIMEOUT_MS = 25000;
+
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new ApiError('The request timed out. Check your connection and try again.', 0, 'timeout', null);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData;
   const identityHeaders = await apiIdentityHeaders();
-  const response = await fetch(`${API_ROOT}${path}`, {
+  const response = await fetchWithTimeout(`${API_ROOT}${path}`, {
     ...init,
     credentials: 'omit',
     headers: {
