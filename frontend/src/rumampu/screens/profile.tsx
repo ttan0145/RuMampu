@@ -170,9 +170,6 @@ export function ProfileScreen() {
           )}
         </Pressable>
       ) : null}
-      <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: C.ink40, textAlign: 'center' }}>
-        {t('pf_version')}
-      </Text>
     </ScreenShell>
   );
 }

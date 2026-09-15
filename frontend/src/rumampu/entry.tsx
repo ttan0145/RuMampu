@@ -717,12 +717,6 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
               </View>
               {authError ? <Text style={st.authError}>{authError}</Text> : null}
               <BtnP label={t('au_login')} onPress={() => void authGo()} loading={authLoading} />
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 4 }}>
-                <View style={{ flex: 1, borderTopWidth: 1.5, borderTopColor: C.ink14 }} />
-                <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink40 }}>{t('au_or')}</Text>
-                <View style={{ flex: 1, borderTopWidth: 1.5, borderTopColor: C.ink14 }} />
-              </View>
-              <BtnO prefix="G" label={t('au_google')} onPress={() => setAuthError('Google login is not connected yet. Use email and password.')} />
               <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4 }}>
                 <Text style={st.authfoot}>{t('au_new')}</Text>
                 <LineBtn label={t('au_createbtn')} onPress={() => up(s => { s.authMode = 'signup'; })} />
