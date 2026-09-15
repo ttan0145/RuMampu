@@ -555,6 +555,50 @@ function RumaHero() {
   );
 }
 
+
+/* The one thing to do gets the one loud button: a teal gradient pill that
+   breathes gently, with a coin dropping into view beside the label. */
+function AddIncomeCta({ label, onPress }: { label: string; onPress: () => void }) {
+  const pulse = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  return (
+    <Animated.View style={{
+      transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.045] }) }],
+      shadowColor: '#2E6B6F', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 },
+      elevation: 6, borderRadius: 999,
+    }}>
+      <Pressable onPress={onPress}
+        style={({ pressed }) => [{
+          minHeight: 58, borderRadius: 999, overflow: 'hidden',
+          alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30,
+        }, pressed && { opacity: 0.9 }]}>
+        <SvgXml
+          xml={'<svg width="100%" height="100%" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="cta" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4A9195"/><stop offset="1" stop-color="#2E6B6F"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#cta)"/></svg>'}
+          width="100%" height="100%"
+          style={{ position: 'absolute', left: 0, top: 0 }}
+        />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{
+            width: 26, height: 26, borderRadius: 13, backgroundColor: '#FEC844',
+            alignItems: 'center', justifyContent: 'center',
+            borderWidth: 2, borderColor: 'rgba(255,255,255,0.85)',
+          }}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 15, lineHeight: 18, color: '#5C4A00' }}>+</Text>
+          </View>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 18, color: '#fff' }}>{label}</Text>
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 /* How-the-app-works cards: rounded pastel tiles with hand-drawn doodles, the
    way a friendly meditation app introduces itself. They ease in one by one. */
 const HW_DOODLES: Record<string, string> = {
@@ -621,9 +665,7 @@ export function HomeScreen() {
         <View style={{ alignItems: 'center', gap: 12, paddingTop: 6 }}>
           <RumaHero />
           <Display cls="h-l" style={{ textAlign: 'center', maxWidth: 280 }}>{t('inc_empty')}</Display>
-          <View style={{ width: 230 }}>
-            <Btn label={t('inc_add')} onPress={() => go('income')} />
-          </View>
+          <AddIncomeCta label={t('inc_add')} onPress={() => go('income')} />
         </View>
         <Text style={{
           fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.88, textTransform: 'uppercase',
