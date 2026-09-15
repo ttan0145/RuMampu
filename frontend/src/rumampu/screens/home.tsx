@@ -11,7 +11,7 @@ import { villageEnsure } from '../village';
 import { IsoIsland } from '../isosvg';
 import { RUMA_IMG } from '../ruma';
 import { BODY_FONT, C, DISP_FONT } from '../theme';
-import { Btn, BodyS, Display } from '../ui';
+import { BodyS, Display } from '../ui';
 import { ScreenShell } from './shell';
 
 
@@ -647,6 +647,41 @@ function HowCard({ n, bg, doodle, title, body, delay }: {
   );
 }
 
+function HomePurposeControl() {
+  const { t } = useApp();
+  const [open, setOpen] = React.useState(false);
+  return (
+    <View style={st.howWrap}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => setOpen(value => !value)}
+        style={({ pressed }) => [st.howToggle, pressed && { opacity: 0.78 }]}
+      >
+        <View style={{ minWidth: 0, flex: 1 }}>
+          <Text style={st.howToggleTitle}>{t('how_title')}</Text>
+        </View>
+        <Text style={st.howToggleMark}>{open ? '↑' : '↓'}</Text>
+      </Pressable>
+      {open ? (
+        <View style={st.howPanel}>
+          <Text style={st.howPanelTitle}>{t('wf_title')}</Text>
+          <BodyS>{t('how_1')}</BodyS>
+          <BodyS>{t('how_payment')}</BodyS>
+          <BodyS>{t('how_2')}</BodyS>
+          <BodyS>{t('how_4')}</BodyS>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setOpen(false)}
+            style={({ pressed }) => [st.howClose, pressed && { opacity: 0.78 }]}
+          >
+            <Text style={st.howCloseText}>{t('done')}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 export function HomeScreen() {
   const { S, t, go, up } = useApp();
   const sp = recSpan(S.data);
@@ -668,6 +703,7 @@ export function HomeScreen() {
         <HowCard n={1} bg="#F3F6F5" doodle={HW_DOODLES.coins} title={t('hw_t1')} body={t('hw_b1')} delay={250} />
         <HowCard n={2} bg="#F3F6F5" doodle={HW_DOODLES.house} title={t('hw_t2')} body={t('hw_b2')} delay={430} />
         <HowCard n={3} bg="#F3F6F5" doodle={HW_DOODLES.sprout} title={t('hw_t3')} body={t('hw_b3')} delay={610} />
+        <HomePurposeControl />
         <View style={{ height: 56 }} />
       </ScreenShell>
     );
@@ -677,6 +713,7 @@ export function HomeScreen() {
     <ScreenShell brand>
       <HomeCards />
       <HouseTestRow />
+      <HomePurposeControl />
       <PlanCard />
     </ScreenShell>
   );
@@ -713,4 +750,24 @@ const st = StyleSheet.create({
   },
   plbtnTxt: { fontFamily: DISP_FONT, fontSize: 13.5, color: '#fff' },
   plbar: { height: 10, borderRadius: 5, backgroundColor: C.ink14, overflow: 'hidden', marginTop: 12 },
+  howWrap: { gap: 8 },
+  howToggle: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+    backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E3EAE8', borderRadius: 18,
+    paddingVertical: 12, paddingHorizontal: 14,
+    shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.06, shadowRadius: 16, shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  howToggleTitle: { fontFamily: DISP_FONT, fontSize: 16.5, lineHeight: 21, color: C.ink },
+  howToggleMark: { fontFamily: DISP_FONT, fontSize: 18, color: C.brand },
+  howPanel: {
+    gap: 8, backgroundColor: '#F3F7F6', borderWidth: 1.5, borderColor: '#DDE9E6',
+    borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16,
+  },
+  howPanelTitle: { fontFamily: DISP_FONT, fontSize: 19, lineHeight: 24, color: C.ink },
+  howClose: {
+    alignSelf: 'flex-start', marginTop: 4, minHeight: 38, paddingHorizontal: 16,
+    borderRadius: 19, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center',
+  },
+  howCloseText: { fontFamily: DISP_FONT, fontSize: 13.5, color: '#fff' },
 });

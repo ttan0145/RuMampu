@@ -168,6 +168,7 @@ export interface AppState {
   /* When a guest chooses Sign up from Profile, this records their explicit
      choice to move the current guest record into the new account. */
   mergeGuestOnSignup: boolean;
+  discardGuestOnSignup: boolean;
   knew: boolean;
   kstep: number;
   jobs: string[];
@@ -278,7 +279,7 @@ function initialState(): AppState {
     route: 'home',
     stack: [],
     onboard: 0, onboarded: false, splash: true,
-    wstep: 0, authMode: 'login', acctMade: false, fgMail: '', guest: false, mergeGuestOnSignup: false,
+    wstep: 0, authMode: 'login', acctMade: false, fgMail: '', guest: false, mergeGuestOnSignup: false, discardGuestOnSignup: false,
     knew: false, kstep: 0, jobs: ['taxi'], ownJobs: [], lastMonth: '',
     plan: null, village: null, buffer: null, vHelp: false, planHorizon: null,
     moView: 'tiles', houseTab: 'test',
@@ -509,7 +510,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           } else {
             // An unfinished account resumes onboarding after authentication.
             next.onboarded = false;
-            next.wstep = auth.preferred_language ? 2 : 1;
+            next.wstep = 1;
           }
           return next;
         });
@@ -1349,7 +1350,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       next.lang = prev.lang;
       next.splash = false;
       next.guest = true;
-      next.onboarded = true;
+      next.onboarded = false;
+      next.wstep = 1;
       return next;
     });
 

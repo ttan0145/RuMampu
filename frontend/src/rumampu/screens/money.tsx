@@ -386,19 +386,34 @@ export function RecordScreen() {
   // 中文：US8.1 把已记录月份、记录条数和最近记录日期交给 recordSummary()，避免页面重复计算规则。
   const summary = recordSummary(S.data);
   const n = summary.recordedMonthCount;
-  const e = S.data.income.length;
-  const last = e ? S.data.income[e - 1].d : '';
-  const lastLbl = last ? `${+last.slice(8, 10)} ${monthName(+last.slice(5, 7) - 1)}` : '';
+  const e = summary.entryCount;
+  const last = summary.latestEntryDate || '';
+  const lastLbl = last ? `${+last.slice(8, 10)} ${monthName(+last.slice(5, 7) - 1)} ${last.slice(0, 4)}` : '';
+  const monthMetric = n === 1 ? t('rc_month_metric_one') : t('rc_month_metric');
   return (
     <ScreenShell back title={t('money_record')}>
       {/* v24 R8f: the screen is the count and the list; guest keeping and why more
          weeks help live behind the (i) on the figure. */}
-      <View style={{ gap: 4 }}>
+      <View style={{ gap: 10 }}>
+        <Text style={mo.eyebrow}>{t('rc_summary')}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Display cls="h-l">{t('rc_months', { n })}</Display>
+          <View accessibilityLabel={`${n} ${monthMetric}`}>
+            <Display cls="h-l">{t('rc_months', { n })}</Display>
+          </View>
           <CardI t="money_record" b={[S.guest ? 'rc_live_guest' : 'rc_live_acct', 'rc_keep_line']} p="user" />
         </View>
-        <BodyS muted>{t('rc_entries', { e, d: lastLbl })}</BodyS>
+        <View accessibilityLabel={`${e} ${t('rc_entry_metric')}`}>
+          <BodyS muted>{lastLbl ? t('rc_entries', { e, d: lastLbl }) : `${e} ${t('rc_entry_metric')}`}</BodyS>
+        </View>
+        {lastLbl ? (
+          <View style={{ gap: 2 }}>
+            <BodyS muted>{t('rc_latest_label')}</BodyS>
+            <Display cls="body-s">{lastLbl}</Display>
+          </View>
+        ) : (
+          <BodyS muted>{t('rc_latest_empty')}</BodyS>
+        )}
+        <BodyS muted>{t('rc_live')}</BodyS>
       </View>
 
       <WhatChanged />
@@ -414,7 +429,11 @@ export function RecordScreen() {
               </View>
             </KV>
           )) : (
-            <BodyS muted>{t('rc_none')}</BodyS>
+            <View style={{ gap: 6 }}>
+              <BodyS muted>{t('rc_none_title')}</BodyS>
+              <BodyS muted>{t('rc_none_body')}</BodyS>
+              <BtnLine label={t('rc_test_action')} style={{ fontSize: 13 }} onPress={() => go('house')} />
+            </View>
           )}
         </Card>
       </View>

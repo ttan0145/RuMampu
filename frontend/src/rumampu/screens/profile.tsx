@@ -16,18 +16,24 @@ export function ProfileScreen() {
   const { S, t, up, go, toast, signOut, deleteCurrentRecord } = useApp();
   const [deleteArmed, setDeleteArmed] = React.useState(false);
   const [signupChoiceOpen, setSignupChoiceOpen] = React.useState(false);
+  const [exportConfirmOpen, setExportConfirmOpen] = React.useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = React.useState(false);
+  const [exporting, setExporting] = React.useState(false);
   const [loggingOut, setLoggingOut] = React.useState(false);
 
   const startSignup = (mergeGuestData: boolean) => {
     setSignupChoiceOpen(false);
     up(s => {
       s.mergeGuestOnSignup = mergeGuestData;
+      s.discardGuestOnSignup = !mergeGuestData;
       s.onboarded = false;
       s.wstep = 0;
       s.authMode = 'signup';
     });
   };
   const downloadExport = async () => {
+    if (exporting) return;
+    setExporting(true);
     try {
       const file = await exportRecord();
       if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -40,9 +46,12 @@ export function ProfileScreen() {
         link.remove();
         URL.revokeObjectURL(url);
       }
+      setExportConfirmOpen(false);
       toast(t('pf_export_done'));
     } catch {
       toast(t('pf_export_failed'), 'error');
+    } finally {
+      setExporting(false);
     }
   };
   const deleteRecord = async () => {
@@ -115,7 +124,7 @@ export function ProfileScreen() {
             <IcLab name="book"><P style={{ fontSize: 15 }}>{t('sv_title')}</P></IcLab>
             <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
           </Pressable>
-          <Pressable onPress={() => { void downloadExport(); }} style={[st.morow, st.morowLine]}>
+          <Pressable onPress={() => setExportConfirmOpen(true)} style={[st.morow, st.morowLine]}>
             <IcLab name="book"><P style={{ fontSize: 15 }}>{t('pf_export')}</P></IcLab>
             <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
           </Pressable>
@@ -147,14 +156,61 @@ export function ProfileScreen() {
           </View>
         </View>
       </Modal>
+      <Modal transparent visible={exportConfirmOpen} animationType="fade" onRequestClose={() => setExportConfirmOpen(false)}>
+        <View style={st.modalBackdrop}>
+          <View style={st.modalCard}>
+            <Text style={st.modalTitle}>{t('pf_export_title')}</Text>
+            <Text style={st.modalBody}>{t('pf_export_body')}</Text>
+            <Pressable
+              style={[st.modalPrimary, exporting && { opacity: 0.72 }]}
+              disabled={exporting}
+              onPress={() => { void downloadExport(); }}
+            >
+              <Text style={st.modalPrimaryText}>{exporting ? t('pf_exporting') : t('pf_export_confirm')}</Text>
+            </Pressable>
+            <Pressable
+              style={st.modalSecondary}
+              disabled={exporting}
+              onPress={() => setExportConfirmOpen(false)}
+            >
+              <Text style={st.modalSecondaryText}>{t('cancel')}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+      <Modal transparent visible={logoutConfirmOpen} animationType="fade" onRequestClose={() => setLogoutConfirmOpen(false)}>
+        <View style={st.modalBackdrop}>
+          <View style={st.modalCard}>
+            <Text style={st.modalTitle}>{t('pf_logout_title')}</Text>
+            <Text style={st.modalBody}>{t('pf_logout_body')}</Text>
+            <Pressable
+              style={[st.modalPrimary, loggingOut && { opacity: 0.72 }]}
+              disabled={loggingOut}
+              onPress={() => {
+                if (loggingOut) return;
+                setLoggingOut(true);
+                void signOut().catch(() => setLoggingOut(false));
+              }}
+            >
+              <Text style={st.modalPrimaryText}>{loggingOut ? t('pf_logout_loading') : t('pf_logout_confirm')}</Text>
+            </Pressable>
+            <Pressable
+              style={st.modalSecondary}
+              disabled={loggingOut}
+              onPress={() => setLogoutConfirmOpen(false)}
+            >
+              <Text style={st.modalSecondaryText}>{t('pf_logout_stay')}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       {!S.guest ? (
         <Pressable
           disabled={loggingOut}
           onPress={() => {
             if (loggingOut) return;
-            setLoggingOut(true);
-            void signOut().catch(() => setLoggingOut(false));
+            setLogoutConfirmOpen(true);
           }}
           style={[st.logoutBtn, loggingOut && { opacity: 0.72 }]}
         >

@@ -22,6 +22,16 @@ async function openApp(page: Page): Promise<void> {
   await completeVisibleOnboarding(page);
 }
 
+async function confirmGuestDialogIfVisible(page: Page): Promise<boolean> {
+  const guestDialog = page.getByRole('dialog');
+  const confirmGuest = guestDialog.getByRole('button', { name: 'Continue as guest', exact: true });
+  const appeared = await confirmGuest.waitFor({ state: 'visible', timeout: 1500 }).then(() => true).catch(() => false);
+  if (!appeared) return false;
+  await confirmGuest.click({ force: true, timeout: 3000 });
+  await page.waitForTimeout(150);
+  return true;
+}
+
 async function completeVisibleOnboarding(page: Page): Promise<void> {
   const splash = page.getByLabel('RuMampu');
   if (await splash.isVisible().catch(() => false)) {
@@ -48,6 +58,9 @@ async function completeVisibleOnboarding(page: Page): Promise<void> {
     const skip = page.getByText(/^Skip$/i).last();
     const next = page.getByText(/^Next$/i).last();
 
+    if (await confirmGuestDialogIfVisible(page)) {
+      continue;
+    }
     if (await clickIfVisible(guest)) {
       continue;
     }
@@ -67,6 +80,13 @@ async function completeVisibleOnboarding(page: Page): Promise<void> {
   }
 
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+}
+
+async function continueAsGuestFromLogin(page: Page): Promise<void> {
+  await page.getByText('Continue as guest', { exact: true }).click();
+  await confirmGuestDialogIfVisible(page);
+  await expect(page.getByText('What RuMampu does', { exact: true })).toBeVisible();
+  await syncClientIdFromBrowser(page);
 }
 
 // EN: Test setup for US8.1 uses backend seed IDs instead of hard-coding database
@@ -140,7 +160,6 @@ async function openRecord(page: Page): Promise<void> {
 
 async function clickThroughFirstAccountOnboarding(page: Page): Promise<void> {
   await page.getByText('Next', { exact: true }).last().click();
-  await page.getByText('Nice to meet you →', { exact: true }).click();
   await page.getByText('Next', { exact: true }).last().click();
   await page.getByText('Skip', { exact: true }).click();
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
@@ -189,6 +208,11 @@ async function registerAccountForTest(page: Page, email: string, password: strin
   expect(response.status()).toBe(201);
   const payload = await response.json();
   expect(payload.token).toBeTruthy();
+  const state = await e2ePatch(page, `${API}/auth/me/`, {
+    headers: { Authorization: `Token ${payload.token}` },
+    data: { preferred_language: 'en', onboarding_completed: true },
+  });
+  expect(state.status()).toBe(200);
   return payload.token;
 }
 
@@ -218,6 +242,7 @@ async function fetchAccountSavedTests(page: Page, token: string): Promise<Array<
 
 async function saveGuestHousingTestThroughUi(page: Page, name: string): Promise<void> {
   await page.getByRole('tab', { name: 'House', exact: true }).click();
+  await page.getByText('Test a house', { exact: true }).click();
   await page.getByPlaceholder('e.g. 250,000').fill('250000');
   await page.getByRole('button', { name: 'Run the test', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Save test', exact: true })).toBeVisible();
@@ -227,17 +252,23 @@ async function saveGuestHousingTestThroughUi(page: Page, name: string): Promise<
   await expect(page.getByText(name, { exact: true })).toBeVisible();
 }
 
-async function loginExistingAccountFromGuest(page: Page, email: string, password: string): Promise<void> {
+async function openSignupFromProfile(page: Page, guestChoice: 'keep' | 'fresh' = 'fresh'): Promise<void> {
   await page.getByRole('tab', { name: 'Profile', exact: true }).click();
-  await page.getByText('Create an account', { exact: true }).first().click();
+  await page.getByText('Sign up', { exact: true }).first().click();
+  await page.getByText(guestChoice === 'keep' ? 'Keep my guest record' : 'Start fresh', { exact: true }).click();
+}
+
+async function loginExistingAccountFromGuest(page: Page, email: string, password: string): Promise<void> {
+  await openSignupFromProfile(page);
   await page.getByText('Log in', { exact: true }).last().click();
   await page.getByPlaceholder('name@example.com').fill(email);
   await page.getByPlaceholder('Your password').fill(password);
   await page.getByText('Log in', { exact: true }).last().click();
-  await expect(page.getByText('Keep your guest record?', { exact: true })).toBeVisible();
+  await expect(page.getByText('Keep your guest record?', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible({ timeout: 15000 });
 }
 
-test('US8.16 first-launch onboarding explains RuMampu and supports Back between steps', async ({ page }) => {
+test('US8.16 first-launch onboarding explains RuMampu and reaches get-to-know', async ({ page }) => {
   await page.goto('/');
   const splash = page.getByLabel('RuMampu');
   if (await splash.isVisible().catch(() => false)) await splash.click({ force: true });
@@ -250,28 +281,47 @@ test('US8.16 first-launch onboarding explains RuMampu and supports Back between 
   await page.getByPlaceholder('Type it again').fill(password);
   await page.getByText('Create account', { exact: true }).last().click();
 
-  await expect(page.getByText('Which language feels like home?', { exact: true })).toBeVisible();
-  await page.getByLabel('Back').click();
-  await expect(page.getByText('Log in', { exact: true }).last()).toBeVisible();
-
-  await page.getByPlaceholder('name@example.com').fill(email);
-  await page.getByPlaceholder('Your password').fill(password);
-  await page.getByText('Log in', { exact: true }).last().click();
-  await expect(page.getByText('Which language feels like home?', { exact: true })).toBeVisible();
-  await page.getByText('Next', { exact: true }).last().click();
-
-  await expect(page.getByText('Hi, I’m Ruma!', { exact: true })).toBeVisible();
+  await expect(page.getByText('Step 1 of 3', { exact: true })).toBeVisible();
+  await expect(page.getByText('What RuMampu does', { exact: true })).toBeVisible();
   await expect(page.getByText('RuMampu blends rumah and mampu: can I afford a home?', { exact: true })).toBeVisible();
   await expect(page.getByText('I test a home against your recorded months', { exact: true })).toBeVisible();
   await expect(page.getByText('It is not a loan or home approval', { exact: true })).toBeVisible();
-  await page.getByLabel('Back').click();
-  await expect(page.getByText('Which language feels like home?', { exact: true })).toBeVisible();
 
   await page.getByText('Next', { exact: true }).last().click();
-  await page.getByText('Nice to meet you →', { exact: true }).click();
-  await expect(page.getByText('Hi there!', { exact: true })).toBeVisible();
-  await page.getByLabel('Back').click();
-  await expect(page.getByText('Hi, I’m Ruma!', { exact: true })).toBeVisible();
+  await expect(page.getByText('Step 2 of 3', { exact: true })).toBeVisible();
+  await expect(page.getByText('What do you do?', { exact: true })).toBeVisible();
+});
+
+test('US8.16 Home How it works opens purpose content without replaying onboarding', async ({ page }) => {
+  await completedAccountForUi(page);
+  await page.goto('/');
+  const splash = page.getByLabel('RuMampu');
+  if (await splash.isVisible().catch(() => false)) await splash.click({ force: true });
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+  const assistantIntro = page.getByText('Hi! Ask me about your record, your saving plan, or a house you have in mind. I only answer from your own numbers.', { exact: true });
+  await assistantIntro.waitFor({ state: 'visible', timeout: 1000 }).catch(() => undefined);
+  if (await assistantIntro.isVisible().catch(() => false)) {
+    await page.getByRole('button', { name: 'Done', exact: true }).last().click({ force: true });
+    await expect(assistantIntro).toHaveCount(0);
+  }
+
+  await page.getByRole('button', { name: /How it works/i }).click();
+  await expect(page.getByText('What RuMampu does', { exact: true })).toBeVisible();
+  await expect(page.getByText('RuMampu tests homes against the months you have recorded.', { exact: true })).toBeVisible();
+  await expect(page.getByText('It shows how a housing payment would have behaved across those months.', { exact: true })).toBeVisible();
+  await expect(page.getByText('It does not approve a loan or a home.')).toBeVisible();
+  await expect(page.getByText('It does not predict whether a bank or lender will approve financing.', { exact: true })).toBeVisible();
+  await expect(page.getByText('What do you do?', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('How much did you earn last month?', { exact: true })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+  await expect(page.getByText('It does not predict whether a bank or lender will approve financing.', { exact: true })).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+  await expect(page.getByText('What do you do?', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('How much did you earn last month?', { exact: true })).toHaveCount(0);
 });
 
 test('US8.17 skipped get-to-know creates no fake income and leaves Home guidance', async ({ page }) => {
@@ -279,8 +329,8 @@ test('US8.17 skipped get-to-know creates no fake income and leaves Home guidance
   const splash = page.getByLabel('RuMampu');
   if (await splash.isVisible().catch(() => false)) await splash.click({ force: true });
 
-  await page.getByText('Continue as guest', { exact: true }).click();
-  await expect(page.getByText('Hi there!', { exact: true })).toBeVisible();
+  await continueAsGuestFromLogin(page);
+  await expect(page.getByText('What RuMampu does', { exact: true })).toBeVisible();
   await page.getByText('Next', { exact: true }).last().click();
   await page.getByText('Skip', { exact: true }).click();
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
@@ -297,7 +347,7 @@ test('US8.17 get-to-know accepts custom work and saves one editable rough monthl
   const splash = page.getByLabel('RuMampu');
   if (await splash.isVisible().catch(() => false)) await splash.click({ force: true });
 
-  await page.getByText('Continue as guest', { exact: true }).click();
+  await continueAsGuestFromLogin(page);
   await page.getByText('Next', { exact: true }).last().click();
   await expect(page.getByText('What do you do?', { exact: true })).toBeVisible();
   await page.getByText('＋ Add your own', { exact: true }).click();
@@ -310,13 +360,22 @@ test('US8.17 get-to-know accepts custom work and saves one editable rough monthl
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
 
   await syncClientIdFromBrowser(page);
-  const record = await e2eGet(page, `${API}/income/record/`);
-  expect(record.status()).toBe(200);
-  const payload = await record.json();
-  expect(payload.entries).toHaveLength(1);
-  expect(payload.entries[0].amount).toBe('3000.00');
-  expect(payload.entries[0].date).toBe(expectedLastMonthIso());
-  expect(payload.entries[0].entry_method).toBe('historical_total');
+  let payload: { entries: Array<{ amount: string; date: string; entry_method: string }> } | undefined;
+  await expect
+    .poll(async () => {
+      const record = await e2eGet(page, `${API}/income/record/`);
+      if (record.status() !== 200) return `status:${record.status()}`;
+      const body = (await record.json()) as { entries: Array<{ amount: string; date: string; entry_method: string }> };
+      payload = body;
+      return String(body.entries.length);
+    })
+    .toBe('1');
+  const finalPayload = payload;
+  expect(finalPayload).toBeTruthy();
+  expect(finalPayload!.entries).toHaveLength(1);
+  expect(finalPayload!.entries[0].amount).toBe('3000.00');
+  expect(finalPayload!.entries[0].date).toBe(expectedLastMonthIso());
+  expect(finalPayload!.entries[0].entry_method).toBe('historical_total');
 });
 
 test('US8.12 guest entry does not call authenticated-only account endpoints', async ({ page }) => {
@@ -340,7 +399,7 @@ test('US8.12 guest entry does not call authenticated-only account endpoints', as
   const splash = page.getByLabel('RuMampu');
   if (await splash.isVisible().catch(() => false)) await splash.click({ force: true });
 
-  await page.getByText('Continue as guest', { exact: true }).click();
+  await continueAsGuestFromLogin(page);
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
   await page.waitForLoadState('networkidle').catch(() => undefined);
 
@@ -379,9 +438,9 @@ test('US8.12 delete account then create account opens real registration first', 
   await page.getByRole('tab', { name: 'Profile', exact: true }).click();
   await expect(page.getByText('Welcome, guest', { exact: true }).first()).toBeVisible();
 
-  await page.getByText('Create an account', { exact: true }).first().click();
+  await openSignupFromProfile(page, 'fresh');
   await expect(page.getByPlaceholder('name@example.com')).toBeVisible();
-  await expect(page.getByText('Nice to meet you →', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('What RuMampu does', { exact: true })).toHaveCount(0);
 
   const secondEmail = `epic8-recreate-${Date.now()}@example.com`;
   const secondPassword = 'Passw0rd123';
@@ -401,8 +460,7 @@ test('US8.12 transfers guest saved housing tests to a new account on Keep', asyn
   const savedName = `Guest transfer ${Date.now()}`;
   await saveGuestHousingTestThroughUi(page, savedName);
 
-  await page.getByRole('tab', { name: 'Profile', exact: true }).click();
-  await page.getByText('Create an account', { exact: true }).first().click();
+  await openSignupFromProfile(page, 'keep');
   const email = `epic8-transfer-${Date.now()}@example.com`;
   const password = 'Passw0rd123';
   await page.getByPlaceholder('name@example.com').fill(email);
@@ -410,18 +468,18 @@ test('US8.12 transfers guest saved housing tests to a new account on Keep', asyn
   await page.getByPlaceholder('Type it again').fill(password);
   await page.getByText('Create account', { exact: true }).last().click();
 
-  await expect(page.getByText('Keep your guest record?', { exact: true })).toBeVisible();
-  await page.getByText('Keep my guest record', { exact: true }).click();
   await clickThroughFirstAccountOnboarding(page);
 
   await page.getByRole('tab', { name: 'House', exact: true }).click();
   await page.getByLabel('Saved tests').click();
   await expect(page.getByText(savedName, { exact: true })).toBeVisible();
-  await page.getByText('Open this result', { exact: true }).click();
+  await page.getByText('Open this result').click();
   await expect(page.getByText('Result', { exact: true }).first()).toBeVisible();
 
   await page.getByRole('tab', { name: 'Profile', exact: true }).click();
   await page.getByText('Log out', { exact: true }).click();
+  await expect(page.getByText('Your record remains with your account. This only ends the current session on this browser/device.', { exact: true })).toBeVisible();
+  await page.getByText('Log out', { exact: true }).last().click();
   await page.getByPlaceholder('name@example.com').fill(email);
   await page.getByPlaceholder('Your password').fill(password);
   await page.getByText('Log in', { exact: true }).last().click();
@@ -430,11 +488,11 @@ test('US8.12 transfers guest saved housing tests to a new account on Keep', asyn
   await page.getByRole('tab', { name: 'House', exact: true }).click();
   await page.getByLabel('Saved tests').click();
   await expect(page.getByText(savedName, { exact: true })).toBeVisible();
-  await page.getByText('Open this result', { exact: true }).click();
+  await page.getByText('Open this result').click();
   await expect(page.getByText('Result', { exact: true }).first()).toBeVisible();
 });
 
-test('US8.12 adds guest saved test to existing account without duplicating account tests', async ({ page }) => {
+test('US8.12 login to existing account does not show retired guest-transfer prompt', async ({ page }) => {
   const password = 'Passw0rd123';
   const email = `epic8-existing-${Date.now()}@example.com`;
   const accountName = `Account test ${Date.now()}`;
@@ -446,20 +504,18 @@ test('US8.12 adds guest saved test to existing account without duplicating accou
   await openApp(page);
   await saveGuestHousingTestThroughUi(page, guestName);
   await loginExistingAccountFromGuest(page, email, password);
-  await page.getByText('Keep my guest record', { exact: true }).click();
 
-  await clickThroughFirstAccountOnboarding(page);
   await page.getByRole('tab', { name: 'House', exact: true }).click();
   await page.getByLabel('Saved tests').click();
   await expect(page.getByText(accountName, { exact: true })).toBeVisible();
-  await expect(page.getByText(guestName, { exact: true })).toBeVisible();
+  await expect(page.getByText(guestName, { exact: true })).toHaveCount(0);
 
   const records = await fetchAccountSavedTests(page, token);
   expect(records.filter(record => record.name === accountName)).toHaveLength(1);
-  expect(records.filter(record => record.name === guestName)).toHaveLength(1);
+  expect(records.filter(record => record.name === guestName)).toHaveLength(0);
 });
 
-test('US8.12 decline discards guest saved test and keeps existing account tests', async ({ page }) => {
+test('US8.12 existing-account login leaves guest saved test out of the account', async ({ page }) => {
   const password = 'Passw0rd123';
   const email = `epic8-decline-existing-${Date.now()}@example.com`;
   const accountName = `Account decline ${Date.now()}`;
@@ -471,9 +527,7 @@ test('US8.12 decline discards guest saved test and keeps existing account tests'
   await openApp(page);
   await saveGuestHousingTestThroughUi(page, guestName);
   await loginExistingAccountFromGuest(page, email, password);
-  await page.getByText('Continue without it', { exact: true }).click();
 
-  await clickThroughFirstAccountOnboarding(page);
   await page.getByRole('tab', { name: 'House', exact: true }).click();
   await page.getByLabel('Saved tests').click();
   await expect(page.getByText(accountName, { exact: true })).toBeVisible();
@@ -578,11 +632,11 @@ test('US8.2 keeps a completed housing test only once in the current frontend ses
   // belongs to earlier epics; this test uses it only to reach a completed Result.
   // 中文：这些点击通过当前 UI 完成用户操作。住房计算引擎属于前面 epic；这里仅用它进入完成后的 Result 页。
   await page.getByRole('tab', { name: 'House', exact: true }).click();
+  await page.getByText('Test a house', { exact: true }).click();
   await page.getByPlaceholder('e.g. 250,000').fill('250000');
   await page.getByRole('button', { name: 'Run the test', exact: true }).click();
 
   await expect(page.getByRole('button', { name: 'Save test', exact: true })).toBeVisible();
-  await expect(page.getByText('Add this result to Your record for this session.', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Save test', exact: true }).click();
   await expect(page.getByText('Name this test', { exact: true })).toBeVisible();
   await page.locator('input:visible').last().fill('Epic 8 session check');
@@ -595,10 +649,8 @@ test('US8.2 keeps a completed housing test only once in the current frontend ses
   // backend result object or permanent saved-history behaviour.
   // 中文：留存卡片验证记录页展示的精简字段，不验证完整后端结果对象，也不验证永久历史保存。
   await expect(page.getByText('Kept tests', { exact: true })).toBeVisible();
-  await expect(page.getByText(/\/ month/)).toBeVisible();
-  await expect(page.getByText('Short months', { exact: true })).toBeVisible();
-  await expect(page.getByText('Largest gap', { exact: true })).toBeVisible();
-  await expect(page.getByText('Kept for this session.', { exact: true })).toHaveCount(1);
+  await expect(page.getByText(/RM\s*1,382\s*·\s*0 of 3 short/)).toBeVisible();
+  await expect(page.getByText('Largest gap', { exact: true })).toHaveCount(1);
   await expect(page.locator('body')).not.toContainText(/permanent|cloud backup/i);
   await captureEvidence(page, 'epic-8', '03-kept-test-session-record.png');
 });
@@ -668,7 +720,7 @@ test('US8.4 exposes the four main areas and returns with Back', async ({ page })
   // EN: Epic 8 owns navigation into the Prepare area, not the detailed contents
   // of upfront-cash or document tools.
   // 中文：Epic 8 负责进入 Prepare 区域，不负责购房现金或文件工具的具体功能。
-  await expect(page.getByText('Coming soon', { exact: true })).toBeVisible();
+  await expect(page.getByText(/coming soon/i)).toBeVisible();
   await expect(page.getByText('This feature is not finished yet. Please look forward to it.', { exact: true })).toBeVisible();
   await expect(page.getByText('It will be completed in Iteration 3.', { exact: true })).toBeVisible();
   await page.getByText('Back', { exact: true }).click();

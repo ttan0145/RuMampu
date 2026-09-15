@@ -286,6 +286,80 @@ class AuthApiRegressionTests(TestCase):
         self.assertEqual(claimed_record.status_code, 200)
         self.assertEqual(claimed_record.json()["entries"][0]["amount"], "2444.00")
 
+    def test_register_with_explicit_guest_merge_claims_guest_record(self):
+        guest_client = Client(HTTP_X_RUMAMPU_CLIENT_ID="register-merge-guest-client")
+        self.assertEqual(guest_client.get("/api/v1/income/record/").status_code, 200)
+        guest = GuestProfile.objects.get(user__isnull=True)
+        source = guest.income_sources.get(slug="ehail")
+        period = guest.financial_periods.create(period_month=date(2026, 10, 1))
+        guest.income_entries.create(
+            period=period,
+            source=source,
+            income_date=date(2026, 10, 4),
+            gross_amount="2888.00",
+            entry_method=IncomeEntry.EntryMethod.MANUAL,
+        )
+        scenario = HousingScenario.objects.create(
+            profile=guest,
+            property_price="275000.00",
+            deposit="27500.00",
+            financing_rate="4.000",
+            tenure_years=30,
+            known_monthly_payment="980.00",
+        )
+
+        response = guest_client.post(
+            "/api/v1/auth/register/",
+            data={
+                "email": "register-merge@example.com",
+                "password": "Passw0rd123",
+                "merge_guest_data": True,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        user = User.objects.get(email="register-merge@example.com")
+        self.assertTrue(response.json()["token"])
+        self.assertTrue(GuestProfile.objects.filter(user=user).exists())
+        self.assertFalse(GuestProfile.objects.filter(pk=guest.pk, user__isnull=True).exists())
+        scenario.refresh_from_db()
+        self.assertEqual(scenario.user, user)
+        self.assertIsNone(scenario.profile_id)
+
+    def test_register_without_guest_merge_leaves_guest_record_unclaimed(self):
+        guest_client = Client(HTTP_X_RUMAMPU_CLIENT_ID="register-fresh-guest-client")
+        self.assertEqual(guest_client.get("/api/v1/income/record/").status_code, 200)
+        guest = GuestProfile.objects.get(user__isnull=True)
+        source = guest.income_sources.get(slug="ehail")
+        period = guest.financial_periods.create(period_month=date(2026, 11, 1))
+        guest.income_entries.create(
+            period=period,
+            source=source,
+            income_date=date(2026, 11, 4),
+            gross_amount="1888.00",
+            entry_method=IncomeEntry.EntryMethod.MANUAL,
+        )
+
+        response = guest_client.post(
+            "/api/v1/auth/register/",
+            data={
+                "email": "register-fresh@example.com",
+                "password": "Passw0rd123",
+                "merge_guest_data": False,
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        user = User.objects.get(email="register-fresh@example.com")
+        self.assertTrue(GuestProfile.objects.filter(pk=guest.pk, user__isnull=True).exists())
+        self.assertFalse(
+            GuestProfile.objects
+            .filter(user=user, income_entries__gross_amount="1888.00")
+            .exists()
+        )
+
     def test_declining_guest_transfer_discards_guest_record_and_keeps_account_record(self):
         user = User.objects.create_user(
             username="decline@example.com",
@@ -416,33 +490,14 @@ class AuthApiRegressionTests(TestCase):
         self.assertIn("2026-01", text)
         self.assertIn("Short", text)
 
-    def test_guest_export_returns_readable_xlsx_without_account_identity(self):
+    def test_guest_export_requires_an_account(self):
         client = Client(HTTP_X_RUMAMPU_CLIENT_ID="guest-xlsx-export")
         client.get("/api/v1/income/record/")
-        profile = GuestProfile.objects.get()
-        source = profile.income_sources.get(slug="ehail")
-        period = profile.financial_periods.create(period_month=date(2026, 2, 1))
-        profile.income_entries.create(
-            period=period,
-            source=source,
-            income_date=date(2026, 2, 1),
-            gross_amount="888.00",
-            entry_method=IncomeEntry.EntryMethod.MANUAL,
-        )
 
         response = client.get("/api/v1/auth/export/", HTTP_ACCEPT=XLSX_CONTENT_TYPE)
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Content-Type"], XLSX_CONTENT_TYPE)
-        workbook = workbook_from_response(response)
-        self.assertEqual(
-            workbook.sheetnames,
-            ["My Record", "Saved House Tests", "Calculated Results", "About This Export"],
-        )
-        text = workbook_values(workbook)
-        self.assertIn("888", text)
-        self.assertIn("Your Data", text)
-        self.assertNotIn("export@example.com", text)
+        self.assertEqual(response.status_code, 401)
+        self.assertTrue(GuestProfile.objects.filter(user__isnull=True).exists())
 
     def test_export_is_account_isolated_and_omits_internal_sensitive_fields(self):
         user_a = User.objects.create_user(

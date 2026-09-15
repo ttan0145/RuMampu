@@ -45,12 +45,6 @@ function IconBtn({ label, onPress, light }: { label: string; onPress: () => void
 
 /* ---------- step 1+2 cards ---------- */
 
-const LANGS: [string, string, string, string][] = [
-  ['en', '🇬🇧', 'English', 'Continue in English'],
-  ['ms', '🇲🇾', 'Bahasa Melayu', 'Teruskan dalam Bahasa Melayu'],
-  ['zh', '🇨🇳', '中文', '以中文继续'],
-];
-
 const FEAT_ICO: Record<string, string> = {
   ledger: '<rect x="4.5" y="3.5" width="15" height="17" rx="2.5"/><path d="M8.5 3.5v17"/><path d="M12.5 8.5h3.5M12.5 12h3.5"/>',
   house: '<path d="M3.5 10.5 12 3.5l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="m9.3 14.8 2 2 3.6-4.2"/>',
@@ -138,6 +132,16 @@ function LineBtn({ label, onPress, small }: { label: string; onPress: () => void
   );
 }
 
+function AuthLanguageButton({ onPress }: { onPress: () => void }) {
+  const { S } = useApp();
+  const label = S.lang === 'ms' ? 'Bahasa Melayu' : S.lang === 'zh' ? '中文' : 'English';
+  return (
+    <Pressable onPress={onPress} style={st.authLangBtn}>
+      <Text style={st.authLangText}>{label}</Text>
+    </Pressable>
+  );
+}
+
 function savedTestSignature(input: {
   scenarioId?: number | null;
   name?: string;
@@ -217,8 +221,6 @@ export function EntryFlow() {
   const params = useLocalSearchParams<{ uid?: string | string[]; token?: string | string[] }>();
   const resetUid = Array.isArray(params.uid) ? params.uid[0] : params.uid;
   const resetToken = Array.isArray(params.token) ? params.token[0] : params.token;
-  const [languageSaving, setLanguageSaving] = React.useState(false);
-  const [languageError, setLanguageError] = React.useState('');
 
   // A link from the password-reset email opens this screen directly.
   if (resetUid && resetToken) {
@@ -230,64 +232,17 @@ export function EntryFlow() {
     return <AuthStep />;
   }
 
-  if (S.wstep === 1) {
-    /* First-time account setup — choose and persist the account language. */
-    const continueWithLanguage = async () => {
-      if (languageSaving) return;
-      setLanguageSaving(true);
-      setLanguageError('');
-      try {
-        await savePreferredLanguage(S.lang);
-        up(state => { state.wstep = 2; });
-      } catch (error) {
-        setLanguageError(error instanceof ApiError ? error.message : 'Could not save your language choice.');
-      } finally {
-        setLanguageSaving(false);
-      }
-    };
-
-    return (
-      <View style={[st.wpage, { paddingTop: 20 + insets.top, paddingBottom: 22 + insets.bottom }]}>
-        <KProg total={3} on={1} />
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-          <Ruma w={148} pose="wave" />
-          <Text style={[st.hL, { textAlign: 'center' }]}>{t('wf_langq')}</Text>
-          <View style={{ width: '100%', gap: 8 }}>
-            {LANGS.map(([code, flag, name, sub]) => {
-              const on = S.lang === code;
-              return (
-                <Pressable key={code}
-                  onPress={() => up(state => { state.lang = code as typeof state.lang; })}
-                  style={[st.langcard, on && st.langcardOn]}>
-                  <Text style={{ fontSize: 26 }}>{flag}</Text>
-                  <View>
-                    <Text style={{ fontFamily: DISP_FONT, fontSize: 17, color: C.ink }}>{name}</Text>
-                    <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink64 }}>{sub}</Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-          {languageError ? <Text style={st.authError}>{languageError}</Text> : null}
-        </View>
-        <Pressable disabled={languageSaving} onPress={() => void continueWithLanguage()} style={[st.btn, languageSaving && { opacity: 0.72 }]}>
-          {languageSaving ? <ActivityIndicator color="#fff" /> : <Text style={st.btnTxt}>{t('wf_next')}</Text>}
-        </Pressable>
-      </View>
-    );
-  }
-
-  /* First-time account setup — meet Ruma. */
+  /* First-time setup step 1 — explain what RuMampu does. */
   return (
     <View style={[st.wpage, { paddingTop: 20 + insets.top, paddingBottom: 22 + insets.bottom }]}>
-      <KProg total={3} on={2} />
-      <View style={{ flexDirection: 'row', minHeight: 40, alignItems: 'center' }}>
-        <IconBtn label="←" onPress={() => up(state => { state.wstep = 1; })} />
+      <KProg total={3} on={1} />
+      <View style={{ minHeight: 40, justifyContent: 'center' }}>
+        <Text style={st.stepText}>{t('wf_step', { n: 1 })}</Text>
       </View>
       <ScrollView contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
         <Ruma w={172} pose="happy" />
         <View style={{ alignItems: 'center' }}>
-          <Text style={st.hL}>{t('wf_hi')}</Text>
+          <Text style={st.hL}>{t('wf_title')}</Text>
           <Text style={{ fontFamily: BODY_FONT, fontSize: 16, lineHeight: 24, color: C.ink64, maxWidth: 280, marginTop: 4, textAlign: 'center' }}>
             {t('wf_blend').replace(/<[^>]+>/g, '')}
           </Text>
@@ -299,8 +254,8 @@ export function EntryFlow() {
         </View>
         <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 16, color: C.ink40, textAlign: 'center' }}>{t('wf_copy')}</Text>
       </ScrollView>
-      <Pressable onPress={() => up(state => { state.onboarded = true; state.knew = false; state.kstep = 0; })} style={st.btn}>
-        <Text style={st.btnTxt}>{t('wf_meet')}</Text>
+      <Pressable onPress={() => up(state => { state.onboarded = true; state.knew = false; state.kstep = 1; state.wstep = 0; })} style={st.btn}>
+        <Text style={st.btnTxt}>{t('wf_next')}</Text>
       </Pressable>
     </View>
   );
@@ -371,9 +326,6 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
   const [accountLoadError, setAccountLoadError] = React.useState('');
   const [pendingAuth, setPendingAuth] = React.useState<ApiAuthResponse | null>(null);
   const [pendingLoadBeforeOnboarding, setPendingLoadBeforeOnboarding] = React.useState(false);
-  const [guestTransferAuth, setGuestTransferAuth] = React.useState<ApiAuthResponse | null>(null);
-  const [guestTransferLoading, setGuestTransferLoading] = React.useState(false);
-  const [guestTransferError, setGuestTransferError] = React.useState('');
   const forcedReset = Boolean(resetUid && resetToken);
   const login = !forcedReset && S.authMode === 'login';
   const amode: 'login' | 'signup' | 'forgot' | 'checkmail' | 'reset' = forcedReset ? 'reset' : S.authMode;
@@ -399,7 +351,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
 
       if (!auth.onboarding_completed) {
         s.onboarded = false;
-        s.wstep = auth.preferred_language ? 2 : 1;
+        s.wstep = 1;
       }
     });
 
@@ -430,7 +382,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
           s.knew = false;
           s.onboarded = false;
           s.kstep = 0;
-          s.wstep = auth.preferred_language ? 2 : 1;
+          s.wstep = 1;
         }
         if (auth.preferred_language) s.lang = auth.preferred_language;
       });
@@ -506,13 +458,35 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
     setAuthLoading(true);
     setAuthError('');
     try {
-      const auth = amode === 'signup'
-        ? await registerRequest(cleanEmail, pw)
+      const mergeGuestData = amode === 'signup' && S.mergeGuestOnSignup;
+      const discardGuestData = amode === 'signup' && S.discardGuestOnSignup;
+      const guestSavedTests = mergeGuestData
+        ? S.keptTests.map(test => JSON.parse(JSON.stringify(test)) as KeptTest)
+        : [];
+      let auth = amode === 'signup'
+        ? await registerRequest(cleanEmail, pw, mergeGuestData)
         : await loginRequest(cleanEmail, pw);
-      const transfer = await fetchGuestTransferStatus();
-      if (transfer.available) {
-        setGuestTransferAuth(auth);
-        setGuestTransferError('');
+      if (!auth.onboarding_completed && !auth.preferred_language) {
+        const updatedAuth = await savePreferredLanguage(S.lang);
+        auth = { ...auth, ...updatedAuth };
+      }
+      if (mergeGuestData) {
+        if (guestSavedTests.length) await persistGuestSavedTests(guestSavedTests);
+        up(s => {
+          s.keptTests = [];
+          s.mergeGuestOnSignup = false;
+          s.discardGuestOnSignup = false;
+        });
+        await finishAuthenticatedEntry(auth, { loadBeforeOnboarding: true });
+        return;
+      }
+      if (discardGuestData) {
+        up(s => {
+          s.keptTests = [];
+          s.mergeGuestOnSignup = false;
+          s.discardGuestOnSignup = false;
+        });
+        await finishAuthenticatedEntry(auth);
         return;
       }
       await finishAuthenticatedEntry(auth);
@@ -522,33 +496,6 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
       setAuthLoading(false);
     }
   };
-
-  const completeGuestTransfer = async (action: 'keep' | 'decline') => {
-    if (!guestTransferAuth || guestTransferLoading) return;
-    const guestSavedTests = S.keptTests.map(test => JSON.parse(JSON.stringify(test)) as KeptTest);
-    setGuestTransferLoading(true);
-    setGuestTransferError('');
-    try {
-      await resolveGuestTransfer(action);
-      if (action === 'keep') {
-        await persistGuestSavedTests(guestSavedTests);
-        up(s => { s.keptTests = []; });
-      } else {
-        up(s => { s.keptTests = []; });
-        await rotateGuestClientId();
-      }
-      const auth = guestTransferAuth;
-      setGuestTransferAuth(null);
-      await finishAuthenticatedEntry(auth, {
-        loadBeforeOnboarding: action === 'keep',
-      });
-    } catch (error) {
-      setGuestTransferError(error instanceof ApiError ? error.message : t('gt_error'));
-    } finally {
-      setGuestTransferLoading(false);
-    }
-  };
-
 
   const sendResetLink = async () => {
     if (authLoading) return;
@@ -606,10 +553,11 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
   return (
     <View style={[StyleSheet.absoluteFillObject, { zIndex: 50, backgroundColor: '#4C8388' }]}>
       <View style={{ paddingHorizontal: 20, paddingTop: 16 + insets.top }}>
-        <View style={{ flexDirection: 'row' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           {!login ? (
             <IconBtn light label="←" onPress={() => up(s => { s.authMode = 'login'; })} />
           ) : <View style={{ width: 44, height: 44 }} />}
+          {!forcedReset ? <AuthLanguageButton onPress={() => up(s => { s.sheet = 'lang'; })} /> : <View style={{ width: 44, height: 44 }} />}
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
           <View style={{ flex: 1, paddingBottom: 26 }}>
@@ -648,15 +596,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
       </View>
       <View style={st.sheet2}>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 20 + insets.bottom }}>
-          {guestTransferAuth ? (
-            <View style={{ gap: 12 }}>
-              <Text style={st.h2}>{t('gt_title')}</Text>
-              <BodyS muted>{t('gt_body')}</BodyS>
-              {guestTransferError ? <Text style={st.authError}>{guestTransferError}</Text> : null}
-              <BtnP label={t('gt_keep')} onPress={() => void completeGuestTransfer('keep')} loading={guestTransferLoading} />
-              <BtnO label={t('gt_decline')} onPress={() => void completeGuestTransfer('decline')} />
-            </View>
-          ) : amode === 'reset' ? (
+          {amode === 'reset' ? (
             <View style={{ gap: 10 }}>
               <Text style={st.h2}>{resetDone ? 'Password changed' : 'Set a new password'}</Text>
               {resetDone ? (
@@ -780,13 +720,48 @@ function JobTile({ id, bg, label, on, onPress }: { id: string; bg: string; label
 }
 
 export function GetToKnow() {
-  const { S, t, up, toast, saveIncomeEntry, updateIncomeEntry } = useApp();
+  const { S, t, up, toast, saveIncomeEntry, updateIncomeEntry, saveIncomeSource } = useApp();
   const insets = useSafeAreaInsets();
   const [amt, setAmt] = React.useState(S.lastMonth || '');
+  const [finishError, setFinishError] = React.useState('');
   const [finishing, setFinishing] = React.useState(false);
   const [finishProgress, setFinishProgress] = React.useState(20);
   const [finishStage, setFinishStage] = React.useState('Saving your details...');
-  const step = S.kstep || 0;
+  const step = S.kstep === 2 ? 2 : 1;
+
+  const ensureOnboardingSources = async (): Promise<string | undefined> => {
+    const known: Record<string, string> = { taxi: 'ehail', free: 'freelance' };
+    const custom: Record<string, string> = { deliv: t('k_j_deliv'), bar: t('k_j_bar') };
+    const pickedIds: string[] = [];
+    const existingByName = (name: string) => S.data.sources.find(source => (
+      (source.name || t(source.k || '')).trim().toLowerCase() === name.trim().toLowerCase()
+    ));
+
+    for (const job of S.jobs) {
+      const slug = known[job];
+      if (slug) {
+        const source = S.data.sources.find(item => item.k === `src_${slug}` || item.id === slug);
+        if (source) pickedIds.push(source.id);
+        continue;
+      }
+
+      const own = S.ownJobs.find(item => item.id === job);
+      const name = own?.name || custom[job];
+      if (!name) continue;
+      const existing = existingByName(name);
+      pickedIds.push(existing ? existing.id : await saveIncomeSource(name));
+    }
+
+    up(s => {
+      const picked = pickedIds
+        .map(id => s.data.sources.find(source => source.id === id))
+        .filter(Boolean) as typeof s.data.sources;
+      s.data.sources = picked.concat(s.data.sources.filter(source => !pickedIds.includes(source.id)));
+      if (pickedIds[0]) s.incomeDraft.s = pickedIds[0];
+    });
+
+    return pickedIds[0];
+  };
 
   const finish = async (save: boolean) => {
     if (finishing) return;
@@ -796,6 +771,7 @@ export function GetToKnow() {
        at the comma). Thousands separators and spaces are not part of the number. */
     const amount = save ? (parseFloat(String(amt).replace(/[,\s]/g, '')) || 0) : 0;
     const showLoading = S.guest && step >= 2;
+    setFinishError('');
     if (showLoading) {
       setFinishing(true);
       setFinishProgress(20);
@@ -806,16 +782,7 @@ export function GetToKnow() {
     // onboarding as complete until the final save attempt has finished. This
     // allows the guest loading screen to remain visible while the request runs.
     up(s => {
-      if (save) {
-        /* Preferred sources float to the top of the picker; unknown picks become custom names later. */
-        const known: Record<string, string> = { taxi: 'ehail', free: 'freelance' };
-        const wanted = s.jobs.map(j => known[j] || j);
-        const bySlug = (slug: string) => s.data.sources.find(x => x.id === slug || x.k === 'src_' + slug);
-        const picked = wanted.map(bySlug).filter(Boolean) as typeof s.data.sources;
-        s.data.sources = picked.concat(s.data.sources.filter(x => !picked.includes(x)));
-        if (s.data.sources.length) s.incomeDraft.s = s.data.sources[0].id;
-        s.lastMonth = amt;
-      }
+      if (save) s.lastMonth = amt;
       s.sheet = null;
     });
 
@@ -852,6 +819,16 @@ export function GetToKnow() {
       }
     }
 
+    if (save && amount > 0 && incomeFailed) {
+      const message = t('k_save_failed');
+      setFinishError(message);
+      toast(message, 'error');
+      setFinishing(false);
+      return;
+    }
+
+    await ensureOnboardingSources();
+
     if (showLoading) {
       setFinishProgress(82);
       setFinishStage('Getting RuMampu ready...');
@@ -876,6 +853,7 @@ export function GetToKnow() {
 
     up(s => {
       s.knew = true;
+      s.onboarded = true;
       s.sheet = null;
     });
     if (save && amount > 0 && incomeFailed) toast(t('k_save_failed'), 'error');
@@ -896,23 +874,21 @@ export function GetToKnow() {
 
   return (
     <View style={[st.kpage, { paddingTop: 18 + insets.top, paddingBottom: 18 + insets.bottom }]}>
-      {step ? <KProg total={2} on={step} /> : null}
+      <KProg total={3} on={step + 1} />
       <View style={{ flexDirection: 'row', minHeight: 40, alignItems: 'center', justifyContent: 'space-between' }}>
-        {step ? <IconBtn label="←" onPress={() => up(s => { s.kstep = Math.max(0, (s.kstep || 0) - 1); })} /> : <View />}
-        {step ? <LineBtn label={t('k_skip')} onPress={() => finish(false)} /> : null}
+        <IconBtn label="←" onPress={() => up(s => {
+          if (step === 1) {
+            s.onboarded = false;
+            s.wstep = 1;
+            return;
+          }
+          s.kstep = 1;
+        })} />
+        <Text style={st.stepText}>{t('wf_step', { n: step + 1 })}</Text>
+        <LineBtn label={t('k_skip')} onPress={() => finish(false)} />
       </View>
-      {step === 0 ? (
-        <>
-          <Pressable style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} onPress={() => up(s => { s.kstep = 1; })}>
-            <Text style={{ fontFamily: DISP_FONT, fontSize: 36, lineHeight: 42, color: C.ink, textAlign: 'center' }}>{t('k_hi')}</Text>
-            <Text style={{ fontFamily: BODY_FONT, fontSize: 17, lineHeight: 24, color: C.ink64, maxWidth: 280, marginTop: 10, textAlign: 'center' }}>{t('k_intro')}</Text>
-            <View style={{ marginTop: 30 }}><Ruma w={220} pose="count" /></View>
-          </Pressable>
-          <Pressable onPress={() => up(s => { s.kstep = 1; })} style={st.kbtn}>
-            <Text style={st.kbtnTxt}>{t('k_next')}</Text>
-          </Pressable>
-        </>
-      ) : step === 1 ? (
+      {finishError ? <Text style={st.authError}>{finishError}</Text> : null}
+      {step === 1 ? (
         <>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 8 }}>
             <Text style={{ fontFamily: DISP_FONT, fontSize: 26, lineHeight: 32, color: C.ink, marginTop: 8 }}>{t('k_q1')}</Text>
@@ -1013,6 +989,17 @@ const st = StyleSheet.create({
   },
   loadingPercent: {
     fontFamily: DISP_FONT, fontSize: 17, color: C.ink,
+  },
+  stepText: {
+    fontFamily: BODY_FONT, fontSize: 12.5, fontWeight: '700', color: C.ink64, textAlign: 'center',
+  },
+  authLangBtn: {
+    minHeight: 36, borderRadius: 999, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.62)',
+    paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  authLangText: {
+    fontFamily: DISP_FONT, fontSize: 12.5, color: '#fff',
   },
   kpage: {
     ...StyleSheet.absoluteFillObject, zIndex: 50, backgroundColor: '#FBFCFC',

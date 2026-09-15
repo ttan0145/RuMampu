@@ -312,7 +312,12 @@ class RegisterView(APIView):
         # sign-up flow. A normal sign-up starts with a clean account profile.
         merge_guest_data = request.data.get("merge_guest_data", False) is True
         if merge_guest_data:
-            claim_guest_profile_for_user(request, user)
+            original_user = request.user
+            request.user = user
+            try:
+                transfer_guest_record_to_user(request, user)
+            finally:
+                request.user = original_user
         _app_state(user)
 
         # Registration also signs the user in. Subsequent API requests use this
@@ -428,7 +433,7 @@ class LogoutView(APIView):
 
 
 class RecordExportView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     renderer_classes = [XlsxRenderer, JSONRenderer]
 
     def get(self, request):
