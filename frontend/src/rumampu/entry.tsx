@@ -819,74 +819,68 @@ export function GetToKnow() {
       s.sheet = null;
     });
 
-    try {
-      if (save && amount > 0) {
-        if (showLoading) {
-          setFinishProgress(45);
-          setFinishStage('Saving your previous month income...');
-        }
-
+    /* Two independent steps, each judged on its own: the note about last
+       month's income reflects only the income write, never the completion
+       flag or the hand-off to Home that follow it (a failed completion call
+       used to surface as 'income could not be saved'). */
+    let incomeFailed = false;
+    if (save && amount > 0) {
+      if (showLoading) {
+        setFinishProgress(45);
+        setFinishStage('Saving your previous month income...');
+      }
+      try {
         const targetDate = lastMonthIso();
-        /* Decide against the LIVE record, not the local copy: right after a
-           login or a guest start the copy can still be empty, and the backend
-           refuses a whole-month total for a month that already has income
-           records. Gig workers have several incomes, so the figure is always
-           kept: an empty month gets it as the month's total; a month that
-           already has entries gets it as one more entry; an existing month
-           total is replaced, so running setup twice never doubles it. */
+        /* Decide against the LIVE record, not the local copy, which can still
+           be empty right after a login or a guest start. The figure is kept as
+           last month's total: a month may hold a total alongside itemised
+           entries and they add up, and a second run of setup replaces the
+           total instead of doubling it. */
         const month = targetDate.slice(0, 7);
         const record = await fetchIncomeRecord();
-        const sourceId = S.data.sources[0]?.id ?? (record.sources[0] ? String(record.sources[0].id) : undefined);
-        const inMonth = record.entries.filter(entry => entry.date.slice(0, 7) === month);
-        const existingTotal = inMonth.find(entry => entry.entry_method === 'historical_total');
+        const existingTotal = record.entries.find(entry => (
+          entry.entry_method === 'historical_total' && entry.date.slice(0, 7) === month
+        ));
         if (existingTotal) {
-          await updateIncomeEntry(String(existingTotal.id), { amount, date: targetDate, sourceId });
+          await updateIncomeEntry(String(existingTotal.id), { amount, date: targetDate });
         } else {
-          await saveIncomeEntry({
-            amount, date: targetDate, sourceId,
-            entryMethod: inMonth.length ? 'manual' : 'historical_total', confirmOutlier: true,
-          });
+          await saveIncomeEntry({ amount, date: targetDate, entryMethod: 'historical_total', confirmOutlier: true });
         }
+      } catch (error) {
+        incomeFailed = true;
+        console.error('Onboarding: last month income was not saved', error);
       }
-
-      if (showLoading) {
-        setFinishProgress(82);
-        setFinishStage('Getting RuMampu ready...');
-      }
-
-      // Guests complete this flow locally. Registered users persist the
-      // completion flag so future logins and app restarts skip these pages.
-      if (!S.guest) await completeAccountOnboarding();
-
-      // Give the guest a visible transition instead of instantly jumping from
-      // the income question to Home after the network request completes.
-      if (showLoading) {
-        await new Promise(resolve => setTimeout(resolve, 350));
-        setFinishProgress(100);
-      }
-
-      up(s => {
-        s.knew = true;
-        s.sheet = null;
-      });
-      if (save) toast(t('k_saved'));
-    } catch (error) {
-      // Setup still finishes locally if the income write fails, but say so
-      // honestly instead of claiming the record started, and still persist the
-      // completion flag so the account does not repeat onboarding on reload.
-      console.error('Onboarding: last month income was not saved', error);
-      if (!S.guest) {
-        try { await completeAccountOnboarding(); } catch { /* retried on the next login */ }
-      }
-      up(s => {
-        s.knew = true;
-        s.sheet = null;
-      });
-      if (save && amount > 0) toast(t('k_save_failed'), 'error');
-      else if (save) toast(t('k_saved'));
-    } finally {
-      setFinishing(false);
     }
+
+    if (showLoading) {
+      setFinishProgress(82);
+      setFinishStage('Getting RuMampu ready...');
+    }
+
+    // Guests complete this flow locally. Registered users persist the
+    // completion flag so future logins and app restarts skip these pages.
+    if (!S.guest) {
+      try {
+        await completeAccountOnboarding();
+      } catch (error) {
+        console.error('Onboarding: completion flag not saved; the next login retries', error);
+      }
+    }
+
+    // Give the guest a visible transition instead of instantly jumping from
+    // the income question to Home after the network request completes.
+    if (showLoading) {
+      await new Promise(resolve => setTimeout(resolve, 350));
+      setFinishProgress(100);
+    }
+
+    up(s => {
+      s.knew = true;
+      s.sheet = null;
+    });
+    if (save && amount > 0 && incomeFailed) toast(t('k_save_failed'), 'error');
+    else if (save) toast(t('k_saved'));
+    setFinishing(false);
   };
 
   if (finishing) {
