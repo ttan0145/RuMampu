@@ -8,7 +8,7 @@ import { SvgXml } from 'react-native-svg';
 import { AppState, useApp } from './state';
 import { ApiError, assistantChat } from './api';
 import { BODY_FONT, C, DISP_FONT } from './theme';
-import { RumaHelpAvatar } from './ruma-view';
+import { RumaHelpAvatar, RumaSignAvatar } from './ruma-view';
 
 /* Flip to false to hide the whole Ask RuMampu UI (bubble, header
    button, popover), e.g. while the AI backend is unavailable. */
@@ -97,7 +97,9 @@ export function AssistantFab() {
           accessibilityLabel={t('ai_title')}
           style={({ pressed }) => [st.aibtn, pressed && { transform: [{ scale: 1.06 }] }]}
         >
-          <RumaHelpAvatar size={56} ring />
+          {/* Parked under an open chat the bubble reads EXIT: Ruma holding up
+              the sign, the "coming soon" board design with the word changed. */}
+          {open ? <RumaSignAvatar size={56} ring /> : <RumaHelpAvatar size={56} ring />}
         </Pressable>
       </Animated.View>
     </View>
@@ -294,12 +296,15 @@ const st = StyleSheet.create({
   },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
   input: {
-    flex: 1, minHeight: 48,
+    /* minWidth 0: a web text input will not shrink below ~20 characters on its
+       own, so with a larger phone font it pushed the Send button out of the
+       pop-up. Letting it shrink keeps the row inside the card. */
+    flex: 1, minWidth: 0, minHeight: 48,
     backgroundColor: C.paper, borderWidth: 1.5, borderColor: C.ink40, borderRadius: 12,
     paddingHorizontal: 12, fontSize: 15, color: C.ink, fontFamily: BODY_FONT,
   },
   sendBtn: {
-    width: 48, height: 48, borderRadius: 12,
+    width: 48, height: 48, borderRadius: 12, flexShrink: 0,
     backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center',
   },
   disclaimer: { fontFamily: BODY_FONT, fontSize: 11, lineHeight: 15, color: C.ink64, paddingTop: 8, textAlign: 'center' },
