@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Animated, Easing, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions,
+  Animated, Easing, Image, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
@@ -11,7 +11,7 @@ import { PLAN_HORIZONS, monthlySaveCapacity, planHorizonEffective, planResolveTa
 import { getHousingTestResult } from '../../services/housingSession';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from './theme';
 import { Btn, BtnLine, BodyS, EditList, NumInput, PROV_G } from './ui';
-import { Ico, Logo } from './svgs';
+import { Ico } from './svgs';
 import { Ruma } from './ruma-view';
 import { PEEK_W, peekArt } from './ruma-peek';
 import { IsoHouse, IsoIsland } from './isosvg';
@@ -1130,7 +1130,11 @@ export function Splash() {
           opacity: mark,
           transform: [{ scale: mark.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] }) }],
         }}>
-          <Logo size={126} />
+          <Image
+            source={require('../../assets/images/RuMampu_AppIcon_512.png')}
+            style={{ width: 126, height: 126 }}
+            resizeMode="contain"
+          />
         </Animated.View>
         <Animated.Text style={{
           fontSize: 36, fontWeight: '800', letterSpacing: -0.5, color: C.ink,
