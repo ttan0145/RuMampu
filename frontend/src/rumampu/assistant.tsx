@@ -8,8 +8,7 @@ import { SvgXml } from 'react-native-svg';
 import { AppState, useApp } from './state';
 import { ApiError, assistantChat } from './api';
 import { BODY_FONT, C, DISP_FONT } from './theme';
-import { RobotIco } from './svgs';
-import { RumaAvatar } from './ruma-view';
+import { RumaHelpAvatar } from './ruma-view';
 
 /* Flip to false to hide the whole Ask RuMampu UI (bubble, header
    button, popover), e.g. while the AI backend is unavailable. */
@@ -98,7 +97,7 @@ export function AssistantFab() {
           accessibilityLabel={t('ai_title')}
           style={({ pressed }) => [st.aibtn, pressed && { transform: [{ scale: 1.06 }] }]}
         >
-          <RobotIco size={26} />
+          <RumaHelpAvatar size={56} ring />
         </Pressable>
       </Animated.View>
     </View>
@@ -198,7 +197,7 @@ export function AssistantSheet() {
           <View style={st.pop}>
             <View style={st.header}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                <RumaAvatar size={44} />
+                <RumaHelpAvatar size={44} />
                 <Text style={st.title}>{t('ai_title')}</Text>
               </View>
               <Pressable onPress={close} hitSlop={10} accessibilityLabel={t('done')}>
@@ -269,7 +268,7 @@ export function AssistantSheet() {
 
 const st = StyleSheet.create({
   aibtn: {
-    width: 56, height: 56, borderRadius: 28, backgroundColor: C.brand,
+    width: 56, height: 56, borderRadius: 28, backgroundColor: '#E4EFEC',
     alignItems: 'center', justifyContent: 'center',
     shadowColor: 'rgba(31,63,65,1)', shadowOpacity: 0.35, shadowRadius: 22, shadowOffset: { width: 0, height: 10 },
     elevation: 8,
