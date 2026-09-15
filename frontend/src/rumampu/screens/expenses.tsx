@@ -9,7 +9,7 @@ import {
   EXP_FULL_DAYS, expByMonth, expCatTotals, latestExpMonth, monthsAgg, nf, pickMonth, rm, rmx,
 } from '../calc';
 import {
-  Badge, BodyS, Btn, BtnLine, Card, Chip, Chips, Display, Fig, FromR,
+  BodyS, Btn, BtnLine, Card, Chip, Chips, Display, Fig, FromR,
   IcLab, KV, NoteC, NumInput, P, Prov, StackS, TextField,
   CardI, MonthBtn,
 } from '../ui';
@@ -763,7 +763,6 @@ function ExpenseScanBody() {
     return (
       <InSec last>
         <Drop icon="scan" tint="out" title={t('ex_scan')} hint={t('ex_scan_pick')}
-          badge={<Badge label={t('ex_preview')} />}
           onPress={() => { void pickPhoto('library'); }} />
         <View style={{ marginTop: 10 }}>
           <Pressable onPress={() => { void pickPhoto('camera'); }}

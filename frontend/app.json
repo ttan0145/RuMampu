@@ -33,7 +33,14 @@
           "imageWidth": 100
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "RuMampu uses the camera to photograph a receipt or an earnings page so you can add it to your record.",
+          "photosPermission": "RuMampu opens your photos so you can pick a receipt or an earnings screenshot to add to your record."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
