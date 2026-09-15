@@ -165,32 +165,36 @@ function InfoSheet({ t, stateName, income, onClose }: {
 }) {
   return (
     <SheetFrame pose="curious" onClose={onClose} scroll>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={{ fontFamily: DISP_FONT, fontSize: 19, color: C.ink, flexShrink: 1 }}>{t('fh_i')}</Text>
-            <Pressable onPress={onClose} hitSlop={10}><Text style={{ fontSize: 18, color: C.ink }}>✕</Text></Pressable>
-          </View>
-          <ScrollView style={{ marginTop: 8 }} contentContainerStyle={{ gap: 8 }}>
-            <BodyS>{t('fh_not')}</BodyS>
-            <BodyS>{t('fh_earn', { s: stateName, m: income.toLocaleString('en-MY') })}</BodyS>
-            <BodyS>{t('fh_basis')}</BodyS>
-            {['fh_i1', 'fh_i7', 'fh_i2', 'fh_i5', 'fh_i6'].map(k => <BodyS key={k}>{t(k)}</BodyS>)}
-            <BodyS muted>{t('fh_i4')}</BodyS>
-            <View style={st.scaleCard}>
-              {FH_BAND_KEYS.map(([rk, bk], i) => (
-                <View key={rk} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 28 }}>
-                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: FH_BANDC[i] }} />
-                  <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink, width: 92 }}>{t(rk)}</Text>
-                  <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink, flexShrink: 1 }}>{t(bk)}</Text>
-                </View>
-              ))}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 19, color: C.ink, flexShrink: 1 }}>{t('fh_i')}</Text>
+        <Pressable onPress={onClose} hitSlop={10}><Text style={{ fontSize: 18, color: C.ink }}>✕</Text></Pressable>
+      </View>
+      <ScrollView
+        style={{ marginTop: 8, flexShrink: 1 }}
+        contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
+        showsVerticalScrollIndicator
+      >
+        <BodyS>{t('fh_not')}</BodyS>
+        <BodyS>{t('fh_earn', { s: stateName, m: income.toLocaleString('en-MY') })}</BodyS>
+        <BodyS>{t('fh_basis')}</BodyS>
+        {['fh_i1', 'fh_i7', 'fh_i2', 'fh_i5', 'fh_i6'].map(k => <BodyS key={k}>{t(k)}</BodyS>)}
+        <BodyS muted>{t('fh_i4')}</BodyS>
+        <View style={st.scaleCard}>
+          {FH_BAND_KEYS.map(([rk, bk], i) => (
+            <View key={rk} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 28 }}>
+              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: FH_BANDC[i] }} />
+              <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink, width: 92 }}>{t(rk)}</Text>
+              <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink, flexShrink: 1 }}>{t(bk)}</Text>
             </View>
-            <Text style={{ fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.99, textTransform: 'uppercase', color: C.ink64 }}>{t('fh_src')}</Text>
-            {['fh_src1', 'fh_src2', 'fh_src3'].map(k => (
-              <BodyS key={k} muted style={{ fontSize: 11.5 }}>{t(k)}</BodyS>
-            ))}
-            <BodyS muted style={{ fontSize: 11.5 }}>{t('fh_src4', { s: stateName })}</BodyS>
-            <BodyS muted style={{ fontSize: 11.5 }}>{t('fh_opened')}</BodyS>
-          </ScrollView>
+          ))}
+        </View>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.99, textTransform: 'uppercase', color: C.ink64 }}>{t('fh_src')}</Text>
+        {['fh_src1', 'fh_src2', 'fh_src3'].map(k => (
+          <BodyS key={k} muted style={{ fontSize: 11.5 }}>{t(k)}</BodyS>
+        ))}
+        <BodyS muted style={{ fontSize: 11.5 }}>{t('fh_src4', { s: stateName })}</BodyS>
+        <BodyS muted style={{ fontSize: 11.5 }}>{t('fh_opened')}</BodyS>
+      </ScrollView>
     </SheetFrame>
   );
 }
