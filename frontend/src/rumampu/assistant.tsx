@@ -25,6 +25,9 @@ export const ASSISTANT_UI_ENABLED = true;
 
 
 /* .aifloat — free drag inside the frame, snaps to the nearer side edge. */
+/* Room left under the open pop-up for the parked bubble: its 56px plus a gap. */
+const FAB_PARK_GAP = 64;
+
 export function AssistantFab() {
   const { S, t, up } = useApp();
   const frame = React.useRef({ w: 390, h: 700 });
@@ -54,6 +57,17 @@ export function AssistantFab() {
     },
     onPanResponderTerminate: () => { setTimeout(() => { moved.current = false; }, 80); },
   })).current;
+
+  /* While the chat is open the bubble slides to the bottom-left corner, just
+     under the pop-up and clear of its header, then springs back to where the
+     user last left it once the chat closes (user ruling 15 Sep). */
+  const open = S.assistantOpen;
+  React.useEffect(() => {
+    const target = open
+      ? { x: 8, y: frame.current.h - 140 }
+      : start.current;
+    Animated.spring(pos, { toValue: target, useNativeDriver: false, friction: 8, tension: 70 }).start();
+  }, [open, pos]);
 
   /* The floating bubble is the one entry to Ask RuMampu on every screen, tab
      roots and pushed screens alike (user ruling 15 Sep: no header robot on
@@ -133,6 +147,17 @@ export function AssistantSheet() {
 
   const close = () => up(s => { s.assistantOpen = false; });
 
+  /* A language switch starts a fresh chat: replies written while the app was
+     in another language name screens in that language, and the model copies
+     the wording of earlier turns (seen live: 'Daily Log（每日记账）' after
+     English-labelled replies). The greeting re-renders in the new language. */
+  const prevLang = React.useRef(S.lang);
+  React.useEffect(() => {
+    if (prevLang.current === S.lang) return;
+    prevLang.current = S.lang;
+    up(s => { s.assistantMsgs = []; });
+  }, [S.lang, up]);
+
   const send = async (text?: string) => {
     const content = (text ?? draft).trim();
     if (!content || sending) return;
@@ -162,9 +187,11 @@ export function AssistantSheet() {
           <View style={{ flex: 1, backgroundColor: 'rgba(15,32,33,0.28)' }} />
         </Pressable>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          {/* Right-anchored above the bubble's home corner, like the prototype's .aipop. */}
+          {/* Right-anchored like the prototype's .aipop, lifted one bubble height
+              so the parked bubble (bottom-left, see AssistantFab) stays in view
+              under the pop-up instead of behind it. */}
           <View pointerEvents="box-none" style={[
-            { width: '100%', alignItems: 'flex-end', paddingRight: 12, marginBottom: 84 + insets.bottom },
+            { width: '100%', alignItems: 'flex-end', paddingRight: 12, marginBottom: 84 + FAB_PARK_GAP + insets.bottom },
             Platform.OS === 'web' ? { alignSelf: 'center', maxWidth: 390 } : null,
           ]}>
           <View style={st.pop}>
