@@ -44,6 +44,22 @@ export function PrepareScreen() {
   );
 }
 
+/* The House entry points to this placeholder until Epic 5 is delivered in
+   Iteration 3. The working preparation screens remain available in source. */
+export function PrepareComingSoonScreen() {
+  const { t, backNav } = useApp();
+  return (
+    <ScreenShell back title={t('hh_prep')}>
+      <View style={pr.comingSoon}>
+        <Badge label={t('pr_coming')} />
+        <Display cls="h-xl">{t('pr_coming_note')}</Display>
+        <BodyS muted>{t('pr_coming_iter')}</BodyS>
+        <Btn label={t('back')} onPress={backNav} />
+      </View>
+    </ScreenShell>
+  );
+}
+
 export function UpfrontScreen() {
   const { S, t, up, toast } = useApp();
   const f = upfrontFees(S);
@@ -234,6 +250,12 @@ export function UpfrontScreen() {
 }
 
 const pr = StyleSheet.create({
+  comingSoon: {
+    minHeight: 420,
+    justifyContent: 'center',
+    gap: 16,
+    paddingVertical: 48,
+  },
   ufsrc: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: '#EDF2F1', borderRadius: 14, paddingVertical: 10, paddingHorizontal: 14, minHeight: 54,

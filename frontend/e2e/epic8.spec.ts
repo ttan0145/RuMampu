@@ -668,8 +668,11 @@ test('US8.4 exposes the four main areas and returns with Back', async ({ page })
   // EN: Epic 8 owns navigation into the Prepare area, not the detailed contents
   // of upfront-cash or document tools.
   // 中文：Epic 8 负责进入 Prepare 区域，不负责购房现金或文件工具的具体功能。
-  await expect(page.getByText('Documents & financing', { exact: true })).toBeVisible();
-  await expect(page.getByText('Coming soon', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Coming soon', { exact: true })).toBeVisible();
+  await expect(page.getByText('This feature is not finished yet. Please look forward to it.', { exact: true })).toBeVisible();
+  await expect(page.getByText('It will be completed in Iteration 3.', { exact: true })).toBeVisible();
+  await page.getByText('Back', { exact: true }).click();
+  await expect(page.getByText('Prepare for a house', { exact: true })).toBeVisible();
 
   await page.getByRole('tab', { name: 'Profile', exact: true }).click();
   await expect(page.getByText('Language', { exact: true })).toBeVisible();

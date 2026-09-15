@@ -224,7 +224,7 @@ export function MoneyScreen() {
         </View>
       </View>
       {group('mo_rec', [['income', 'money_income', 'banknote'], ['expenses', 'money_expenses', 'receipt'], ['commit', 'bl_title', 'calendar']])}
-      {group('mo_savings', [['plan', 'pl_title', 'calday'], ['buffer', 'pr_buffer', 'ring']])}
+      {group('mo_savings', [['plan', 'pl_title', 'calday'], ['prepare_soon', 'pr_buffer', 'ring']])}
       {group('mo_insights', [['pattern', 'money_pattern', 'bars'], ['coverage', 'money_coverage', 'search'], ['record', 'money_record', 'book']])}
     </ScreenShell>
   );

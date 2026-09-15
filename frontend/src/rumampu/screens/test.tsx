@@ -402,7 +402,7 @@ export function HousehomeScreen() {
           {stripLbl(costStrip.label)}
         </View>
       ))}
-      {card('prepare', 'wallet', 'hh_prep', 'hh_prep_d', (
+      {card('prepare_soon', 'wallet', 'hh_prep', 'hh_prep_d', (
         <View style={{ gap: 7, width: '100%' }}>
           {prepStrip.pct != null ? (
             <View style={{ height: 8, borderRadius: 5, backgroundColor: C.ink14, overflow: 'hidden' }}>

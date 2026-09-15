@@ -52,7 +52,7 @@ export type Route =
   // EN: Epic 7 preview routes are registered for future Iteration 3 work; this
   // does not make them an Iteration 1 implementation.
   // 中文：Epic 7 预览路由为未来 Iteration 3 工作保留；这不代表它们是 Iteration 1 实现。
-  | 'prepare' | 'upfront' | 'buffer' | 'docs' | 'pv_switch' | 'pv_month' | 'pv_compare';
+  | 'prepare' | 'prepare_soon' | 'upfront' | 'buffer' | 'docs' | 'pv_switch' | 'pv_month' | 'pv_compare';
 
 /* v22 tab model: home / money / test (house) / profile, FAB in the middle. */
 export type Tab = 'home' | 'money' | 'test' | 'profile';
@@ -65,7 +65,7 @@ export const TAB_OF: Record<Route, Tab> = {
   house: 'test', homecost: 'test', precheck: 'test', result: 'test', range: 'test',
   homecosts: 'test', acctdetails: 'profile',
   compare: 'test', shock: 'test',
-  plan: 'money', profile: 'profile', prepare: 'test', upfront: 'test', buffer: 'money', docs: 'test',
+  plan: 'money', profile: 'profile', prepare: 'test', prepare_soon: 'test', upfront: 'test', buffer: 'money', docs: 'test',
   pv_switch: 'test', pv_month: 'test', pv_compare: 'test',
 };
 
