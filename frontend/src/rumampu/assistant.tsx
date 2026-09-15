@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
-import { useApp } from './state';
+import { AppState, useApp } from './state';
 import { ApiError, assistantChat } from './api';
 import { BODY_FONT, C, DISP_FONT } from './theme';
 import { RobotIco } from './svgs';
@@ -97,7 +97,7 @@ function uiLabels(t: (k: string) => string): Record<string, string> {
   return {
     tab_home: t('tab_home'), tab_money: t('tab_money'), tab_house: t('tab_test'), tab_profile: t('tab_profile'),
     quick_income: t('qk_income'), quick_expense: t('qk_expense'), quick_scan: t('qk_scan'),
-    income_page: t('money_income'), add_income: t('inc_add'),
+    income_page: t('money_income'), add_income: t('inc_add'), past_month_link: t('inc_past'),
     tab_manual: t('im_type'), tab_scan: t('im_scan'), tab_import: t('im_csv'),
     expenses_page: t('money_expenses'), add_expense: t('ex_add'),
     work_costs: t('money_workcosts'), commitments: t('money_commit'), income_pattern: t('money_pattern'),
@@ -106,6 +106,22 @@ function uiLabels(t: (k: string) => string): Record<string, string> {
     saved_tests: t('sv_title'), house_costs: t('hh_costs'), prepare: t('hh_prep'),
     language: t('pf_lang'), ask: t('ai_title'),
   };
+}
+
+/* The record stores default category and source names in English; the app
+   shows them translated. Map stored name to shown label so the assistant's
+   copy of the record reads the way the screen does (Family becomes Keluarga). */
+function termLabels(S: AppState, t: (k: string) => string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const add = (name: string | undefined, key: string | undefined) => {
+    if (!name || !key) return;
+    const shown = t(key);
+    if (shown && shown !== key && shown !== name) out[name] = shown;
+  };
+  for (const c of S.data.expenseCats) if (!c.custom) add(c.name, c.k);
+  for (const c of S.data.workCostCategories) if (!c.custom) add(c.name, c.k);
+  for (const x of S.data.sources) if (!x.custom) add(x.name, x.k);
+  return out;
 }
 
 export function AssistantSheet() {
@@ -125,7 +141,7 @@ export function AssistantSheet() {
     setSending(true);
     up(s => { s.assistantMsgs.push({ role: 'user', content }); });
     try {
-      const { reply } = await assistantChat(history, S.lang, uiLabels(t));
+      const { reply } = await assistantChat(history, S.lang, uiLabels(t), termLabels(S, t));
       up(s => { s.assistantMsgs.push({ role: 'assistant', content: reply }); });
     } catch (error) {
       const limited = error instanceof ApiError && error.code === 'assistant_rate_limited';

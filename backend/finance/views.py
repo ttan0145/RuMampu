@@ -591,6 +591,7 @@ class AssistantChatView(APIView):
                 data["messages"],
                 ui_language=data["language"],
                 ui_labels=data.get("ui_labels"),
+                term_labels=data.get("term_labels"),
             )
         except assistant_service.AssistantError as exc:
             return Response(

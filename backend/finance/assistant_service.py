@@ -41,6 +41,7 @@ DEFAULT_UI_LABELS = {
     "quick_scan": "Scan a receipt",
     "income_page": "Income",
     "add_income": "Add income",
+    "past_month_link": "Add a month I did not record",
     "tab_manual": "Manual",
     "tab_scan": "Scan",
     "tab_import": "Import",
@@ -60,7 +61,7 @@ DEFAULT_UI_LABELS = {
     "house_costs": "House costs",
     "prepare": "Prepare for a house",
     "language": "Language",
-    "ask": "Ask RuMampu",
+    "ask": "Ask Ruma",
 }
 
 # The current (v24) screen layout. Every placeholder is a label above, so the
@@ -69,10 +70,11 @@ APP_MAP_TEMPLATE = (
     "RUMAMPU'S SCREENS, with every button, tab and page named exactly as the user sees it:\n"
     "- Bottom tabs: {tab_home}, {tab_money}, {tab_house}, {tab_profile}. The round {add_button} button in the middle of the bar opens a menu with {quick_income}, {quick_expense} and {quick_scan}.\n"
     "- {tab_home}: the remaining balance, this month's income and spending, the house-test headline, and the {saving_plan} card.\n"
-    "- {tab_money}: {income_page} (three tabs: {tab_manual}, {tab_scan}, {tab_import}; the {add_income} button saves one entry; a small link below it adds a whole past month), {expenses_page} (the same three tabs; the {add_expense} button; a switch marks the spend as a work cost; spending limits and a monthly summary), {work_costs}, {commitments}, {income_pattern}, {quiet_months}, {your_record}, and {saving_plan} (daily amounts, tick a day when saved; the upfront target can be spread over 6, 12, 24 or 36 months).\n"
+    "- {tab_money}: {income_page} (three tabs: {tab_manual}, {tab_scan}, {tab_import}. On {tab_manual} the user types the amount, picks the date and the source, then presses {add_income}, which saves it at once; there is no separate save or confirm step. The small link {past_month_link} under that button records one whole past month as a total), {expenses_page} (the same three tabs; the {add_expense} button; a switch marks the spend as a work cost; spending limits and a monthly summary), {work_costs}, {commitments}, {income_pattern}, {quiet_months}, {your_record}, and {saving_plan} (daily amounts, tick a day when saved; the upfront target can be spread over 6, 12, 24 or 36 months).\n"
     "- {tab_house}: {test_house} (property price, deposit, instalment, other monthly costs, then {run_test} opens the {result}; from the result: {save_test}, carrying range, compare payments, if income drops), {saved_tests}, {house_costs} (published prices by area, in years of a typical family's income), {prepare} (upfront cash, cash buffer, documents).\n"
     "- {tab_profile}: the account, {language} (English, Bahasa Melayu, 中文), export and delete.\n"
-    "- {ask} is the floating robot bubble that stays on every screen."
+    "- {ask} is the floating robot bubble that stays on every screen.\n"
+    "- There is no Save, Confirm or Submit button on the income or expense forms: pressing {add_income} or {add_expense} is the whole step."
 )
 
 
@@ -88,6 +90,21 @@ _MD_BOLD = re.compile(r"(\*\*|__)(.+?)\1", re.S)
 _MD_ITALIC = re.compile(r"(?<![\w*])\*(?!\s)([^*\n]+?)\*(?![\w*])")
 _MD_HEADING = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+", re.M)
 _MD_BULLET = re.compile(r"^([ \t]*)[*•][ \t]+", re.M)
+
+
+def _localize_terms(value: Any, terms: dict[str, str] | None) -> Any:
+    """Swap the record's stored English category and source names for the
+    labels the app shows in its current language, wherever they appear as a
+    dict key or a string value, so the model repeats what is on screen."""
+    if not terms:
+        return value
+    if isinstance(value, dict):
+        return {terms.get(k, k): _localize_terms(v, terms) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_localize_terms(v, terms) for v in value]
+    if isinstance(value, str):
+        return terms.get(value, value)
+    return value
 
 
 def _plain_text(text: str) -> str:
@@ -228,12 +245,14 @@ HONESTY:
 TONE AND FRAMING:
 - Simple, warm, everyday language. Short answers — usually under 120 words. Amounts as RM 1,234.
 - Never mention the record's internal JSON field names (like income_months or work_costs) — describe things with everyday words and RuMampu's page names.
-- Plain text only: no markdown, no asterisks, no headings, and no dashes as punctuation inside a sentence (use a comma or a full stop). For a short list, start lines with "- ".
+- Plain text only: no markdown, no asterisks, no headings, no brackets with translations, and no dashes as punctuation inside a sentence (use a comma or a full stop). For a short list, start lines with "- ".
 - You give explanations of the user's own numbers, never guarantees, predictions, loan-approval judgements, or professional financial advice. If asked "will the bank approve me" or "should I buy", explain what the record shows and say the decision and the bank's answer are outside RuMampu.
 
 LANGUAGE:
 - The app is currently shown in {ui_language}. Reply in {ui_language}. Only if the user clearly writes in a different one of English, Bahasa Melayu (including shortforms and Manglish) or Chinese, reply in that language instead.
 - Buttons, tabs and pages: write them EXACTLY as they appear in the screen map below, character for character, because that is the text on the user's screen. Never translate a label into another language, never add an English name in brackets after it, and never invent a button or page that is not in the map. If a step has no label in the map, describe what to do in plain words.
+- The map is complete: if a button is not in it, it does not exist.
+- Expense categories and income sources in the record are already written the way the app shows them. Repeat them exactly, with no translation and no English in brackets.
 
 {app_map}
 
@@ -253,11 +272,16 @@ def _completion(model: str, messages: list[dict[str, str]]) -> str:
     from groq import Groq
 
     client = Groq(api_key=api_key)
+    # gpt-oss is a reasoning model: the completion cap counts its hidden
+    # reasoning, so a tight cap on a harder question returned an empty or
+    # cut-off answer. Keep reasoning short and leave room for the reply.
+    extra = {"reasoning_effort": "low"} if "gpt-oss" in model else {}
     completion = client.chat.completions.create(
         model=model,
         messages=messages,
         temperature=0.4,
-        max_completion_tokens=500,
+        max_completion_tokens=1500,
+        **extra,
     )
     return (completion.choices[0].message.content or "").strip()
 
@@ -279,9 +303,10 @@ def answer_chat(
     messages: list[dict[str, str]],
     ui_language: str = "en",
     ui_labels: dict[str, str] | None = None,
+    term_labels: dict[str, str] | None = None,
 ) -> str:
     _enforce_daily_limit(profile)
-    snapshot = build_financial_snapshot(profile)
+    snapshot = _localize_terms(build_financial_snapshot(profile), term_labels)
     system = SYSTEM_TEMPLATE.format(
         today=datetime.date.today().isoformat(),
         ui_language=LANGUAGE_NAMES.get(ui_language, "English"),
@@ -295,6 +320,9 @@ def answer_chat(
     ]
     try:
         reply = _completion(model, [{"role": "system", "content": system}, *history])
+        if not reply:
+            # An empty answer is a model hiccup, not a user error: one retry.
+            reply = _completion(model, [{"role": "system", "content": system}, *history])
     except AssistantError:
         raise
     except Exception as exc:  # Groq SDK errors: auth, rate limit, network

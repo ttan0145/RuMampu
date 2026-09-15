@@ -146,6 +146,17 @@ class AssistantServiceTests(TestCase):
         self.assertIn("shown in Chinese", system)
         self.assertIn("EXACTLY as they appear", system)
 
+    def test_record_terms_are_localized_in_the_prompt(self):
+        from . import assistant_service
+
+        snap = {"expenses_recent_months": [{"by_category": {"Family": 150.0, "Meals": 45.0}}],
+                "sources": ["Grab", "Family"], "note": "Family"}
+        out = assistant_service._localize_terms(snap, {"Family": "Keluarga", "Meals": "Makanan"})
+        self.assertEqual(out["expenses_recent_months"][0]["by_category"], {"Keluarga": 150.0, "Makanan": 45.0})
+        self.assertEqual(out["sources"], ["Grab", "Keluarga"])
+        self.assertEqual(out["note"], "Keluarga")
+        self.assertEqual(assistant_service._localize_terms(snap, None), snap)
+
     def test_prompt_falls_back_to_english_labels(self):
         profile = _make_profile("labels-default")
         from . import assistant_service

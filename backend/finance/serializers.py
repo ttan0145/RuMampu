@@ -616,8 +616,20 @@ class AssistantChatRequestSerializer(serializers.Serializer):
         required=False,
     )
 
+    # Stored English category and source names mapped to the labels the app
+    # shows in its current language (see assistant_service._localize_terms).
+    term_labels = serializers.DictField(
+        child=serializers.CharField(max_length=60, trim_whitespace=True),
+        required=False,
+    )
+
     def validate_ui_labels(self, value):
         if len(value) > 60:
+            raise serializers.ValidationError("Too many labels.")
+        return value
+
+    def validate_term_labels(self, value):
+        if len(value) > 100:
             raise serializers.ValidationError("Too many labels.")
         return value
 

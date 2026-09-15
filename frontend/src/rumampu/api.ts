@@ -742,10 +742,15 @@ export function assistantChat(
   messages: AssistantMessage[],
   language: string,
   uiLabels?: Record<string, string>,
+  termLabels?: Record<string, string>,
 ): Promise<{ reply: string }> {
   return request<{ reply: string }>('/assistant/chat/', {
     method: 'POST',
-    body: JSON.stringify({ messages, language, ...(uiLabels ? { ui_labels: uiLabels } : {}) }),
+    body: JSON.stringify({
+      messages, language,
+      ...(uiLabels ? { ui_labels: uiLabels } : {}),
+      ...(termLabels ? { term_labels: termLabels } : {}),
+    }),
   });
 }
 
