@@ -425,7 +425,7 @@ export function RecordScreen() {
 /* v22 income scan (preview): a simulated earnings-screen read that fills a
    reviewable checklist; every kept row is saved through the real API. */
 function IncomeScanBody() {
-  const { S, t, up, monthName, saveIncomeEntry, toast } = useApp();
+  const { S, t, up, monthName, saveIncomeEntry, refreshAfterMoneyWrite, toast } = useApp();
   const sc = S.incScan;
   const [amts, setAmts] = React.useState<Record<number, string>>({});
   const [adding, setAdding] = React.useState(false);
@@ -546,9 +546,12 @@ function IncomeScanBody() {
           const r = sc.rows[i];
           const a = amts[i] != null ? (parseFloat(amts[i]) || 0) : r.a;
           if (!r.on || !(a > 0)) continue;
-          await saveIncomeEntry({ amount: a, date: r.d, sourceId: r.s, confirmOutlier: true });
+          /* One refresh cycle for the whole batch, not one per row — a five-row
+             confirm used to fire ~30 requests over the remote database. */
+          await saveIncomeEntry({ amount: a, date: r.d, sourceId: r.s, confirmOutlier: true }, { deferRefresh: true });
           added++;
         }
+        refreshAfterMoneyWrite();
         up(s => { s.incScan = { stage: 'pick', rows: [] }; s.incMode = 'type'; });
         toast(t('sc_added', { n: added }));
       } catch {

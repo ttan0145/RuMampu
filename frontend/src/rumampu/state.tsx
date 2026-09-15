@@ -369,7 +369,9 @@ export interface Ctx {
   go: (r: Route) => void;
   goTab: (tab: Tab) => void;
   backNav: () => void;
-  saveIncomeEntry: (input: SaveIncomeInput) => Promise<'saved' | 'outlier'>;
+  saveIncomeEntry: (input: SaveIncomeInput, options?: { deferRefresh?: boolean }) => Promise<'saved' | 'outlier'>;
+  /* Batch loops save many rows with deferRefresh, then run one refresh at the end. */
+  refreshAfterMoneyWrite: () => void;
   updateIncomeEntry: (id: string, input: { amount: number; date: string; sourceId?: string }) => Promise<void>;
   deleteIncomeEntry: (id: string) => Promise<void>;
   saveIncomeSource: (name: string) => Promise<string>;
@@ -911,7 +913,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
    * EN: Persist US1.1/US1.2 income; return the stable 409 warning for AC1.1.10 confirmation.
    * 中文：持久化 US1.1/US1.2 收入；把稳定的 409 警告交给 AC1.1.10 二次确认。
    */
-  const saveIncomeEntry = useCallback(async (input: SaveIncomeInput): Promise<'saved' | 'outlier'> => {
+  const saveIncomeEntry = useCallback(async (
+    input: SaveIncomeInput,
+    options?: { deferRefresh?: boolean },
+  ): Promise<'saved' | 'outlier'> => {
     if (!INCOME_API_ENABLED) {
       up(s => {
         s.data.income.push({
@@ -943,7 +948,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         s.incomeSync = 'ready';
         logIt(s, 'lg_inc_add', { a: rm(Number(entry.amount)) });
       });
-      refreshAfterMoneyWrite();
+      if (!options?.deferRefresh) refreshAfterMoneyWrite();
       return 'saved';
     } catch (error) {
       if (isOutlierConfirmation(error)) return 'outlier';
@@ -1376,13 +1381,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Ctx>(() => ({
     S, authReady, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
+    saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   }), [
     S, authReady, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
+    saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,

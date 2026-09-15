@@ -9,11 +9,30 @@ export const APP_MODE: 'api' | 'prototype' = configuredAppMode === 'prototype'
   : 'api';
 export const INCOME_API_ENABLED = APP_MODE === 'api';
 
-const API_ROOT = (
+const CONFIGURED_ROOT = (
   process.env.EXPO_PUBLIC_E2E === '1'
     ? process.env.EXPO_PUBLIC_PLAYWRIGHT_API_URL
     : process.env.EXPO_PUBLIC_API_URL
 ) || 'http://localhost:8000/api/v1';
+
+/* On web, the page and the API run on the same machine, so the API host is
+   whatever host the page itself was loaded from — localhost on the Mac, the
+   LAN IP on a phone. This survives the Mac's IP changing without touching
+   .env. Native (Expo Go) has no page host and keeps the configured URL. */
+function resolveApiRoot(): string {
+  if (Platform.OS !== 'web' || process.env.EXPO_PUBLIC_E2E === '1') return CONFIGURED_ROOT;
+  try {
+    const pageHost = window.location.hostname;
+    if (!pageHost) return CONFIGURED_ROOT;
+    const url = new URL(CONFIGURED_ROOT);
+    url.hostname = pageHost;
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return CONFIGURED_ROOT;
+  }
+}
+
+const API_ROOT = resolveApiRoot();
 
 export interface ApiIncomeSource {
   id: number;
