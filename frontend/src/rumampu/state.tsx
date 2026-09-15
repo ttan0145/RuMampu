@@ -178,6 +178,9 @@ export interface AppState {
   village: VillageState | null;
   buffer: BufferState | null;
   vHelp: boolean;
+  /* Months the user chose to spread the upfront need over (village phase).
+     null = go by the record's median leftover, or 12 when there is no record. */
+  planHorizon: number | null;
   /* v22 misc UI state. */
   moView: 'tiles' | 'list';
   /* US11 what homes cost here: published NAPIC figures, cached per session. */
@@ -277,7 +280,7 @@ function initialState(): AppState {
     onboard: 0, onboarded: false, splash: true,
     wstep: 0, authMode: 'login', acctMade: false, fgMail: '', guest: false, mergeGuestOnSignup: false,
     knew: false, kstep: 0, jobs: ['taxi'], ownJobs: [], lastMonth: '',
-    plan: null, village: null, buffer: null, vHelp: false,
+    plan: null, village: null, buffer: null, vHelp: false, planHorizon: null,
     moView: 'tiles', houseTab: 'test',
     houseCosts: null, houseCostsSync: 'idle', hcState: 'sgr', hcType: 'all', firstHome: false,
     potMoved: 0, potMovedMonths: [], ufTest: null, ufReno: false, viewTestName: null, scanAuto: false, pastT: 'inc', cardInfo: null, log: [],

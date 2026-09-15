@@ -6,13 +6,14 @@ import { rm } from '../calc';
 import {
   bufferEnsure, feasibilityGap, planEnsure, planMonthsLeft, planPause, planPhase,
   planReset, planResolveTarget, planSaved, planShuffleLeft, planSkip, planToggle, syncBufferTarget, upfrontNeed,
+  PLAN_HORIZONS, monthlySaveCapacity, planHorizonEffective, planMonthlyAsk,
 } from '../plan';
 import { commitTotal } from '../calc';
 import { villageEnsure } from '../village';
 import { logIt } from '../log';
 import { getHousingTestResult } from '../../../services/housingSession';
 import { BODY_FONT, C, DISP_FONT } from '../theme';
-import { BodyS, Btn, BtnQuiet, Card, Display, P, Prov, Row } from '../ui';
+import { BodyS, Btn, BtnQuiet, Card, Chip, Chips, Display, P, Prov, Row } from '../ui';
 import { ScreenShell } from './shell';
 
 /* Epic 10 saving plan screen. One source of truth (planPhase) decides what
@@ -108,6 +109,11 @@ export function PlanScreen() {
   const bTarget = b?.target ?? 0;
   const bPct = bTarget > 0 ? Math.min(100, Math.round((b?.saved ?? 0) / bTarget * 100)) : 100;
   const upShort = Math.max(0, upfrontNeed(S) - S.data.cashOnHand);
+  /* Village phase: how the upfront need is spread — the user's pick, or the record. */
+  const horizon = planHorizonEffective(S);
+  const monthlyAsk = planMonthlyAsk(S);
+  const hasRecord = monthlySaveCapacity(S) != null;
+  const pickHorizon = (n: number | null) => up(s => { s.planHorizon = n; planResolveTarget(s, result); });
 
   const paused = !!p.paused;
   const monthEnding = p.n - (today + 1) <= 2;
@@ -175,6 +181,24 @@ export function PlanScreen() {
             </View>
           </View>
           {(v?.queued ?? 0) > 0 ? <BodyS muted>{t('vl_queue', { n: v?.queued ?? 0 })}</BodyS> : null}
+          {/* Spread the need over months the user chooses — RM 12k in half a
+              month is not a plan. The month target and daily split follow. */}
+          <View style={{ marginTop: 4, gap: 8 }}>
+            <Text style={st.eyebrow}>{t('pl_hz_l')}</Text>
+            <Chips>
+              {hasRecord ? (
+                <Chip label={t('pl_hz_rec')} on={!S.planHorizon} selectionRole="radio" onPress={() => pickHorizon(null)} />
+              ) : null}
+              {PLAN_HORIZONS.map(n => (
+                <Chip key={n} label={t('pl_hz_mo', { n })} on={horizon === n} selectionRole="radio" onPress={() => pickHorizon(n)} />
+              ))}
+            </Chips>
+            <BodyS muted>
+              {horizon
+                ? t('pl_hz_sub', { a: rm(monthlyAsk), n: horizon })
+                : t('pl_hz_rec_sub', { a: rm(monthlyAsk) })}
+            </BodyS>
+          </View>
         </Card>
       )}
       <Card>

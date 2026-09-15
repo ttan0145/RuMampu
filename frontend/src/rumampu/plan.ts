@@ -261,11 +261,33 @@ export function monthlySaveCapacity(s: AppState): number | null {
   return med > 0 ? Math.round(med) : null;
 }
 
+/* How many months the upfront need is spread over (village phase). The user's
+   own pick wins; otherwise the record decides (null = "ask what a recorded
+   month typically leaves"); with no usable record at all, 12 months — never
+   the whole need in one month. */
+export const PLAN_HORIZONS = [6, 12, 24, 36];
+
+export function planHorizonEffective(s: AppState): number | null {
+  if (s.planHorizon) return s.planHorizon;
+  return monthlySaveCapacity(s) == null ? 12 : null;
+}
+
+/* What this month asks toward the upfront need: the still-owed amount split
+   across the horizon, or the record's median leftover, never more than what
+   is still owed. */
+export function planMonthlyAsk(s: AppState): number {
+  const owed = Math.max(0, upfrontNeed(s) - s.data.cashOnHand);
+  const horizon = planHorizonEffective(s);
+  if (horizon) return Math.min(owed, Math.ceil(owed / horizon));
+  const capacity = monthlySaveCapacity(s);
+  return capacity != null ? Math.min(owed, capacity) : owed;
+}
+
 /* Point the month's daily split at the phase target. The buffer phase chases
    the shield gap directly (it is small and urgent by design). The village
    phase used to dump the WHOLE remaining upfront need into one month; now the
-   month asks only what the user's own record says a month can carry — the
-   median recorded leftover — capped by what is still owed. The honest
+   month asks planMonthlyAsk — the user's chosen horizon, or what the record
+   says a month can carry — capped by what is still owed. The honest
    long-range gap stays on screen via the phase card and the pot's gap line.
    Ticked days grow the pot in step with planSaved, so the desired number
    stays stable as days are ticked and the split only regenerates when the
@@ -280,8 +302,7 @@ export function planResolveTarget(s: AppState, result: HousingTestResult | null)
     desired = Math.max(0, (bufferEnsure(s).target ?? 0) - bufferEnsure(s).saved + done);
   } else {
     const remaining = Math.max(0, upfrontNeed(s) - s.data.cashOnHand + done);
-    const capacity = monthlySaveCapacity(s);
-    desired = capacity != null ? Math.max(done, Math.min(remaining, capacity)) : remaining;
+    desired = Math.max(done, Math.min(remaining, planMonthlyAsk(s)));
   }
   if (p.target !== desired) {
     p.target = desired;
