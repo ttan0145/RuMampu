@@ -6,14 +6,14 @@ import { rm } from '../calc';
 import {
   bufferEnsure, feasibilityGap, planEnsure, planMonthsLeft, planPause, planPhase,
   planReset, planResolveTarget, planSaved, planShuffleLeft, planSkip, planToggle, syncBufferTarget, upfrontNeed,
-  PLAN_HORIZONS, monthlySaveCapacity, planHorizonEffective, planMonthlyAsk,
+  planHorizonEffective, planMonthlyAsk,
 } from '../plan';
 import { commitTotal } from '../calc';
 import { villageEnsure } from '../village';
 import { logIt } from '../log';
 import { getHousingTestResult } from '../../../services/housingSession';
-import { BODY_FONT, C, DISP_FONT } from '../theme';
-import { BodyS, Btn, BtnQuiet, Card, Chip, Chips, Display, P, Prov, Row } from '../ui';
+import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
+import { BodyS, Btn, BtnQuiet, Card, Display, P, Prov, Row } from '../ui';
 import { ScreenShell } from './shell';
 
 /* Epic 10 saving plan screen. One source of truth (planPhase) decides what
@@ -112,8 +112,6 @@ export function PlanScreen() {
   /* Village phase: how the upfront need is spread — the user's pick, or the record. */
   const horizon = planHorizonEffective(S);
   const monthlyAsk = planMonthlyAsk(S);
-  const hasRecord = monthlySaveCapacity(S) != null;
-  const pickHorizon = (n: number | null) => up(s => { s.planHorizon = n; planResolveTarget(s, result); });
 
   const paused = !!p.paused;
   const monthEnding = p.n - (today + 1) <= 2;
@@ -184,15 +182,20 @@ export function PlanScreen() {
           {/* Spread the need over months the user chooses — RM 12k in half a
               month is not a plan. The month target and daily split follow. */}
           <View style={{ marginTop: 4, gap: 8 }}>
-            <Text style={st.eyebrow}>{t('pl_hz_l')}</Text>
-            <Chips>
-              {hasRecord ? (
-                <Chip label={t('pl_hz_rec')} on={!S.planHorizon} selectionRole="radio" onPress={() => pickHorizon(null)} />
-              ) : null}
-              {PLAN_HORIZONS.map(n => (
-                <Chip key={n} label={t('pl_hz_mo', { n })} on={horizon === n} selectionRole="radio" onPress={() => pickHorizon(n)} />
-              ))}
-            </Chips>
+            <Pressable onPress={() => up(s => { s.sheet = 'plhorizon'; })}
+              accessibilityRole="button"
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                minHeight: 52, paddingVertical: 7, paddingHorizontal: 14, borderRadius: 12, backgroundColor: '#fff',
+              }}>
+              <View style={{ flexShrink: 1 }}>
+                <Text style={[st.eyebrow, { marginBottom: 1 }]}>{t('pl_hz_l')}</Text>
+                <Text style={{ fontFamily: SEMI_FONT, fontSize: 14.5, color: C.ink }}>
+                  {horizon ? t('pl_hz_mo', { n: horizon }) : t('pl_hz_rec')}
+                </Text>
+              </View>
+              <Text style={{ color: C.ink40 }}>{'▾'}</Text>
+            </Pressable>
             <BodyS muted>
               {horizon
                 ? t('pl_hz_sub', { a: rm(monthlyAsk), n: horizon })

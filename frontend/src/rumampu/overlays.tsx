@@ -7,6 +7,8 @@ import { SvgXml } from 'react-native-svg';
 import { TAB_OF, Tab, useApp } from './state';
 import { STRINGS, Lang } from './strings';
 import { actualMonths, commitFor, commitSwap, monthKeysOf, monthsAgg, pickMonth, rm } from './calc';
+import { PLAN_HORIZONS, monthlySaveCapacity, planHorizonEffective, planResolveTarget } from './plan';
+import { getHousingTestResult } from '../../services/housingSession';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from './theme';
 import { Btn, BtnLine, BodyS, EditList, NumInput, PROV_G } from './ui';
 import { Ico, Logo } from './svgs';
@@ -546,6 +548,37 @@ export function SheetHost() {
                 {k === cur ? <Text style={{ fontSize: 15, color: C.brand }}>✓</Text> : null}
               </Pressable>
             ))}
+      </SheetFrame>
+    );
+  }
+
+  /* Saving plan: how many months the upfront need is spread over. Same
+     dropdown-sheet pattern as the month filter. */
+  if (sheet === 'plhorizon') {
+    const hasRecord = monthlySaveCapacity(S) != null;
+    const cur = planHorizonEffective(S);
+    const options: { key: number | null; label: string }[] = [
+      ...(hasRecord ? [{ key: null, label: t('pl_hz_rec') }] : []),
+      ...PLAN_HORIZONS.map(n => ({ key: n, label: t('pl_hz_mo', { n }) })),
+    ];
+    return (
+      <SheetFrame pose="counting" onClose={close}>
+        <SheetH3>{t('pl_hz_t')}</SheetH3>
+        {options.map((o, i) => {
+          const on = o.key === cur;
+          return (
+            <Pressable key={String(o.key)}
+              onPress={() => up(s => { s.planHorizon = o.key; planResolveTarget(s, getHousingTestResult()); s.sheet = null; })}
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                minHeight: 46, paddingHorizontal: 4,
+                borderBottomWidth: i < options.length - 1 ? 1 : 0, borderBottomColor: C.ink14,
+              }}>
+              <Text style={{ fontFamily: on ? SEMI_FONT : BODY_FONT, fontSize: 15, color: on ? C.brand : C.ink }}>{o.label}</Text>
+              {on ? <Text style={{ fontSize: 15, color: C.brand }}>✓</Text> : null}
+            </Pressable>
+          );
+        })}
       </SheetFrame>
     );
   }
