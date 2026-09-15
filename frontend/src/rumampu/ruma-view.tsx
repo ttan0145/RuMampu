@@ -45,7 +45,7 @@ export function RumaFlat({ mood, w }: { mood: 'waving' | 'curious'; w: number })
    arching over the roof apex like headphones over a head, ear cups at the
    eaves, a mic boom to the mouth). Used for the Ask Ruma bubble
    and the chat header so the assistant reads as "customer service by Ruma",
-   not a generic robot. `ring` adds the brand outline that makes it a button. */
+   not a generic robot. `ring``ring` adds the white outline that lifts it off the page as a button. */
 export function RumaHelpAvatar({ size = 56, ring = false }: { size?: number; ring?: boolean }) {
   /* Ink, not brand teal: the roof is teal, so a teal band disappeared into it.
      The gold mic tip is the app's accent. Tuned at 320px, checked at 56/44. */
@@ -62,7 +62,7 @@ export function RumaHelpAvatar({ size = 56, ring = false }: { size?: number; rin
     <View style={{
       width: size, height: size, borderRadius: size / 2, backgroundColor: '#E4EFEC',
       alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden',
-      borderWidth: ring ? Math.max(2, size * 0.045) : 0, borderColor: '#2E6B6F',
+      borderWidth: ring ? Math.max(2, size * 0.045) : 0, borderColor: '#FFFFFF',
     }}>
       {/* Mascot and headset scale together and sit a touch left, so the right
           ear cup and the mic keep clear of the disc edge. */}
