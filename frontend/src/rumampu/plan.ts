@@ -1,4 +1,5 @@
 import { AppState, BufferState, PlanState } from './state';
+import { monthsAgg } from './calc';
 import { villageEnsure, villageRemove, villageSpawn } from './village';
 import { HousingTestResult } from '../../types/housing';
 import { getHousingTestResult } from '../../services/housingSession';
@@ -232,18 +233,43 @@ export function planPhase(s: AppState, result: HousingTestResult | null): PlanPh
   return saved < bufferTargetOf(result) ? 'buffer' : 'village';
 }
 
-/* Point the month's daily split at the phase target: the buffer still owed,
-   or the upfront cash still short. Ticked days grow the buffer/cash in step
-   with planSaved, so the desired number stays stable as days are ticked and
-   the split only regenerates when the phase target genuinely moves. */
+/* What the record says one month can actually set aside: the median leftover
+   across recorded months (after work costs and commitments). Null when no
+   recorded month has a positive leftover. */
+export function monthlySaveCapacity(s: AppState): number | null {
+  const sur = monthsAgg(s.data)
+    .map(r => r.surplus)
+    .filter(v => Number.isFinite(v))
+    .sort((a, b) => a - b);
+  if (!sur.length) return null;
+  const med = (sur.length % 2)
+    ? sur[(sur.length - 1) / 2]
+    : (sur[sur.length / 2 - 1] + sur[sur.length / 2]) / 2;
+  return med > 0 ? Math.round(med) : null;
+}
+
+/* Point the month's daily split at the phase target. The buffer phase chases
+   the shield gap directly (it is small and urgent by design). The village
+   phase used to dump the WHOLE remaining upfront need into one month; now the
+   month asks only what the user's own record says a month can carry — the
+   median recorded leftover — capped by what is still owed. The honest
+   long-range gap stays on screen via the phase card and the pot's gap line.
+   Ticked days grow the pot in step with planSaved, so the desired number
+   stays stable as days are ticked and the split only regenerates when the
+   target genuinely moves. */
 export function planResolveTarget(s: AppState, result: HousingTestResult | null): void {
   const phase = planPhase(s, result);
   if (phase !== 'buffer' && phase !== 'village') return;
   const p = planEnsure(s);
   const done = planSaved(p);
-  const desired = phase === 'buffer'
-    ? Math.max(0, (bufferEnsure(s).target ?? 0) - bufferEnsure(s).saved + done)
-    : Math.max(0, upfrontNeed(s) - s.data.cashOnHand + done);
+  let desired: number;
+  if (phase === 'buffer') {
+    desired = Math.max(0, (bufferEnsure(s).target ?? 0) - bufferEnsure(s).saved + done);
+  } else {
+    const remaining = Math.max(0, upfrontNeed(s) - s.data.cashOnHand + done);
+    const capacity = monthlySaveCapacity(s);
+    desired = capacity != null ? Math.max(done, Math.min(remaining, capacity)) : remaining;
+  }
   if (p.target !== desired) {
     p.target = desired;
     planRegen(p);
