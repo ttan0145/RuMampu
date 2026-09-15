@@ -9,16 +9,19 @@ export const APP_MODE: 'api' | 'prototype' = configuredAppMode === 'prototype'
   : 'api';
 export const INCOME_API_ENABLED = APP_MODE === 'api';
 
-const CONFIGURED_ROOT =
+const CONFIGURED_ROOT_ENV =
   process.env.EXPO_PUBLIC_E2E === '1'
     ? process.env.EXPO_PUBLIC_PLAYWRIGHT_API_URL
     : process.env.EXPO_PUBLIC_API_URL;
 
-if (!CONFIGURED_ROOT) {
+if (!CONFIGURED_ROOT_ENV) {
   throw new Error(
     'API URL is not configured. Check EXPO_PUBLIC_API_URL.'
   );
 }
+/* Narrowed copy: the guard above does not narrow a module constant inside the
+   functions below, so without this `tsc` sees string | undefined there. */
+const CONFIGURED_ROOT: string = CONFIGURED_ROOT_ENV;
 
 /* Local web development only: the dev server and Django run on the same
    machine, so the API host follows the host the page was loaded from —
@@ -738,10 +741,11 @@ export interface AssistantMessage {
 export function assistantChat(
   messages: AssistantMessage[],
   language: string,
+  uiLabels?: Record<string, string>,
 ): Promise<{ reply: string }> {
   return request<{ reply: string }>('/assistant/chat/', {
     method: 'POST',
-    body: JSON.stringify({ messages, language }),
+    body: JSON.stringify({ messages, language, ...(uiLabels ? { ui_labels: uiLabels } : {}) }),
   });
 }
 
