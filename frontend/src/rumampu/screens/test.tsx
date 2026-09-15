@@ -12,7 +12,7 @@ import {
   getHousingScenario, getHousingTestResult, getPreHousingResult,
   setHousingScenario, setHousingTestResult, setPreHousingResult,
 } from '../../../services/housingSession';
-import { Pressable, StyleSheet, Text, TextInput, View, type DimensionValue } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TextInput, View, type DimensionValue } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { useApp } from '../state';
 import { logIt } from '../log';
@@ -25,6 +25,7 @@ import {
 } from '../ui';
 import { Ico } from '../svgs';
 import { Ruma } from '../ruma-view';
+import { RUMA_IMG } from '../ruma';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { Band, Waterline } from '../charts';
 import { ScreenShell } from './shell';
@@ -253,6 +254,51 @@ export function HouseBody() {
 }
 
 /* v22 House tab home: saved-tests chip, test / prepare segments. */
+
+/* A friendly meadow pinned to the foot of the House tab: soft hills, and Ruma
+   celebrating a football kick. Decoration only — content scrolls over it. */
+function HouseMeadow() {
+  const hills = `<svg width="100%" height="200" viewBox="0 0 390 200" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="86" cy="34" rx="34" ry="13" fill="#FFFFFF" opacity="0.8"/>
+  <ellipse cx="112" cy="40" rx="26" ry="10" fill="#FFFFFF" opacity="0.8"/>
+  <ellipse cx="300" cy="22" rx="30" ry="11" fill="#FFFFFF" opacity="0.7"/>
+  <path d="M-20 200 L-20 132 Q 95 74 240 122 Q 330 150 410 118 L410 200 Z" fill="#CBE6CF"/>
+  <path d="M-20 200 L-20 168 Q 90 118 210 152 Q 320 182 410 150 L410 200 Z" fill="#A5D6AE"/>
+  <g stroke="#63A96F" stroke-width="2.4" stroke-linecap="round" fill="none">
+    <path d="M52 172 q-2 -8 1 -12 M58 172 q0 -9 4 -12 M64 173 q3 -7 8 -9"/>
+    <path d="M300 168 q-2 -8 1 -12 M306 168 q0 -9 4 -12 M312 169 q3 -7 8 -9"/>
+  </g>
+  <g>
+    <circle cx="86" cy="150" r="4.6" fill="#FFFFFF"/><circle cx="86" cy="150" r="1.7" fill="#F4D27A"/>
+    <circle cx="346" cy="178" r="4.6" fill="#FFFFFF"/><circle cx="346" cy="178" r="1.7" fill="#F4D27A"/>
+  </g>
+  <ellipse cx="148" cy="166" rx="17" ry="4.5" fill="#3C5152" opacity="0.12"/>
+  <g transform="translate(148 148) rotate(-14)">
+    <circle r="14" fill="#FFFFFF" stroke="#3C5152" stroke-width="2"/>
+    <path d="M0 -5.2 L5 -1.6 L3.1 4.3 L-3.1 4.3 L-5 -1.6 Z" fill="#3C5152"/>
+    <path d="M0 -14 L0 -9.4 M9.5 -6.8 L5 -1.6 M9.5 6.8 L3.1 4.3 M-9.5 6.8 L-3.1 4.3 M-9.5 -6.8 L-5 -1.6" stroke="#3C5152" stroke-width="1.6"/>
+  </g>
+  <g stroke="#7FB08A" stroke-width="2.6" stroke-linecap="round" fill="none" opacity="0.9">
+    <path d="M104 150 q10 -12 24 -14"/>
+    <path d="M112 162 q9 -8 20 -9"/>
+  </g>
+  <ellipse cx="252" cy="186" rx="34" ry="6" fill="#3C5152" opacity="0.14"/>
+</svg>`;
+  return (
+    <View style={{ height: 200 }}>
+      <SvgXml xml={hills} width="100%" height={200} />
+      <Image
+        source={{ uri: RUMA_IMG.happy }}
+        resizeMode="contain"
+        style={{
+          position: 'absolute', right: 84, bottom: 26, width: 104, height: 104,
+          transform: [{ rotate: '-9deg' }],
+        }}
+      />
+    </View>
+  );
+}
+
 export function HousehomeScreen() {
   const { S, t, go, loadHouseCosts } = useApp();
   React.useEffect(() => { void loadHouseCosts(); }, [loadHouseCosts]);
@@ -312,7 +358,7 @@ export function HousehomeScreen() {
   );
 
   return (
-    <ScreenShell greet title={t('tab_test')} right={
+    <ScreenShell greet title={t('tab_test')} bg={<HouseMeadow />} right={
       <Pressable onPress={() => go('savedtests')} style={tx.savedchip} accessibilityLabel={t('sv_title')}>
         <SvgXml xml={`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="${C.ink}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M6.5 3.5h11V21L12 17l-5.5 4z"/></svg>`} width={13} height={13} />
         <Text style={{ fontFamily: SEMI_FONT, fontSize: 12, color: C.ink }}>{t('sv_title')}</Text>
