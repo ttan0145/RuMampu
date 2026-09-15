@@ -87,9 +87,14 @@ export function AssistantFab() {
         pos.setValue(open ? { x: w - 64, y: h - 140 } : { x, y });
       }}
     >
+      {/* Hidden while the chat is open: the chat layer draws the EXIT sign at
+          the parked spot itself, and a dimmed twin under it read as a second
+          button. The position still animates, so the bubble springs back from
+          the corner when the chat closes. */}
       <Animated.View
         {...pan.panHandlers}
-        style={{ position: 'absolute', transform: pos.getTranslateTransform() }}
+        pointerEvents={open ? 'none' : 'auto'}
+        style={{ position: 'absolute', opacity: open ? 0 : 1, transform: pos.getTranslateTransform() }}
       >
         <Pressable
           onPressIn={() => { moved.current = false; }}
@@ -97,9 +102,7 @@ export function AssistantFab() {
           accessibilityLabel={t('ai_title')}
           style={({ pressed }) => [st.aibtn, pressed && { transform: [{ scale: 1.06 }] }]}
         >
-          {/* Parked under an open chat the bubble reads EXIT: Ruma holding up
-              the sign, the "coming soon" board design with the word changed. */}
-          {open ? <RumaSignAvatar size={56} ring /> : <RumaHelpAvatar size={56} ring />}
+          <RumaHelpAvatar size={56} ring />
         </Pressable>
       </Animated.View>
     </View>
