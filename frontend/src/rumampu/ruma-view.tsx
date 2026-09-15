@@ -79,6 +79,38 @@ export function RumaHelpAvatar({ size = 56, ring = false }: { size?: number; rin
   );
 }
 
+/* Ruma holding up a wooden sign, the "coming soon" crayon design with the
+   word swapped: the mascot and the stick come from that picture (board cut
+   off), and the board with its grain and the word are drawn here so the text
+   can change. Shown in the parked bubble while the chat is open, where the
+   word is EXIT: tapping the dimmed page, bubble included, closes the chat. */
+export function RumaSignAvatar({ size = 56, ring = false, word = 'EXIT' }: {
+  size?: number; ring?: boolean; word?: string;
+}) {
+  const board = `<svg viewBox="0 0 100 100" width="${size}" height="${size}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="13" y="13" width="64" height="33" rx="6" fill="#EBB980" stroke="#D5A066" stroke-width="1.5"/>
+    <path d="M19 21H43M49 21H70M18 39H35M41 39H71" stroke="#F4D3A6" stroke-width="1.6" stroke-linecap="round"/>
+    <text x="45" y="37" text-anchor="middle" font-family="Arial Rounded MT Bold, Nunito, Arial, sans-serif" font-size="19" font-weight="800" letter-spacing="1.5" fill="#4F6272">${word}</text>
+  </svg>`;
+  /* The cropped picture starts at the top of the stick; its width is set so the
+     stick's top meets the board's bottom edge, and it is shifted so the stick
+     (38% in from the picture's left) sits under the board's centre. */
+  const imgW = size * 0.73;
+  const imgH = imgW * 0.741;
+  return (
+    <View style={{
+      width: size, height: size, borderRadius: size / 2, backgroundColor: '#E4EFEC', overflow: 'hidden',
+      borderWidth: ring ? Math.max(2, size * 0.045) : 0, borderColor: '#FFFFFF',
+    }}>
+      <Image source={{ uri: RUMA_IMG.sign }} resizeMode="contain"
+        style={{ position: 'absolute', left: size * 0.17, bottom: -1, width: imgW, height: imgH }} />
+      <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0 }}>
+        <SvgXml xml={board} width={size} height={size} />
+      </View>
+    </View>
+  );
+}
+
 export function RumaAvatar({ size = 44 }: { size?: number }) {
   return (
     <View style={{
