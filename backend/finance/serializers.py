@@ -7,7 +7,6 @@ from .models import (
     CommitmentItem,
     ExpenseCategory,
     ExpenseEntry,
-    FinancialPeriod,
     IncomeEntry,
     IncomeImportBatch,
     IncomeImportRow,
@@ -183,11 +182,17 @@ class IncomeEntryUpdateSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     {"date": "A historical monthly total must be for an earlier month."}
                 )
+            # A month may hold a monthly total alongside itemised entries; the
+            # month's income is the sum of everything recorded in it (gig
+            # workers have several incomes, product ruling 15 Sep 2026). Only
+            # a second monthly total for the same month is refused: that total
+            # is edited, never doubled.
             if profile.income_entries.exclude(id=entry.id).filter(
-                period__period_month=period_month
+                period__period_month=period_month,
+                entry_method=IncomeEntry.EntryMethod.HISTORICAL_TOTAL,
             ).exists():
                 raise serializers.ValidationError(
-                    {"date": "This month already contains income records."}
+                    {"date": "This month already has a monthly total. Edit that total instead."}
                 )
             attrs["source_id"] = None
             return attrs
@@ -199,13 +204,6 @@ class IncomeEntryUpdateSerializer(serializers.Serializer):
             if not attrs.get("source_id"):
                 raise serializers.ValidationError(
                     {"source_id": "An income source is required for an itemised entry."}
-                )
-            if profile.financial_periods.filter(
-                period_month=period_month,
-                record_basis=FinancialPeriod.RecordBasis.MONTHLY_TOTAL,
-            ).exclude(id=entry.period_id).exists():
-                raise serializers.ValidationError(
-                    {"date": "This month is already represented by a historical monthly total."}
                 )
             return attrs
 
@@ -260,13 +258,6 @@ class IncomeEntryCreateSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     {"source_id": "An income source is required for a manual entry."}
                 )
-            if profile.financial_periods.filter(
-                period_month=period_month,
-                record_basis=FinancialPeriod.RecordBasis.MONTHLY_TOTAL,
-            ).exists():
-                raise serializers.ValidationError(
-                    {"date": "This month is already represented by a historical monthly total."}
-                )
             return attrs
 
         current_month = timezone.localdate().replace(day=1)
@@ -274,9 +265,16 @@ class IncomeEntryCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"date": "A historical monthly total must be for an earlier month."}
             )
-        if profile.income_entries.filter(period__period_month=period_month).exists():
+        # A month may hold a monthly total alongside itemised entries: the
+        # month's income is the sum of everything recorded in it. Only a
+        # second monthly total for the same month is refused (the database
+        # holds one per month); that total is edited, never doubled.
+        if profile.income_entries.filter(
+            period__period_month=period_month,
+            entry_method=IncomeEntry.EntryMethod.HISTORICAL_TOTAL,
+        ).exists():
             raise serializers.ValidationError(
-                {"date": "This month already contains income records."}
+                {"date": "This month already has a monthly total. Edit that total instead."}
             )
         attrs["source_id"] = None
         return attrs

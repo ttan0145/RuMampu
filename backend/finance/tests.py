@@ -217,7 +217,10 @@ class IncomeApiTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("date", response.json()["error"]["fields"])
 
-    def test_does_not_mix_monthly_total_with_individual_entries(self):
+    def test_monthly_total_and_individual_entries_share_a_month_and_add_up(self):
+        """Product ruling 15 Sep 2026: gig workers have several incomes, so a
+        month may hold a monthly total alongside itemised entries, and the
+        month's income is the sum of everything in it (500 + 50 = 550)."""
         historical = self.client.post(
             f"{self.api_root}/entries/",
             data={
@@ -240,9 +243,14 @@ class IncomeApiTests(TestCase):
         )
 
         self.assertEqual(historical.status_code, 201)
-        self.assertEqual(manual_after_total.status_code, 400)
+        self.assertEqual(manual_after_total.status_code, 201)
         self.assertEqual(manual_first.status_code, 201)
-        self.assertEqual(total_after_manual.status_code, 400)
+        self.assertEqual(total_after_manual.status_code, 201)
+
+        pattern = self.client.get("/api/v1/income-pattern/").json()
+        by_month = {month["month"]: month["gross_income"] for month in pattern["months"]}
+        self.assertEqual(Decimal(by_month["2026-03"]), Decimal("2850.00"))
+        self.assertEqual(Decimal(by_month["2026-04"]), Decimal("2850.00"))
 
     def test_rejects_a_second_monthly_total_for_the_same_period(self):
         payload = {

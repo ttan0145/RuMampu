@@ -667,20 +667,10 @@ export function IncomeScreen() {
         toast(t('inc_past_invalid'), 'error');
         return;
       }
-
-      if (S.data.income.some(entry => entry.d.slice(0, 7) === selectedMonth)) {
-        toast(t('inc_past_exists'), 'error');
-        return;
-      }
-    }
-
-    // A manual entry cannot be added into a month that is already represented
-    // by a historical monthly total. Catch this client-side as well.
-    if ((d.per || 'day') !== 'month') {
-      const selectedMonth = d.d.slice(0, 7);
-      if (S.data.income.some(entry =>
-        entry.d.slice(0, 7) === selectedMonth && entry.method === 'historical_total'
-      )) {
+      // A month may hold a monthly total alongside itemised entries; they add
+      // up (product ruling 15 Sep 2026: gig workers have several incomes).
+      // Only a second monthly total for the same month is refused: edit it.
+      if (S.data.income.some(entry => entry.d.slice(0, 7) === selectedMonth && entry.method === 'historical_total')) {
         toast(t('inc_past_exists'), 'error');
         return;
       }
