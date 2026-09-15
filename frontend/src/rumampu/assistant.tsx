@@ -188,7 +188,7 @@ export function AssistantSheet() {
         <Pressable style={StyleSheet.absoluteFill} onPress={close}>
           <View style={{ flex: 1, backgroundColor: 'rgba(15,32,33,0.28)' }} />
         </Pressable>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView pointerEvents="box-none" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           {/* Right-anchored like the prototype's .aipop, lifted one bubble height
               so the parked bubble (bottom-right, see AssistantFab) stays in view
               under the pop-up instead of behind it. */}
@@ -202,9 +202,6 @@ export function AssistantSheet() {
                 <RumaHelpAvatar size={44} />
                 <Text style={st.title}>{t('ai_title')}</Text>
               </View>
-              <Pressable onPress={close} hitSlop={10} accessibilityLabel={t('done')}>
-                <Text style={{ fontSize: 20, color: C.ink64 }}>✕</Text>
-              </Pressable>
             </View>
             <ScrollView
               ref={scrollRef}
@@ -263,6 +260,20 @@ export function AssistantSheet() {
           </View>
           </View>
         </KeyboardAvoidingView>
+        {/* The one way out: Ruma's EXIT sign as a real button above the dimming
+            layer, at exactly the spot the parked bubble slides to (bottom-right,
+            8px in, 56px tall, 84px up). No ✕ in the header (user ruling 15 Sep). */}
+        <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 84, alignItems: 'center' }}>
+          <View pointerEvents="box-none" style={{ width: '100%', maxWidth: Platform.OS === 'web' ? 390 : undefined, alignItems: 'flex-end', paddingRight: 8 }}>
+            <Pressable
+              onPress={close}
+              accessibilityLabel={t('done')}
+              style={({ pressed }) => [st.aibtn, pressed && { transform: [{ scale: 1.06 }] }]}
+            >
+              <RumaSignAvatar size={56} ring />
+            </Pressable>
+          </View>
+        </View>
       </View>
     </Modal>
   );
