@@ -484,7 +484,7 @@ export function SheetHost() {
             </View>
             <BodyS style={{ marginTop: 8 }}>{t('gs_body')}</BodyS>
             <View style={{ marginTop: 16 }}>
-              <Btn label={t('au_guest')} onPress={() => { up(s2 => { s2.sheet = null; }); void enterGuestMode(); }} />
+              <Btn label={t('au_guest')} onPress={() => { up(s2 => { s2.sheet = null; }); void enterGuestMode().catch(() => toast(t('inc_sync_error'), 'error')); }} />
             </View>
             <Pressable onPress={close}
               style={({ pressed }) => [{ minHeight: 38, alignSelf: 'center', justifyContent: 'center', marginTop: 8 }, pressed && { opacity: 0.7 }]}>
