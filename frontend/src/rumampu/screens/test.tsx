@@ -319,6 +319,10 @@ export function HousehomeScreen() {
 
   /* v24 hcCostStrip: the state's cheapest and dearest place in years, on a 0-10 scale. */
   const costStrip = (() => {
+    if (S.houseCostsSync === 'loading' || S.houseCostsSync === 'idle') {
+      return { label: t('hc_loading') };
+    }
+    if (S.houseCostsSync === 'error') return { label: t('hc_error') };
     const stateData = S.houseCosts?.states[S.hcState];
     if (!stateData?.income) return { label: t('fh_none') };
     const years = Object.values(stateData.types.all ?? {})

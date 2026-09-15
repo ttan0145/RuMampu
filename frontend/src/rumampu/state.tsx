@@ -1355,6 +1355,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
      The in-flight guard lives in a ref because setState updaters are not
      applied synchronously. */
   const houseCostsInflight = useRef(false);
+  /* Loads once per session. The guard is deliberately not reset on success: the
+     payload is small and the underlying data changes quarterly at most, so a
+     second fetch would be wasted. It IS reset on error so a retry works.
+     Consequence: the `quarters` parameter cannot be varied after a successful
+     load without a state reset. */
   const loadHouseCosts = useCallback(async (): Promise<void> => {
     if (houseCostsInflight.current) return;
     houseCostsInflight.current = true;

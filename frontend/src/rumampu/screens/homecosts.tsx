@@ -1,6 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useApp } from '../state';
 import { rm } from '../calc';
 import { HouseCostType } from '../../../types/housing';
@@ -14,6 +13,11 @@ import { SheetFrame } from '../overlays';
    Data is published-figure provenance, never the user's own record. */
 
 const TYPE_KEYS: HouseCostType[] = ['all', 'terr', 'condo', 'flat', 'lch', 'lcf'];
+
+/* Update this whenever the NAPIC or DOSM loaders are re-run. It records when
+   the figures were last verified against the published sources, which is a
+   manual step and therefore cannot come from the API. */
+const HC_LAST_CHECKED = '13 September 2026';
 
 /* v24: Demographia band for a median multiple — the colours belong to the
    scale, never to a household. */
@@ -126,13 +130,14 @@ export function HomeCostsScreen() {
                 ) : null}
               </View>
               <Text style={st.rowSub}>
-                {rm(r.median)} {'\u00b7'} {t('fh_sold', { n: r.sales.toLocaleString('en-MY') })} {'\u00b7'} {t('fh_u300', { n: r.under.toLocaleString('en-MY') })}
+                {rm(r.median)} {'\u00b7'} {t('fh_sold', { n: r.sales.toLocaleString('en-MY') })} {'\u00b7'} {t('fh_u300', { n: r.under.toLocaleString('en-MY'), k: threshold })}
               </Text>
             </View>
           ))}
           {!rows.length ? <BodyS muted style={{ padding: 14 }}>{t('fh_none')}</BodyS> : null}
         </View>
       )}
+      <BodyS muted style={{ fontSize: 11.5 }}>{t('hc_checked', { d: HC_LAST_CHECKED })}</BodyS>
       <Pressable onPress={() => setPick('info')} style={st.infoBtn}>
         <View style={st.infoIc}><Text style={{ fontFamily: DISP_FONT, fontSize: 11, color: C.ink64 }}>i</Text></View>
         <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink64, flexShrink: 1 }}>{t('fh_i')}</Text>
@@ -208,10 +213,6 @@ const st = StyleSheet.create({
   rowYears: { fontFamily: DISP_FONT, fontSize: 15.5, color: C.ink, fontVariant: ['tabular-nums'] },
   bar: { height: 8, borderRadius: 4, backgroundColor: C.ink14, overflow: 'hidden' },
   rowSub: { fontFamily: BODY_FONT, fontSize: 12, lineHeight: 16, color: C.ink64 },
-  sheet: {
-    backgroundColor: C.paper, borderTopLeftRadius: 22, borderTopRightRadius: 22,
-    paddingHorizontal: 18, paddingTop: 16,
-  },
   opt: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     minHeight: 52, paddingHorizontal: 12, borderRadius: 12,
