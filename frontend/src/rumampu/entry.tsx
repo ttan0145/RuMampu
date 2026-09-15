@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
 import {
-  ApiAuthResponse, ApiError, completeAccountOnboarding, confirmPasswordReset, fetchGuestTransferStatus, login as loginRequest, register as registerRequest, requestPasswordReset, resolveGuestTransfer, rotateGuestClientId, savePreferredLanguage,
+  ApiAuthResponse, ApiError, completeAccountOnboarding, confirmPasswordReset, fetchGuestTransferStatus, fetchIncomeRecord, login as loginRequest, register as registerRequest, requestPasswordReset, resolveGuestTransfer, rotateGuestClientId, savePreferredLanguage,
 } from './api';
 import { lastMonthIso, useApp, type KeptTest } from './state';
 import { createSavedHousingTest, fetchSavedHousingTests } from '../../services/housingService';
@@ -795,6 +795,7 @@ export function GetToKnow() {
        comma, so "3,000" must mean three thousand, not three (parseFloat stops
        at the comma). Thousands separators and spaces are not part of the number. */
     const amount = save ? (parseFloat(String(amt).replace(/[,\s]/g, '')) || 0) : 0;
+    let monthAlreadyRecorded = false;
     const showLoading = S.guest && step >= 2;
     if (showLoading) {
       setFinishing(true);
@@ -828,9 +829,19 @@ export function GetToKnow() {
 
         const targetDate = lastMonthIso();
         const sourceId = S.data.sources[0]?.id;
-        const existing = S.data.income.find(entry => entry.method === 'historical_total' && entry.d.slice(0, 7) === targetDate.slice(0, 7));
-        if (existing?.id) {
-          await updateIncomeEntry(existing.id, { amount, date: targetDate, sourceId });
+        /* Decide against the LIVE record, not the local copy: right after a
+           login or a guest start the copy can still be empty, and the backend
+           refuses a monthly total for a month that already has income records
+           or already has a total. Seen as a "could not be saved" toast on an
+           account that had last month recorded already. */
+        const month = targetDate.slice(0, 7);
+        const record = await fetchIncomeRecord();
+        const inMonth = record.entries.filter(entry => entry.date.slice(0, 7) === month);
+        const existingTotal = inMonth.find(entry => entry.entry_method === 'historical_total');
+        if (existingTotal) {
+          await updateIncomeEntry(String(existingTotal.id), { amount, date: targetDate, sourceId });
+        } else if (inMonth.length) {
+          monthAlreadyRecorded = true;
         } else {
           await saveIncomeEntry({
             amount, date: targetDate, sourceId,
@@ -859,11 +870,13 @@ export function GetToKnow() {
         s.knew = true;
         s.sheet = null;
       });
-      if (save) toast(t('k_saved'));
-    } catch {
+      if (save && amount > 0 && monthAlreadyRecorded) toast(t('k_month_exists'));
+      else if (save) toast(t('k_saved'));
+    } catch (error) {
       // Setup still finishes locally if the income write fails, but say so
       // honestly instead of claiming the record started, and still persist the
       // completion flag so the account does not repeat onboarding on reload.
+      console.error('Onboarding: last month income was not saved', error);
       if (!S.guest) {
         try { await completeAccountOnboarding(); } catch { /* retried on the next login */ }
       }
