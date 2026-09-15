@@ -38,7 +38,15 @@ export function SheetFrame({ children, onClose, scroll = false, pose }: {
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
           <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
         </Pressable>
-        <View style={Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : { width: '100%' }}>
+        {/* A scroll sheet caps the whole stack (peek art + sheet) at 92% of
+            the screen; the percentage must sit on this wrapper, which the
+            full-height backdrop sizes, or it resolves against nothing and a
+            long body grows past the top of the phone. The sheet then shrinks
+            and its ScrollView child takes the leftover height. */}
+        <View style={[
+          Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : { width: '100%' },
+          scroll && { maxHeight: '92%' },
+        ]}>
           {pose ? (
             <View style={{ alignItems: 'flex-end', paddingRight: 20, marginBottom: -below, zIndex: 1 }} pointerEvents="none">
               <SvgXml xml={peekArt(pose, 'body', w)} width={w} height={hh} />
@@ -47,7 +55,7 @@ export function SheetFrame({ children, onClose, scroll = false, pose }: {
           <View style={[
             sheetSt.sheet,
             { paddingBottom: 20 + insets.bottom, zIndex: 2 },
-            scroll && { maxHeight: '92%' },
+            scroll && { flexShrink: 1, minHeight: 0, maxHeight: '100%' },
           ]}>
             {children}
           </View>
