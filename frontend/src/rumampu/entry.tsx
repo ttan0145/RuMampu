@@ -795,7 +795,6 @@ export function GetToKnow() {
        comma, so "3,000" must mean three thousand, not three (parseFloat stops
        at the comma). Thousands separators and spaces are not part of the number. */
     const amount = save ? (parseFloat(String(amt).replace(/[,\s]/g, '')) || 0) : 0;
-    let monthAlreadyRecorded = false;
     const showLoading = S.guest && step >= 2;
     if (showLoading) {
       setFinishing(true);
@@ -828,24 +827,24 @@ export function GetToKnow() {
         }
 
         const targetDate = lastMonthIso();
-        const sourceId = S.data.sources[0]?.id;
         /* Decide against the LIVE record, not the local copy: right after a
            login or a guest start the copy can still be empty, and the backend
-           refuses a monthly total for a month that already has income records
-           or already has a total. Seen as a "could not be saved" toast on an
-           account that had last month recorded already. */
+           refuses a whole-month total for a month that already has income
+           records. Gig workers have several incomes, so the figure is always
+           kept: an empty month gets it as the month's total; a month that
+           already has entries gets it as one more entry; an existing month
+           total is replaced, so running setup twice never doubles it. */
         const month = targetDate.slice(0, 7);
         const record = await fetchIncomeRecord();
+        const sourceId = S.data.sources[0]?.id ?? (record.sources[0] ? String(record.sources[0].id) : undefined);
         const inMonth = record.entries.filter(entry => entry.date.slice(0, 7) === month);
         const existingTotal = inMonth.find(entry => entry.entry_method === 'historical_total');
         if (existingTotal) {
           await updateIncomeEntry(String(existingTotal.id), { amount, date: targetDate, sourceId });
-        } else if (inMonth.length) {
-          monthAlreadyRecorded = true;
         } else {
           await saveIncomeEntry({
             amount, date: targetDate, sourceId,
-            entryMethod: 'historical_total', confirmOutlier: true,
+            entryMethod: inMonth.length ? 'manual' : 'historical_total', confirmOutlier: true,
           });
         }
       }
@@ -870,8 +869,7 @@ export function GetToKnow() {
         s.knew = true;
         s.sheet = null;
       });
-      if (save && amount > 0 && monthAlreadyRecorded) toast(t('k_month_exists'));
-      else if (save) toast(t('k_saved'));
+      if (save) toast(t('k_saved'));
     } catch (error) {
       // Setup still finishes locally if the income write fails, but say so
       // honestly instead of claiming the record started, and still persist the
