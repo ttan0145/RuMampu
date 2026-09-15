@@ -1,4 +1,4 @@
-import { apiIdentityHeaders, API_ROOT } from '../src/rumampu/api';
+import { apiIdentityHeaders, API_ROOT, requestTimeoutMs } from '../src/rumampu/api';
 
 export class ApiError extends Error {
   status: number;
@@ -12,17 +12,15 @@ export class ApiError extends Error {
   }
 }
 
-/* Same 25s guard as the main client: a stalled write (e.g. running a house
-   test on a slow hotspot) becomes a caught timeout instead of a button that
-   spins forever. */
-export const REQUEST_TIMEOUT_MS = 25000;
-
+/* Same guard as the main client (25s reads, 60s writes): a stalled request
+   becomes a caught timeout instead of a button that spins forever, without
+   aborting a slow-but-successful save. */
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const identityHeaders = await apiIdentityHeaders();
   const isFormData = typeof FormData !== 'undefined' && init.body instanceof FormData;
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), requestTimeoutMs(init));
   let response: Response;
   try {
     response = await fetch(`${API_ROOT}${path}`, {

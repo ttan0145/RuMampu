@@ -357,14 +357,26 @@ export async function apiIdentityHeaders(): Promise<Record<string, string>> {
 }
 
 /* No fetch should hang forever: on a slow network (phone hotspot to a remote
-   database) a write can stall with no response, leaving a "Calculating…" or
-   "Saving…" button spinning indefinitely. A 25s abort turns that into a normal
-   caught error the caller can show instead. */
+   database) a request can stall with no response, leaving a "Calculating…" or
+   "Saving…" button spinning indefinitely. An abort turns that into a normal
+   caught error the caller can show instead.
+
+   Reads give up after 25s — they are safe to retry. Writes get 60s: the dev
+   backend opens a fresh Neon connection per request (~2–3s each) and the
+   browser queues past six in flight, so a queued write can legitimately take
+   well over 25s and still succeed. Aborting it early made the app show
+   "could not be saved" for a save the server then completed. */
 export const REQUEST_TIMEOUT_MS = 25000;
+export const WRITE_TIMEOUT_MS = 60000;
+
+export function requestTimeoutMs(init?: RequestInit): number {
+  const method = (init?.method || 'GET').toUpperCase();
+  return method === 'GET' || method === 'HEAD' ? REQUEST_TIMEOUT_MS : WRITE_TIMEOUT_MS;
+}
 
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), requestTimeoutMs(init));
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } catch (error) {

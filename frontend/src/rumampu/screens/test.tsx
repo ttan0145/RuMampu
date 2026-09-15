@@ -534,7 +534,7 @@ export function PrecheckScreen() {
 }
 
 export function ResultScreen() {
-  const { S, t, monthName, up, go, toast } = useApp();
+  const { S, t, monthName, up, go, toast, refreshSavedHousingTests } = useApp();
   React.useEffect(() => {
     up(state => { state.stack = ['househome']; });
   }, [up]);
@@ -768,8 +768,19 @@ export function ResultScreen() {
           }
         });
         if (pendingName) void updateSavedHousingTest(record.id, { name: pendingName }).catch(() => undefined);
-      }).catch(() => {
-        toast(t('housing_run_failed'), 'error');
+      }).catch(async () => {
+        /* A timed-out or dropped response does not mean the server did not
+           save. Re-read the list before blaming the save: if the test is there,
+           it is simply saved; only report a failure when it truly is missing. */
+        let landed = false;
+        try {
+          await refreshSavedHousingTests();
+          up(x2 => {
+            landed = x2.keptTests.some(item => !!item.id
+              && item.pay === Math.round(cost) && item.s === s && item.n === n);
+          });
+        } catch { /* the list could not be re-read either */ }
+        if (!landed) toast(t('sv_save_failed'), 'error');
       });
     }
   };

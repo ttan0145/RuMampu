@@ -710,9 +710,11 @@ export function SheetHost() {
               s.route = 'savedtests';
             });
             if (savedId) {
+              /* Only the write can fail the save; the list is already updated
+                 locally, so a slow follow-up read must not report a failure. */
               void updateSavedHousingTest(savedId, { name })
-                .then(() => refreshSavedHousingTests())
-                .catch(() => toast(t('housing_run_failed'), 'error'));
+                .then(() => refreshSavedHousingTests().catch(() => undefined))
+                .catch(() => toast(t('sv_name_failed'), 'error'));
             }
             toast(t('sv_kept_where'));
           }} />
@@ -752,8 +754,8 @@ export function SheetHost() {
             });
             if (savedId) {
               void updateSavedHousingTest(savedId, { name, monthly_payment: pay })
-                .then(() => refreshSavedHousingTests())
-                .catch(() => toast(t('housing_run_failed'), 'error'));
+                .then(() => refreshSavedHousingTests().catch(() => undefined))
+                .catch(() => toast(t('sv_name_failed'), 'error'));
             }
           }} />
           <View style={{ alignItems: 'center' }}>
@@ -772,8 +774,8 @@ export function SheetHost() {
                 });
                 if (savedId) {
                   void deleteSavedHousingTest(savedId)
-                    .then(() => refreshSavedHousingTests())
-                    .catch(() => toast(t('housing_run_failed'), 'error'));
+                    .then(() => refreshSavedHousingTests().catch(() => undefined))
+                    .catch(() => toast(t('sv_del_failed'), 'error'));
                 }
               }}
             />

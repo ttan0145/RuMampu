@@ -864,13 +864,18 @@ export function GetToKnow() {
       });
       if (save) toast(t('k_saved'));
     } catch {
-      // Preserve the existing behaviour: setup can still finish locally if the
-      // network write fails. The next interaction can retry the backend write.
+      // Setup still finishes locally if the income write fails, but say so
+      // honestly instead of claiming the record started, and still persist the
+      // completion flag so the account does not repeat onboarding on reload.
+      if (!S.guest) {
+        try { await completeAccountOnboarding(); } catch { /* retried on the next login */ }
+      }
       up(s => {
         s.knew = true;
         s.sheet = null;
       });
-      if (save) toast(t('k_saved'));
+      if (save && amount > 0) toast(t('k_save_failed'), 'error');
+      else if (save) toast(t('k_saved'));
     } finally {
       setFinishing(false);
     }

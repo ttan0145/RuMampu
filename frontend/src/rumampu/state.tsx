@@ -714,7 +714,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const records = await fetchSavedHousingTestsRequest();
       up(s => {
-        if (!s.guest) s.keptTests = records.map(keptTestFromRecord);
+        // The API lists newest first; the local list appends as tests are kept.
+        // Keep one order (oldest first) so the list does not jump when a
+        // refresh lands a few seconds after a save.
+        if (!s.guest) s.keptTests = records.slice().reverse().map(keptTestFromRecord);
       });
     } catch (error) {
       // housingService throws services/api.ApiError, which is a different class
