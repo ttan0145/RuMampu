@@ -58,13 +58,13 @@ export function AssistantFab() {
     onPanResponderTerminate: () => { setTimeout(() => { moved.current = false; }, 80); },
   })).current;
 
-  /* While the chat is open the bubble slides to the bottom-left corner, just
+  /* While the chat is open the bubble slides to the bottom-right corner, just
      under the pop-up and clear of its header, then springs back to where the
      user last left it once the chat closes (user ruling 15 Sep). */
   const open = S.assistantOpen;
   React.useEffect(() => {
     const target = open
-      ? { x: 8, y: frame.current.h - 140 }
+      ? { x: frame.current.w - 64, y: frame.current.h - 140 }
       : start.current;
     Animated.spring(pos, { toValue: target, useNativeDriver: false, friction: 8, tension: 70 }).start();
   }, [open, pos]);
@@ -84,7 +84,8 @@ export function AssistantFab() {
         const x = Math.min(start.current.x, w - 64);
         const y = Math.min(start.current.y, h - 140);
         start.current = { x, y };
-        pos.setValue({ x, y });
+        /* A layout change (rotation, browser resize) must not un-park an open chat. */
+        pos.setValue(open ? { x: w - 64, y: h - 140 } : { x, y });
       }}
     >
       <Animated.View
@@ -188,7 +189,7 @@ export function AssistantSheet() {
         </Pressable>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           {/* Right-anchored like the prototype's .aipop, lifted one bubble height
-              so the parked bubble (bottom-left, see AssistantFab) stays in view
+              so the parked bubble (bottom-right, see AssistantFab) stays in view
               under the pop-up instead of behind it. */}
           <View pointerEvents="box-none" style={[
             { width: '100%', alignItems: 'flex-end', paddingRight: 12, marginBottom: 84 + FAB_PARK_GAP + insets.bottom },
