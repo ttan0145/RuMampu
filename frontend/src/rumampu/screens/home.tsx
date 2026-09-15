@@ -602,26 +602,19 @@ function AddIncomeCta({ label, onPress }: { label: string; onPress: () => void }
 /* How-the-app-works cards: rounded pastel tiles with hand-drawn doodles, the
    way a friendly meditation app introduces itself. They ease in one by one. */
 const HW_DOODLES: Record<string, string> = {
-  coins: `<svg width="100%" height="100%" viewBox="0 0 320 96" preserveAspectRatio="xMaxYMid slice" xmlns="http://www.w3.org/2000/svg" fill="none" stroke-linecap="round">
-    <circle cx="272" cy="30" r="13" stroke="#3F7A7E" stroke-width="2.6"/>
-    <path d="M272 24v12M267 30h10" stroke="#3F7A7E" stroke-width="2.6"/>
-    <circle cx="298" cy="58" r="9" stroke="#E0A800" stroke-width="2.6"/>
-    <path d="M236 68 q10 -10 22 -4" stroke="#B54F2B" stroke-width="2.6"/>
-    <path d="M20 78 q8 -8 16 -2 M252 12 q6 6 14 2" stroke="#4A9195" stroke-width="2.4" opacity="0.6"/>
-    <circle cx="36" cy="22" r="3.4" fill="#E0A800"/>
+  coins: `<svg width="100%" height="100%" viewBox="0 0 320 96" preserveAspectRatio="xMaxYMid slice" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#4A9195" stroke-width="2.4" stroke-linecap="round" opacity="0.35">
+    <circle cx="272" cy="34" r="13"/>
+    <path d="M272 28v12M267 34h10"/>
+    <circle cx="298" cy="62" r="9"/>
   </svg>`,
-  house: `<svg width="100%" height="100%" viewBox="0 0 320 96" preserveAspectRatio="xMaxYMid slice" xmlns="http://www.w3.org/2000/svg" fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M254 48 l24 -20 24 20 M262 44 v26 h32 v-26" stroke="#8A6D00" stroke-width="2.8"/>
-    <path d="M286 56 l5 6 9 -12" stroke="#2E9E4E" stroke-width="3"/>
-    <path d="M20 20 q8 -8 16 -2 M232 78 q8 -6 16 -2" stroke="#C98A00" stroke-width="2.4" opacity="0.6"/>
-    <circle cx="238" cy="24" r="3.4" fill="#B54F2B"/>
+  house: `<svg width="100%" height="100%" viewBox="0 0 320 96" preserveAspectRatio="xMaxYMid slice" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#4A9195" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.35">
+    <path d="M254 48 l24 -20 24 20 M262 44 v26 h32 v-26"/>
+    <path d="M286 56 l5 6 9 -12"/>
   </svg>`,
-  sprout: `<svg width="100%" height="100%" viewBox="0 0 320 96" preserveAspectRatio="xMaxYMid slice" xmlns="http://www.w3.org/2000/svg" fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M282 70 v-18 q0 -12 12 -14 M282 56 q0 -10 -11 -12" stroke="#2E9E4E" stroke-width="2.8"/>
-    <path d="M294 38 q6 1 6 8 q-8 1 -10 -4 M271 44 q-6 1 -6 8 q8 1 10 -4" stroke="#2E9E4E" stroke-width="2.4"/>
-    <path d="M270 74 h24" stroke="#8A6D00" stroke-width="2.8"/>
-    <path d="M20 24 q8 -8 16 -2 M240 16 q8 -6 16 -2" stroke="#B0679E" stroke-width="2.4" opacity="0.55"/>
-    <circle cx="248" cy="70" r="3.4" fill="#4A9195"/>
+  sprout: `<svg width="100%" height="100%" viewBox="0 0 320 96" preserveAspectRatio="xMaxYMid slice" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#4A9195" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.35">
+    <path d="M282 70 v-18 q0 -12 12 -14 M282 56 q0 -10 -11 -12"/>
+    <path d="M294 38 q6 1 6 8 q-8 1 -10 -4 M271 44 q-6 1 -6 8 q8 1 10 -4"/>
+    <path d="M270 74 h24"/>
   </svg>`,
 };
 
@@ -635,19 +628,20 @@ function HowCard({ n, bg, doodle, title, body, delay }: {
   return (
     <Animated.View style={{
       opacity: inA, transform: [{ translateY: inA.interpolate({ inputRange: [0, 1], outputRange: [26, 0] }) }],
-      backgroundColor: bg, borderRadius: 22, overflow: 'hidden', minHeight: 96, justifyContent: 'center',
+      backgroundColor: bg, borderRadius: 22, overflow: 'hidden', minHeight: 92, justifyContent: 'center',
+      borderWidth: 1.5, borderColor: 'rgba(60,81,82,0.08)',
     }}>
       <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}>
         <SvgXml xml={doodle} width="100%" height="100%" />
       </View>
       <View style={{ paddingVertical: 16, paddingHorizontal: 18, paddingRight: 96, gap: 3 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.85)', alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontFamily: DISP_FONT, fontSize: 12, color: C.ink }}>{n}</Text>
+          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#E4EFEC', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 12, color: '#2E6B6F' }}>{n}</Text>
           </View>
           <Text style={{ fontFamily: DISP_FONT, fontSize: 16.5, color: C.ink }}>{title}</Text>
         </View>
-        <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: C.ink }}>{body}</Text>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: C.ink64 }}>{body}</Text>
       </View>
     </Animated.View>
   );
@@ -671,9 +665,9 @@ export function HomeScreen() {
           fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.88, textTransform: 'uppercase',
           color: C.ink64, marginTop: 6,
         }}>{t('hw_title')}</Text>
-        <HowCard n={1} bg="#BFE2D8" doodle={HW_DOODLES.coins} title={t('hw_t1')} body={t('hw_b1')} delay={250} />
-        <HowCard n={2} bg="#F7E3AE" doodle={HW_DOODLES.house} title={t('hw_t2')} body={t('hw_b2')} delay={430} />
-        <HowCard n={3} bg="#F2D4E4" doodle={HW_DOODLES.sprout} title={t('hw_t3')} body={t('hw_b3')} delay={610} />
+        <HowCard n={1} bg="#F3F6F5" doodle={HW_DOODLES.coins} title={t('hw_t1')} body={t('hw_b1')} delay={250} />
+        <HowCard n={2} bg="#F3F6F5" doodle={HW_DOODLES.house} title={t('hw_t2')} body={t('hw_b2')} delay={430} />
+        <HowCard n={3} bg="#F3F6F5" doodle={HW_DOODLES.sprout} title={t('hw_t3')} body={t('hw_b3')} delay={610} />
         <View style={{ height: 56 }} />
       </ScreenShell>
     );
