@@ -55,10 +55,10 @@ export function AssistantFab() {
     onPanResponderTerminate: () => { setTimeout(() => { moved.current = false; }, 80); },
   })).current;
 
-  /* v22: the floating bubble lives on the tab roots (greeting-header screens);
-     pushed screens carry the small robot button in their header instead. */
-  const roots = S.route === 'home' || S.route === 'money' || S.route === 'profile' || S.route === 'househome';
-  if (!ASSISTANT_UI_ENABLED || !S.onboarded || !S.knew || !roots) return null;
+  /* The floating bubble is the one entry to Ask RuMampu on every screen, tab
+     roots and pushed screens alike (user ruling 15 Sep: no header robot on
+     Income, Expenses and the rest; the bubble simply floats everywhere). */
+  if (!ASSISTANT_UI_ENABLED || !S.onboarded || !S.knew) return null;
 
   return (
     <View

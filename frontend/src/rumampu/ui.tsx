@@ -3,10 +3,9 @@ import {
   Pressable, StyleSheet, Text, TextInput, TextStyle, View, ViewStyle,
 } from 'react-native';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from './theme';
-import { Ico, RobotIco } from './svgs';
+import { Ico } from './svgs';
 import { RumaAvatar } from './ruma-view';
 import { useApp } from './state';
-import { ASSISTANT_UI_ENABLED } from './assistant';
 
 /* UI primitives — each maps 1:1 to a CSS class in the prototype. */
 
@@ -129,7 +128,7 @@ export function NoteC({ children }: { children: React.ReactNode }) {
 export function Hdr({ back, title, brand, greet, right }: {
   back?: boolean; title?: string; brand?: boolean; greet?: boolean; right?: React.ReactNode;
 }) {
-  const { t, S, backNav, up } = useApp();
+  const { t, S, backNav } = useApp();
 
   if (brand || greet) {
     const h = new Date().getHours();
@@ -167,17 +166,8 @@ export function Hdr({ back, title, brand, greet, right }: {
         {title || ''}
       </Text>
       {right}
-      {/* US6.2: every pushed screen keeps the small assistant entry (AC6.2.15);
-          hidden together with the rest of the assistant UI for now. */}
-      {ASSISTANT_UI_ENABLED ? (
-        <Pressable
-          style={st.aibtnSmall}
-          onPress={() => up(s => { s.assistantOpen = true; })}
-          accessibilityLabel={t('ai_title')}
-        >
-          <RobotIco size={17} arms={false} />
-        </Pressable>
-      ) : null}
+      {/* US6.2 / AC6.2.15: every pushed screen keeps an assistant entry, now
+          the floating bubble (assistant.AssistantFab) rather than a header button. */}
     </View>
   );
 }
@@ -475,12 +465,6 @@ const st = StyleSheet.create({
     paddingHorizontal: 20,
   },
   iconbtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
-  aibtnSmall: {
-    width: 32, height: 32, borderRadius: 10, backgroundColor: C.brand,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: 'rgba(74,145,149,1)', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-  },
   card: { backgroundColor: C.card, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: C.ink14 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   noteC: {
