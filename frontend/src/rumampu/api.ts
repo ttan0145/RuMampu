@@ -9,11 +9,16 @@ export const APP_MODE: 'api' | 'prototype' = configuredAppMode === 'prototype'
   : 'api';
 export const INCOME_API_ENABLED = APP_MODE === 'api';
 
-const CONFIGURED_ROOT = (
+const CONFIGURED_ROOT =
   process.env.EXPO_PUBLIC_E2E === '1'
     ? process.env.EXPO_PUBLIC_PLAYWRIGHT_API_URL
-    : process.env.EXPO_PUBLIC_API_URL
-) || 'http://localhost:8000/api/v1';
+    : process.env.EXPO_PUBLIC_API_URL;
+
+if (!CONFIGURED_ROOT) {
+  throw new Error(
+    'API URL is not configured. Check EXPO_PUBLIC_API_URL.'
+  );
+}
 
 /* Local web development only: the dev server and Django run on the same
    machine, so the API host follows the host the page was loaded from —

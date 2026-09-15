@@ -4,17 +4,15 @@ import { C } from './theme';
 
 /* SVG artwork ported verbatim from the prototype (logo, onboarding heroes, row icons). */
 
-const LOGO_INNER =
-  '<circle cx="50" cy="50" r="50" fill="#28343A"/>' +
-  '<g transform="rotate(-42 50 50)">' +
-  '<rect x="32" y="45.8" width="56" height="8.4" rx="4.2" fill="#FFFFFF"/>' +
-  '<rect x="54" y="29" width="6" height="17" rx="3" fill="#4C9F58"/>' +
-  '<rect x="63" y="35" width="6" height="11" rx="3" fill="#F4C64D"/>' +
-  '<rect x="72" y="31" width="6" height="15" rx="3" fill="#4C9F58"/>' +
-  '<rect x="81" y="38" width="6" height="8" rx="3" fill="#D95436"/>' +
-  '<circle cx="32" cy="50" r="16.5" fill="#FFFFFF"/>' +
-  '<path d="M32 43.5 L40 50 L40 57 L24 57 L24 50 Z" fill="#28343A"/>' +
-  '</g>';
+const LOGO_INNER = `
+  <circle cx="50" cy="50" r="50" fill="#263238"/>
+  <rect x="48" y="24" width="7" height="18" fill="#2FA65A" transform="rotate(-42 51.5 33)"/>
+  <rect x="58" y="24" width="7" height="15" fill="#FFC247" transform="rotate(-42 61.5 31.5)"/>
+  <rect x="66" y="17" width="8" height="22" fill="#2FA65A" transform="rotate(-42 70 28)"/>
+  <rect x="76" y="16" width="8" height="16" fill="#F05A37" transform="rotate(-42 80 24)"/>
+  <circle cx="36" cy="62" r="21" fill="#fff"/>
+  <line x1="47" y1="51" x2="82" y2="20" stroke="#fff" stroke-width="11" stroke-linecap="round"/>
+  <path d="M29 62L36 56L43 62V72H29Z" fill="#263238"/> `;
 
 export function Logo({ size }: { size: number }) {
   const xml = `<svg width="${size}" height="${size}" viewBox="0 0 100 100">${LOGO_INNER}</svg>`;
