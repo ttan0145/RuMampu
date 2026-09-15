@@ -9,6 +9,7 @@ import {
 } from '../plan';
 import { villageEnsure } from '../village';
 import { IsoIsland } from '../isosvg';
+import { Ruma } from '../ruma-view';
 import { BODY_FONT, C, DISP_FONT } from '../theme';
 import { Btn, BodyS, Display } from '../ui';
 import { ScreenShell } from './shell';
@@ -493,17 +494,55 @@ ${lvl > 0 ? `<rect x="6.6" y="${fy}" width="10.8" height="${fh}" rx="1.4" fill="
   );
 }
 
+
+/* First-open welcome: a sunny meadow with a little home on the hill, pinned to
+   the foot of the screen behind the content. Decoration only. */
+function HomeMeadow() {
+  const xml = `<svg width="100%" height="230" viewBox="0 0 390 230" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="52" cy="28" r="20" fill="#F4D27A" opacity="0.9"/>
+  <circle cx="52" cy="28" r="27" fill="#F4D27A" opacity="0.25"/>
+  <ellipse cx="150" cy="36" rx="34" ry="12" fill="#FFFFFF" opacity="0.9"/>
+  <ellipse cx="178" cy="43" rx="24" ry="9" fill="#FFFFFF" opacity="0.9"/>
+  <ellipse cx="222" cy="24" rx="26" ry="10" fill="#FFFFFF" opacity="0.7"/>
+  <path d="M-20 230 L-20 150 Q 100 92 235 138 Q 330 168 410 134 L410 230 Z" fill="#CBE6CF"/>
+  <g transform="translate(292 96)">
+    <path d="M-26 22 L0 -4 L26 22 Z" fill="#4A9195"/>
+    <rect x="-18" y="20" width="36" height="26" rx="3" fill="#FFFFFF" stroke="#3C5152" stroke-width="1.6"/>
+    <rect x="-6" y="30" width="12" height="16" rx="2" fill="#4A9195"/>
+    <path d="M-30 24 L0 -6 L30 24" fill="none" stroke="#3C5152" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <path d="M-20 230 L-20 186 Q 95 136 215 170 Q 322 200 410 168 L410 230 Z" fill="#A5D6AE"/>
+  <g stroke="#63A96F" stroke-width="2.4" stroke-linecap="round" fill="none">
+    <path d="M60 192 q-2 -8 1 -12 M66 192 q0 -9 4 -12 M72 193 q3 -7 8 -9"/>
+    <path d="M206 190 q-2 -8 1 -12 M212 190 q0 -9 4 -12 M218 191 q3 -7 8 -9"/>
+    <path d="M330 200 q-2 -8 1 -12 M336 200 q0 -9 4 -12"/>
+  </g>
+  <g>
+    <circle cx="112" cy="206" r="4.6" fill="#FFFFFF"/><circle cx="112" cy="206" r="1.7" fill="#F4D27A"/>
+    <circle cx="152" cy="180" r="4.6" fill="#FFFFFF"/><circle cx="152" cy="180" r="1.7" fill="#F4D27A"/>
+    <circle cx="272" cy="204" r="4.6" fill="#FFFFFF"/><circle cx="272" cy="204" r="1.7" fill="#F4D27A"/>
+  </g>
+</svg>`;
+  return <SvgXml xml={xml} width="100%" height={230} />;
+}
+
 export function HomeScreen() {
   const { S, t, go, up } = useApp();
+  const { height: winH } = useWindowDimensions();
   const sp = recSpan(S.data);
 
   if (!sp) {
-    /* Empty record: keep the start prompt; the plan card below hands off to
-       a house test (setup phase) until a real target exists. */
+    /* Empty record: Ruma welcomes from the middle of a sunny meadow, and the
+       one thing to do — add income — sits right under the greeting. */
     return (
-      <ScreenShell brand>
-        <Display cls="h-l">{t('inc_empty')}</Display>
-        <Btn label={t('inc_add')} onPress={() => go('income')} />
+      <ScreenShell brand bg={<HomeMeadow />}>
+        <View style={{ minHeight: winH - 300, alignItems: 'center', justifyContent: 'center', gap: 14, paddingBottom: 90 }}>
+          <Ruma w={150} pose="wave" />
+          <Display cls="h-l" style={{ textAlign: 'center', maxWidth: 280 }}>{t('inc_empty')}</Display>
+          <View style={{ width: 230, marginTop: 4 }}>
+            <Btn label={t('inc_add')} onPress={() => go('income')} />
+          </View>
+        </View>
       </ScreenShell>
     );
   }
