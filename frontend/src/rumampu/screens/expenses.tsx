@@ -572,6 +572,7 @@ export function ExLimitsBody() {
           <BodyS muted style={{ flex: 1 }}>{t('lm_limit')}</BodyS>
           <NumInput value={lims[id] || ''} placeholder={String(LIM_EX[id] || 300)}
             accessibilityLabel={`${label} ${t('lm_limit')}`}
+            dimZero
             onNum={n => up(s => { s.data.expenseLimits[id] = Math.max(0, n); logIt(s, id === 'total' ? 'lg_limit_total' : 'lg_limit', { a: rm(Math.max(0, n)) }, `lim:${id}`); })} alignRight />
         </View>
         {lim > 0 ? (
