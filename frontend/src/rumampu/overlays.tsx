@@ -355,7 +355,7 @@ function VillageSheet() {
 export function SheetHost() {
   const {
     S, t, up, monthName, saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource,
-    saveWorkCostCategory, saveExpenseCategory, saveExpenseEntry, refreshSavedHousingTests, toast,
+    saveWorkCostCategory, saveExpenseCategory, saveExpenseEntry, refreshSavedHousingTests, toast, enterGuestMode,
   } = useApp();
   const sheet = S.sheet;
   const close = () => up(s => { s.sheet = null; });
@@ -475,6 +475,41 @@ export function SheetHost() {
             <View style={{ marginTop: 14 }}>
               <Btn label={t('done')} onPress={close} />
             </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  /* v24 guestsure: continuing as a guest is confirmed, with what it means. */
+  if (sheet === 'guestsure') {
+    return (
+      <Modal transparent animationType="none" visible onRequestClose={close}>
+        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={close}>
+            <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
+          </Pressable>
+          <View style={{ alignItems: 'center', marginBottom: -30, zIndex: 2 }}>
+            <Ruma w={96} pose="curious" float={false} />
+          </View>
+          <View style={[
+            sheetSt.sheet, { paddingBottom: 26, paddingTop: 34 },
+            Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null,
+          ]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <SheetH3 noMargin>{t('gs_title')}</SheetH3>
+              <Pressable onPress={close} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10 }}>
+                <Text style={{ fontSize: 18, color: C.ink }}>✕</Text>
+              </Pressable>
+            </View>
+            <BodyS style={{ marginTop: 8 }}>{t('gs_body')}</BodyS>
+            <View style={{ marginTop: 16 }}>
+              <Btn label={t('au_guest')} onPress={() => { up(s2 => { s2.sheet = null; }); void enterGuestMode(); }} />
+            </View>
+            <Pressable onPress={close}
+              style={({ pressed }) => [{ minHeight: 38, alignSelf: 'center', justifyContent: 'center', marginTop: 8 }, pressed && { opacity: 0.7 }]}>
+              <Text style={{ fontFamily: SEMI_FONT, fontSize: 14, color: C.ink, textDecorationLine: 'underline' }}>{t('gs_not')}</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>

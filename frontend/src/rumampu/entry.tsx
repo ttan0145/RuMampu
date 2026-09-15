@@ -730,7 +730,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
               <View style={st.demobox}>
                 <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 15, color: C.ink40, textAlign: 'center', marginBottom: 6 }}>{t('au_guestnote')}</Text>
                 <View style={{ alignItems: 'center' }}>
-                  <LineBtn label={t('au_guest')} onPress={() => void enterGuestMode()} />
+                  <LineBtn label={t('au_guest')} onPress={() => up(s2 => { s2.sheet = 'guestsure'; })} />
                 </View>
               </View>
             </View>
@@ -749,7 +749,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
                 <LineBtn label={t('au_login')} onPress={() => up(s => { s.authMode = 'login'; })} />
               </View>
               <View style={{ alignItems: 'center' }}>
-                <LineBtn label={t('au_guest2')} onPress={() => void enterGuestMode()} />
+                <LineBtn label={t('au_guest2')} onPress={() => up(s2 => { s2.sheet = 'guestsure'; })} />
               </View>
             </View>
           )}
