@@ -1,6 +1,7 @@
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, TextInput, View, type DimensionValue } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, View, type DimensionValue } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { SaveFormat, manipulateAsync } from 'expo-image-manipulator';
 import { useApp } from '../state';
 import { logIt } from '../log';
@@ -8,7 +9,7 @@ import {
   EXP_FULL_DAYS, expByMonth, expCatTotals, latestExpMonth, monthsAgg, nf, pickMonth, rm, rmx,
 } from '../calc';
 import {
-  Badge, BodyS, Btn, BtnLine, BtnQuiet, Card, Chip, Chips, Display, Fig, FromR,
+  Badge, BodyS, Btn, BtnLine, Card, Chip, Chips, Display, Fig, FromR,
   IcLab, KV, NoteC, NumInput, P, Prov, StackS, TextField,
   CardI, MonthBtn,
 } from '../ui';
@@ -16,8 +17,9 @@ import { C, CHART_COLS, DISP_FONT } from '../theme';
 import { Ico } from '../svgs';
 import { CatIcon, guessCat } from '../icons';
 import { CSV_SAMPLE_EX, csvAmount, parseCsv, parseDateAny } from '../csv';
-import { DayShortcutPicker, InCard, InChip, InHero, InLbl, InRow, InSec, InSeg, PerSeg } from '../incard';
-import { HBar, Shimmer } from '../charts';
+import { DayShortcutPicker, Drop, InCard, InChip, InHero, InLbl, InRow, InSec, InSeg, MockStmt, PerSeg } from '../incard';
+import { Ruma } from '../ruma-view';
+import { HBar } from '../charts';
 import { ScreenShell } from './shell';
 import { isValidIsoDate } from '../validation';
 import { DatePickerField } from '../date-picker';
@@ -40,7 +42,6 @@ function useCatLabel() {
 function ExpenseCsvBody() {
   const { S, t, up, monthName, saveExpenseEntry, toast } = useApp();
   const c = S.exCsv;
-  const [pasted, setPasted] = React.useState('');
   const [importing, setImporting] = React.useState(false);
   const cats = useCatLabel();
 
@@ -90,7 +91,7 @@ function ExpenseCsvBody() {
   if (c.stage === 'map' && c.headers && c.rows && c.map) {
     const colChips = (sel: number, onPick: (i: number) => void, allowNone?: boolean) => (
       <Chips>
-        {allowNone ? <Chip label="—" on={sel < 0} onPress={() => onPick(-1)} /> : null}
+        {allowNone ? <Chip label={t('cv_nocol')} on={sel < 0} onPress={() => onPick(-1)} /> : null}
         {c.headers!.map((h, i) => (
           <Chip key={i} label={h} on={sel === i} onPress={() => onPick(i)} />
         ))}
@@ -145,25 +146,43 @@ function ExpenseCsvBody() {
     );
   }
 
+  /* v24 .drop: choose the .csv file, exactly like the income Import tab;
+     the template link and the sample sit under it. */
+  const chooseFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['text/csv', 'text/comma-separated-values', 'application/vnd.ms-excel'],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      const text = asset.file ? await asset.file.text() : await (await fetch(asset.uri)).text();
+      load(text);
+    } catch {
+      up(s => { s.exCsv = { stage: 'pick', err: t('cv_none') }; });
+    }
+  };
+  const downloadTemplate = () => {
+    if (typeof document === 'undefined') return;
+    const blob = new Blob(['date,amount,description\n2026-08-02,12.50,Mamak Bistro\n'], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'rumampu-expenses-template.csv';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
   return (
     <View style={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 14, gap: 10 }}>
       {c.err ? <NoteC><BodyS>{c.err}</BodyS></NoteC> : null}
-      <BodyS muted>{t('exc_hint')}</BodyS>
-      <TextInput
-        multiline
-        numberOfLines={5}
-        value={pasted}
-        onChangeText={setPasted}
-        placeholder="date,amount,description"
-        placeholderTextColor={C.ink40}
-        style={{
-          minHeight: 110, backgroundColor: '#F6F8F7', borderWidth: 1.5, borderColor: C.ink14,
-          borderRadius: 12, padding: 12, fontSize: 13, color: C.ink, textAlignVertical: 'top',
-        }}
-      />
-      <Btn label={t('cv_import', { n: '' }).replace('{n}', '').trim() || t('add')} onPress={() => load(pasted)} />
-      <View style={{ alignItems: 'center' }}>
-        <BtnLine label={t('cv_sample')} style={{ fontSize: 13.5 }} onPress={() => load(CSV_SAMPLE_EX)} />
+      <Drop icon="csv" tint="out" title={t('cvi_pick')} hint={t('exc_hint')} onPress={() => { void chooseFile(); }} />
+      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 18, flexWrap: 'wrap' }}>
+        {Platform.OS === 'web' ? <BtnLine label={t('cv_tpl')} onPress={downloadTemplate} style={{ fontSize: 14 }} /> : null}
+        <BtnLine label={t('cv_sample')} style={{ fontSize: 14 }} onPress={() => load(CSV_SAMPLE_EX)} />
       </View>
     </View>
   );
@@ -385,15 +404,14 @@ export function ExpensesScreen() {
       {S.expenseSync === 'error' ? <NoteC><BodyS>{t('ex_sync_error')}</BodyS></NoteC> : null}
       {summary}
       <InCard>
-        {/* 'scan' is a separate route; shown here it would pair a Scan tab
-            with the manual body, so it never stays selected on this screen. */}
-        <InSeg mode={S.exMode === 'scan' ? 'type' : S.exMode} tint="out"
+        {/* v24: Manual / Scan / Import live in one card, exactly like Income.
+            The receipt scan renders in place under its tab. */}
+        <InSeg mode={S.exMode} tint="out"
           labels={[['type', t('im_type')], ['scan', t('im_scan')], ['csv', t('im_csv')]]}
           onMode={m => {
-            if (m === 'scan') { up(s => { s.scan = { stage: 'pick' }; }); go('expscan'); return; }
             up(s => { s.exMode = m as typeof s.exMode; });
           }} />
-        {S.exMode === 'csv' ? <ExpenseCsvBody /> : manual}
+        {S.exMode === 'csv' ? <ExpenseCsvBody /> : S.exMode === 'scan' ? <ExpenseScanBody /> : manual}
       </InCard>
       {S.data.expenses.length ? (
         <>
@@ -594,79 +612,23 @@ export function ExLimitsScreen() {
  * EN: US1.5 validates amount/date/category before adding a manual expense to the current record.
  * 中文：US1.5 在把手工支出加入当前记录前校验金额、日期和类别。
  */
+/* The old stand-alone add and scan routes now open the one tabbed Expenses
+   screen (Manual / Scan / Import), the same anatomy as Income. The route
+   names stay valid so nothing that navigates to them breaks. */
 export function ExpAddScreen() {
-  const { S, t, monthName, up, toast, backNav, saveExpenseEntry } = useApp();
-  const d = S.expDraft;
-  const [saving, setSaving] = React.useState(false);
-  const [error, setError] = React.useState<'amount' | 'date' | 'save' | null>(null);
+  return <ExpensesScreen />;
+}
 
-  const save = async () => {
-    const a = parseFloat(d.a) || 0;
-    if (a <= 0) { setError('amount'); return; }
-    if (!isValidIsoDate(d.d)) { setError('date'); return; }
-    if (!d.c || saving || S.expenseSync === 'loading') return;
-    const dd = d.d;
-    const key = (+dd.slice(0, 4)) * 12 + (+dd.slice(5, 7) - 1);
-    const total = (expByMonth(S.data).get(key)?.total || 0) + a;
-    setSaving(true);
-    setError(null);
-    try {
-      await saveExpenseEntry({ amount: a, date: dd, categoryId: d.c });
-      up(s => {
-        s.expDraft = { a: '', c: s.expDraft.c, d: dd, per: s.expDraft.per };
-      });
-      toast(t('ex_saved', { m: monthName(key % 12), x: nf(total) }));
-      backNav();
-    } catch {
-      setError('save');
-      toast(t('ex_save_failed'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <ScreenShell back title={t('ex_add')}>
-      {S.expenseSync === 'loading' ? <NoteC><BodyS>{t('ex_sync_loading')}</BodyS></NoteC> : null}
-      {S.expenseSync === 'error' ? <NoteC><BodyS>{t('ex_sync_error')}</BodyS></NoteC> : null}
-      <Card gap={8}>
-        <View style={{ gap: 6 }}>
-          <BodyS muted>{t('inc_amount')}</BodyS>
-          <TextField value={d.a} keyboardType="decimal-pad" inputMode="decimal"
-            onChangeText={v => { setError(null); up(s => { s.expDraft.a = v; }); }} />
-        </View>
-        <View style={{ gap: 6 }}>
-          <BodyS muted>{t('ex_cat')}</BodyS>
-          <Chips>
-            {S.data.expenseCats.map(x => (
-              <Chip key={x.id} label={x.custom ? x.name || '' : t(x.k || '')} on={d.c === x.id}
-                onPress={() => up(s => { s.expDraft.c = x.id; })} />
-            ))}
-            <Chip label={t('xc_own')} onPress={() => up(s => { s.sheet = 'xcown'; })} />
-          </Chips>
-        </View>
-        <View style={{ gap: 6 }}>
-          <BodyS muted>{t('inc_date')}</BodyS>
-          <DatePickerField
-            value={d.d}
-            mode="date"
-            monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
-            maximumDate={new Date()}
-            onChange={v => { setError(null); up(s => { s.expDraft.d = v; }); }}
-          />
-        </View>
-        {error ? <BodyS>{t(`ex_${error === 'amount' ? 'amount_positive' : error === 'date' ? 'date_invalid' : 'save_failed'}`)}</BodyS> : null}
-        <Btn label={saving ? t('ex_saving') : t('ex_add')} onPress={() => { void save(); }} />
-      </Card>
-    </ScreenShell>
-  );
+export function ExpScanScreen() {
+  return <ExpensesScreen />;
 }
 
 /**
  * EN: US1.7 keeps receipt-derived values editable and non-authoritative until explicit confirmation.
+ * v24: rendered inside the entry card under the Scan tab, like the income scan.
  * 中文：US1.7 让收据识别值可编辑，并在显式确认前保持非权威状态。
  */
-export function ExpScanScreen() {
+function ExpenseScanBody() {
   const { S, t, up, toast, monthName, saveExpenseEntry } = useApp();
   const st = S.scan.stage;
   const [saving, setSaving] = React.useState(false);
@@ -677,14 +639,14 @@ export function ExpScanScreen() {
      keeps the offline mock so the flow works without an API key (US1.7:
      the review/edit/confirm boundary stays the authoritative behaviour). */
   React.useEffect(() => {
-    if (S.route !== 'expscan' || st !== 'read') return;
+    if (S.exMode !== 'scan' || st !== 'read') return;
     const picked = getPickedReceipt();
     const useApi = INCOME_API_ENABLED && S.scan.thumb != null && picked != null;
 
     if (!useApi) {
       const timer = setTimeout(() => {
         up(s => {
-          if (s.route !== 'expscan' || s.scan.stage !== 'read') return;
+          if (s.exMode !== 'scan' || s.scan.stage !== 'read') return;
           const groceries = s.data.expenseCats.find(category => category.k === 'xc_groc')
             || s.data.expenseCats[0];
           s.scan = {
@@ -715,7 +677,7 @@ export function ExpScanScreen() {
           return;
         }
         up(s => {
-          if (s.route !== 'expscan' || s.scan.stage !== 'read') return;
+          if (s.exMode !== 'scan' || s.scan.stage !== 'read') return;
           const bySlug = result.category_slug
             ? s.data.expenseCats.find(category => category.k === `xc_${result.category_slug}`)
             : undefined;
@@ -746,13 +708,13 @@ export function ExpScanScreen() {
       }
     })();
     return () => { active = false; };
-  }, [S.route, st, up]);
+  }, [S.exMode, st, up]);
 
   /* Quick-menu shortcut: Add → Scan a receipt → Expense goes straight to
      the camera instead of stopping at the picker step. */
   const scanAuto = S.scanAuto;
   React.useEffect(() => {
-    if (S.route !== 'expscan' || !scanAuto) return;
+    if (S.exMode !== 'scan' || !scanAuto) return;
     up(s => { s.scanAuto = false; });
     void pickPhoto('camera');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -761,7 +723,7 @@ export function ExpScanScreen() {
   const pickPhoto = async (source: 'camera' | 'library') => {
     setError(null);
     try {
-      if (source === 'camera') {
+      if (source === 'camera' && Platform.OS !== 'web') {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
         if (!permission.granted) {
           setError('image');
@@ -795,43 +757,56 @@ export function ExpScanScreen() {
     }
   };
 
-  let body: React.ReactNode;
   if (st === 'pick') {
-    body = (
-      <>
-        <P>{t('ex_scan_pick')}</P>
-        <Btn label={t('ex_take_photo')} onPress={() => { void pickPhoto('camera'); }} />
-        <BtnQuiet onPress={() => { void pickPhoto('library'); }}>
-          <P>{t('ex_choose_photo')}</P>
-        </BtnQuiet>
-        <BtnQuiet onPress={() => { setError(null); up(s => { s.scan = { stage: 'read', thumb: null }; }); }}>
-          <P>{t('ex_scan_sample')}</P>
-        </BtnQuiet>
-        {error === 'image' ? <BodyS>{t('ex_image_failed')}</BodyS> : null}
-        {error === 'scan' ? <BodyS>{t('ex_scan_failed')}</BodyS> : null}
-        {error === 'notreceipt' ? <BodyS>{t('ex_not_receipt')}</BodyS> : null}
-      </>
+    /* v24 .drop: one tappable area (photo library), the camera button under
+       it, the sample as a quiet link. Same anatomy as the income scan tab. */
+    return (
+      <InSec last>
+        <Drop icon="scan" tint="out" title={t('ex_scan')} hint={t('ex_scan_pick')}
+          badge={<Badge label={t('ex_preview')} />}
+          onPress={() => { void pickPhoto('library'); }} />
+        <View style={{ marginTop: 10 }}>
+          <Pressable onPress={() => { void pickPhoto('camera'); }}
+            style={({ pressed }) => [exSt.btnOut, pressed && { opacity: 0.85 }]}>
+            <Text style={{ color: '#fff', fontFamily: DISP_FONT, fontSize: 19 }}>{t('ex_take_photo')}</Text>
+          </Pressable>
+        </View>
+        <View style={{ alignItems: 'center', marginTop: 8 }}>
+          <BtnLine label={t('ex_scan_sample')} style={{ fontSize: 13.5 }}
+            onPress={() => { setError(null); up(s => { s.scan = { stage: 'read', thumb: null }; }); }} />
+        </View>
+        {error === 'image' ? <NoteC><BodyS>{t('ex_image_failed')}</BodyS></NoteC> : null}
+        {error === 'scan' ? <NoteC><BodyS>{t('ex_scan_failed')}</BodyS></NoteC> : null}
+        {error === 'notreceipt' ? <NoteC><BodyS>{t('ex_not_receipt')}</BodyS></NoteC> : null}
+      </InSec>
     );
-  } else if (st === 'read') {
-    body = (
-      <>
-        <Shimmer label={t('ex_reading')} />
-        <BodyS muted>{t('ex_reading')}</BodyS>
-      </>
+  }
+
+  if (st === 'read') {
+    return (
+      <InSec last>
+        <MockStmt />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 }}>
+          <Ruma w={56} pose="count" float={false} />
+          <BodyS muted>{t('ex_reading')}</BodyS>
+        </View>
+      </InSec>
     );
-  } else {
+  }
+
+  {
     const v = S.scan.vals!;
     /* Absent src means every field came from the receipt (sample flow). */
     const src = S.scan.src || { m: true, d: true, a: true };
     const missing = !src.m || !src.d || !src.a;
-    body = (
-      <>
-        <BodyS>{t('ex_check')}</BodyS>
+    return (
+      <InSec last>
+        <BodyS muted>{t('ex_check')}</BodyS>
         {missing ? <NoteC><BodyS>{t('ex_scan_partial')}</BodyS></NoteC> : null}
         {S.scan.thumb ? (
-          <Image source={{ uri: S.scan.thumb }} style={{ maxWidth: '100%', height: 140, borderRadius: 12, resizeMode: 'cover' }} />
+          <Image source={{ uri: S.scan.thumb }} style={{ maxWidth: '100%', height: 120, borderRadius: 12, resizeMode: 'cover', marginTop: 8 }} />
         ) : null}
-        <Card gap={8}>
+        <View style={{ gap: 8, marginTop: 8 }}>
           <View style={{ gap: 6 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <BodyS muted>{t('ex_merchant')}</BodyS>
@@ -859,15 +834,17 @@ export function ExpScanScreen() {
               <BodyS muted>{t('ex_cat')}</BodyS>
               {S.scan.aiC && v.c === S.scan.aiC ? <FromR label={t('ex_ai_suggested')} /> : null}
             </View>
-            <Chips>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {S.data.expenseCats.map(x => (
-                <Chip key={x.id} label={x.custom ? x.name || '' : t(x.k || '')} on={v.c === x.id}
+                <InChip key={x.id} tint="out"
+                  icon={<CatIcon id={x.id} data={S.data} size={18} color={v.c === x.id ? '#fff' : C.ink} />}
+                  label={x.custom ? x.name || '' : t(x.k || '')} on={v.c === x.id}
                   onPress={() => up(s => { s.scan.vals!.c = x.id; })} />
               ))}
-            </Chips>
+            </View>
           </View>
-          {error && error !== 'image' ? <BodyS>{t(`ex_${error === 'amount' ? 'amount_positive' : error === 'date' ? 'date_invalid' : 'save_failed'}`)}</BodyS> : null}
-          <Btn label={saving ? t('ex_saving') : t('add')} onPress={() => { void (async () => {
+          {error && error !== 'image' ? <NoteC><BodyS>{t(`ex_${error === 'amount' ? 'amount_positive' : error === 'date' ? 'date_invalid' : 'save_failed'}`)}</BodyS></NoteC> : null}
+          <Pressable disabled={saving} style={({ pressed }) => [exSt.btnOut, (pressed || saving) && { opacity: 0.85 }]} onPress={() => { void (async () => {
             const a = +v.a || 0;
             if (a <= 0) { setError('amount'); return; }
             if (!isValidIsoDate(v.d)) { setError('date'); return; }
@@ -887,8 +864,8 @@ export function ExpScanScreen() {
                 confirmReceipt: true,
               });
               up(s => {
-              s.scan = { stage: 'pick' };
-              s.route = 'expenses';
+                s.scan = { stage: 'pick' };
+                s.exMode = 'type';
               });
               toast(t('ex_saved', { m: monthName(key % 12), x: nf(total) }));
             } catch {
@@ -897,19 +874,16 @@ export function ExpScanScreen() {
             } finally {
               setSaving(false);
             }
-          })(); }} />
-          <BtnLine label={t('ex_retake')} onPress={() => { setError(null); up(s => { s.scan = { stage: 'pick' }; }); }} />
-        </Card>
-      </>
+          })(); }}>
+            <Text style={{ color: '#fff', fontFamily: DISP_FONT, fontSize: 19 }}>{saving ? t('ex_saving') : t('ex_add')}</Text>
+          </Pressable>
+          <View style={{ alignItems: 'center' }}>
+            <BtnLine label={t('ex_retake')} style={{ fontSize: 13.5 }} onPress={() => { setError(null); up(s => { s.scan = { stage: 'pick' }; }); }} />
+          </View>
+        </View>
+      </InSec>
     );
   }
-
-  return (
-    <ScreenShell back title={t('ex_scan')}>
-      <Badge label={t('ex_preview')} />
-      {body}
-    </ScreenShell>
-  );
 }
 
 const exSt = StyleSheet.create({

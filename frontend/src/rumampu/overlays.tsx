@@ -154,9 +154,8 @@ function QuickMenu() {
       if (kind === 'in') { s.incMode = 'scan'; s.incScan = { stage: 'pick', rows: [] }; s.scanAuto = true; }
       else { s.exMode = 'scan'; s.scan = { stage: 'pick' }; s.scanAuto = true; }
     });
-    /* The expense scan lives on its own route; landing on the expenses screen
-       with exMode 'scan' used to show the manual body under a Scan tab. */
-    go(kind === 'in' ? 'income' : 'expscan');
+    /* Both land on their tabbed entry screen with the Scan tab selected. */
+    go(kind === 'in' ? 'income' : 'expenses');
   };
 
   const item = (label: string, icon: React.ReactNode, onPress: () => void, delay: number) => (
@@ -182,7 +181,7 @@ function QuickMenu() {
           }, 100),
           item(t('qk_expense'), <Ico name={QK_OUT_ICO} size={22} />, () => {
             up(s => { s.sheet = null; s.exMode = 'type'; });
-            go('expadd');
+            go('expenses');
           }, 50),
           item(t('qk_scan'), <Ico name="camera" size={22} />, () => up(s => { s.sheet = 'quick2'; }), 0),
         ]}
