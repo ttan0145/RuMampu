@@ -518,6 +518,7 @@ en: {
   fh_i: 'Where these numbers come from',
   fh_i1: 'The years are the middle price a home sold for in a place, divided by what a typical family in the state earns in a year. Both figures come from the government.',
   fh_i2: 'The middle price is what half the homes sold above and half below. A few expensive sales no longer pull it up, so it reads closer to what you would really pay.',
+  fh_i8: 'These are prices homes actually sold for in the district. They are not a valuation, and not an asking price for any one property.',
   fh_i3: 'This is the median multiple, the measure housing researchers in Malaysia use. The colours beside each place are its published scale.',
   fh_i4: 'A published scale reads:',
   fh_i5: 'Household income is published by state, not by district, so every place within a state is measured against the same income.',
@@ -637,6 +638,7 @@ en: {
   hc_from_b: 'Median sale prices come from published NAPIC transaction records for {w}. The typical family income for each state comes from government household income statistics ({y}). Years = the middle price a home sold for in a place, divided by a year of that state income. Both figures are published data, not RuMampu\u2019s estimates, and price is not a full affordability test.',
   hc_loading: 'Fetching published figures\u2026',
   hc_error: 'Could not load the published figures. Pull back and try again.',
+  hc_src_line: 'Prices: NAPIC. Household income: DOSM.',
   hc_checked: 'Figures last checked {d}. They are updated by hand, not automatically.',
   hc_t_all: 'All homes',
   hc_t_terr: 'Terrace house',
@@ -1662,6 +1664,9 @@ ms: {
   fh_i: 'Dari mana angka ini datang',
   fh_i1: 'Tahun tersebut ialah harga pertengahan rumah yang dijual di sesuatu tempat, dibahagikan dengan pendapatan setahun keluarga biasa di negeri itu. Kedua-dua angka daripada kerajaan.',
   fh_i2: 'Harga pertengahan bermaksud separuh rumah dijual lebih tinggi dan separuh lebih rendah. Beberapa jualan mahal tidak lagi menariknya ke atas, jadi ia lebih hampir dengan harga yang anda benar-benar bayar.',
+  /* TODO placeholder translation — drafted, not reviewed by a native speaker.
+     Replace before release. */
+  fh_i8: 'Ini ialah harga rumah yang benar-benar dijual di daerah tersebut. Ia bukan penilaian, dan bukan harga tawaran bagi mana-mana hartanah tertentu.',
   fh_i3: 'This is the median multiple, the measure housing researchers in Malaysia use. The colours beside each place are its published scale.',
   fh_i4: 'Skala yang diterbitkan berbunyi:',
   fh_i5: 'Pendapatan isi rumah diterbitkan mengikut negeri, bukan daerah, jadi setiap tempat dalam sesebuah negeri diukur dengan pendapatan yang sama.',
@@ -1780,6 +1785,9 @@ ms: {
   hc_from_b: 'Harga jualan penengah datang daripada rekod transaksi NAPIC yang diterbitkan untuk {w}. Pendapatan keluarga biasa setiap negeri datang daripada statistik pendapatan isi rumah kerajaan ({y}). Tahun = harga penengah rumah terjual di sesuatu tempat, dibahagi dengan setahun pendapatan negeri itu. Kedua-dua angka ialah data terbitan, bukan anggaran RuMampu, dan harga bukan ujian mampu-milik yang lengkap.',
   hc_loading: 'Mengambil angka terbitan\u2026',
   hc_error: 'Angka terbitan tidak dapat dimuatkan. Undur dan cuba lagi.',
+  /* TODO placeholder translation — drafted, not reviewed by a native speaker.
+     Replace before release. */
+  hc_src_line: 'Harga: NAPIC. Pendapatan isi rumah: DOSM.',
   hc_checked: 'Angka terakhir disemak {d}. Ia dikemas kini secara manual, bukan automatik.',
   hc_t_all: 'Semua rumah',
   hc_t_terr: 'Rumah teres',
@@ -2805,6 +2813,9 @@ zh: {
   fh_i: '这些数字从哪里来',
   fh_i1: '年数是该地区房屋成交的中位价格，除以该州一个普通家庭一年的收入。两项数据均来自政府。',
   fh_i2: '中位价格是指一半房屋成交价高于它、一半低于它。少数高价成交不再把它拉高，因此更接近你实际要付的价格。',
+  /* TODO placeholder translation — drafted, not reviewed by a native speaker.
+     Replace before release. */
+  fh_i8: '这些是该地区房屋实际成交的价格，并非估价，也不是任何一处房产的开价。',
   fh_i3: 'This is the median multiple, the measure housing researchers in Malaysia use. The colours beside each place are its published scale.',
   fh_i4: '已发布的尺度如下：',
   fh_i5: '住户收入按州公布，而非按县公布，因此同一州内每个地区都以相同收入衡量。',
@@ -2923,6 +2934,9 @@ zh: {
   hc_from_b: '中位成交价来自 NAPIC 公布的 {w} 交易记录。各州普通家庭收入来自政府住户收入统计（{y}）。年数 = 该地区房屋成交中位价，除以该州一年的收入。两者都是公开数据，不是 RuMampu 的估算，而且价格并不是完整的负担能力测试。',
   hc_loading: '正在获取公开数据\u2026',
   hc_error: '无法载入公开数据。请返回再试。',
+  /* TODO placeholder translation — drafted, not reviewed by a native speaker.
+     Replace before release. */
+  hc_src_line: '价格：NAPIC。住户收入：DOSM。',
   hc_checked: '数据最后核对于 {d}。由人手更新，非自动更新。',
   hc_t_all: '所有房屋',
   hc_t_terr: '排屋',

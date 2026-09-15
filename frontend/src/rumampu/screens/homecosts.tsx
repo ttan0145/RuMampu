@@ -4,7 +4,7 @@ import { useApp } from '../state';
 import { rm } from '../calc';
 import { HouseCostType } from '../../../types/housing';
 import { BODY_FONT, C, DISP_FONT } from '../theme';
-import { BodyS } from '../ui';
+import { BodyS, Prov } from '../ui';
 import { ScreenShell } from './shell';
 import { SheetFrame } from '../overlays';
 
@@ -121,12 +121,22 @@ export function HomeCostsScreen() {
                   {r.years == null ? '—' : t('fh_yrs', { n: r.years.toFixed(1) })}
                 </Text>
               </View>
-              <View style={st.bar}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={[st.bar, { flex: 1 }]}>
+                  {r.years != null ? (
+                    <View style={{
+                      width: `${Math.max(4, Math.min(100, Math.round(r.years / maxYears * 100)))}%`,
+                      height: '100%', borderRadius: 4, backgroundColor: FH_BANDC[fhBand(r.years)],
+                    }} />
+                  ) : null}
+                </View>
                 {r.years != null ? (
-                  <View style={{
-                    width: `${Math.max(4, Math.min(100, Math.round(r.years / maxYears * 100)))}%`,
-                    height: '100%', borderRadius: 4, backgroundColor: FH_BANDC[fhBand(r.years)],
-                  }} />
+                  <Text style={{
+                    fontFamily: BODY_FONT, fontSize: 10.5, lineHeight: 14,
+                    color: FH_BANDC[fhBand(r.years)], flexShrink: 0,
+                  }} numberOfLines={1}>
+                    {t(FH_BAND_KEYS[fhBand(r.years)][1])}
+                  </Text>
                 ) : null}
               </View>
               <Text style={st.rowSub}>
@@ -137,6 +147,10 @@ export function HomeCostsScreen() {
           {!rows.length ? <BodyS muted style={{ padding: 14 }}>{t('fh_none')}</BodyS> : null}
         </View>
       )}
+      <View style={{ gap: 4 }}>
+        <Prov p="official" />
+        <BodyS muted style={{ fontSize: 11.5 }}>{t('hc_src_line')}</BodyS>
+      </View>
       <BodyS muted style={{ fontSize: 11.5 }}>{t('hc_checked', { d: HC_LAST_CHECKED })}</BodyS>
       <Pressable onPress={() => setPick('info')} style={st.infoBtn}>
         <View style={st.infoIc}><Text style={{ fontFamily: DISP_FONT, fontSize: 11, color: C.ink64 }}>i</Text></View>
@@ -184,7 +198,9 @@ function InfoSheet({ t, stateName, income, onClose }: {
         <BodyS>{t('fh_not')}</BodyS>
         <BodyS>{t('fh_earn', { s: stateName, m: income.toLocaleString('en-MY') })}</BodyS>
         <BodyS>{t('fh_basis')}</BodyS>
-        {['fh_i1', 'fh_i7', 'fh_i2', 'fh_i5', 'fh_i6'].map(k => <BodyS key={k}>{t(k)}</BodyS>)}
+        {['fh_i1', 'fh_i7', 'fh_i2'].map(k => <BodyS key={k}>{t(k)}</BodyS>)}
+        <BodyS>{t('fh_i8')}</BodyS>
+        {['fh_i5', 'fh_i6'].map(k => <BodyS key={k}>{t(k)}</BodyS>)}
         <BodyS muted>{t('fh_i4')}</BodyS>
         <View style={st.scaleCard}>
           {FH_BAND_KEYS.map(([rk, bk], i) => (
