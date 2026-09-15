@@ -75,16 +75,23 @@ function Root() {
   );
 }
 
-/* On wide web viewports, show the app inside a phone frame like the prototype does. */
+/* The two branches must stay structurally identical. Returning a different
+   element tree either side of the threshold makes React remount the whole
+   subtree on resize or zoom, wiping local state in every screen below. */
 function Framed({ children }: { children: React.ReactNode }) {
   const { width, height } = useWindowDimensions();
-  if (Platform.OS !== 'web' || width <= 430) return <>{children}</>;
+  const framed = Platform.OS === 'web' && width > 430;
   return (
-    <View style={{ flex: 1, backgroundColor: C.frame, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={{
-        width: 390, height: Math.min(844, height),
-        borderRadius: 28, overflow: 'hidden', backgroundColor: C.paper,
-      }}>
+    <View style={
+      framed
+        ? { flex: 1, backgroundColor: C.frame, alignItems: 'center', justifyContent: 'center' }
+        : { flex: 1 }
+    }>
+      <View style={
+        framed
+          ? { width: 390, height: Math.min(844, height), borderRadius: 28, overflow: 'hidden', backgroundColor: C.paper }
+          : { flex: 1, width: '100%' }
+      }>
         {children}
       </View>
     </View>

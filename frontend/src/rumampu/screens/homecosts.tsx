@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useApp } from '../state';
 import { rm } from '../calc';
 import { HouseCostType } from '../../../types/housing';
@@ -163,6 +163,13 @@ function InfoSheet({ t, stateName, income, onClose }: {
   t: (k: string, v?: Record<string, string | number>) => string;
   stateName: string; income: number; onClose: () => void;
 }) {
+  const { height } = useWindowDimensions();
+  /* SheetFrame's maxHeight: '92%' does not resolve, because its parent is
+     content-sized and percentages need a definite parent height. Bound the
+     scroll area explicitly instead. The reserve covers the peek art above the
+     sheet, the header row, the sheet padding and the safe-area inset. */
+  const maxBody = Math.max(220, Math.round(height * 0.72) - 180);
+
   return (
     <SheetFrame pose="curious" onClose={onClose} scroll>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
@@ -170,7 +177,7 @@ function InfoSheet({ t, stateName, income, onClose }: {
         <Pressable onPress={onClose} hitSlop={10}><Text style={{ fontSize: 18, color: C.ink }}>✕</Text></Pressable>
       </View>
       <ScrollView
-        style={{ marginTop: 8, flexShrink: 1 }}
+        style={{ marginTop: 8, maxHeight: maxBody, flexShrink: 1 }}
         contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
         showsVerticalScrollIndicator
       >
