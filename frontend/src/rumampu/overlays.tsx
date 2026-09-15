@@ -11,6 +11,7 @@ import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from './theme';
 import { Btn, BtnLine, BodyS, EditList, NumInput, PROV_G } from './ui';
 import { Ico, Logo } from './svgs';
 import { Ruma } from './ruma-view';
+import { PEEK_W, peekArt } from './ruma-peek';
 import { IsoHouse, IsoIsland } from './isosvg';
 import { ISO_TIERS, villagePlay } from './village';
 import { logIt } from './log';
@@ -20,60 +21,63 @@ import { deleteSavedHousingTest, updateSavedHousingTest } from '../../services/h
 
 /* ---------- bottom sheets ---------- */
 
-function SheetFrame({ children, onClose, scroll = false }: {
-  children: React.ReactNode; onClose: () => void; scroll?: boolean;
+export function SheetFrame({ children, onClose, scroll = false, pose }: {
+  children: React.ReactNode; onClose: () => void; scroll?: boolean; pose?: string;
 }) {
   const insets = useSafeAreaInsets();
+  /* v24 peekWrap: Ruma's flat peek body sits behind the sheet's top edge at the
+     right, and the mitts layer over it (mascot handover s4). */
+  const w = PEEK_W;
+  const hh = w * 110 / 144;
+  const below = hh * 18 / 110 + 1;
   return (
     <Modal transparent animationType="none" visible onRequestClose={onClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
           <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
         </Pressable>
-        <View style={[
-          sheetSt.sheet,
-          { paddingBottom: 20 + insets.bottom },
-          scroll && { maxHeight: '92%' },
-          Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null,
-        ]}>
-          {children}
+        <View style={Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : { width: '100%' }}>
+          {pose ? (
+            <View style={{ alignItems: 'flex-end', paddingRight: 20, marginBottom: -below, zIndex: 1 }} pointerEvents="none">
+              <SvgXml xml={peekArt(pose, 'body', w)} width={w} height={hh} />
+            </View>
+          ) : null}
+          <View style={[
+            sheetSt.sheet,
+            { paddingBottom: 20 + insets.bottom, zIndex: 2 },
+            scroll && { maxHeight: '92%' },
+          ]}>
+            {children}
+          </View>
+          {pose ? (
+            <View pointerEvents="none" style={{ position: 'absolute', top: 0, right: 20, zIndex: 3 }}>
+              <SvgXml xml={peekArt(pose, 'mitts', w)} width={w} height={hh} />
+            </View>
+          ) : null}
         </View>
       </View>
     </Modal>
   );
 }
 
-/* peekSheet — Ruma peeks over the top edge of the sheet. */
+/* peekSheet — title row with a close ✕, the body, then Done unless the caller
+   brings its own footer. */
 function PeekSheet({ pose, title, body, onClose, doneLabel }: {
   pose: string; title: string; body: string; onClose: () => void; doneLabel: string;
 }) {
-  const insets = useSafeAreaInsets();
   return (
-    <Modal transparent animationType="none" visible onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
-          <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
+    <SheetFrame pose={pose} onClose={onClose}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <SheetH3 noMargin>{title}</SheetH3>
+        <Pressable onPress={onClose} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10 }}>
+          <Text style={{ fontSize: 18, color: C.ink }}>✕</Text>
         </Pressable>
-        <View style={{ alignItems: 'center', marginBottom: -30, zIndex: 2 }}>
-          <Ruma w={96} pose={pose} float={false} />
-        </View>
-        <View style={[
-          sheetSt.sheet, { paddingBottom: 20 + insets.bottom, paddingTop: 34 },
-          Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null,
-        ]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <SheetH3 noMargin>{title}</SheetH3>
-            <Pressable onPress={onClose} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10 }}>
-              <Text style={{ fontSize: 18, color: C.ink }}>✕</Text>
-            </Pressable>
-          </View>
-          <BodyS style={{ marginTop: 4 }}>{body}</BodyS>
-          <View style={{ marginTop: 16 }}>
-            <Btn label={doneLabel} onPress={onClose} />
-          </View>
-        </View>
       </View>
-    </Modal>
+      <BodyS style={{ marginTop: 4 }}>{body}</BodyS>
+      <View style={{ marginTop: 16 }}>
+        <Btn label={doneLabel} onPress={onClose} />
+      </View>
+    </SheetFrame>
   );
 }
 
@@ -279,7 +283,7 @@ function VillageSheet() {
   const isleW = Math.min(width, 390) - 60;
 
   return (
-    <SheetFrame onClose={close} scroll>
+    <SheetFrame pose="curious" onClose={close} scroll>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <View style={{ flex: 1 }}>
           <SheetH3 noMargin>{t('vl_title')}</SheetH3>
@@ -406,7 +410,7 @@ export function SheetHost() {
   // 中文：US8.3 的语言选择在这个底部弹层中完成。它展示支持的语言，并把选择写回当前应用状态。
   if (sheet === 'lang') {
     return (
-      <SheetFrame onClose={close}>
+      <SheetFrame pose="curious" onClose={close}>
         <SheetH3>{t('lang_pick')}</SheetH3>
         {(['en', 'ms', 'zh'] as Lang[]).map(l => (
           <Opt key={l} label={STRINGS[l].langname} on={S.lang === l}
@@ -426,18 +430,7 @@ export function SheetHost() {
       .map(r => ({ r, sw: commitSwap(S.data, r.y * 12 + r.m) }))
       .filter(({ sw }) => sw != null);
     return (
-      <Modal transparent animationType="none" visible onRequestClose={close}>
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={close}>
-            <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
-          </Pressable>
-          <View style={{ alignItems: 'center', marginBottom: -30, zIndex: 2 }}>
-            <Ruma w={96} pose="count" float={false} />
-          </View>
-          <View style={[
-            sheetSt.sheet, { paddingBottom: 26, paddingTop: 34 },
-            Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null,
-          ]}>
+      <SheetFrame pose="counting" onClose={close}>
             <SheetH3>{t('cm_total')}</SheetH3>
             <View style={{ gap: 8, marginTop: 6 }}>
               {months.map(({ r, sw }) => {
@@ -475,27 +468,14 @@ export function SheetHost() {
             <View style={{ marginTop: 14 }}>
               <Btn label={t('done')} onPress={close} />
             </View>
-          </View>
-        </View>
-      </Modal>
+      </SheetFrame>
     );
   }
 
   /* v24 guestsure: continuing as a guest is confirmed, with what it means. */
   if (sheet === 'guestsure') {
     return (
-      <Modal transparent animationType="none" visible onRequestClose={close}>
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={close}>
-            <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
-          </Pressable>
-          <View style={{ alignItems: 'center', marginBottom: -30, zIndex: 2 }}>
-            <Ruma w={96} pose="curious" float={false} />
-          </View>
-          <View style={[
-            sheetSt.sheet, { paddingBottom: 26, paddingTop: 34 },
-            Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null,
-          ]}>
+      <SheetFrame pose="curious" onClose={close}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <SheetH3 noMargin>{t('gs_title')}</SheetH3>
               <Pressable onPress={close} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10 }}>
@@ -510,9 +490,7 @@ export function SheetHost() {
               style={({ pressed }) => [{ minHeight: 38, alignSelf: 'center', justifyContent: 'center', marginTop: 8 }, pressed && { opacity: 0.7 }]}>
               <Text style={{ fontFamily: SEMI_FONT, fontSize: 14, color: C.ink, textDecorationLine: 'underline' }}>{t('gs_not')}</Text>
             </Pressable>
-          </View>
-        </View>
-      </Modal>
+      </SheetFrame>
     );
   }
 
@@ -528,18 +506,7 @@ export function SheetHost() {
       </View>
     );
     return (
-      <Modal transparent animationType="none" visible onRequestClose={close}>
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={close}>
-            <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
-          </Pressable>
-          <View style={{ alignItems: 'center', marginBottom: -30, zIndex: 2 }}>
-            <Ruma w={96} pose="count" float={false} />
-          </View>
-          <View style={[
-            sheetSt.sheet, { paddingBottom: 26, paddingTop: 34 },
-            Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null,
-          ]}>
+      <SheetFrame pose="counting" onClose={close}>
             <SheetH3>{t('ph_title')}</SheetH3>
             {kvRow(t('ph_plan'), planPart)}
             {kvRow(t('ph_moved'), moved)}
@@ -551,9 +518,7 @@ export function SheetHost() {
             <View style={{ marginTop: 14 }}>
               <Btn label={t('done')} onPress={close} />
             </View>
-          </View>
-        </View>
-      </Modal>
+      </SheetFrame>
     );
   }
 
@@ -564,18 +529,7 @@ export function SheetHost() {
     const ks = monthKeysOf(arrs);
     const cur = pickMonth(inc ? S.incMonth : S.exMonth, arrs).key;
     return (
-      <Modal transparent animationType="none" visible onRequestClose={close}>
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={close}>
-            <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
-          </Pressable>
-          <View style={{ alignItems: 'center', marginBottom: -30, zIndex: 2 }}>
-            <Ruma w={96} pose="count" float={false} />
-          </View>
-          <View style={[
-            sheetSt.sheet, { paddingBottom: 26, paddingTop: 34 },
-            Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null,
-          ]}>
+      <SheetFrame pose="counting" onClose={close}>
             <SheetH3>{t('mf_title')}</SheetH3>
             {ks.map((k, i) => (
               <Pressable key={k}
@@ -592,16 +546,14 @@ export function SheetHost() {
                 {k === cur ? <Text style={{ fontSize: 15, color: C.brand }}>✓</Text> : null}
               </Pressable>
             ))}
-          </View>
-        </View>
-      </Modal>
+      </SheetFrame>
     );
   }
 
   if (sheet.startsWith('prov:')) {
     const p = sheet.slice(5);
     return (
-      <SheetFrame onClose={close}>
+      <SheetFrame pose="curious" onClose={close}>
         <SheetH3>{PROV_G[p]} {t('prov_' + p)}</SheetH3>
         <BodyS>{t('provf_' + p)}</BodyS>
         <View style={{ marginTop: 16 }}>
@@ -612,24 +564,13 @@ export function SheetHost() {
   }
 
   /* v22 peek sheets — Ruma leans over the top edge. */
-  if (sheet === 'plinfo') return <PeekSheet pose="happy" title={t('pl_title')} body={t('pl_note')} onClose={close} doneLabel={t('done')} />;
-  if (sheet === 'potadd') return <PeekSheet pose="count" title={t('sp_add_t')} body={t('sp_add_b')} onClose={close} doneLabel={t('done')} />;
-  if (sheet === 'mailhow') return <PeekSheet pose="happy" title={t('mh_title')} body={t('mh_body')} onClose={close} doneLabel={t('done')} />;
+  if (sheet === 'plinfo') return <PeekSheet pose="steady" title={t('pl_title')} body={t('pl_note')} onClose={close} doneLabel={t('done')} />;
+  if (sheet === 'potadd') return <PeekSheet pose="counting" title={t('sp_add_t')} body={t('sp_add_b')} onClose={close} doneLabel={t('done')} />;
+  if (sheet === 'mailhow') return <PeekSheet pose="listening" title={t('mh_title')} body={t('mh_body')} onClose={close} doneLabel={t('done')} />;
   if (sheet === 'cardinfo' && S.cardInfo) {
     const ci = S.cardInfo;
     return (
-      <Modal transparent animationType="none" visible onRequestClose={close}>
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={close}>
-            <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
-          </Pressable>
-          <View style={{ alignItems: 'center', marginBottom: -30, zIndex: 2 }}>
-            <Ruma w={96} pose="curious" float={false} />
-          </View>
-          <View style={[
-            sheetSt.sheet, { paddingBottom: 26, paddingTop: 34 },
-            Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null,
-          ]}>
+      <SheetFrame pose="curious" onClose={close}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <SheetH3 noMargin>{t(ci.t)}</SheetH3>
               <Pressable onPress={close} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10 }}>
@@ -654,9 +595,7 @@ export function SheetHost() {
             <View style={{ marginTop: 14 }}>
               <Btn label={t('done')} onPress={close} />
             </View>
-          </View>
-        </View>
-      </Modal>
+      </SheetFrame>
     );
   }
 
@@ -677,7 +616,7 @@ export function SheetHost() {
       });
     };
     return (
-      <SheetFrame onClose={close}>
+      <SheetFrame pose="pleased" onClose={close}>
         <SheetH3>{t('k_own')}</SheetH3>
         <View style={{ gap: 8 }}>
           <BodyS muted>{t('k_own_h')}</BodyS>
@@ -692,7 +631,7 @@ export function SheetHost() {
   if (sheet === 'loan') {
     const h = S.data.house;
     return (
-      <SheetFrame onClose={close}>
+      <SheetFrame pose="steady" onClose={close}>
         <SheetH3>{t('tx_loan_t')}</SheetH3>
         <View style={{ gap: 8 }}>
           <BodyS muted>{t('th_rate')}</BodyS>
@@ -709,7 +648,7 @@ export function SheetHost() {
   /* v22: other monthly home costs behind the "other costs" row. */
   if (sheet === 'hcosts') {
     return (
-      <SheetFrame onClose={close} scroll>
+      <SheetFrame pose="counting" onClose={close} scroll>
         <SheetH3>{t('tx_costs_t')}</SheetH3>
         <View style={{ gap: 8 }}>
           <BodyS muted>{t('tx_costs_h')}</BodyS>
@@ -732,7 +671,7 @@ export function SheetHost() {
       toast(t('ex_limit_saved'));
     };
     return (
-      <SheetFrame onClose={close}>
+      <SheetFrame pose="steady" onClose={close}>
         <SheetH3>{t('ex_limit_title')}</SheetH3>
         <View style={{ gap: 8 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -751,7 +690,7 @@ export function SheetHost() {
   /* v22: name a kept test. */
   if (sheet === 'savename') {
     return (
-      <SheetFrame onClose={close}>
+      <SheetFrame pose="pleased" onClose={close}>
         <SheetH3>{t('sv_name_t')}</SheetH3>
         <View style={{ gap: 8 }}>
           <BodyS muted>{t('sv_name_l')}</BodyS>
@@ -786,7 +725,7 @@ export function SheetHost() {
   if (sheet === 'svedit' && S.keptTests[S.svIdx]) {
     const k = S.keptTests[S.svIdx];
     return (
-      <SheetFrame onClose={close}>
+      <SheetFrame pose="steady" onClose={close}>
         <SheetH3>{t('sv_edit_t')}</SheetH3>
         <View style={{ gap: 8 }}>
           <BodyS muted>{t('sv_name_l')}</BodyS>
@@ -879,7 +818,7 @@ export function SheetHost() {
       }
     };
     return (
-      <SheetFrame onClose={close}>
+      <SheetFrame pose="counting" onClose={close}>
         <SheetH3>{t('edit')} {t('money_income')}</SheetH3>
         {(() => {
           /* v24 ie_made: when the entry was recorded, distinct from the date
@@ -1007,7 +946,7 @@ export function SheetHost() {
       }
     };
     return (
-      <SheetFrame onClose={close}>
+      <SheetFrame pose="counting" onClose={close}>
         <SheetH3>{editId ? `${t('edit')} ${t('inc_month_total')}` : t('inc_past')}</SheetH3>
         <View style={{ gap: 8 }}>
           <BodyS muted>{t('inc_past_hint')}</BodyS>
@@ -1055,7 +994,7 @@ export function SheetHost() {
       }
     };
     return (
-      <SheetFrame onClose={close}>
+      <SheetFrame pose="pleased" onClose={close}>
         <SheetH3>{title}</SheetH3>
         <View style={{ gap: 8 }}>
           <BodyS muted>{t(sheet === 'wcown' ? 'wc_name' : sheet === 'xcown' ? 'xc_name' : 'src_name')}</BodyS>

@@ -13,6 +13,7 @@ import {
 import { BODY_FONT, C, DISP_FONT } from '../theme';
 import { Waterline } from '../charts';
 import { ScreenShell } from './shell';
+import { SheetFrame } from '../overlays';
 
 /* v22: prepare rows live inside the House tab's "Get ready" segment. */
 export function PrepareBody() {
@@ -211,26 +212,22 @@ export function UpfrontScreen() {
         {S.ufReno ? <Row label={t('uf_reno')} kind="user" info={<CardI t="uf_reno" b={['uf_reno_h']} p="user" />}><Input id="reno" /></Row> : null}
       </Stage>
       {pick ? (
-        <Modal transparent animationType="none" visible onRequestClose={() => setPick(false)}>
-          <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={() => setPick(false)}>
-              <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
-            </Pressable>
-            <View style={[pr.sheet, Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null]}>
-              <Text style={{ fontFamily: DISP_FONT, fontSize: 19, color: C.ink }}>{t('uf_pick_t')}</Text>
-              <BodyS muted style={{ marginTop: 4 }}>{t('uf_pick_h')}</BodyS>
-              <View style={{ marginTop: 10, gap: 4 }}>
-                {testsWithPrice.map(({ k, i }) => (
-                  <Pressable key={i} onPress={() => { up(s => { s.ufTest = i; }); setPick(false); toast(t('saved')); }}
-                    style={[pr.opt, S.ufTest === i && { backgroundColor: C.card }]}>
-                    <P style={{ fontSize: 15 }}>{k.name || rm(Number(k.propertyPrice) || 0)}</P>
-                    <BodyS muted>{rm(Number(k.propertyPrice) || 0)}</BodyS>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
+        <SheetFrame pose="curious" onClose={() => setPick(false)}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 19, color: C.ink }}>{t('uf_pick_t')}</Text>
+            <Pressable onPress={() => setPick(false)} hitSlop={10}><Text style={{ fontSize: 18, color: C.ink }}>✕</Text></Pressable>
           </View>
-        </Modal>
+          <BodyS muted style={{ marginTop: 4 }}>{t('uf_pick_h')}</BodyS>
+          <View style={{ marginTop: 10, gap: 4 }}>
+            {testsWithPrice.map(({ k, i }) => (
+              <Pressable key={i} onPress={() => { up(s => { s.ufTest = i; }); setPick(false); toast(t('saved')); }}
+                style={[pr.opt, S.ufTest === i && { backgroundColor: C.card }]}>
+                <P style={{ fontSize: 15 }}>{k.name || rm(Number(k.propertyPrice) || 0)}</P>
+                <BodyS muted>{rm(Number(k.propertyPrice) || 0)}</BodyS>
+              </Pressable>
+            ))}
+          </View>
+        </SheetFrame>
       ) : null}
     </ScreenShell>
   );

@@ -7,6 +7,7 @@ import { HouseCostType } from '../../../types/housing';
 import { BODY_FONT, C, DISP_FONT } from '../theme';
 import { BodyS } from '../ui';
 import { ScreenShell } from './shell';
+import { SheetFrame } from '../overlays';
 
 /* US11 — What homes cost here (Figma B24). Published NAPIC medians per
    district, expressed as years of a typical family's income in that state.
@@ -29,35 +30,24 @@ function PickSheet({ title, options, value, onPick, onClose }: {
   onPick: (key: string) => void;
   onClose: () => void;
 }) {
-  const insets = useSafeAreaInsets();
   return (
-    <Modal transparent animationType="none" visible onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
-          <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
-        </Pressable>
-        <View style={[
-          st.sheet, { paddingBottom: 20 + insets.bottom },
-          Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null,
-        ]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={{ fontFamily: DISP_FONT, fontSize: 19, color: C.ink }}>{title}</Text>
-            <Pressable onPress={onClose} hitSlop={10}><Text style={{ fontSize: 18, color: C.ink }}>✕</Text></Pressable>
-          </View>
-          <ScrollView style={{ maxHeight: 420, marginTop: 8 }}>
-            {options.map(o => (
-              <Pressable key={o.key} onPress={() => { onPick(o.key); onClose(); }}
-                style={[st.opt, o.key === value && { backgroundColor: C.card }]}>
-                <Text style={{ fontFamily: BODY_FONT, fontSize: 17, color: C.ink, fontWeight: o.key === value ? '600' : '400' }}>
-                  {o.label}
-                </Text>
-                {o.key === value ? <Text style={{ fontSize: 17, color: C.brand }}>✓</Text> : null}
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
+    <SheetFrame pose="counting" onClose={onClose}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 19, color: C.ink }}>{title}</Text>
+        <Pressable onPress={onClose} hitSlop={10}><Text style={{ fontSize: 18, color: C.ink }}>✕</Text></Pressable>
       </View>
-    </Modal>
+      <ScrollView style={{ maxHeight: 420, marginTop: 8 }}>
+        {options.map(o => (
+          <Pressable key={o.key} onPress={() => { onPick(o.key); onClose(); }}
+            style={[st.opt, o.key === value && { backgroundColor: C.card }]}>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 17, color: C.ink, fontWeight: o.key === value ? '600' : '400' }}>
+              {o.label}
+            </Text>
+            {o.key === value ? <Text style={{ fontSize: 17, color: C.brand }}>✓</Text> : null}
+          </Pressable>
+        ))}
+      </ScrollView>
+    </SheetFrame>
   );
 }
 
@@ -168,17 +158,8 @@ function InfoSheet({ t, stateName, income, onClose }: {
   t: (k: string, v?: Record<string, string | number>) => string;
   stateName: string; income: number; onClose: () => void;
 }) {
-  const insets = useSafeAreaInsets();
   return (
-    <Modal transparent animationType="none" visible onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
-          <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
-        </Pressable>
-        <View style={[
-          st.sheet, { paddingBottom: 20 + insets.bottom, maxHeight: '88%' },
-          Platform.OS === 'web' ? { width: '100%', maxWidth: 390, alignSelf: 'center' } : null,
-        ]}>
+    <SheetFrame pose="curious" onClose={onClose} scroll>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={{ fontFamily: DISP_FONT, fontSize: 19, color: C.ink, flexShrink: 1 }}>{t('fh_i')}</Text>
             <Pressable onPress={onClose} hitSlop={10}><Text style={{ fontSize: 18, color: C.ink }}>✕</Text></Pressable>
@@ -205,9 +186,7 @@ function InfoSheet({ t, stateName, income, onClose }: {
             <BodyS muted style={{ fontSize: 11.5 }}>{t('fh_src4', { s: stateName })}</BodyS>
             <BodyS muted style={{ fontSize: 11.5 }}>{t('fh_opened')}</BodyS>
           </ScrollView>
-        </View>
-      </View>
-    </Modal>
+    </SheetFrame>
   );
 }
 
