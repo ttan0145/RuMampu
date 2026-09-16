@@ -73,17 +73,53 @@ export function villagePlaceQueued(s: AppState): void {
   }
 }
 
+/* Un-saving a day takes one Pondok back. When every Pondok has already been
+   merged (two saved days built a Kampung house), the smallest house on the
+   plot is broken back into the Pondok-equivalents it was built from, minus the
+   one taken back: a Kampung leaves a Pondok, a Terrace leaves a Kampung and a
+   Pondok, a Kondo leaves a Terrace, a Kampung and a Pondok. Houses that do
+   not fit on the plot wait in the queue as Pondoks. Without this the merged
+   house stayed and the next save spawned an extra Pondok, so the plot showed
+   more saved days than the plan. An Istana in the collection is only opened
+   when the plot is empty. */
 export function villageRemove(s: AppState): void {
   const v = villageEnsure(s);
+  v.pop = [];
   if (v.queued > 0) {
     v.queued--;
     v.built = Math.max(0, v.built - 1);
-    v.pop = [];
     return;
   }
-  const i = v.cells.indexOf(1);
-  if (i >= 0) { v.cells[i] = 0; v.built = Math.max(0, v.built - 1); }
-  v.pop = [];
+  const pondok = v.cells.indexOf(1);
+  if (pondok >= 0) {
+    v.cells[pondok] = 0;
+    v.built = Math.max(0, v.built - 1);
+    return;
+  }
+  let tier = 0, at = -1;
+  v.cells.forEach((c, i) => { if (c > 0 && (tier === 0 || c < tier)) { tier = c; at = i; } });
+  if (at >= 0) {
+    v.cells[at] = 0;
+  } else if (v.collection > 0) {
+    v.collection--;
+    tier = ISO_TIERS.length;
+  } else {
+    return;
+  }
+  v.built = Math.max(0, v.built - 1);
+  /* A tier-t house is 2^(t-1) Pondoks; one fewer is exactly one house of each
+     lower tier. Place the biggest first so the plot keeps its shape. */
+  let waiting = 0;
+  for (let t = tier - 1; t >= 1; t--) {
+    const empty = v.cells.indexOf(0);
+    if (empty >= 0) {
+      v.cells[empty] = t;
+      v.pop.push(empty);
+    } else {
+      waiting += Math.pow(2, t - 1);
+    }
+  }
+  v.queued += waiting;
 }
 
 /* Slide + merge in one direction; returns the best merged tier, or -1 if nothing moved. */
