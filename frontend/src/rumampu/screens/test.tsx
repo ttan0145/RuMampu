@@ -15,6 +15,7 @@ import {
 import { Image, Pressable, StyleSheet, Text, TextInput, View, type DimensionValue } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { useApp } from '../state';
+import { useFreshHousingTest } from '../useFreshHousingTest';
 import { logIt } from '../log';
 import { monthsAgg, nf, rm } from '../calc';
 import { upfrontNeed } from '../fees';
@@ -580,6 +581,8 @@ export function ResultScreen() {
       .catch(() => undefined);
     return () => { active = false; };
   }, [scenarioId, S.tryPay, shock]);
+
+  useFreshHousingTest();
 
   if (!base) return <ScreenShell back title={t('rs_title')}><View /></ScreenShell>;
   const result = (shock && shocked) ? shocked : base;

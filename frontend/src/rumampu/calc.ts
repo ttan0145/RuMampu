@@ -163,6 +163,19 @@ export function actualMonths(data: AppData): MonthRow[] {
   return monthsAgg(data).filter(r => { const e = em.get(r.y * 12 + r.m); return e && e.days.size >= EXP_FULL_DAYS; });
 }
 
+/* A housing test result is a snapshot of the months it was run against. Once
+   the record gains or loses a month (a past month added after the test, an
+   entry deleted), the cached verdict no longer describes the record, so the
+   screens that show it re-run the same scenario instead of repeating the old
+   numbers. Compared by month keys, not counts, so a swapped month counts too. */
+export function housingResultStale(data: AppData, result: { months: { year: number; month: number }[] } | null): boolean {
+  if (!result) return false;
+  /* MonthRow.m is 0-based; the backend's month is 1 to 12. */
+  const recorded = monthsAgg(data).map(r => `${r.y}-${r.m + 1}`).sort().join(',');
+  const tested = result.months.map(r => `${r.year}-${r.month}`).sort().join(',');
+  return recorded !== tested;
+}
+
 export function recSpan(data: AppData): { from: MonthRow; to: MonthRow; list: MonthRow[] } | null {
   const a = monthsAgg(data);
   if (!a.length) return null;

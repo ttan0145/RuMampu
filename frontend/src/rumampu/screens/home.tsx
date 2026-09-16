@@ -3,7 +3,8 @@ import { Animated, Easing, Pressable, StyleSheet, Text, View, useWindowDimension
 import { SvgXml } from 'react-native-svg';
 import { getHousingTestResult } from '../../../services/housingSession';
 import { Route, useApp } from '../state';
-import { commitTotal, expByMonth, monthsAgg, recSpan, rm } from '../calc';
+import { useFreshHousingTest } from '../useFreshHousingTest';
+import { commitTotal, expByMonth, housingResultStale, monthsAgg, recSpan, rm } from '../calc';
 import {
   planEnsure, planPhase, planResolveTarget, planSaved, planToggle, syncBufferTarget, upfrontNeed,
 } from '../plan';
@@ -315,21 +316,26 @@ function HomeCards() {
 /* .htrow — the slim house-test row under the balance cards. */
 function HouseTestRow() {
   const { S, t, monthName, go } = useApp();
+  const refreshing = useFreshHousingTest();
   const sp = recSpan(S.data);
   if (!sp) return null;
   const n = sp.list.length;
   const housingResult = getHousingTestResult();
   const tested = S.testRan && housingResult;
-  const s = tested ? housingResult.short_month_count : 0;
-  const g = tested ? housingResult.largest_gap : 0;
-  const nn = tested ? (housingResult.tested_months ?? n) : n;
-  const title = tested
+  /* A verdict from before the record changed (a past month added after the
+     test) is not repeated as if it still held: the row shows the record and
+     the Re-test door, and the result screen re-runs the scenario. */
+  const fresh = tested && !housingResultStale(S.data, housingResult);
+  const s = fresh ? housingResult.short_month_count : 0;
+  const g = fresh ? housingResult.largest_gap : 0;
+  const nn = fresh ? (housingResult.tested_months ?? n) : n;
+  const title = fresh
     ? (s ? t('ht_short', { s, n: nn }) : t('ht_ok', { n: nn }))
     : t('ht_title');
-  const sub = tested && s
+  const sub = fresh && s
     ? t('ht_gap', { g: rm(g) })
     : t('ht_rec', { n, a: monthName(sp.from.m), b: monthName(sp.to.m) });
-  const warn = tested ? s > 0 : n < 4;
+  const warn = fresh ? s > 0 : n < 4;
   return (
     <Pressable onPress={() => go(tested ? 'result' : 'house')} style={st.htrow}>
       <View style={st.htrowIc}><SvgXml xml={HT_SVG} width={22} height={22} /></View>
@@ -337,7 +343,7 @@ function HouseTestRow() {
         <Text style={{ fontFamily: DISP_FONT, fontSize: 14.5, lineHeight: 18, color: C.ink }}>{title}</Text>
         <Text style={{ fontFamily: BODY_FONT, fontSize: 12, lineHeight: 15, color: warn ? '#B7791F' : C.ink64, marginTop: 2 }}>{sub}</Text>
       </View>
-      <View style={st.plbtn}>
+      <View style={[st.plbtn, refreshing && { opacity: 0.6 }]}>
         <Text style={st.plbtnTxt}>{tested ? t('ht_rego') : t('ht_go')}</Text>
       </View>
     </Pressable>
