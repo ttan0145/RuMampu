@@ -794,7 +794,9 @@ export function GetToKnow() {
        comma, so "3,000" must mean three thousand, not three (parseFloat stops
        at the comma). Thousands separators and spaces are not part of the number. */
     const amount = save ? (parseFloat(String(amt).replace(/[,\s]/g, '')) || 0) : 0;
-    const showLoading = S.guest && step >= 2;
+    // Show the loading/progress screen for both guests and registered users
+    // when they leave the final onboarding step.
+    const showLoading = step >= 2;
     setFinishError('');
     if (showLoading) {
       setFinishing(true);
@@ -804,7 +806,7 @@ export function GetToKnow() {
 
     // Keep the user's setup choices in local state immediately, but do not mark
     // onboarding as complete until the final save attempt has finished. This
-    // allows the guest loading screen to remain visible while the request runs.
+    // allows the loading screen to remain visible while the request runs.
     up(s => {
       if (save) s.lastMonth = amt;
       s.sheet = null;
@@ -880,7 +882,7 @@ export function GetToKnow() {
       }
     }
 
-    // Give the guest a visible transition instead of instantly jumping from
+    // Give the user a visible transition instead of instantly jumping from
     // the income question to Home after the network request completes.
     if (showLoading) {
       await new Promise(resolve => setTimeout(resolve, 350));
