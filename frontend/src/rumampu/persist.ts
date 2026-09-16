@@ -148,6 +148,4 @@ export function hydrateAccountState(s: AppState, remote: Record<string, unknown>
     data: { cashOnHand: cash },
   };
   hydrate(s, JSON.stringify(payload));
-  const preferredSourceId = remote.preferred_income_source_id;
-  s.preferredIncomeSourceId = preferredSourceId == null ? null : String(preferredSourceId);
 }

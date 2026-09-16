@@ -236,7 +236,6 @@ export interface ApiAuthState {
   kept_tests: unknown[];
   onboarding_completed: boolean;
   preferred_language: 'en' | 'ms' | 'zh' | '';
-  preferred_income_source_id: number | null;
   last_record_exported_at: string | null;
 }
 
@@ -540,17 +539,6 @@ export function savePreferredLanguage(preferred_language: 'en' | 'ms' | 'zh'): P
   return request<ApiAuthState>('/auth/me/', {
     method: 'PATCH',
     body: JSON.stringify({ preferred_language }),
-  });
-}
-
-export function savePreferredIncomeSource(sourceId: string | null): Promise<ApiAuthState> {
-  const preferredSourceId = sourceId == null ? null : Number.parseInt(sourceId, 10);
-  if (sourceId != null && !Number.isFinite(preferredSourceId)) {
-    return Promise.reject(new Error('The selected income source is not available in the API record.'));
-  }
-  return request<ApiAuthState>('/auth/me/', {
-    method: 'PATCH',
-    body: JSON.stringify({ preferred_income_source_id: preferredSourceId }),
   });
 }
 

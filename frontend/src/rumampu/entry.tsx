@@ -744,7 +744,7 @@ function JobTile({ id, bg, label, on, onPress }: { id: string; bg: string; label
 }
 
 export function GetToKnow() {
-  const { S, t, up, toast, saveIncomeEntry, updateIncomeEntry, saveIncomeSource, savePreferredIncomeSource, refreshAccountData } = useApp();
+  const { S, t, up, toast, saveIncomeEntry, updateIncomeEntry, saveIncomeSource, refreshAccountData } = useApp();
   const insets = useSafeAreaInsets();
   const [amt, setAmt] = React.useState(S.lastMonth || '');
   const [finishError, setFinishError] = React.useState('');
@@ -757,35 +757,14 @@ export function GetToKnow() {
     const known: Record<string, string> = { taxi: 'ehail', free: 'freelance' };
     const custom: Record<string, string> = { deliv: t('k_j_deliv'), bar: t('k_j_bar') };
     const pickedIds: string[] = [];
-    let availableSources = S.data.sources;
-    if (!S.guest) {
-      const record = await fetchIncomeRecord();
-      availableSources = record.sources.map(source => ({
-        id: String(source.id),
-        k: source.slug ? `src_${source.slug}` : undefined,
-        custom: source.is_custom,
-        name: source.name,
-      }));
-      up(s => {
-        s.data.sources = availableSources;
-        s.data.income = record.entries.map(entry => ({
-          id: String(entry.id),
-          a: Number(entry.amount),
-          d: entry.date,
-          s: entry.source_id == null ? '' : String(entry.source_id),
-          method: entry.entry_method,
-          createdAt: entry.created_at,
-        }));
-      });
-    }
-    const existingByName = (name: string) => availableSources.find(source => (
+    const existingByName = (name: string) => S.data.sources.find(source => (
       (source.name || t(source.k || '')).trim().toLowerCase() === name.trim().toLowerCase()
     ));
 
     for (const job of S.jobs) {
       const slug = known[job];
       if (slug) {
-        const source = availableSources.find(item => item.k === `src_${slug}` || item.id === slug);
+        const source = S.data.sources.find(item => item.k === `src_${slug}` || item.id === slug);
         if (source) pickedIds.push(source.id);
         continue;
       }
@@ -794,13 +773,7 @@ export function GetToKnow() {
       const name = own?.name || custom[job];
       if (!name) continue;
       const existing = existingByName(name);
-      if (existing) {
-        pickedIds.push(existing.id);
-      } else {
-        const id = await saveIncomeSource(name);
-        availableSources.push({ id, custom: true, name });
-        pickedIds.push(id);
-      }
+      pickedIds.push(existing ? existing.id : await saveIncomeSource(name));
     }
 
     up(s => {
@@ -883,7 +856,7 @@ export function GetToKnow() {
       return;
     }
 
-    const preferredSourceId = await ensureOnboardingSources();
+    await ensureOnboardingSources();
 
     if (showLoading) {
       setFinishProgress(82);
@@ -893,13 +866,6 @@ export function GetToKnow() {
     // Guests complete this flow locally. Registered users persist the
     // completion flag so future logins and app restarts skip these pages.
     if (!S.guest) {
-      if (preferredSourceId) {
-        try {
-          await savePreferredIncomeSource(preferredSourceId);
-        } catch (error) {
-          console.error('Onboarding: preferred income source was not saved; default selection may reset', error);
-        }
-      }
       try {
         await completeAccountOnboarding();
       } catch (error) {
