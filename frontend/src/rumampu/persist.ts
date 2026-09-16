@@ -1,4 +1,5 @@
 import type { AppState, BufferState, KeptTest, PlanState, VillageState } from './state';
+import { getHousingScenario, getHousingTestResult, hydrateHousingSession } from '../../services/housingSession';
 
 const VERSION = 1;
 const PERSISTED = ['plan', 'buffer', 'village', 'planHorizon',
@@ -75,6 +76,8 @@ export function snapshot(s: AppState): string {
   const payload: JsonRecord = { version: VERSION };
   for (const key of PERSISTED) payload[key] = s[key];
   payload.data = { cashOnHand: s.data.cashOnHand };
+  payload.housingTestResult = getHousingTestResult();
+  payload.housingScenario = getHousingScenario();
   return JSON.stringify(payload);
 }
 
@@ -84,6 +87,8 @@ export function hydrate(s: AppState, raw: string | null): void {
   try {
     const payload: unknown = JSON.parse(raw);
     if (!record(payload) || payload.version !== VERSION) return;
+
+    hydrateHousingSession(payload.housingTestResult, payload.housingScenario);
 
     s.plan = validPlan(payload.plan) ? payload.plan : null;
     s.buffer = validBuffer(payload.buffer) ? payload.buffer : null;

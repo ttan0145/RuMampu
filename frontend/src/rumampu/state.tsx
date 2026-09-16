@@ -43,7 +43,7 @@ import {
   updateWorkCostEntry as updateWorkCostEntryRequest,
 } from './api';
 import { fetchHouseCosts as fetchHouseCostsRequest, fetchSavedHousingTests as fetchSavedHousingTestsRequest } from '../../services/housingService';
-import { clearHousingSession } from '../../services/housingSession';
+import { clearHousingSession, getHousingScenario, getHousingTestResult, hydrateHousingSession, setHousingScenario, setHousingTestResult, subscribeHousingSession } from '../../services/housingSession';
 import { HouseCostType, HouseCostsResponse, SavedHousingTestRecord } from '../../types/housing';
 import { logIt } from './log';
 import { rm, rmx } from './calc';
@@ -487,6 +487,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [S, setS] = useState<AppState>(initialState);
   const [authReady, setAuthReady] = useState(!INCOME_API_ENABLED);
   const [localStateReady, setLocalStateReady] = useState(false);
+  const [housingSessionRevision, setHousingSessionRevision] = useState(0);
   const [toastMsg, setToastMsg] = useState<{
     msg: string;
     key: number;
@@ -550,6 +551,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setS(prev => {
         const next: AppState = JSON.parse(JSON.stringify(prev));
         hydrate(next, raw);
+        next.testRan = Boolean(getHousingTestResult() && getHousingScenario());
         return next;
       });
       localStateHydrated.current = true;
@@ -609,6 +611,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => { active = false; };
   }, [applyAccountState]);
 
+  React.useEffect(() => subscribeHousingSession(() => {
+    setHousingSessionRevision(revision => revision + 1);
+  }), []);
+
   /* Persist the allow-listed declarations in one place. UI-only state (route,
      sheets, toasts, etc.) is ignored by snapshot(). Anonymous sessions remain
      local-only because UserAppState is keyed to an authenticated account. */
@@ -638,7 +644,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         localStateWriteTimer.current = null;
       }
     };
-  }, [S]);
+  }, [S, housingSessionRevision]);
 
   // EN: Bootstrap Epic 1 domains from one guest-owned backend record before Epic 2 analysis runs.
   // 中文：在 Epic 2 分析启动前，从同一访客所有的后端记录加载 Epic 1 各数据域。
@@ -818,11 +824,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!INCOME_API_ENABLED) return;
     try {
       const records = await fetchSavedHousingTestsRequest();
+      const newest = records[0];
+      /* Signed-in saved tests are the server's durable source of truth (and
+         therefore win over any anonymous/local module state on this device). */
+      if (newest?.result && newest.scenario) {
+        hydrateHousingSession(newest.result, newest.scenario);
+      } else {
+        setHousingScenario(null);
+        setHousingTestResult(null);
+      }
       up(s => {
         // The API lists newest first; the local list appends as tests are kept.
         // Keep one order (oldest first) so the list does not jump when a
         // refresh lands a few seconds after a save.
-        if (!s.guest) s.keptTests = records.slice().reverse().map(keptTestFromRecord);
+        if (!s.guest) {
+          s.keptTests = records.slice().reverse().map(keptTestFromRecord);
+          s.testRan = Boolean(getHousingTestResult() && getHousingScenario());
+        }
       });
     } catch (error) {
       // housingService throws services/api.ApiError, which is a different class
@@ -1416,6 +1434,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     await rotateGuestClientId();
     await clearLocalState();
+    clearHousingSession();
     guestBootstrap.current = null;
     setS(prev => {
       const next = initialState();
@@ -1441,6 +1460,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await deleteRecordRequest();
     await rotateGuestClientId();
     await clearLocalState();
+    clearHousingSession();
     guestBootstrap.current = null;
     setS(prev => {
       const next = initialState();
@@ -1469,6 +1489,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     await rotateGuestClientId();
     await clearLocalState();
+    clearHousingSession();
     guestBootstrap.current = null;
 
     setS(prev => {
