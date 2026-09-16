@@ -295,7 +295,7 @@ export function KV({ k, children }: { k: React.ReactNode; children: React.ReactN
 /* Numeric input that keeps a local string while typing but reports parsed values. */
 export function NumInput({
   value, onNum, onCommit, style, min0 = true, alignRight, decimal = true, placeholder, accessibilityLabel,
-  dimZero = false,
+  blankZero = false,
 }: {
   value: number | string;
   onNum: (n: number) => void;
@@ -306,13 +306,13 @@ export function NumInput({
   decimal?: boolean;
   placeholder?: string;
   accessibilityLabel?: string;
-  dimZero?: boolean;
+  blankZero?: boolean;
 }) {
-  const formatLocal = React.useCallback((v: number | string) => String(v ?? ''), []);
+  const formatLocal = React.useCallback((v: number | string) => (
+    blankZero && Number(v) === 0 ? '' : String(v ?? '')
+  ), [blankZero]);
   const [local, setLocal] = React.useState(formatLocal(value));
   const focused = React.useRef(false);
-  const [isFocused, setIsFocused] = React.useState(false);
-  const isZero = value !== '' && Number.isFinite(Number(value)) && Number(value) === 0;
   React.useEffect(() => {
     if (!focused.current) setLocal(formatLocal(value));
   }, [value, formatLocal]);
@@ -322,7 +322,6 @@ export function NumInput({
         st.input,
         alignRight && { textAlign: 'right', width: 104, minHeight: 44 },
         style as TextStyle,
-        dimZero && isZero && !isFocused && { color: C.ink64 },
       ]}
       keyboardType={decimal ? 'decimal-pad' : 'number-pad'}
       inputMode={decimal ? 'decimal' : 'numeric'}
@@ -330,14 +329,13 @@ export function NumInput({
       placeholder={placeholder}
       accessibilityLabel={accessibilityLabel}
       placeholderTextColor={C.ink40}
-      onFocus={() => { focused.current = true; setIsFocused(true); }}
+      onFocus={() => { focused.current = true; }}
       onBlur={() => {
         focused.current = false;
-        setIsFocused(false);
         let n = parseFloat(local);
         if (!isFinite(n)) n = 0;
         if (min0) n = Math.max(0, n);
-        setLocal(decimal ? String(n) : String(Math.trunc(n)));
+        setLocal(formatLocal(decimal ? n : Math.trunc(n)));
         onCommit?.(n);
       }}
       onChangeText={txt => {
@@ -390,7 +388,7 @@ export function TextField({
 export interface EditItem { id: string; k?: string; custom?: boolean; name?: string; a: number; p?: string; description?: string }
 
 export function EditRow({
-  label, p, description, value, onNum, onCommit, decimal = false, dimZero = false,
+  label, p, description, value, onNum, onCommit, decimal = false, blankZero = false,
 }: {
   label: string;
   p?: string;
@@ -399,7 +397,7 @@ export function EditRow({
   onNum: (n: number) => void;
   onCommit?: (n: number) => void;
   decimal?: boolean;
-  dimZero?: boolean;
+  blankZero?: boolean;
 }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -411,20 +409,20 @@ export function EditRow({
           <Prov p={p} />
         ) : null}
       </View>
-      <NumInput value={value} onNum={onNum} onCommit={onCommit} alignRight decimal={decimal} dimZero={dimZero} />
+      <NumInput value={value} onNum={onNum} onCommit={onCommit} alignRight decimal={decimal} blankZero={blankZero} />
     </View>
   );
 }
 
 export function EditList({
-  list, onNum, onCommit, decimal = false, showProvenance = true, dimZero = false,
+  list, onNum, onCommit, decimal = false, showProvenance = true, blankZero = false,
 }: {
   list: EditItem[];
   onNum: (i: number, n: number) => void;
   onCommit?: (i: number, n: number) => void;
   decimal?: boolean;
   showProvenance?: boolean;
-  dimZero?: boolean;
+  blankZero?: boolean;
 }) {
   const { t } = useApp();
   return (
@@ -439,7 +437,7 @@ export function EditList({
           onNum={n => onNum(i, n)}
           onCommit={onCommit ? n => onCommit(i, n) : undefined}
           decimal={decimal}
-          dimZero={dimZero}
+          blankZero={blankZero}
         />
       ))}
     </>
