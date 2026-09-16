@@ -823,7 +823,10 @@ export function GetToKnow() {
     const amount = save ? (parseFloat(String(amt).replace(/[,\s]/g, '')) || 0) : 0;
     // Show the loading/progress screen for both guests and registered users
     // when they leave the final onboarding step.
-    const showLoading = step >= 2;
+    //uncomment later
+    //const showLoading = step >= 2;
+    //take note, later uncomment the bottom
+    const showLoading = S.guest && step >= 2;
     setFinishError('');
     if (showLoading) {
       setFinishing(true);
