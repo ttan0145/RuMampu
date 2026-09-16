@@ -486,7 +486,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
           s.mergeGuestOnSignup = false;
           s.discardGuestOnSignup = false;
         });
-        await finishAuthenticatedEntry(auth);
+        await finishAuthenticatedEntry(auth, { loadBeforeOnboarding: true });
         return;
       }
       await finishAuthenticatedEntry(auth);

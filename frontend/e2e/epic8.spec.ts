@@ -150,6 +150,19 @@ async function addWorkCost(page: Page, categoryId: number, date: string, amount:
   expect(response.status()).toBe(201);
 }
 
+async function accountRecord(page: Page): Promise<{
+  sources: Array<{ id: number; slug: string }>;
+  entries: Array<{ amount: string; date: string; source_id: number | null }>;
+}> {
+  const token = await page.evaluate(() => window.localStorage.getItem('rumampu_auth_token'));
+  expect(token).toBeTruthy();
+  const response = await e2eGet(page, `${API}/income/record/`, {
+    headers: { Authorization: `Token ${token}` },
+  });
+  expect(response.status()).toBe(200);
+  return response.json();
+}
+
 // EN: Open Your Record through the visible Money menu, proving the Epic 8 record
 // screen is reachable without directly setting internal routes.
 // 中文：通过可见的 Money 菜单打开“记录档案”，证明 Epic 8 记录页可从真实界面入口到达，而不是直接改内部路由。
@@ -536,6 +549,57 @@ test('US8.12 existing-account login leaves guest saved test out of the account',
   const records = await fetchAccountSavedTests(page, token);
   expect(records.filter(record => record.name === accountName)).toHaveLength(1);
   expect(records.filter(record => record.name === guestName)).toHaveLength(0);
+});
+
+test('US8.12 Start fresh signs up into a clean account that can immediately save income', async ({ page }) => {
+  await page.goto('/');
+  const splash = page.getByLabel('RuMampu');
+  if (await splash.isVisible().catch(() => false)) await splash.click({ force: true });
+  await continueAsGuestFromLogin(page);
+  await page.getByText('Next', { exact: true }).last().click();
+  await page.getByText('Skip', { exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+
+  const guestIds = await defaultIds(page);
+  await addIncome(page, guestIds.sourceId, '2026-05-03', '777.00');
+  const guestBefore = await (await e2eGet(page, `${API}/income/record/`)).json();
+  expect(guestBefore.entries.map((entry: { amount: string }) => entry.amount)).toContain('777.00');
+
+  await openSignupFromProfile(page, 'fresh');
+  const email = `epic8-start-fresh-${Date.now()}@example.com`;
+  const password = 'Passw0rd123';
+  await page.getByPlaceholder('name@example.com').fill(email);
+  await page.getByPlaceholder('At least 8 characters').fill(password);
+  await page.getByPlaceholder('Type it again').fill(password);
+  await page.getByText('Create account', { exact: true }).last().click();
+  await clickThroughFirstAccountOnboarding(page);
+
+  const emptyAccount = await accountRecord(page);
+  expect(emptyAccount.entries).toEqual([]);
+  expect(emptyAccount.sources.map(source => source.id)).not.toContain(guestIds.sourceId);
+
+  await page.getByRole('tab', { name: 'Money', exact: true }).click();
+  await page.getByText('Income', { exact: true }).last().click();
+  await page.getByPlaceholder('0').fill('1234');
+  const saveResponse = page.waitForResponse(response =>
+    response.request().method() === 'POST'
+    && response.url().endsWith('/api/v1/income/entries/')
+  );
+  await page.getByRole('button', { name: 'Add income', exact: true }).click();
+  const response = await saveResponse;
+  expect(response.status()).toBe(201);
+  await expect(page.getByText('Entry saved. You now have 1 income entries.', { exact: true })).toBeVisible();
+
+  await openRecord(page);
+  await expect(page.getByLabel('1 month recorded')).toBeVisible();
+  await expect(page.getByLabel('1 financial entries')).toBeVisible();
+
+  const accountAfter = await accountRecord(page);
+  expect(accountAfter.entries.map(entry => entry.amount)).toEqual(['1234.00']);
+  expect(accountAfter.entries.map(entry => entry.amount)).not.toContain('777.00');
+
+  const guestAfter = await (await e2eGet(page, `${API}/income/record/`)).json();
+  expect(guestAfter.entries.map((entry: { amount: string }) => entry.amount)).toContain('777.00');
 });
 
 // EN: US8.1 / AC8.1.1-AC8.1.5. Setup creates dated income and expenses out of
