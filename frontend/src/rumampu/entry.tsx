@@ -8,7 +8,7 @@ import { SvgXml } from 'react-native-svg';
 import {
   ApiAuthResponse, ApiError, completeAccountOnboarding, confirmPasswordReset, fetchGuestTransferStatus, fetchIncomeRecord, login as loginRequest, register as registerRequest, requestPasswordReset, resolveGuestTransfer, rotateGuestClientId, savePreferredLanguage,
 } from './api';
-import { lastMonthIso, useApp, type KeptTest } from './state';
+import { lastMonthIso, resetGuestIdentityForStartFreshAccount, useApp, type KeptTest } from './state';
 import { createSavedHousingTest, fetchSavedHousingTests } from '../../services/housingService';
 import { SavedHousingTestRecord } from '../../types/housing';
 import { BODY_FONT, C, DISP_FONT } from './theme';
@@ -334,7 +334,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
 
   const finishAuthenticatedEntry = async (
     auth: ApiAuthResponse,
-    options: { loadBeforeOnboarding?: boolean } = {},
+    options: { loadBeforeOnboarding?: boolean; loadingStage?: string } = {},
   ) => {
     const loadBeforeOnboarding = Boolean(options.loadBeforeOnboarding);
 
@@ -344,6 +344,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
     // the claimed guest data is prepared before continuing onboarding.
     up(s => {
       s.guest = false;
+      s.authEntryOpen = false;
       s.acctMade = false;
       s.knew = auth.onboarding_completed;
       s.kstep = 0;
@@ -362,7 +363,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
     setAccountLoading(true);
     setAccountLoadError('');
     setAccountProgress(10);
-    setAccountStage(loadBeforeOnboarding ? 'Keeping your guest data...' : 'Signed in successfully');
+    setAccountStage(options.loadingStage || (loadBeforeOnboarding ? 'Keeping your guest data...' : 'Signed in successfully'));
 
     try {
       await refreshAccountData((progress, stage) => {
@@ -372,6 +373,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
 
       up(s => {
         s.guest = false;
+        s.authEntryOpen = false;
         if (auth.onboarding_completed) {
           s.knew = true;
           s.onboarded = true;
@@ -481,12 +483,16 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
         return;
       }
       if (discardGuestData) {
+        up(resetGuestIdentityForStartFreshAccount);
+        if (!auth.onboarding_completed) {
+          const updatedAuth = await completeAccountOnboarding();
+          auth = { ...auth, ...updatedAuth, onboarding_completed: true };
+        }
         up(s => {
-          s.keptTests = [];
           s.mergeGuestOnSignup = false;
           s.discardGuestOnSignup = false;
         });
-        await finishAuthenticatedEntry(auth);
+        await finishAuthenticatedEntry(auth, { loadBeforeOnboarding: true, loadingStage: 'Starting your fresh account...' });
         return;
       }
       await finishAuthenticatedEntry(auth);
@@ -546,8 +552,17 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
   };
 
   const leaveReset = () => {
-    up(s => { s.authMode = 'login'; s.wstep = 0; });
+    up(s => { s.authMode = 'login'; s.wstep = 0; s.authEntryOpen = false; });
     router.replace('/');
+  };
+
+  const leaveAuthEntry = () => {
+    up(s => {
+      s.authEntryOpen = false;
+      s.authMode = 'login';
+      s.mergeGuestOnSignup = false;
+      s.discardGuestOnSignup = false;
+    });
   };
 
   return (
@@ -555,7 +570,10 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
       <View style={{ paddingHorizontal: 20, paddingTop: 16 + insets.top }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           {!login ? (
-            <IconBtn light label="←" onPress={() => up(s => { s.authMode = 'login'; })} />
+            <IconBtn light label="←" onPress={() => {
+              if (S.authEntryOpen) leaveAuthEntry();
+              else up(s => { s.authMode = 'login'; });
+            }} />
           ) : <View style={{ width: 44, height: 44 }} />}
           {!forcedReset ? <AuthLanguageButton onPress={() => up(s => { s.sheet = 'lang'; })} /> : <View style={{ width: 44, height: 44 }} />}
         </View>

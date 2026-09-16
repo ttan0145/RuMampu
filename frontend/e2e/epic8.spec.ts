@@ -82,6 +82,14 @@ async function completeVisibleOnboarding(page: Page): Promise<void> {
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
 }
 
+async function dismissSplashIfVisible(page: Page): Promise<void> {
+  const splash = page.getByLabel('RuMampu');
+  if (await splash.isVisible().catch(() => false)) {
+    await splash.click({ force: true });
+    await expect(splash).toHaveCount(0, { timeout: 5000 }).catch(() => undefined);
+  }
+}
+
 async function continueAsGuestFromLogin(page: Page): Promise<void> {
   await page.getByText('Continue as guest', { exact: true }).click();
   await confirmGuestDialogIfVisible(page);
@@ -148,6 +156,116 @@ async function addWorkCost(page: Page, categoryId: number, date: string, amount:
     data: { amount, date, category_id: categoryId },
   });
   expect(response.status()).toBe(201);
+}
+
+async function accountToken(page: Page): Promise<string> {
+  await expect
+    .poll(async () => page.evaluate(() => window.localStorage.getItem('rumampu_auth_token')), { timeout: 15000 })
+    .not.toBeNull();
+  const token = await page.evaluate(() => window.localStorage.getItem('rumampu_auth_token'));
+  return token || '';
+}
+
+async function accountIncomeRecord(page: Page): Promise<{
+  sources: Array<{ id: number; slug: string | null; name: string; is_custom: boolean }>;
+  entries: Array<{ amount: string; date: string; source_id: number | null; entry_method: string }>;
+}> {
+  const response = await e2eGet(page, `${API}/income/record/`, {
+    headers: { Authorization: `Token ${await accountToken(page)}` },
+  });
+  expect(response.status()).toBe(200);
+  return response.json();
+}
+
+async function guestIncomeRecord(page: Page, clientId?: string | null): Promise<{
+  sources: Array<{ id: number; slug: string | null; name: string; is_custom: boolean }>;
+  entries: Array<{ amount: string; date: string; source_id: number | null; entry_method: string }>;
+}> {
+  const response = clientId
+    ? await page.request.get(`${API}/income/record/`, { headers: { 'X-RuMampu-Client-ID': clientId } })
+    : await e2eGet(page, `${API}/income/record/`);
+  expect(response.status()).toBe(200);
+  return response.json();
+}
+
+async function accountExpenses(page: Page): Promise<Array<{ amount: string; date: string; category_id: number }>> {
+  const response = await e2eGet(page, `${API}/expenses/`, {
+    headers: { Authorization: `Token ${await accountToken(page)}` },
+  });
+  expect(response.status()).toBe(200);
+  return response.json();
+}
+
+async function accountWorkCostEntries(page: Page): Promise<Array<{ amount: string; date: string; category_id: number }>> {
+  const response = await e2eGet(page, `${API}/work-costs/entries/`, {
+    headers: { Authorization: `Token ${await accountToken(page)}` },
+  });
+  expect(response.status()).toBe(200);
+  return response.json();
+}
+
+async function accountCommitments(page: Page): Promise<Array<{ monthly_amount: string; slug: string }>> {
+  const response = await e2eGet(page, `${API}/commitments/`, {
+    headers: { Authorization: `Token ${await accountToken(page)}` },
+  });
+  expect(response.status()).toBe(200);
+  return response.json();
+}
+
+async function completeGuestOnboardingWithSelectedWorkAndIncome(page: Page, amount: string): Promise<void> {
+  await page.goto('/');
+  const splash = page.getByLabel('RuMampu');
+  if (await splash.isVisible().catch(() => false)) await splash.click({ force: true });
+
+  await continueAsGuestFromLogin(page);
+  await page.getByText('Next', { exact: true }).last().click();
+  await expect(page.getByText('What do you do?', { exact: true })).toBeVisible();
+
+  // E-hailing is the default selected job; select the two extra jobs from the manual report.
+  await page.getByText('Food delivery', { exact: true }).click();
+  await page.getByText('Freelancer', { exact: true }).click();
+  await page.getByText('Next', { exact: true }).last().click();
+  await page.locator('input:visible').last().fill(amount);
+
+  const responsePromise = page.waitForResponse(response =>
+    response.request().method() === 'POST'
+    && response.url().endsWith('/api/v1/income/entries/')
+  );
+  await page.getByText('Start using RuMampu', { exact: true }).click();
+  const response = await responsePromise;
+  expect(response.status(), await response.text()).toBe(201);
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+  await syncClientIdFromBrowser(page);
+}
+
+async function addIncomeThroughUi(page: Page, amount: string): Promise<void> {
+  await page.getByRole('tab', { name: 'Money', exact: true }).click();
+  await page.getByText('Income', { exact: true }).last().click();
+  await expect(page.getByText('E-hailing', { exact: true })).toBeVisible();
+  await page.locator('input:visible').first().fill(amount);
+  await page.getByText('E-hailing', { exact: true }).click();
+  const responsePromise = page.waitForResponse(response =>
+    response.request().method() === 'POST'
+    && response.url().endsWith('/api/v1/income/entries/')
+  );
+  await page.getByRole('button', { name: 'Add income', exact: true }).click();
+  const response = await responsePromise;
+  expect(response.status(), await response.text()).toBe(201);
+}
+
+async function addExpenseThroughUi(page: Page, amount: string): Promise<void> {
+  await page.getByRole('tab', { name: 'Money', exact: true }).click();
+  await page.getByText('Daily expenses', { exact: true }).last().click();
+  await expect(page.getByText('Meals', { exact: true })).toBeVisible();
+  await page.locator('input:visible').first().fill(amount);
+  await page.getByText('Meals', { exact: true }).click();
+  const responsePromise = page.waitForResponse(response =>
+    response.request().method() === 'POST'
+    && response.url().endsWith('/api/v1/expenses/')
+  );
+  await page.getByText('Add expense', { exact: true }).click();
+  const response = await responsePromise;
+  expect(response.status(), await response.text()).toBe(201);
 }
 
 // EN: Open Your Record through the visible Money menu, proving the Epic 8 record
@@ -290,6 +408,27 @@ test('US8.16 first-launch onboarding explains RuMampu and reaches get-to-know', 
   await page.getByText('Next', { exact: true }).last().click();
   await expect(page.getByText('Step 2 of 3', { exact: true })).toBeVisible();
   await expect(page.getByText('What do you do?', { exact: true })).toBeVisible();
+  await page.getByText('Next', { exact: true }).last().click();
+  await expect(page.getByText('Step 3 of 3', { exact: true })).toBeVisible();
+  await expect(page.getByText('How much did you earn last month?', { exact: true })).toBeVisible();
+  await page.locator('input:visible').last().fill('1234');
+  await page.getByText('Start using RuMampu', { exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible({ timeout: 15000 });
+
+  await page.reload();
+  await dismissSplashIfVisible(page);
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+  await expect(page.getByText('Step 1 of 3', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Step 2 of 3', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Step 3 of 3', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('What RuMampu does', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('What do you do?', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('How much did you earn last month?', { exact: true })).toHaveCount(0);
+});
+
+test('US8.16 first-launch guest onboarding runs once and reaches Home', async ({ page }) => {
+  await completeGuestOnboardingWithSelectedWorkAndIncome(page, '1234');
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
 });
 
 test('US8.16 Home How it works opens purpose content without replaying onboarding', async ({ page }) => {
@@ -448,7 +587,8 @@ test('US8.12 delete account then create account opens real registration first', 
   await page.getByPlaceholder('At least 8 characters').fill(secondPassword);
   await page.getByPlaceholder('Type it again').fill(secondPassword);
   await page.getByText('Create account', { exact: true }).last().click();
-  await clickThroughFirstAccountOnboarding(page);
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText('What do you do?', { exact: true })).toHaveCount(0);
 
   expect(unauthorizedResponses).toEqual([]);
 });
@@ -490,6 +630,32 @@ test('US8.12 transfers guest saved housing tests to a new account on Keep', asyn
   await expect(page.getByText(savedName, { exact: true })).toBeVisible();
   await page.getByText('Open this result').click();
   await expect(page.getByText('Result', { exact: true }).first()).toBeVisible();
+});
+
+test('US8.12 Keep transfers onboarding-derived guest income to a new account', async ({ page }) => {
+  await completeGuestOnboardingWithSelectedWorkAndIncome(page, '5555');
+  const guestBefore = await guestIncomeRecord(page);
+  expect(guestBefore.entries.map(entry => entry.amount)).toContain('5555.00');
+  expect(guestBefore.sources.some(source => source.name === 'Food delivery' && source.is_custom)).toBe(true);
+
+  await openSignupFromProfile(page, 'keep');
+  const email = `epic8-keep-onboarding-${Date.now()}@example.com`;
+  const password = 'Passw0rd123';
+  await page.getByPlaceholder('name@example.com').fill(email);
+  await page.getByPlaceholder('At least 8 characters').fill(password);
+  await page.getByPlaceholder('Type it again').fill(password);
+  await page.getByText('Create account', { exact: true }).last().click();
+  await clickThroughFirstAccountOnboarding(page);
+
+  const accountRecord = await accountIncomeRecord(page);
+  expect(accountRecord.entries).toEqual([
+    expect.objectContaining({
+      amount: '5555.00',
+      date: expectedLastMonthIso(),
+      entry_method: 'historical_total',
+    }),
+  ]);
+  expect(accountRecord.sources.some(source => source.name === 'Food delivery' && source.is_custom)).toBe(true);
 });
 
 test('US8.12 login to existing account does not show retired guest-transfer prompt', async ({ page }) => {
@@ -536,6 +702,119 @@ test('US8.12 existing-account login leaves guest saved test out of the account',
   const records = await fetchAccountSavedTests(page, token);
   expect(records.filter(record => record.name === accountName)).toHaveLength(1);
   expect(records.filter(record => record.name === guestName)).toHaveLength(0);
+});
+
+test('US8.12 cancel from guest sign-up choice leaves the guest record unchanged', async ({ page }) => {
+  await openApp(page);
+  await syncClientIdFromBrowser(page);
+  const guestClientId = await page.evaluate(() => window.localStorage.getItem('rumampu_client_id'));
+  expect(guestClientId).toBeTruthy();
+  const { sourceId } = await defaultIds(page);
+  await addIncome(page, sourceId, '2026-06-03', '444.00');
+
+  await page.getByRole('tab', { name: 'Profile', exact: true }).click();
+  await page.getByText('Sign up', { exact: true }).first().click();
+  await page.getByText('Cancel', { exact: true }).click();
+
+  await expect(page.getByText('Welcome, guest', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Create account', { exact: true })).toHaveCount(0);
+  expect(await page.evaluate(() => window.localStorage.getItem('rumampu_auth_token'))).toBeNull();
+  expect(await page.evaluate(() => window.localStorage.getItem('rumampu_client_id'))).toBe(guestClientId);
+
+  const record = await e2eGet(page, `${API}/income/record/`);
+  expect(record.status()).toBe(200);
+  expect((await record.json()).entries.map((entry: { amount: string }) => entry.amount)).toContain('444.00');
+});
+
+test('US8.12 Start fresh goes directly Home without replaying onboarding or transferring guest data', async ({ page }) => {
+  await completeGuestOnboardingWithSelectedWorkAndIncome(page, '5555');
+  const guestClientId = await page.evaluate(() => window.localStorage.getItem('rumampu_client_id'));
+  expect(guestClientId).toBeTruthy();
+
+  const guestIncomeBefore = await guestIncomeRecord(page);
+  expect(guestIncomeBefore.entries).toEqual([
+    expect.objectContaining({
+      amount: '5555.00',
+      date: expectedLastMonthIso(),
+      entry_method: 'historical_total',
+    }),
+  ]);
+  expect(guestIncomeBefore.sources.some(source => source.slug === 'ehail')).toBe(true);
+  expect(guestIncomeBefore.sources.some(source => source.slug === 'freelance')).toBe(true);
+  expect(guestIncomeBefore.sources.some(source => source.name === 'Food delivery' && source.is_custom)).toBe(true);
+
+  await page.getByRole('tab', { name: 'Money', exact: true }).click();
+  await page.getByText('Income', { exact: true }).last().click();
+  await expect(page.locator('body')).toContainText(/5,555|5555/);
+  await expect(page.getByText('Food delivery', { exact: true })).toBeVisible();
+
+  await openSignupFromProfile(page, 'fresh');
+  const email = `epic8-startfresh-isolation-${Date.now()}@example.com`;
+  const password = 'Passw0rd123';
+  await page.getByPlaceholder('name@example.com').fill(email);
+  await page.getByPlaceholder('At least 8 characters').fill(password);
+  await page.getByPlaceholder('Type it again').fill(password);
+  await page.getByText('Create account', { exact: true }).last().click();
+
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible({ timeout: 15000 });
+  expect(await accountToken(page)).toBeTruthy();
+  await expect(page.getByText('Step 1 of 3', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Step 2 of 3', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Step 3 of 3', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('What RuMampu does', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('What do you do?', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('How much did you earn last month?', { exact: true })).toHaveCount(0);
+
+  const emptyAccountIncome = await accountIncomeRecord(page);
+  const emptyAccountExpenses = await accountExpenses(page);
+  const emptyAccountWorkCosts = await accountWorkCostEntries(page);
+  const accountCommitmentDefaults = await accountCommitments(page);
+  expect(emptyAccountIncome.entries).toEqual([]);
+  expect(emptyAccountExpenses).toEqual([]);
+  expect(emptyAccountWorkCosts).toEqual([]);
+  expect(accountCommitmentDefaults.every(item => item.monthly_amount === '0.00')).toBe(true);
+  expect(emptyAccountIncome.sources.some(source => source.name === 'Food delivery' && source.is_custom)).toBe(false);
+  expect(emptyAccountIncome.sources.every(source => !source.is_custom)).toBe(true);
+
+  await page.getByRole('tab', { name: 'Money', exact: true }).click();
+  await page.getByText('Income', { exact: true }).last().click();
+  await expect(page.locator('body')).not.toContainText(/5,555|5555|Food delivery|Freelancer/);
+  await openRecord(page);
+  await expect(page.getByLabel('0 months recorded')).toBeVisible();
+  await expect(page.getByLabel('0 financial entries')).toBeVisible();
+  await expect(page.locator('body')).toContainText('Nothing changed yet. Every entry you add or edit shows up here.');
+  await expect(page.locator('body')).not.toContainText(/5,555|5555|Food delivery|Freelancer/);
+
+  await page.getByRole('tab', { name: 'House', exact: true }).click();
+  await page.getByText('Test a house', { exact: true }).click();
+  await expect(page.locator('body')).not.toContainText(/5,555|5555/);
+
+  await page.reload();
+  await dismissSplashIfVisible(page);
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+  await expect(page.getByText('Step 1 of 3', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Step 2 of 3', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Step 3 of 3', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('What do you do?', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('How much did you earn last month?', { exact: true })).toHaveCount(0);
+  expect((await accountIncomeRecord(page)).entries).toEqual([]);
+  await openRecord(page);
+  await expect(page.getByLabel('0 months recorded')).toBeVisible();
+  await expect(page.locator('body')).not.toContainText(/5,555|5555|Food delivery|Freelancer/);
+
+  await addIncomeThroughUi(page, '3333');
+  await openRecord(page);
+  await expect(page.getByLabel('1 month recorded')).toBeVisible();
+  await expect(page.locator('body')).toContainText(/3,333|3333/);
+  await expect(page.locator('body')).not.toContainText(/5,555|5555/);
+
+  const accountAfter = await accountIncomeRecord(page);
+  expect(accountAfter.entries.map(entry => entry.amount)).toEqual(['3333.00']);
+  expect(accountAfter.entries.map(entry => entry.amount)).not.toContain('5555.00');
+
+  const guestIncomeAfter = await guestIncomeRecord(page, guestClientId);
+  expect(guestIncomeAfter.entries.map(entry => entry.amount)).toContain('5555.00');
+  expect(guestIncomeAfter.sources.some(source => source.name === 'Food delivery' && source.is_custom)).toBe(true);
 });
 
 // EN: US8.1 / AC8.1.1-AC8.1.5. Setup creates dated income and expenses out of

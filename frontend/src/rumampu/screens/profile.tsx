@@ -26,7 +26,7 @@ export function ProfileScreen() {
     up(s => {
       s.mergeGuestOnSignup = mergeGuestData;
       s.discardGuestOnSignup = !mergeGuestData;
-      s.onboarded = false;
+      s.authEntryOpen = true;
       s.wstep = 0;
       s.authMode = 'signup';
     });

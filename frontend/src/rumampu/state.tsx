@@ -38,6 +38,7 @@ import {
   updateWorkCostEntry as updateWorkCostEntryRequest,
 } from './api';
 import { fetchHouseCosts as fetchHouseCostsRequest, fetchSavedHousingTests as fetchSavedHousingTestsRequest } from '../../services/housingService';
+import { clearHousingSession } from '../../services/housingSession';
 import { HouseCostType, HouseCostsResponse, SavedHousingTestRecord } from '../../types/housing';
 import { logIt } from './log';
 import { rm, rmx } from './calc';
@@ -161,6 +162,7 @@ export interface AppState {
   splash: boolean;
   /* v22 entry flow: language → meet Ruma → auth, then the get-to-know pages. */
   wstep: number;
+  authEntryOpen: boolean;
   authMode: AuthMode;
   acctMade: boolean;
   fgMail: string;
@@ -279,7 +281,7 @@ function initialState(): AppState {
     route: 'home',
     stack: [],
     onboard: 0, onboarded: false, splash: true,
-    wstep: 0, authMode: 'login', acctMade: false, fgMail: '', guest: false, mergeGuestOnSignup: false, discardGuestOnSignup: false,
+    wstep: 0, authEntryOpen: false, authMode: 'login', acctMade: false, fgMail: '', guest: false, mergeGuestOnSignup: false, discardGuestOnSignup: false,
     knew: false, kstep: 0, jobs: ['taxi'], ownJobs: [], lastMonth: '',
     plan: null, village: null, buffer: null, vHelp: false, planHorizon: null,
     moView: 'tiles', houseTab: 'test',
@@ -316,6 +318,34 @@ function initialState(): AppState {
     assistantOpen: false,
     assistantMsgs: [],
   };
+}
+
+export function resetGuestIdentityForStartFreshAccount(state: AppState): void {
+  const clean = initialState();
+  const lang = state.lang;
+  const splash = state.splash;
+
+  Object.assign(state, clean);
+
+  state.lang = lang;
+  state.splash = splash;
+  state.route = 'home';
+  state.stack = [];
+  state.onboarded = true;
+  state.wstep = 0;
+  state.authEntryOpen = false;
+  state.authMode = 'login';
+  state.acctMade = false;
+  state.guest = false;
+  state.mergeGuestOnSignup = false;
+  state.discardGuestOnSignup = false;
+  state.knew = true;
+  state.kstep = 0;
+  state.jobs = [];
+  state.ownJobs = [];
+  state.lastMonth = '';
+
+  clearHousingSession();
 }
 
 function currentMonthText(): string {
@@ -1315,6 +1345,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // Logging out must always return to the authentication screen.
       // Language/onboarding steps are only resumed after a successful login.
       next.wstep = 0;
+      next.authEntryOpen = false;
       next.authMode = 'login';
       return next;
     });
@@ -1352,6 +1383,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       next.guest = true;
       next.onboarded = false;
       next.wstep = 1;
+      next.authEntryOpen = false;
       return next;
     });
 

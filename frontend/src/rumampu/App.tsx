@@ -64,7 +64,7 @@ function Root() {
       <TabBar />
       <ToastView />
       {/* v22 entry flow: language → meet Ruma → auth, then get-to-know. */}
-      {authReady && !S.onboarded ? <EntryFlow /> : null}
+      {authReady && (!S.onboarded || S.authEntryOpen) ? <EntryFlow /> : null}
       {authReady && S.onboarded && !S.knew ? <GetToKnow /> : null}
       {!authReady || !S.onboarded ? <Splash /> : null}
       <SheetHost />
