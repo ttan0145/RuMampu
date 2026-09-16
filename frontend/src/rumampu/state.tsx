@@ -44,6 +44,7 @@ import {
 } from './api';
 import { fetchHouseCosts as fetchHouseCostsRequest, fetchSavedHousingTests as fetchSavedHousingTestsRequest } from '../../services/housingService';
 import { clearHousingSession, getHousingScenario, getHousingTestResult, hydrateHousingSession, setHousingScenario, setHousingTestResult, subscribeHousingSession } from '../../services/housingSession';
+import type { HousingScenarioResponse, HousingTestResult } from '../../types/housing';
 import { HouseCostType, HouseCostsResponse, SavedHousingTestRecord } from '../../types/housing';
 import { logIt } from './log';
 import { rm, rmx } from './calc';
@@ -457,6 +458,62 @@ function applyConfirmedCoverage(state: AppState, coverage: ApiIncomeCoverage): v
   state.incomeCoverage = coverage;
 }
 
+/* The saving plan reads its house goal from the housing session, which is a
+   plain in-memory variable and empties on every reload, and the upfront need
+   reads the price from the chosen saved test (ufTest) or the house form draft,
+   neither of which is persisted. After a reload the plan therefore showed
+   "run a house test first", and once the goal was back the target collapsed
+   to RM 0. The kept tests carry the full result, the scenario and the price,
+   so the goal is rebuilt from them: the test the buffer was sized on (same
+   tested home cost) if it is still kept, otherwise the newest kept test. */
+function isHousingResult(value: unknown): value is HousingTestResult {
+  return !!value && typeof value === 'object' && 'starting_liquidity' in value && 'tested_home_cost' in value;
+}
+
+function restoreHousingGoal(s: AppState): void {
+  const kept = s.keptTests
+    .map((test, index) => ({ test, index }))
+    .filter(item => isHousingResult(item.test.result));
+  if (!kept.length) return;
+  const costOf = (result: unknown) => Math.round(Number((result as HousingTestResult).tested_home_cost) || 0);
+
+  let result = getHousingTestResult();
+  if (!result) {
+    const houseCost = s.buffer?.houseCost ?? null;
+    const match = houseCost === null ? undefined : kept.find(item => costOf(item.test.result) === houseCost);
+    const pick = (match ?? kept[kept.length - 1]).test;
+    result = pick.result as HousingTestResult;
+    setHousingTestResult(result);
+    const scenario = pick.scenario;
+    if (scenario && typeof scenario === 'object' && 'id' in scenario && typeof scenario.id === 'number') {
+      setHousingScenario(scenario as HousingScenarioResponse);
+    }
+  }
+
+  /* Point the upfront figures at the kept test behind the goal when no valid
+     choice exists, so the plan's target survives the reload too. */
+  const goalCost = costOf(result);
+  const chosen = s.ufTest != null ? s.keptTests[s.ufTest] : undefined;
+  if (!chosen || !(Number(chosen.propertyPrice) > 0)) {
+    const goal = kept.find(item => costOf(item.test.result) === goalCost && Number(item.test.propertyPrice) > 0)
+      ?? kept.find(item => Number(item.test.propertyPrice) > 0);
+    if (goal) s.ufTest = goal.index;
+  }
+
+  /* Refill an empty house form from the same test so the Test screen and the
+     upfront fallback describe the house the plan is saving for. */
+  const h = s.data.house;
+  const src = s.ufTest != null ? s.keptTests[s.ufTest] : undefined;
+  const sc = src?.scenario as Partial<HousingScenarioResponse> | undefined;
+  if (h.knownPayment == null && !((h.price ?? 0) > 0) && sc && Number(sc.property_price) > 0) {
+    h.price = Math.round(Number(sc.property_price));
+    h.deposit = Math.round(Number(sc.deposit) || 0);
+    if (Number(sc.financing_rate) > 0) h.rate = Number(sc.financing_rate);
+    if (Number(sc.tenure_years) > 0) h.years = Number(sc.tenure_years);
+    h.knownPayment = sc.known_monthly_payment == null ? null : Number(sc.known_monthly_payment);
+  }
+}
+
 function keptTestFromRecord(record: SavedHousingTestRecord): KeptTest {
   return {
     id: record.id,
@@ -506,6 +563,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const skipNextAccountSync = useRef(false);
   const accountAuthenticated = useRef(false);
   const localStateWriteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* The last snapshot written locally and, for accounts, patched to the
+     server. Most state changes (a screen change, a data refresh landing) leave
+     the declared progress untouched; without this check every one of them sent
+     a PATCH, and on the dev server those bursts queued long enough to push
+     ordinary reads past their timeout. */
+  const lastPersistedSnapshot = useRef<string | null>(null);
 
   const ensureGuest = useCallback(() => {
     if (!guestBootstrap.current) {
@@ -534,7 +597,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       /* The account is authoritative: anonymous declarations are discarded
          rather than merged when both devices contain a plan for the same day. */
       hydrateAccountState(next, auth as unknown as Record<string, unknown>);
-      try { void writeLocalState(snapshot(next)); } catch { /* best effort */ }
+      restoreHousingGoal(next);
+      try {
+        const local = snapshot(next);
+        lastPersistedSnapshot.current = local;
+        void writeLocalState(local);
+      } catch { /* best effort */ }
       return next;
     });
   }, []);
@@ -551,7 +619,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setS(prev => {
         const next: AppState = JSON.parse(JSON.stringify(prev));
         hydrate(next, raw);
+        restoreHousingGoal(next);
         next.testRan = Boolean(getHousingTestResult() && getHousingScenario());
+        try { lastPersistedSnapshot.current = snapshot(next); } catch { /* best effort */ }
         return next;
       });
       localStateHydrated.current = true;
@@ -629,6 +699,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       localStateWriteTimer.current = null;
       let local: string;
       try { local = snapshot(S); } catch { return; }
+      if (local === lastPersistedSnapshot.current) {
+        skipNextAccountSync.current = false;
+        return;
+      }
+      lastPersistedSnapshot.current = local;
       void writeLocalState(local);
       if (accountAuthenticated.current) {
         const syncAccount = !skipNextAccountSync.current;
@@ -837,10 +912,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // The API lists newest first; the local list appends as tests are kept.
         // Keep one order (oldest first) so the list does not jump when a
         // refresh lands a few seconds after a save.
-        if (!s.guest) {
-          s.keptTests = records.slice().reverse().map(keptTestFromRecord);
-          s.testRan = Boolean(getHousingTestResult() && getHousingScenario());
-        }
+        if (!s.guest) s.keptTests = records.slice().reverse().map(keptTestFromRecord);
+        restoreHousingGoal(s);
+        if (!s.guest) s.testRan = Boolean(getHousingTestResult() && getHousingScenario());
       });
     } catch (error) {
       // housingService throws services/api.ApiError, which is a different class
@@ -1433,6 +1507,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // logoutRequest clears the locally stored token in its finally block.
     }
     await rotateGuestClientId();
+    lastPersistedSnapshot.current = null;
     await clearLocalState();
     clearHousingSession();
     guestBootstrap.current = null;
@@ -1459,6 +1534,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     await deleteRecordRequest();
     await rotateGuestClientId();
+    lastPersistedSnapshot.current = null;
     await clearLocalState();
     clearHousingSession();
     guestBootstrap.current = null;
@@ -1488,6 +1564,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // This is expected when there is no authenticated token yet.
     }
     await rotateGuestClientId();
+    lastPersistedSnapshot.current = null;
     await clearLocalState();
     clearHousingSession();
     guestBootstrap.current = null;
