@@ -490,6 +490,37 @@ class AuthApiRegressionTests(TestCase):
         self.assertIn("2026-01", text)
         self.assertIn("Short", text)
 
+    def test_export_marks_account_exported_and_auth_payload_persists_it(self):
+        user = User.objects.create_user(
+            username="export-state@example.com",
+            email="export-state@example.com",
+            password="Passw0rd123",
+        )
+        GuestProfile.objects.create(user=user, session_key="export-state-profile")
+        token, _ = Token.objects.get_or_create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+        before = client.get("/api/v1/auth/me/")
+        self.assertEqual(before.status_code, 200)
+        self.assertIsNone(before.json()["last_record_exported_at"])
+
+        response = client.get("/api/v1/auth/export/", HTTP_ACCEPT=XLSX_CONTENT_TYPE)
+
+        self.assertEqual(response.status_code, 200)
+        app_state = UserAppState.objects.get(user=user)
+        self.assertIsNotNone(app_state.last_record_exported_at)
+        after = client.get("/api/v1/auth/me/")
+        self.assertEqual(after.json()["last_record_exported_at"], app_state.last_record_exported_at.isoformat())
+
+        token.delete()
+        login = Client().post(
+            "/api/v1/auth/login/",
+            data={"username": "export-state@example.com", "password": "Passw0rd123"},
+            content_type="application/json",
+        )
+        self.assertEqual(login.status_code, 200)
+        self.assertEqual(login.json()["last_record_exported_at"], app_state.last_record_exported_at.isoformat())
+
     def test_guest_export_requires_an_account(self):
         client = Client(HTTP_X_RUMAMPU_CLIENT_ID="guest-xlsx-export")
         client.get("/api/v1/income/record/")

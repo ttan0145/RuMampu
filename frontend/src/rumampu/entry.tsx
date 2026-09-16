@@ -344,6 +344,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
     // the claimed guest data is prepared before continuing onboarding.
     up(s => {
       s.guest = false;
+      s.accountLastExportedAt = auth.last_record_exported_at;
       s.authEntryOpen = false;
       s.acctMade = false;
       s.knew = auth.onboarding_completed;
@@ -373,6 +374,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
 
       up(s => {
         s.guest = false;
+        s.accountLastExportedAt = auth.last_record_exported_at;
         s.authEntryOpen = false;
         if (auth.onboarding_completed) {
           s.knew = true;

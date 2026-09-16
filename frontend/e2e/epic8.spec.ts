@@ -177,6 +177,14 @@ async function accountIncomeRecord(page: Page): Promise<{
   return response.json();
 }
 
+async function accountAuthState(page: Page): Promise<{ last_record_exported_at: string | null }> {
+  const response = await e2eGet(page, `${API}/auth/me/`, {
+    headers: { Authorization: `Token ${await accountToken(page)}` },
+  });
+  expect(response.status()).toBe(200);
+  return response.json();
+}
+
 async function guestIncomeRecord(page: Page, clientId?: string | null): Promise<{
   sources: Array<{ id: number; slug: string | null; name: string; is_custom: boolean }>;
   entries: Array<{ amount: string; date: string; source_id: number | null; entry_method: string }>;
@@ -640,6 +648,68 @@ test('US8.17 direct account can add income after skipping rough onboarding incom
   await expect(page.locator('body')).toContainText('1 entries');
 });
 
+test('US8.14.5 delete confirmation offers optional export first for a never-exported account', async ({ page }) => {
+  const email = `epic8-delete-export-${Date.now()}@example.com`;
+  const password = 'Passw0rd123';
+
+  await createDirectAccountThroughOnboarding(page, email, password);
+  expect((await accountAuthState(page)).last_record_exported_at).toBeNull();
+
+  await page.getByRole('tab', { name: 'Profile', exact: true }).click();
+  await page.getByText('Delete account and record', { exact: true }).first().click();
+
+  await expect(page.getByText('Delete account and record?', { exact: true })).toBeVisible();
+  await expect(page.getByText('This removes your account, income entries, work costs, bills, expenses, saved home tests and plans.', { exact: true })).toBeVisible();
+  await expect(page.getByText(/backup copies/i)).toBeVisible();
+  await expect(page.getByText('Export my record', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('Delete account and record', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('Cancel', { exact: true }).last()).toBeVisible();
+
+  await page.getByText('Cancel', { exact: true }).last().click();
+  await expect(page.getByText('Delete account and record?', { exact: true })).toHaveCount(0);
+});
+
+test('US8.14.5 export first keeps deletion optional and persists exported state', async ({ page }) => {
+  const email = `epic8-delete-export-first-${Date.now()}@example.com`;
+  const password = 'Passw0rd123';
+
+  await createDirectAccountThroughOnboarding(page, email, password);
+  await page.getByRole('tab', { name: 'Profile', exact: true }).click();
+  await page.getByText('Delete account and record', { exact: true }).first().click();
+  await expect(page.getByText('Delete account and record?', { exact: true })).toBeVisible();
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByText('Export my record', { exact: true }).last().click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/RuMampu_Record_.*\.xlsx$/);
+
+  await expect.poll(async () => (await accountAuthState(page)).last_record_exported_at).not.toBeNull();
+  await expect(page.getByText('Delete account and record?', { exact: true })).toBeVisible();
+  await expect(page.getByText('Delete account and record', { exact: true }).last()).toBeVisible();
+  await page.getByText('Cancel', { exact: true }).last().click();
+
+  await page.getByText('Delete account and record', { exact: true }).first().click();
+  await expect(page.getByText('Delete account and record?', { exact: true })).toBeVisible();
+  await expect(page.getByText('Delete account and record', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('Cancel', { exact: true }).last()).toBeVisible();
+});
+
+test('US8.14.5 guest delete confirmation does not expose account export', async ({ page }) => {
+  await page.goto('/');
+  await dismissSplashIfVisible(page);
+  await continueAsGuestFromLogin(page);
+  await clickThroughFirstAccountOnboarding(page);
+
+  await page.getByRole('tab', { name: 'Profile', exact: true }).click();
+  await expect(page.getByText('Export my record', { exact: true })).toHaveCount(0);
+  await page.getByText('Delete guest record', { exact: true }).click();
+
+  await expect(page.getByText('Delete guest record?', { exact: true })).toBeVisible();
+  await expect(page.getByText('Export my record', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Delete guest record', { exact: true }).last()).toBeVisible();
+  await expect(page.getByText('Cancel', { exact: true }).last()).toBeVisible();
+});
+
 test('US8.12 guest entry does not call authenticated-only account endpoints', async ({ page }) => {
   const savedTestRequests: string[] = [];
   const authOnlyRequests: string[] = [];
@@ -693,8 +763,9 @@ test('US8.12 delete account then create account opens real registration first', 
   await clickThroughFirstAccountOnboarding(page);
 
   await page.getByRole('tab', { name: 'Profile', exact: true }).click();
-  await page.getByText('Delete account and record', { exact: true }).click();
-  await page.getByText('Tap again to delete', { exact: true }).click();
+  await page.getByText('Delete account and record', { exact: true }).first().click();
+  await expect(page.getByText('Delete account and record?', { exact: true })).toBeVisible();
+  await page.getByText('Delete account and record', { exact: true }).last().click();
   await expect(page.getByText('Add last week’s earnings. That’s enough to start.', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Home', exact: true }).click();
   await page.getByRole('tab', { name: 'Profile', exact: true }).click();

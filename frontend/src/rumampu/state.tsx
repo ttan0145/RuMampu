@@ -167,6 +167,7 @@ export interface AppState {
   acctMade: boolean;
   fgMail: string;
   guest: boolean;
+  accountLastExportedAt: string | null;
   /* When a guest chooses Sign up from Profile, this records their explicit
      choice to move the current guest record into the new account. */
   mergeGuestOnSignup: boolean;
@@ -281,7 +282,7 @@ function initialState(): AppState {
     route: 'home',
     stack: [],
     onboard: 0, onboarded: false, splash: true,
-    wstep: 0, authEntryOpen: false, authMode: 'login', acctMade: false, fgMail: '', guest: false, mergeGuestOnSignup: false, discardGuestOnSignup: false,
+    wstep: 0, authEntryOpen: false, authMode: 'login', acctMade: false, fgMail: '', guest: false, accountLastExportedAt: null, mergeGuestOnSignup: false, discardGuestOnSignup: false,
     knew: false, kstep: 0, jobs: ['taxi'], ownJobs: [], lastMonth: '',
     plan: null, village: null, buffer: null, vHelp: false, planHorizon: null,
     moView: 'tiles', houseTab: 'test',
@@ -530,6 +531,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setS(prev => {
           const next: AppState = JSON.parse(JSON.stringify(prev));
           next.guest = false;
+          next.accountLastExportedAt = auth.last_record_exported_at;
           next.knew = auth.onboarding_completed;
           if (auth.preferred_language) next.lang = auth.preferred_language;
 

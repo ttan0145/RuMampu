@@ -224,6 +224,7 @@ export interface ApiAuthState {
   user: ApiUser;
   onboarding_completed: boolean;
   preferred_language: 'en' | 'ms' | 'zh' | '';
+  last_record_exported_at: string | null;
 }
 
 export interface ApiAuthResponse extends ApiAuthState {

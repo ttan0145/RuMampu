@@ -14,12 +14,14 @@ const FLAGS: Record<string, string> = { en: '🇬🇧', ms: '🇲🇾', zh: '�
 
 export function ProfileScreen() {
   const { S, t, up, go, toast, signOut, deleteCurrentRecord } = useApp();
-  const [deleteArmed, setDeleteArmed] = React.useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false);
   const [signupChoiceOpen, setSignupChoiceOpen] = React.useState(false);
   const [exportConfirmOpen, setExportConfirmOpen] = React.useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = React.useState(false);
   const [exporting, setExporting] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
   const [loggingOut, setLoggingOut] = React.useState(false);
+  const shouldOfferDeleteExport = !S.guest && !S.accountLastExportedAt;
 
   const startSignup = (mergeGuestData: boolean) => {
     setSignupChoiceOpen(false);
@@ -31,8 +33,9 @@ export function ProfileScreen() {
       s.authMode = 'signup';
     });
   };
-  const downloadExport = async () => {
+  const downloadExport = async (options: { closeExportConfirm?: boolean } = {}) => {
     if (exporting) return;
+    const closeExportConfirm = options.closeExportConfirm !== false;
     setExporting(true);
     try {
       const file = await exportRecord();
@@ -46,7 +49,8 @@ export function ProfileScreen() {
         link.remove();
         URL.revokeObjectURL(url);
       }
-      setExportConfirmOpen(false);
+      up(s => { s.accountLastExportedAt = new Date().toISOString(); });
+      if (closeExportConfirm) setExportConfirmOpen(false);
       toast(t('pf_export_done'));
     } catch {
       toast(t('pf_export_failed'), 'error');
@@ -56,17 +60,15 @@ export function ProfileScreen() {
   };
   const deleteRecord = async () => {
     const wasGuest = S.guest;
-    if (!deleteArmed) {
-      setDeleteArmed(true);
-      toast(t(wasGuest ? 'pf_delete_guest_confirm' : 'pf_delete_confirm'));
-      return;
-    }
+    if (deleting) return;
+    setDeleting(true);
     try {
       await deleteCurrentRecord();
-      setDeleteArmed(false);
+      setDeleteConfirmOpen(false);
       toast(t(wasGuest ? 'pf_delete_done_guest' : 'pf_delete_done_account'));
     } catch {
       toast(t('pf_delete_failed'), 'error');
+      setDeleting(false);
     }
   };
 
@@ -101,13 +103,11 @@ export function ProfileScreen() {
       </Pressable>
       {S.guest ? (
         <View style={st.mocard}>
-          <Pressable onPress={() => { void deleteRecord(); }} style={st.morow}>
+          <Pressable onPress={() => setDeleteConfirmOpen(true)} style={st.morow}>
             <IcLab name="ring">
-              <P style={{ fontSize: 15, color: deleteArmed ? C.short : C.ink }}>
-                {deleteArmed ? t('pf_delete2') : t('pf_delete_guest')}
-              </P>
+              <P style={{ fontSize: 15, color: C.ink }}>{t('pf_delete_guest')}</P>
             </IcLab>
-            <Text style={{ fontSize: 16, color: deleteArmed ? C.short : C.ink }}>→</Text>
+            <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
           </Pressable>
         </View>
       ) : (
@@ -128,13 +128,11 @@ export function ProfileScreen() {
             <IcLab name="book"><P style={{ fontSize: 15 }}>{t('pf_export')}</P></IcLab>
             <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
           </Pressable>
-          <Pressable onPress={() => { void deleteRecord(); }} style={[st.morow, st.morowLine]}>
+          <Pressable onPress={() => setDeleteConfirmOpen(true)} style={[st.morow, st.morowLine]}>
             <IcLab name="ring">
-              <P style={{ fontSize: 15, color: deleteArmed ? C.short : C.ink }}>
-                {deleteArmed ? t('pf_delete2') : t('pf_delete')}
-              </P>
+              <P style={{ fontSize: 15, color: C.ink }}>{t('pf_delete')}</P>
             </IcLab>
-            <Text style={{ fontSize: 16, color: deleteArmed ? C.short : C.ink }}>→</Text>
+            <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
           </Pressable>
         </View>
       )}
@@ -174,6 +172,38 @@ export function ProfileScreen() {
               onPress={() => setExportConfirmOpen(false)}
             >
               <Text style={st.modalSecondaryText}>{t('cancel')}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+      <Modal transparent visible={deleteConfirmOpen} animationType="fade" onRequestClose={() => setDeleteConfirmOpen(false)}>
+        <View style={st.modalBackdrop}>
+          <View style={st.modalCard}>
+            <Text style={st.modalTitle}>{t(S.guest ? 'pf_delete_guest_title' : 'pf_delete_title')}</Text>
+            <Text style={st.modalBody}>{t(S.guest ? 'pf_delete_guest_body' : 'pf_delete_body')}</Text>
+            <Text style={st.modalBody}>{t('pf_delete_backup')}</Text>
+            {shouldOfferDeleteExport ? (
+              <Pressable
+                style={[st.modalPrimary, exporting && { opacity: 0.72 }]}
+                disabled={exporting || deleting}
+                onPress={() => { void downloadExport({ closeExportConfirm: false }); }}
+              >
+                <Text style={st.modalPrimaryText}>{exporting ? t('pf_exporting') : t('pf_export')}</Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              style={[st.modalDanger, deleting && { opacity: 0.72 }]}
+              disabled={exporting || deleting}
+              onPress={() => { void deleteRecord(); }}
+            >
+              <Text style={st.modalDangerText}>{deleting ? t('pf_deleting') : t(S.guest ? 'pf_delete_guest' : 'pf_delete')}</Text>
+            </Pressable>
+            <Pressable
+              style={st.modalCancel}
+              disabled={exporting || deleting}
+              onPress={() => setDeleteConfirmOpen(false)}
+            >
+              <Text style={st.modalCancelText}>{t('cancel')}</Text>
             </Pressable>
           </View>
         </View>
@@ -274,6 +304,8 @@ const st = StyleSheet.create({
   modalPrimaryText: { fontFamily: DISP_FONT, fontSize: 14.5, color: '#fff', textAlign: 'center' },
   modalSecondary: { minHeight: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#C9D6D3', paddingHorizontal: 16 },
   modalSecondaryText: { fontFamily: DISP_FONT, fontSize: 14.5, color: C.ink, textAlign: 'center' },
+  modalDanger: { minHeight: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: C.short, paddingHorizontal: 16 },
+  modalDangerText: { fontFamily: DISP_FONT, fontSize: 14.5, color: '#fff', textAlign: 'center' },
   modalCancel: { minHeight: 38, alignItems: 'center', justifyContent: 'center' },
   modalCancelText: { fontFamily: BODY_FONT, fontSize: 13, color: C.ink40 },
 });

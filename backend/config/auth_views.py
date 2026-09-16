@@ -48,10 +48,12 @@ def _app_state(user):
 
 
 def _auth_payload(user, token=None):
+    state = _app_state(user)
     payload = {
         "user": _user_payload(user),
-        "onboarding_completed": _app_state(user).onboarding_completed,
-        "preferred_language": _app_state(user).preferred_language,
+        "onboarding_completed": state.onboarding_completed,
+        "preferred_language": state.preferred_language,
+        "last_record_exported_at": state.last_record_exported_at.isoformat() if state.last_record_exported_at else None,
     }
     if token is not None:
         payload["token"] = token.key
@@ -441,6 +443,9 @@ class RecordExportView(APIView):
         filename = timezone.localtime().strftime("RuMampu_Record_%d_%b_%Y.xlsx")
         response = HttpResponse(_build_record_workbook(request, profile), content_type=XLSX_CONTENT_TYPE)
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        state = _app_state(request.user)
+        state.last_record_exported_at = timezone.now()
+        state.save(update_fields=["last_record_exported_at", "updated_at"])
         return response
 
 
