@@ -464,6 +464,13 @@ class UserAppState(models.Model):
     kept_tests = models.JSONField(default=list, blank=True)
     onboarding_completed = models.BooleanField(default=False)
     preferred_language = models.CharField(max_length=5, blank=True, default="")
+    preferred_income_source = models.ForeignKey(
+        IncomeSource,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
     last_record_exported_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -70,6 +70,7 @@ def _auth_payload(user, token=None):
         "kept_tests": state.kept_tests,
         "onboarding_completed": state.onboarding_completed,
         "preferred_language": state.preferred_language,
+        "preferred_income_source_id": state.preferred_income_source_id,
         "last_record_exported_at": state.last_record_exported_at.isoformat() if state.last_record_exported_at else None,
     }
     if token is not None:
@@ -81,8 +82,7 @@ _APP_STATE_FIELDS = {
     "cash_on_hand", "upfront_costs", "docs_checked", "bought_home",
     "expense_limits", "compare_payments", "saving_plan", "buffer_state",
     "village_state", "plan_horizon", "pot_moved_months", "kept_tests",
-    "onboarding_completed", "preferred_language",
-}
+    "onboarding_completed", "preferred_language", "preferred_income_source_id",}
 
 
 def _valid_number(value, *, integer=False, minimum=None):
@@ -554,7 +554,7 @@ class MeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        for field in _APP_STATE_FIELDS - {"preferred_language", "onboarding_completed"}:
+        for field in _APP_STATE_FIELDS - {"preferred_language", "onboarding_completed", "preferred_income_source_id"}:
             if field not in request.data:
                 continue
             value = _validate_app_state_field(field, request.data[field])
@@ -581,6 +581,31 @@ class MeView(APIView):
             if state.preferred_language != language:
                 state.preferred_language = language
                 update_fields.append("preferred_language")
+
+        if "preferred_income_source_id" in request.data:
+            raw_source_id = request.data.get("preferred_income_source_id")
+            if raw_source_id in (None, ""):
+                source = None
+            else:
+                try:
+                    source_id = int(raw_source_id)
+                except (TypeError, ValueError):
+                    source_id = None
+                profile = profile_for_request(request)
+                source = profile.income_sources.filter(id=source_id, is_active=True).first() if source_id else None
+                if source is None:
+                    return Response(
+                        {
+                            "error": {
+                                "code": "invalid_preferred_income_source",
+                                "message": "Choose an income source from your record.",
+                            }
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            if state.preferred_income_source_id != (source.id if source else None):
+                state.preferred_income_source = source
+                update_fields.append("preferred_income_source")
 
         if "onboarding_completed" in request.data:
             if request.data.get("onboarding_completed") is not True:

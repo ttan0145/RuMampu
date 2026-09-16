@@ -201,6 +201,61 @@ class AuthApiRegressionTests(TestCase):
         self.assertEqual(record.status_code, 200)
         self.assertEqual(record.json()["entries"][0]["amount"], "1777.00")
 
+    def test_account_state_persists_preferred_income_source_for_own_record_only(self):
+        user = User.objects.create_user(
+            username="preferred-source@example.com",
+            email="preferred-source@example.com",
+            password="Passw0rd123",
+        )
+        profile = GuestProfile.objects.create(user=user, session_key="preferred-source-profile")
+        ensure_default_sources(profile)
+        own_source = profile.income_sources.create(name="Bartender", is_custom=True)
+        token, _ = Token.objects.get_or_create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+        response = client.patch(
+            "/api/v1/auth/me/",
+            data={"preferred_income_source_id": own_source.id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["preferred_income_source_id"], own_source.id)
+        self.assertEqual(
+            UserAppState.objects.get(user=user).preferred_income_source_id,
+            own_source.id,
+        )
+
+        login = Client().post(
+            "/api/v1/auth/login/",
+            data={"username": "preferred-source@example.com", "password": "Passw0rd123"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(login.status_code, 200)
+        self.assertEqual(login.json()["preferred_income_source_id"], own_source.id)
+
+        other = User.objects.create_user(
+            username="preferred-source-other@example.com",
+            email="preferred-source-other@example.com",
+            password="Passw0rd123",
+        )
+        other_profile = GuestProfile.objects.create(user=other, session_key="preferred-source-other-profile")
+        ensure_default_sources(other_profile)
+        other_source = other_profile.income_sources.get(slug="ehail")
+
+        rejected = client.patch(
+            "/api/v1/auth/me/",
+            data={"preferred_income_source_id": other_source.id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(rejected.status_code, 400)
+        self.assertEqual(
+            rejected.json()["error"]["code"],
+            "invalid_preferred_income_source",
+        )
+
     def test_login_invalid_credentials_are_generic_for_email_or_password(self):
         User.objects.create_user(
             username="login@example.com",

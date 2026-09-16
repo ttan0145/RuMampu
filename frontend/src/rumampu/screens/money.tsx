@@ -778,6 +778,7 @@ export function IncomeScreen() {
               icon={<SrcIcon id={x.id} data={S.data} size={18} color={d.s === x.id ? '#fff' : C.ink} />}
               label={x.custom ? x.name || '' : t(x.k || '')}
               on={d.s === x.id}
+              selectionRole="radio"
               onPress={() => up(s => { s.incomeDraft.s = x.id; s.incomeDraft.flag = null; })} />
           ))}
           <InChip dashed label={t('src_own').replace(/^\+\s*|^＋\s*/, '')}

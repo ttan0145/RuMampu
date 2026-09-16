@@ -218,16 +218,23 @@ export function DayShortcutPicker({
 }
 
 /* .inchip — icon chip for sources / categories. */
-export function InChip({ icon, label, on, dashed, onPress, tint = 'in' }: {
+export function InChip({ icon, label, on, dashed, onPress, tint = 'in', selectionRole }: {
   icon?: React.ReactNode; label: string; on?: boolean; dashed?: boolean; onPress: () => void; tint?: InTint;
+  selectionRole?: 'radio' | 'checkbox';
 }) {
   const tints = IN_TINTS[tint];
+  const selected = Boolean(on);
   return (
-    <Pressable onPress={onPress} style={[
-      st.inchip,
-      on && { backgroundColor: tints.chipOn, borderColor: tints.chipOn },
-      dashed && { borderStyle: 'dashed' },
-    ]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole={selectionRole || 'button'}
+      accessibilityState={selectionRole ? { checked: selected } : { selected }}
+      aria-checked={selectionRole ? selected : undefined}
+      style={[
+        st.inchip,
+        on && { backgroundColor: tints.chipOn, borderColor: tints.chipOn },
+        dashed && { borderStyle: 'dashed' },
+      ]}>
       {icon}
       <Text style={{ fontFamily: dashed ? BODY_FONT : SEMI_FONT, fontSize: 13.5, color: on ? '#fff' : dashed ? C.ink64 : C.ink }}>{label}</Text>
     </Pressable>

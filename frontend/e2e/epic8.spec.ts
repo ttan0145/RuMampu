@@ -261,6 +261,21 @@ async function addIncomeThroughUi(page: Page, amount: string): Promise<void> {
   expect(response.status(), await response.text()).toBe(201);
 }
 
+async function addIncomeFromSourceThroughUi(page: Page, sourceName: string, amount: string): Promise<void> {
+  await page.getByRole('tab', { name: 'Money', exact: true }).click();
+  await page.getByText('Income', { exact: true }).last().click();
+  await expect(page.getByText(sourceName, { exact: true }).first()).toBeVisible();
+  await page.locator('input:visible').first().fill(amount);
+  await page.getByText(sourceName, { exact: true }).first().click();
+  const responsePromise = page.waitForResponse(response =>
+    response.request().method() === 'POST'
+    && response.url().endsWith('/api/v1/income/entries/')
+  );
+  await page.getByRole('button', { name: 'Add income', exact: true }).click();
+  const response = await responsePromise;
+  expect(response.status(), await response.text()).toBe(201);
+}
+
 async function addExpenseThroughUi(page: Page, amount: string): Promise<void> {
   await page.getByRole('tab', { name: 'Money', exact: true }).click();
   await page.getByText('Daily expenses', { exact: true }).last().click();

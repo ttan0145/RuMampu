@@ -6,6 +6,7 @@ import {
   ApiAuthState,
   ApiIncomeCoverage,
   ApiIncomePattern,
+  ApiIncomeSource,
   ApiWorkCostMonthSummary,
   ApiWorkCostEntry,
   createExpense as createExpenseRequest,
@@ -32,6 +33,7 @@ import {
   writeLocalState,
   clearLocalState,
   patchAccountState,
+  savePreferredIncomeSource as savePreferredIncomeSourceRequest,
   logout as logoutRequest,
   rotateGuestClientId,
   ApiError,
@@ -175,6 +177,7 @@ export interface AppState {
   fgMail: string;
   guest: boolean;
   accountLastExportedAt: string | null;
+  preferredIncomeSourceId: string | null;
   /* When a guest chooses Sign up from Profile, this records their explicit
      choice to move the current guest record into the new account. */
   mergeGuestOnSignup: boolean;
@@ -289,7 +292,7 @@ function initialState(): AppState {
     route: 'home',
     stack: [],
     onboard: 0, onboarded: false, splash: true,
-    wstep: 0, authEntryOpen: false, authMode: 'login', acctMade: false, fgMail: '', guest: false, accountLastExportedAt: null, mergeGuestOnSignup: false, discardGuestOnSignup: false,
+    wstep: 0, authEntryOpen: false, authMode: 'login', acctMade: false, fgMail: '', guest: false, accountLastExportedAt: null, preferredIncomeSourceId: null, mergeGuestOnSignup: false, discardGuestOnSignup: false,
     knew: false, kstep: 0, jobs: ['taxi'], ownJobs: [], lastMonth: '',
     plan: null, village: null, buffer: null, vHelp: false, planHorizon: null,
     moView: 'tiles', houseTab: 'test',
@@ -326,6 +329,17 @@ function initialState(): AppState {
     assistantOpen: false,
     assistantMsgs: [],
   };
+}
+
+function selectIncomeSource(
+  sources: ApiIncomeSource[],
+  preferredSourceId: string | null,
+  currentSelection: string,
+): ApiIncomeSource | undefined {
+  return (preferredSourceId ? sources.find(source => String(source.id) === preferredSourceId) : undefined)
+    || sources.find(source => String(source.id) === currentSelection)
+    || sources.find(source => source.slug === currentSelection)
+    || sources[0];
 }
 
 export function resetGuestIdentityForStartFreshAccount(state: AppState): void {
@@ -417,6 +431,7 @@ export interface Ctx {
   updateIncomeEntry: (id: string, input: { amount: number; date: string; sourceId?: string }) => Promise<void>;
   deleteIncomeEntry: (id: string) => Promise<void>;
   saveIncomeSource: (name: string) => Promise<string>;
+  savePreferredIncomeSource: (sourceId: string | null) => Promise<void>;
   refreshIncomeRecord: () => Promise<void>;
   refreshAccountData: (
     onProgress?: (progress: number, stage: string) => void,
@@ -746,10 +761,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             method: entry.entry_method,
             createdAt: entry.created_at,
           }));
-          const selectedSlug = prev.incomeDraft.s;
-          const selected = record.sources.find(source => source.slug === selectedSlug)
-            || record.sources.find(source => String(source.id) === selectedSlug)
-            || record.sources[0];
+          const selected = selectIncomeSource(record.sources, prev.preferredIncomeSourceId, prev.incomeDraft.s);
           if (selected) next.incomeDraft.s = String(selected.id);
           next.incomeSync = 'ready';
           return next;
@@ -881,10 +893,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           method: entry.entry_method,
           createdAt: entry.created_at,
         }));
-        const selectedValue = prev.incomeDraft.s;
-        const selected = record.sources.find(source => String(source.id) === selectedValue)
-          || record.sources.find(source => source.slug === selectedValue)
-          || record.sources[0];
+        const selected = selectIncomeSource(record.sources, prev.preferredIncomeSourceId, prev.incomeDraft.s);
         if (selected) next.incomeDraft.s = String(selected.id);
         next.incomeSync = 'ready';
         return next;
@@ -1109,6 +1118,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     void refreshIncomeCoverage().catch(() => undefined);
   }, [authReady, S.coverageSync, S.incomeSync, refreshIncomeCoverage]);
 
+  const savePreferredIncomeSource = useCallback(async (sourceId: string | null): Promise<void> => {
+    if (!INCOME_API_ENABLED || !accountAuthenticated.current) {
+      up(s => { s.preferredIncomeSourceId = sourceId; });
+      return;
+    }
+    const auth = await savePreferredIncomeSourceRequest(sourceId);
+    up(s => {
+      s.preferredIncomeSourceId = auth.preferred_income_source_id == null
+        ? null
+        : String(auth.preferred_income_source_id);
+    });
+  }, [up]);
+
   /**
    * EN: Persist US1.1/US1.2 income; return the stable 409 warning for AC1.1.10 confirmation.
    * 中文：持久化 US1.1/US1.2 收入；把稳定的 409 警告交给 AC1.1.10 二次确认。
@@ -1148,6 +1170,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         s.incomeSync = 'ready';
         logIt(s, 'lg_inc_add', { a: rm(Number(entry.amount)) });
       });
+      const savedSourceId = entry.entry_method === 'manual' && entry.source_id != null
+        ? String(entry.source_id)
+        : null;
+      if (savedSourceId && accountAuthenticated.current && savedSourceId !== S.preferredIncomeSourceId) {
+        await savePreferredIncomeSource(savedSourceId).catch(() => undefined);
+      }
       if (!options?.deferRefresh) refreshAfterMoneyWrite();
       return 'saved';
     } catch (error) {
@@ -1155,7 +1183,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       up(s => { s.incomeSync = 'error'; });
       throw error;
     }
-  }, [refreshAfterMoneyWrite, up]);
+  }, [S.preferredIncomeSourceId, refreshAfterMoneyWrite, savePreferredIncomeSource, up]);
 
   const updateIncomeEntry = useCallback(async (
     id: string,
@@ -1619,13 +1647,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Ctx>(() => ({
     S, authReady, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, applyAccountState, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
+    saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, savePreferredIncomeSource, refreshIncomeRecord, refreshAccountData, applyAccountState, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   }), [
     S, authReady, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, applyAccountState, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
+    saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, savePreferredIncomeSource, refreshIncomeRecord, refreshAccountData, applyAccountState, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
