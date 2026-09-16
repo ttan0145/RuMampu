@@ -283,6 +283,53 @@ async function clickThroughFirstAccountOnboarding(page: Page): Promise<void> {
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
 }
 
+async function createDirectAccountThroughOnboarding(
+  page: Page,
+  email: string,
+  password: string,
+  lastMonthAmount?: string,
+): Promise<void> {
+  await page.goto('/');
+  await dismissSplashIfVisible(page);
+  await page.getByText('Create an account', { exact: true }).click();
+  await page.getByPlaceholder('name@example.com').fill(email);
+  await page.getByPlaceholder('At least 8 characters').fill(password);
+  await page.getByPlaceholder('Type it again').fill(password);
+  await page.getByText('Create account', { exact: true }).last().click();
+
+  await expect(page.getByText('Step 1 of 3', { exact: true })).toBeVisible();
+  await page.getByText('Next', { exact: true }).last().click();
+  await expect(page.getByText('What do you do?', { exact: true })).toBeVisible();
+  await page.getByText('Food delivery', { exact: true }).click();
+  await page.getByText('Next', { exact: true }).last().click();
+  await expect(page.getByText('How much did you earn last month?', { exact: true })).toBeVisible();
+  if (lastMonthAmount) {
+    await page.locator('input:visible').last().fill(lastMonthAmount);
+    await page.getByText('Start using RuMampu', { exact: true }).click();
+  } else {
+    await page.getByText('Skip', { exact: true }).click();
+  }
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText('Step 1 of 3', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Step 2 of 3', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Step 3 of 3', { exact: true })).toHaveCount(0);
+}
+
+async function logoutCurrentAccount(page: Page): Promise<void> {
+  await page.getByRole('tab', { name: 'Profile', exact: true }).click();
+  await page.getByText('Log out', { exact: true }).click();
+  await expect(page.getByText('Your record remains with your account. This only ends the current session on this browser/device.', { exact: true })).toBeVisible();
+  await page.getByText('Log out', { exact: true }).last().click();
+  await expect(page.getByPlaceholder('name@example.com')).toBeVisible();
+}
+
+async function loginThroughUi(page: Page, email: string, password: string): Promise<void> {
+  await page.getByPlaceholder('name@example.com').fill(email);
+  await page.getByPlaceholder('Your password').fill(password);
+  await page.getByText('Log in', { exact: true }).last().click();
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible({ timeout: 15000 });
+}
+
 function expectedLastMonthIso(): string {
   const now = new Date();
   const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -515,6 +562,82 @@ test('US8.17 get-to-know accepts custom work and saves one editable rough monthl
   expect(finalPayload!.entries[0].amount).toBe('3000.00');
   expect(finalPayload!.entries[0].date).toBe(expectedLastMonthIso());
   expect(finalPayload!.entries[0].entry_method).toBe('historical_total');
+});
+
+test('US8.17 direct account can add income after saving rough onboarding income', async ({ page }) => {
+  const email = `epic8-direct-income-${Date.now()}@example.com`;
+  const password = 'Passw0rd123';
+
+  await createDirectAccountThroughOnboarding(page, email, password, '3000');
+
+  await expect
+    .poll(async () => (await accountIncomeRecord(page)).entries.some(entry => (
+      entry.amount === '3000.00'
+      && entry.date === expectedLastMonthIso()
+      && entry.entry_method === 'historical_total'
+    )))
+    .toBe(true);
+  let record = await accountIncomeRecord(page);
+  expect(record.sources.some(source => source.name === 'Food delivery' && source.is_custom)).toBe(true);
+
+  await addIncomeThroughUi(page, '3333');
+  await expect(page.locator('body')).toContainText(/3,333|3333/);
+  record = await accountIncomeRecord(page);
+  expect(record.entries.map(entry => entry.amount)).toEqual(['3000.00', '3333.00']);
+  expect(record.entries.find(entry => entry.amount === '3333.00')).toEqual(expect.objectContaining({
+    entry_method: 'manual',
+  }));
+
+  await openRecord(page);
+  await expect(page.locator('body')).toContainText('2 entries');
+
+  await page.reload();
+  await dismissSplashIfVisible(page);
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+  expect((await accountIncomeRecord(page)).entries.map(entry => entry.amount)).toEqual(['3000.00', '3333.00']);
+
+  await logoutCurrentAccount(page);
+  await loginThroughUi(page, email, password);
+  expect((await accountIncomeRecord(page)).entries.map(entry => entry.amount)).toEqual(['3000.00', '3333.00']);
+  await openRecord(page);
+  await expect(page.locator('body')).toContainText('2 entries');
+});
+
+test('US8.17 direct account can add income after skipping rough onboarding income', async ({ page }) => {
+  const email = `epic8-direct-skip-income-${Date.now()}@example.com`;
+  const password = 'Passw0rd123';
+
+  await createDirectAccountThroughOnboarding(page, email, password);
+
+  let record = await accountIncomeRecord(page);
+  expect(record.entries).toEqual([]);
+  await expect
+    .poll(async () => (await accountIncomeRecord(page)).sources.some(source => source.name === 'Food delivery' && source.is_custom))
+    .toBe(true);
+
+  await addIncomeThroughUi(page, '3333');
+  await expect(page.locator('body')).toContainText(/3,333|3333/);
+  record = await accountIncomeRecord(page);
+  expect(record.entries).toEqual([
+    expect.objectContaining({
+      amount: '3333.00',
+      entry_method: 'manual',
+    }),
+  ]);
+
+  await openRecord(page);
+  await expect(page.locator('body')).toContainText('1 entries');
+
+  await page.reload();
+  await dismissSplashIfVisible(page);
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+  expect((await accountIncomeRecord(page)).entries.map(entry => entry.amount)).toEqual(['3333.00']);
+
+  await logoutCurrentAccount(page);
+  await loginThroughUi(page, email, password);
+  expect((await accountIncomeRecord(page)).entries.map(entry => entry.amount)).toEqual(['3333.00']);
+  await openRecord(page);
+  await expect(page.locator('body')).toContainText('1 entries');
 });
 
 test('US8.12 guest entry does not call authenticated-only account endpoints', async ({ page }) => {

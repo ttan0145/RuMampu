@@ -738,7 +738,7 @@ function JobTile({ id, bg, label, on, onPress }: { id: string; bg: string; label
 }
 
 export function GetToKnow() {
-  const { S, t, up, toast, saveIncomeEntry, updateIncomeEntry, saveIncomeSource } = useApp();
+  const { S, t, up, toast, saveIncomeEntry, updateIncomeEntry, saveIncomeSource, refreshAccountData } = useApp();
   const insets = useSafeAreaInsets();
   const [amt, setAmt] = React.useState(S.lastMonth || '');
   const [finishError, setFinishError] = React.useState('');
@@ -859,6 +859,18 @@ export function GetToKnow() {
         await completeAccountOnboarding();
       } catch (error) {
         console.error('Onboarding: completion flag not saved; the next login retries', error);
+      }
+      try {
+        await refreshAccountData();
+      } catch (error) {
+        const message = error instanceof ApiError
+          ? error.message
+          : 'Could not finish loading your RuMampu account.';
+        console.error('Onboarding: account record was not loaded', error);
+        setFinishError(message);
+        toast(message, 'error');
+        setFinishing(false);
+        return;
       }
     }
 
