@@ -413,7 +413,7 @@ export function RecordScreen() {
         ) : (
           <BodyS muted>{t('rc_latest_empty')}</BodyS>
         )}
-        <BodyS muted>{t('rc_live')}</BodyS>
+        <BodyS muted>{t(S.guest ? 'rc_live' : 'rc_live_acct')}</BodyS>
       </View>
 
       <WhatChanged />

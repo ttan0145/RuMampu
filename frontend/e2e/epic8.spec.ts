@@ -1031,14 +1031,15 @@ test('US8.1 summarises mixed dated income and expenses without using array order
   await openRecord(page);
 
   // EN: These locators assert the visible summary: distinct months, entry count,
-  // latest income/expense business date, and browser/device account-scope copy.
-  // 中文：这些 locator 验证可见摘要：去重月份数、记录条数、最新业务日期，以及浏览器/设备与账号范围说明。
+  // latest income/expense business date, and signed-in account-scope copy.
+  // 中文：这些 locator 验证可见摘要：去重月份数、记录条数、最新业务日期，以及已登录账号范围说明。
   await expect(page.getByText('Financial record', { exact: true })).toBeVisible();
   await expect(page.getByLabel('3 months recorded')).toBeVisible();
   await expect(page.getByLabel('4 financial entries')).toBeVisible();
   await expect(page.getByText('Latest entry', { exact: true })).toBeVisible();
   await expect(page.getByText('5 Mar 2026', { exact: true })).toBeVisible();
-  await expect(page.getByText('Your financial record may remain available on this browser/device. It is linked to an anonymous guest ID, not a RuMampu account.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Every screen updates as you add. Signed in: your record is kept for next time.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Your financial record may remain available on this browser/device. It is linked to an anonymous guest ID, not a RuMampu account.', { exact: true })).not.toBeVisible();
   await captureEvidence(page, 'epic-8', '01-record-mixed-summary.png');
 });
 
