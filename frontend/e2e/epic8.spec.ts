@@ -261,6 +261,21 @@ async function addIncomeThroughUi(page: Page, amount: string): Promise<void> {
   expect(response.status(), await response.text()).toBe(201);
 }
 
+async function addIncomeFromSourceThroughUi(page: Page, sourceName: string, amount: string): Promise<void> {
+  await page.getByRole('tab', { name: 'Money', exact: true }).click();
+  await page.getByText('Income', { exact: true }).last().click();
+  await expect(page.getByText(sourceName, { exact: true }).first()).toBeVisible();
+  await page.locator('input:visible').first().fill(amount);
+  await page.getByText(sourceName, { exact: true }).first().click();
+  const responsePromise = page.waitForResponse(response =>
+    response.request().method() === 'POST'
+    && response.url().endsWith('/api/v1/income/entries/')
+  );
+  await page.getByRole('button', { name: 'Add income', exact: true }).click();
+  const response = await responsePromise;
+  expect(response.status(), await response.text()).toBe(201);
+}
+
 async function addExpenseThroughUi(page: Page, amount: string): Promise<void> {
   await page.getByRole('tab', { name: 'Money', exact: true }).click();
   await page.getByText('Daily expenses', { exact: true }).last().click();
@@ -321,6 +336,64 @@ async function createDirectAccountThroughOnboarding(
   await expect(page.getByText('Step 1 of 3', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Step 2 of 3', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Step 3 of 3', { exact: true })).toHaveCount(0);
+}
+
+async function createDirectAccountWithOnboardingSources(
+  page: Page,
+  email: string,
+  password: string,
+  customWorkName: string,
+): Promise<void> {
+  await page.goto('/');
+  await dismissSplashIfVisible(page);
+  await page.getByText('Create an account', { exact: true }).click();
+  await page.getByPlaceholder('name@example.com').fill(email);
+  await page.getByPlaceholder('At least 8 characters').fill(password);
+  await page.getByPlaceholder('Type it again').fill(password);
+  await page.getByText('Create account', { exact: true }).last().click();
+
+  await expect(page.getByText('Step 1 of 3', { exact: true })).toBeVisible();
+  await page.getByText('Next', { exact: true }).last().click();
+  await expect(page.getByText('What do you do?', { exact: true })).toBeVisible();
+
+  // E-hailing is selected by default. This flow uses only onboarding-created
+  // custom sources so the assertion does not pass by relying on a default row.
+  await page.getByText('E-hailing', { exact: true }).click();
+  await page.getByText('Bartender', { exact: true }).click();
+  await page.getByText('＋ Add your own', { exact: true }).click();
+  await page.locator('input:visible').last().fill(customWorkName);
+  await page.getByText('Add', { exact: true }).click();
+  await expect(page.getByText(customWorkName, { exact: true })).toBeVisible();
+
+  await page.getByText('Next', { exact: true }).last().click();
+  await expect(page.getByText('How much did you earn last month?', { exact: true })).toBeVisible();
+  await page.getByText('Skip', { exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible({ timeout: 15000 });
+}
+
+async function createDirectAccountWithBartenderOnly(
+  page: Page,
+  email: string,
+  password: string,
+): Promise<void> {
+  await page.goto('/');
+  await dismissSplashIfVisible(page);
+  await page.getByText('Create an account', { exact: true }).click();
+  await page.getByPlaceholder('name@example.com').fill(email);
+  await page.getByPlaceholder('At least 8 characters').fill(password);
+  await page.getByPlaceholder('Type it again').fill(password);
+  await page.getByText('Create account', { exact: true }).last().click();
+
+  await expect(page.getByText('Step 1 of 3', { exact: true })).toBeVisible();
+  await page.getByText('Next', { exact: true }).last().click();
+  await expect(page.getByText('What do you do?', { exact: true })).toBeVisible();
+  await page.getByText('E-hailing', { exact: true }).click();
+  await page.getByText('Bartender', { exact: true }).click();
+
+  await page.getByText('Next', { exact: true }).last().click();
+  await expect(page.getByText('How much did you earn last month?', { exact: true })).toBeVisible();
+  await page.getByText('Skip', { exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible({ timeout: 15000 });
 }
 
 async function logoutCurrentAccount(page: Page): Promise<void> {
@@ -646,6 +719,97 @@ test('US8.17 direct account can add income after skipping rough onboarding incom
   expect((await accountIncomeRecord(page)).entries.map(entry => entry.amount)).toEqual(['3333.00']);
   await openRecord(page);
   await expect(page.locator('body')).toContainText('1 entries');
+});
+
+test('US8.17 direct account onboarding sources persist across login, save and reload', async ({ page }) => {
+  const email = `epic8-source-persist-${Date.now()}@example.com`;
+  const password = 'Passw0rd123';
+  const customSource = `Night baker ${Date.now()}`;
+
+  await createDirectAccountWithOnboardingSources(page, email, password, customSource);
+  await page.getByRole('tab', { name: 'Money', exact: true }).click();
+  await page.getByText('Income', { exact: true }).last().click();
+  await expect(page.getByText('Bartender', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(customSource, { exact: true }).first()).toBeVisible();
+
+  let record = await accountIncomeRecord(page);
+  expect(record.sources.some(source => source.name === 'Bartender' && source.is_custom)).toBe(true);
+  expect(record.sources.some(source => source.name === customSource && source.is_custom)).toBe(true);
+
+  await logoutCurrentAccount(page);
+  await loginThroughUi(page, email, password);
+  await page.getByRole('tab', { name: 'Money', exact: true }).click();
+  await page.getByText('Income', { exact: true }).last().click();
+  await expect(page.getByText('Bartender', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(customSource, { exact: true }).first()).toBeVisible();
+
+  record = await accountIncomeRecord(page);
+  const bartender = record.sources.find(source => source.name === 'Bartender' && source.is_custom);
+  expect(bartender).toBeTruthy();
+  expect(record.sources.some(source => source.name === customSource && source.is_custom)).toBe(true);
+
+  await addIncomeFromSourceThroughUi(page, 'Bartender', '333');
+  record = await accountIncomeRecord(page);
+  const savedEntry = record.entries.find(entry => entry.amount === '333.00');
+  expect(savedEntry).toBeTruthy();
+  expect(savedEntry!.source_id).toBe(bartender!.id);
+
+  await page.reload();
+  await dismissSplashIfVisible(page);
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Money', exact: true }).click();
+  await page.getByText('Income', { exact: true }).last().click();
+  await expect(page.getByText('Bartender', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(customSource, { exact: true }).first()).toBeVisible();
+
+  record = await accountIncomeRecord(page);
+  const reloadedBartender = record.sources.find(source => source.name === 'Bartender' && source.is_custom);
+  const reloadedEntry = record.entries.find(entry => entry.amount === '333.00');
+  expect(reloadedBartender).toBeTruthy();
+  expect(record.sources.some(source => source.name === customSource && source.is_custom)).toBe(true);
+  expect(reloadedEntry).toBeTruthy();
+  expect(reloadedEntry!.source_id).toBe(reloadedBartender!.id);
+});
+
+test('US8.17 direct account remembers the highlighted default income source', async ({ page }) => {
+  const email = `epic8-source-default-${Date.now()}@example.com`;
+  const password = 'Passw0rd123';
+
+  await createDirectAccountWithBartenderOnly(page, email, password);
+  await page.getByRole('tab', { name: 'Money', exact: true }).click();
+  await page.getByText('Income', { exact: true }).last().click();
+  await expect(page.getByRole('radio', { name: 'Bartender', checked: true })).toBeVisible();
+
+  let record = await accountIncomeRecord(page);
+  const bartender = record.sources.find(source => source.name === 'Bartender' && source.is_custom);
+  expect(bartender).toBeTruthy();
+
+  await logoutCurrentAccount(page);
+  await loginThroughUi(page, email, password);
+  await page.getByRole('tab', { name: 'Money', exact: true }).click();
+  await page.getByText('Income', { exact: true }).last().click();
+  await expect(page.getByRole('radio', { name: 'Bartender', checked: true })).toBeVisible();
+
+  await page.reload();
+  await dismissSplashIfVisible(page);
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Money', exact: true }).click();
+  await page.getByText('Income', { exact: true }).last().click();
+  await expect(page.getByRole('radio', { name: 'Bartender', checked: true })).toBeVisible();
+
+  await addIncomeFromSourceThroughUi(page, 'Freelance', '444');
+  record = await accountIncomeRecord(page);
+  const freelance = record.sources.find(source => source.slug === 'freelance');
+  const savedEntry = record.entries.find(entry => entry.amount === '444.00');
+  expect(freelance).toBeTruthy();
+  expect(savedEntry).toBeTruthy();
+  expect(savedEntry!.source_id).toBe(freelance!.id);
+
+  await logoutCurrentAccount(page);
+  await loginThroughUi(page, email, password);
+  await page.getByRole('tab', { name: 'Money', exact: true }).click();
+  await page.getByText('Income', { exact: true }).last().click();
+  await expect(page.getByRole('radio', { name: 'Freelance', checked: true })).toBeVisible();
 });
 
 test('US8.14.5 delete confirmation offers optional export first for a never-exported account', async ({ page }) => {
