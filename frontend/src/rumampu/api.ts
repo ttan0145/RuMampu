@@ -222,6 +222,18 @@ export interface ApiUser {
 
 export interface ApiAuthState {
   user: ApiUser;
+  cash_on_hand: number | string;
+  upfront_costs: unknown[];
+  docs_checked: string[];
+  bought_home: boolean;
+  expense_limits: Record<string, unknown>;
+  compare_payments: unknown[];
+  saving_plan: Record<string, unknown>;
+  buffer_state: Record<string, unknown>;
+  village_state: Record<string, unknown>;
+  plan_horizon: number | null;
+  pot_moved_months: string[];
+  kept_tests: unknown[];
   onboarding_completed: boolean;
   preferred_language: 'en' | 'ms' | 'zh' | '';
   last_record_exported_at: string | null;
@@ -229,6 +241,17 @@ export interface ApiAuthState {
 
 export interface ApiAuthResponse extends ApiAuthState {
   token: string;
+}
+
+export interface AccountStatePatch {
+  cash_on_hand: number;
+  saving_plan: Record<string, unknown>;
+  buffer_state: Record<string, unknown>;
+  village_state: Record<string, unknown>;
+  plan_horizon: number | null;
+  pot_moved_months: string[];
+  docs_checked: string[];
+  kept_tests: unknown[];
 }
 
 export interface ApiGuestTransferStatus {
@@ -247,16 +270,59 @@ let nativeAuthToken: string | null = null;
 let nativeAuthStorageLoaded = Platform.OS === 'web';
 const AUTH_TOKEN_KEY = 'rumampu_auth_token';
 const CLIENT_ID_KEY = 'rumampu_client_id';
+export const LOCAL_STATE_KEY = 'rumampu_local_state';
+
+/* Declared progress is local-only. Storage is best-effort: private browsing,
+   quota limits and denied keychains must never break rendering or navigation. */
+export async function readLocalState(): Promise<string | null> {
+  try {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      return window.localStorage.getItem(LOCAL_STATE_KEY);
+    }
+    return await SecureStore.getItemAsync(LOCAL_STATE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export async function writeLocalState(value: string): Promise<void> {
+  try {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.localStorage.setItem(LOCAL_STATE_KEY, value);
+      return;
+    }
+    await SecureStore.setItemAsync(LOCAL_STATE_KEY, value);
+  } catch {
+    // Local persistence is optional; continue with in-memory state.
+  }
+}
+
+export async function clearLocalState(): Promise<void> {
+  try {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.localStorage.removeItem(LOCAL_STATE_KEY);
+      return;
+    }
+    await SecureStore.deleteItemAsync(LOCAL_STATE_KEY);
+  } catch {
+    // Best effort only; a storage failure must not escape a logout action.
+  }
+}
 
 export async function initializeAuthStorage(): Promise<void> {
   if (Platform.OS === 'web' || nativeAuthStorageLoaded) return;
-  nativeAuthToken = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
-  nativeAuthStorageLoaded = true;
+  try {
+    nativeAuthToken = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+  } catch {
+    nativeAuthToken = null;
+  } finally {
+    nativeAuthStorageLoaded = true;
+  }
 }
 
 async function storedAuthToken(): Promise<string | null> {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    return window.localStorage.getItem(AUTH_TOKEN_KEY);
+    try { return window.localStorage.getItem(AUTH_TOKEN_KEY); } catch { return null; }
   }
   await initializeAuthStorage();
   return nativeAuthToken;
@@ -266,12 +332,16 @@ async function storeAuthToken(token: string | null): Promise<void> {
   nativeAuthToken = token;
   nativeAuthStorageLoaded = true;
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    if (token) window.localStorage.setItem(AUTH_TOKEN_KEY, token);
-    else window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    try {
+      if (token) window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+      else window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    } catch { /* best effort */ }
     return;
   }
-  if (token) await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
-  else await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+  try {
+    if (token) await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
+    else await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+  } catch { /* best effort */ }
 }
 
 function newClientId(): string {
@@ -282,17 +352,17 @@ function newClientId(): string {
 
 async function storedClientId(): Promise<string | null> {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    return window.localStorage.getItem(CLIENT_ID_KEY);
+    try { return window.localStorage.getItem(CLIENT_ID_KEY); } catch { return null; }
   }
-  return SecureStore.getItemAsync(CLIENT_ID_KEY);
+  try { return await SecureStore.getItemAsync(CLIENT_ID_KEY); } catch { return null; }
 }
 
 async function storeClientId(clientId: string): Promise<void> {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    window.localStorage.setItem(CLIENT_ID_KEY, clientId);
+    try { window.localStorage.setItem(CLIENT_ID_KEY, clientId); } catch { /* best effort */ }
     return;
   }
-  await SecureStore.setItemAsync(CLIENT_ID_KEY, clientId);
+  try { await SecureStore.setItemAsync(CLIENT_ID_KEY, clientId); } catch { /* best effort */ }
 }
 
 export async function rotateGuestClientId(): Promise<string> {
@@ -476,6 +546,13 @@ export function completeAccountOnboarding(): Promise<ApiAuthState> {
   return request<ApiAuthState>('/auth/me/', {
     method: 'PATCH',
     body: JSON.stringify({ onboarding_completed: true }),
+  });
+}
+
+export function patchAccountState(value: AccountStatePatch): Promise<ApiAuthState> {
+  return request<ApiAuthState>('/auth/me/', {
+    method: 'PATCH',
+    body: JSON.stringify(value),
   });
 }
 

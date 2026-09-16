@@ -17,7 +17,7 @@ export function planEnsure(s: AppState): PlanState {
   const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   const n = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
   if (!s.plan || s.plan.key !== key) {
-    s.plan = { key, target: 500, n, amounts: new Array(n).fill(0), done: new Array(n).fill(false), seed: 1 };
+    s.plan = { key, target: 0, n, amounts: new Array(n).fill(0), done: new Array(n).fill(false), seed: 1 };
     planRegen(s.plan);
   }
   return s.plan;
@@ -35,6 +35,10 @@ export function planRegen(p: PlanState, fromDay = 0): void {
   }
   if (!idx.length) return;
   const rem = Math.max(0, p.target - fixed);
+  if (rem === 0) {
+    idx.forEach(i => { p.amounts[i] = 0; });
+    return;
+  }
   let seed = (p.target * 7919 + p.seed * 104729 + p.n) >>> 0;
   const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
   const w = idx.map(() => 0.35 + rnd() * 1.3);

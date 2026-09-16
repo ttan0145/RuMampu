@@ -3,6 +3,7 @@ import { AppData, MOCK } from './mock';
 import { Lang, STRINGS } from './strings';
 import {
   ApiCoverageAnswer,
+  ApiAuthState,
   ApiIncomeCoverage,
   ApiIncomePattern,
   ApiWorkCostMonthSummary,
@@ -27,6 +28,10 @@ import {
   fetchCurrentUser,
   hasStoredLogin,
   initializeAuthStorage,
+  readLocalState,
+  writeLocalState,
+  clearLocalState,
+  patchAccountState,
   logout as logoutRequest,
   rotateGuestClientId,
   ApiError,
@@ -42,6 +47,7 @@ import { clearHousingSession } from '../../services/housingSession';
 import { HouseCostType, HouseCostsResponse, SavedHousingTestRecord } from '../../types/housing';
 import { logIt } from './log';
 import { rm, rmx } from './calc';
+import { accountSnapshot, hydrate, hydrateAccountState, snapshot } from './persist';
 
 /* Central app state — mirrors the prototype's `S` object and navigation model. */
 
@@ -415,6 +421,7 @@ export interface Ctx {
     onProgress?: (progress: number, stage: string) => void,
     options?: { includeSavedTests?: boolean },
   ) => Promise<void>;
+  applyAccountState: (auth: ApiAuthState) => void;
   refreshSavedHousingTests: () => Promise<void>;
   signOut: () => Promise<void>;
   deleteCurrentRecord: () => Promise<void>;
@@ -479,6 +486,7 @@ function applyConfirmedWorkCost(state: AppState, entry: ApiWorkCostEntry): void 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [S, setS] = useState<AppState>(initialState);
   const [authReady, setAuthReady] = useState(!INCOME_API_ENABLED);
+  const [localStateReady, setLocalStateReady] = useState(false);
   const [toastMsg, setToastMsg] = useState<{
     msg: string;
     key: number;
@@ -492,6 +500,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const workCostRequestVersion = useRef(0);
   const workCostMonth = useRef(S.workCostSelectedMonth);
   const guestBootstrap = useRef<ReturnType<typeof fetchIncomeRecord> | null>(null);
+  const localStateHydrated = useRef(false);
+  const skipNextLocalStateWrite = useRef(false);
+  const skipNextAccountSync = useRef(false);
+  const accountAuthenticated = useRef(false);
+  const localStateWriteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const ensureGuest = useCallback(() => {
     if (!guestBootstrap.current) {
@@ -512,13 +525,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // Restore a real account session before any anonymous profile request runs.
-  // Web reads localStorage; native reads the token from Expo SecureStore.
+  const applyAccountState = useCallback((auth: ApiAuthState) => {
+    accountAuthenticated.current = true;
+    skipNextAccountSync.current = true;
+    setS(prev => {
+      const next: AppState = JSON.parse(JSON.stringify(prev));
+      /* The account is authoritative: anonymous declarations are discarded
+         rather than merged when both devices contain a plan for the same day. */
+      hydrateAccountState(next, auth as unknown as Record<string, unknown>);
+      try { void writeLocalState(snapshot(next)); } catch { /* best effort */ }
+      return next;
+    });
+  }, []);
+
+  // Restore local declarations before rendering the app, then restore a real
+  // account session before any anonymous profile request runs. Web reads
+  // localStorage; native reads the token/state from Expo SecureStore.
   React.useEffect(() => {
-    if (!INCOME_API_ENABLED) return;
     let active = true;
     void (async () => {
-      await initializeAuthStorage();
+      try { await initializeAuthStorage(); } catch { /* storage is best effort */ }
+      const raw = await readLocalState();
+      if (!active) return;
+      setS(prev => {
+        const next: AppState = JSON.parse(JSON.stringify(prev));
+        hydrate(next, raw);
+        return next;
+      });
+      localStateHydrated.current = true;
+      setLocalStateReady(true);
+
+      if (!INCOME_API_ENABLED) return;
       const hasLogin = await hasStoredLogin();
       if (!hasLogin) {
         if (active) setAuthReady(true);
@@ -528,6 +565,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       try {
         const auth = await fetchCurrentUser();
         if (!active) return;
+        applyAccountState(auth);
         setS(prev => {
           const next: AppState = JSON.parse(JSON.stringify(prev));
           next.guest = false;
@@ -569,7 +607,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     })();
     return () => { active = false; };
-  }, []);
+  }, [applyAccountState]);
+
+  /* Persist the allow-listed declarations in one place. UI-only state (route,
+     sheets, toasts, etc.) is ignored by snapshot(). Anonymous sessions remain
+     local-only because UserAppState is keyed to an authenticated account. */
+  React.useEffect(() => {
+    if (!localStateHydrated.current) return;
+    if (skipNextLocalStateWrite.current) {
+      skipNextLocalStateWrite.current = false;
+      return;
+    }
+    if (localStateWriteTimer.current) clearTimeout(localStateWriteTimer.current);
+    localStateWriteTimer.current = setTimeout(() => {
+      localStateWriteTimer.current = null;
+      let local: string;
+      try { local = snapshot(S); } catch { return; }
+      void writeLocalState(local);
+      if (accountAuthenticated.current) {
+        const syncAccount = !skipNextAccountSync.current;
+        skipNextAccountSync.current = false;
+        if (syncAccount) void patchAccountState(accountSnapshot(S)).catch(() => {
+          // Local state remains available if an account sync is temporarily offline.
+        });
+      }
+    }, 500);
+    return () => {
+      if (localStateWriteTimer.current) {
+        clearTimeout(localStateWriteTimer.current);
+        localStateWriteTimer.current = null;
+      }
+    };
+  }, [S]);
 
   // EN: Bootstrap Epic 1 domains from one guest-owned backend record before Epic 2 analysis runs.
   // 中文：在 Epic 2 分析启动前，从同一访客所有的后端记录加载 Epic 1 各数据域。
@@ -1333,12 +1402,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [refreshIncomeRecord, refreshSavedHousingTests, refreshWorkCosts, up]);
 
   const signOut = useCallback(async (): Promise<void> => {
+    accountAuthenticated.current = false;
+    skipNextAccountSync.current = true;
+    skipNextLocalStateWrite.current = true;
+    if (localStateWriteTimer.current) {
+      clearTimeout(localStateWriteTimer.current);
+      localStateWriteTimer.current = null;
+    }
     try {
       await logoutRequest();
     } catch {
       // logoutRequest clears the locally stored token in its finally block.
     }
     await rotateGuestClientId();
+    await clearLocalState();
     guestBootstrap.current = null;
     setS(prev => {
       const next = initialState();
@@ -1354,8 +1431,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteCurrentRecord = useCallback(async (): Promise<void> => {
+    accountAuthenticated.current = false;
+    skipNextAccountSync.current = true;
+    skipNextLocalStateWrite.current = true;
+    if (localStateWriteTimer.current) {
+      clearTimeout(localStateWriteTimer.current);
+      localStateWriteTimer.current = null;
+    }
     await deleteRecordRequest();
     await rotateGuestClientId();
+    await clearLocalState();
     guestBootstrap.current = null;
     setS(prev => {
       const next = initialState();
@@ -1370,12 +1455,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [refreshAccountData]);
 
   const enterGuestMode = useCallback(async (): Promise<void> => {
+    accountAuthenticated.current = false;
+    skipNextAccountSync.current = true;
+    skipNextLocalStateWrite.current = true;
+    if (localStateWriteTimer.current) {
+      clearTimeout(localStateWriteTimer.current);
+      localStateWriteTimer.current = null;
+    }
     try {
       await logoutRequest();
     } catch {
       // This is expected when there is no authenticated token yet.
     }
     await rotateGuestClientId();
+    await clearLocalState();
     guestBootstrap.current = null;
 
     setS(prev => {
@@ -1428,18 +1521,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<Ctx>(() => ({
     S, authReady, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
+    saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, applyAccountState, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   }), [
     S, authReady, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
+    saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, refreshIncomeRecord, refreshAccountData, applyAccountState, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry,
   ]);
 
+  if (!localStateReady) return null;
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }
 

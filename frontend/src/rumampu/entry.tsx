@@ -311,7 +311,7 @@ function AccountLoadingScreen({
 }
 
 function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: string }) {
-  const { S, t, up, refreshAccountData, enterGuestMode, signOut } = useApp();
+  const { S, t, up, refreshAccountData, enterGuestMode, signOut, applyAccountState } = useApp();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [email, setEmail] = React.useState('');
@@ -337,6 +337,10 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
     options: { loadBeforeOnboarding?: boolean; loadingStage?: string } = {},
   ) => {
     const loadBeforeOnboarding = Boolean(options.loadBeforeOnboarding);
+
+    // Account-owned declarations win over any anonymous local plan; never
+    // merge two competing amounts for the same day.
+    applyAccountState(auth);
 
     // Authentication and account loading are deliberately separate. Returning
     // accounts load their dashboard immediately. If a guest has just chosen to

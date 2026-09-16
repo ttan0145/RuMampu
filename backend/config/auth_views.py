@@ -1,4 +1,9 @@
 from io import BytesIO
+import calendar
+import json
+import math
+import re
+from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
@@ -51,6 +56,18 @@ def _auth_payload(user, token=None):
     state = _app_state(user)
     payload = {
         "user": _user_payload(user),
+        "cash_on_hand": float(state.cash_on_hand),
+        "upfront_costs": state.upfront_costs,
+        "docs_checked": state.docs_checked,
+        "bought_home": state.bought_home,
+        "expense_limits": state.expense_limits,
+        "compare_payments": state.compare_payments,
+        "saving_plan": state.saving_plan,
+        "buffer_state": state.buffer_state,
+        "village_state": state.village_state,
+        "plan_horizon": state.plan_horizon,
+        "pot_moved_months": state.pot_moved_months,
+        "kept_tests": state.kept_tests,
         "onboarding_completed": state.onboarding_completed,
         "preferred_language": state.preferred_language,
         "last_record_exported_at": state.last_record_exported_at.isoformat() if state.last_record_exported_at else None,
@@ -58,6 +75,138 @@ def _auth_payload(user, token=None):
     if token is not None:
         payload["token"] = token.key
     return payload
+
+
+_APP_STATE_FIELDS = {
+    "cash_on_hand", "upfront_costs", "docs_checked", "bought_home",
+    "expense_limits", "compare_payments", "saving_plan", "buffer_state",
+    "village_state", "plan_horizon", "pot_moved_months", "kept_tests",
+    "onboarding_completed", "preferred_language",
+}
+
+
+def _valid_number(value, *, integer=False, minimum=None):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        return False
+    if integer and not isinstance(value, int):
+        return False
+    return minimum is None or value >= minimum
+
+
+def _valid_plan(value):
+    if value == {}:
+        return True
+    if not isinstance(value, dict):
+        return False
+    required = {"key", "target", "n", "amounts", "done", "seed"}
+    if set(value) - required - {"skipped", "paused"} or not required <= set(value):
+        return False
+    key = value["key"]
+    match = re.fullmatch(r"(\d{4})-(\d{2})", key) if isinstance(key, str) else None
+    if not match:
+        return False
+    year, month = int(match.group(1)), int(match.group(2))
+    if year < 1 or month < 1 or month > 12:
+        return False
+    n = value["n"]
+    if not _valid_number(n, integer=True, minimum=1) or n != calendar.monthrange(year, month)[1]:
+        return False
+    if not _valid_number(value["target"], minimum=0) or not _valid_number(value["seed"], integer=True, minimum=0):
+        return False
+    if not isinstance(value["amounts"], list) or len(value["amounts"]) != n:
+        return False
+    if not all(_valid_number(item, minimum=0) for item in value["amounts"]):
+        return False
+    if not isinstance(value["done"], list) or len(value["done"]) != n:
+        return False
+    if not all(isinstance(item, bool) for item in value["done"]):
+        return False
+    if "skipped" in value and (not isinstance(value["skipped"], list)
+                               or len(value["skipped"]) != n
+                               or not all(isinstance(item, bool) for item in value["skipped"])):
+        return False
+    return "paused" not in value or isinstance(value["paused"], bool)
+
+
+def _valid_state_object(value, allowed, required_arrays=()):
+    if not isinstance(value, dict) or set(value) - set(allowed):
+        return False
+    if value == {}:
+        return True
+    for key in required_arrays:
+        if not isinstance(value.get(key), list):
+            return False
+    return True
+
+
+def _valid_buffer_state(value):
+    if not _valid_state_object(value, {"saved", "overflow", "target", "houseCost", "prevTarget", "msg"}):
+        return False
+    if value == {}:
+        return True
+    for key in ("saved", "overflow"):
+        if not _valid_number(value.get(key), minimum=0):
+            return False
+    for key in ("target", "houseCost", "prevTarget"):
+        if value.get(key) is not None and not _valid_number(value.get(key), minimum=0):
+            return False
+    return value.get("msg") in {None, "used", "moved"}
+
+
+def _valid_village_state(value):
+    allowed = {"cells", "pop", "score", "best", "moves", "gain", "built", "collection", "queued", "savedRm", "msg"}
+    if not _valid_state_object(value, allowed, ("cells", "pop")):
+        return False
+    if value == {}:
+        return True
+    if len(value["cells"]) != 16 or not all(_valid_number(item, integer=True, minimum=0) and item <= 4 for item in value["cells"]):
+        return False
+    if not all(_valid_number(item, integer=True, minimum=0) and item < 16 for item in value["pop"]):
+        return False
+    for key in ("score", "best", "moves", "gain", "built", "collection", "queued", "savedRm"):
+        if not _valid_number(value.get(key), minimum=0):
+            return False
+    return "msg" not in value or isinstance(value["msg"], str)
+
+
+def _validate_app_state_field(field, value):
+    if field == "cash_on_hand":
+        if isinstance(value, bool):
+            return None
+        try:
+            amount = Decimal(str(value))
+        except (InvalidOperation, ValueError, TypeError):
+            return None
+        if not amount.is_finite() or amount < 0 or amount.as_tuple().exponent < -2:
+            return None
+        return amount
+    if field in {"upfront_costs", "docs_checked", "compare_payments", "pot_moved_months", "kept_tests"}:
+        if not isinstance(value, list):
+            return None
+        if field == "docs_checked" and not all(isinstance(item, str) for item in value):
+            return None
+        if field == "pot_moved_months" and not all(isinstance(item, str) for item in value):
+            return None
+        if field == "kept_tests":
+            for item in value:
+                if not isinstance(item, dict) or not all(_valid_number(item.get(key)) for key in ("pay", "s", "n", "g")):
+                    return None
+        return value
+    if field == "expense_limits":
+        return value if isinstance(value, dict) else None
+    if field == "bought_home":
+        return value if isinstance(value, bool) else None
+    if field == "plan_horizon":
+        return value if value is None or _valid_number(value, integer=True, minimum=1) else None
+    if field == "saving_plan":
+        return value if _valid_plan(value) else None
+    if field == "buffer_state":
+        return value if _valid_buffer_state(value) else None
+    if field == "village_state":
+        return value if _valid_village_state(value) else None
+    if field in {"onboarding_completed", "preferred_language"}:
+        return value
+    return None
 
 
 def _date(value):
@@ -392,6 +541,36 @@ class MeView(APIView):
         state = _app_state(request.user)
         update_fields = []
 
+        try:
+            encoded_request = json.dumps(request.data, separators=(",", ":"), allow_nan=False)
+        except (TypeError, ValueError):
+            return Response(
+                {"error": {"code": "invalid_app_state_json", "message": "Account state must be valid JSON."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(encoded_request.encode("utf-8")) > 32768:
+            return Response(
+                {"error": {"code": "app_state_too_large", "message": "Account state is too large."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        for field in _APP_STATE_FIELDS - {"preferred_language", "onboarding_completed"}:
+            if field not in request.data:
+                continue
+            value = _validate_app_state_field(field, request.data[field])
+            if value is None and (field != "plan_horizon" or request.data[field] is not None):
+                return Response(
+                    {"error": {"code": f"invalid_{field}", "message": f"Invalid {field}."}},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if field == "cash_on_hand":
+                changed = state.cash_on_hand != value
+            else:
+                changed = getattr(state, field) != value
+            if changed:
+                setattr(state, field, value)
+                update_fields.append(field)
+
         if "preferred_language" in request.data:
             language = str(request.data.get("preferred_language", "")).strip().lower()
             if language not in {"en", "ms", "zh"}:
@@ -414,7 +593,7 @@ class MeView(APIView):
                 update_fields.append("onboarding_completed")
 
         if not update_fields:
-            if not any(key in request.data for key in ("preferred_language", "onboarding_completed")):
+            if not any(key in request.data for key in _APP_STATE_FIELDS):
                 return Response(
                     {"error": {"code": "empty_app_state_update", "message": "No supported account settings were provided."}},
                     status=status.HTTP_400_BAD_REQUEST,
