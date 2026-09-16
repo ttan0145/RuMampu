@@ -295,7 +295,7 @@ export function KV({ k, children }: { k: React.ReactNode; children: React.ReactN
 /* Numeric input that keeps a local string while typing but reports parsed values. */
 export function NumInput({
   value, onNum, onCommit, style, min0 = true, alignRight, decimal = true, placeholder, accessibilityLabel,
-  blankZero = false,
+  zeroPlaceholder = false,
 }: {
   value: number | string;
   onNum: (n: number) => void;
@@ -306,11 +306,12 @@ export function NumInput({
   decimal?: boolean;
   placeholder?: string;
   accessibilityLabel?: string;
-  blankZero?: boolean;
+  zeroPlaceholder?: boolean;
 }) {
+  // Keep zero visible as a faint hint, so the first keystroke replaces it.
   const formatLocal = React.useCallback((v: number | string) => (
-    blankZero && Number(v) === 0 ? '' : String(v ?? '')
-  ), [blankZero]);
+    zeroPlaceholder && Number(v) === 0 ? '' : String(v ?? '')
+  ), [zeroPlaceholder]);
   const [local, setLocal] = React.useState(formatLocal(value));
   const focused = React.useRef(false);
   React.useEffect(() => {
@@ -326,7 +327,7 @@ export function NumInput({
       keyboardType={decimal ? 'decimal-pad' : 'number-pad'}
       inputMode={decimal ? 'decimal' : 'numeric'}
       value={local}
-      placeholder={placeholder}
+      placeholder={zeroPlaceholder ? '0' : placeholder}
       accessibilityLabel={accessibilityLabel}
       placeholderTextColor={C.ink40}
       onFocus={() => { focused.current = true; }}
@@ -388,7 +389,7 @@ export function TextField({
 export interface EditItem { id: string; k?: string; custom?: boolean; name?: string; a: number; p?: string; description?: string }
 
 export function EditRow({
-  label, p, description, value, onNum, onCommit, decimal = false, blankZero = false,
+  label, p, description, value, onNum, onCommit, decimal = false, zeroPlaceholder = false,
 }: {
   label: string;
   p?: string;
@@ -397,7 +398,7 @@ export function EditRow({
   onNum: (n: number) => void;
   onCommit?: (n: number) => void;
   decimal?: boolean;
-  blankZero?: boolean;
+  zeroPlaceholder?: boolean;
 }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -409,20 +410,20 @@ export function EditRow({
           <Prov p={p} />
         ) : null}
       </View>
-      <NumInput value={value} onNum={onNum} onCommit={onCommit} alignRight decimal={decimal} blankZero={blankZero} />
+      <NumInput value={value} onNum={onNum} onCommit={onCommit} alignRight decimal={decimal} zeroPlaceholder={zeroPlaceholder} />
     </View>
   );
 }
 
 export function EditList({
-  list, onNum, onCommit, decimal = false, showProvenance = true, blankZero = false,
+  list, onNum, onCommit, decimal = false, showProvenance = true, zeroPlaceholder = false,
 }: {
   list: EditItem[];
   onNum: (i: number, n: number) => void;
   onCommit?: (i: number, n: number) => void;
   decimal?: boolean;
   showProvenance?: boolean;
-  blankZero?: boolean;
+  zeroPlaceholder?: boolean;
 }) {
   const { t } = useApp();
   return (
@@ -437,7 +438,7 @@ export function EditList({
           onNum={n => onNum(i, n)}
           onCommit={onCommit ? n => onCommit(i, n) : undefined}
           decimal={decimal}
-          blankZero={blankZero}
+          zeroPlaceholder={zeroPlaceholder}
         />
       ))}
     </>

@@ -1176,7 +1176,7 @@ export function CommitScreen() {
             decimal
             list={c[sec]}
             showProvenance={false}
-            blankZero
+            zeroPlaceholder
             onNum={(i, n) => up(s => { s.data.commitments[sec][i].a = n; })}
             onCommit={(i, n) => {
               const id = S.data.commitments[sec][i]?.id;

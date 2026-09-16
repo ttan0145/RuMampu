@@ -556,10 +556,7 @@ export function ExLimitsBody() {
   const monthTotal = [...totals.values()].reduce((a, b) => a + b, 0);
   const lims = S.data.expenseLimits;
 
-  /* v24 R8c: one row per limit inside one card — name and spend, then the limit
-     field (an empty field with an example placeholder says "nothing set"), then
-     the bar. One provenance chip for the card, not two per row. */
-  const LIM_EX: Record<string, number> = { total: 1500, meals: 250, groc: 300, transp: 120, family: 300, other: 100 };
+  /* Zero limits display a faint 0 placeholder that typing replaces immediately. */
   const row = (label: string, spend: number, id: string, first: boolean) => {
     const lim = +lims[id] || 0;
     return (
@@ -575,9 +572,9 @@ export function ExLimitsBody() {
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <BodyS muted style={{ flex: 1 }}>{t('lm_limit')}</BodyS>
-          <NumInput value={lims[id] || ''} placeholder={String(LIM_EX[id] || 300)}
+          <NumInput value={lim}
             accessibilityLabel={`${label} ${t('lm_limit')}`}
-            blankZero
+            zeroPlaceholder
             onNum={n => up(s => { s.data.expenseLimits[id] = Math.max(0, n); logIt(s, id === 'total' ? 'lg_limit_total' : 'lg_limit', { a: rm(Math.max(0, n)) }, `lim:${id}`); })} alignRight />
         </View>
         {lim > 0 ? (
