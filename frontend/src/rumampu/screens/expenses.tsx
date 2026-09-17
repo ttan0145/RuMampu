@@ -713,7 +713,9 @@ function ExpenseScanBody() {
               d: result.date != null,
               a: result.total != null,
             },
-            aiC: suggested,
+            /* Only a category the model actually named is marked as its
+               suggestion; a fallback to the draft's category is not (AC6.1.10). */
+            aiC: bySlug?.id,
           };
         });
       } catch {
