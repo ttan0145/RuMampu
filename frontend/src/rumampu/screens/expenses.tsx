@@ -25,6 +25,7 @@ import { isValidIsoDate } from '../validation';
 import { DatePickerField } from '../date-picker';
 import { INCOME_API_ENABLED, scanReceipt } from '../api';
 import { getPickedReceipt, setPickedReceipt } from '../../../services/receiptSession';
+import { getHousingTestResult } from '../../../services/housingSession';
 
 /* v24 shows month completeness (full/partial, dashed bars) everywhere. */
 const SHOW_EXPENSE_COMPLETENESS = true;
@@ -472,8 +473,13 @@ export function ExpMonthsScreen() {
   const em = [...expByMonth(S.data).entries()];
   const asc = [...em].sort((a, b) => a[0] - b[0]);
   const max = Math.max(...em.map(([, v]) => v.total), 1);
-  const incomeKeys = SHOW_EXPENSE_COMPLETENESS
-    ? new Set(monthsAgg(S.data).map(r => r.y * 12 + r.m))
+  /* AC4.1.4: label a month as used only when it is present in the
+     actual housing-test result. This mirrors the backend's tested month list
+     (including its exclusion of the current calendar month) instead of
+     guessing from whether an income entry exists. */
+  const housingResult = getHousingTestResult();
+  const usedInTestKeys = SHOW_EXPENSE_COMPLETENESS && S.testRan && housingResult
+    ? new Set(housingResult.months.map(r => r.year * 12 + (r.month - 1)))
     : new Set<number>();
 
   const chart = (
@@ -528,7 +534,7 @@ export function ExpMonthsScreen() {
         </Pressable>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           {v.days.size >= EXP_FULL_DAYS ? (
-            <BodyS muted style={{ flexShrink: 1 }}>{t('ex_full') + (incomeKeys.has(k) ? ' · ' + t('ex_used') : '')}</BodyS>
+            <BodyS muted style={{ flexShrink: 1 }}>{t('ex_full') + (usedInTestKeys.has(k) ? ' · ' + t('ex_used') : '')}</BodyS>
           ) : (
             <FromR label={t(v.days.size === 1 ? 'ex_partial_one' : 'ex_partial', { d: v.days.size })} />
           )}
@@ -585,16 +591,23 @@ export function ExLimitsBody() {
               <Prov p="calc" />
             </View>
           </>
-        ) : null}
+        ) : (
+          <BodyS muted>{t('lm_none')}</BodyS>
+        )}
       </View>
     );
   };
 
-  const catRows = S.data.expenseCats.filter(c => totals.get(c.id) || lims[c.id])
-    .map((c, i) => row(c.custom ? c.name || '' : t(c.k || ''), totals.get(c.id) || 0, c.id, false));
+  /* AC4.2.2: every available expense category is shown so the user can
+     set a limit before any spending has been recorded in that category. */
+  const catRows = S.data.expenseCats
+    .map(c => row(c.custom ? c.name || '' : t(c.k || ''), totals.get(c.id) || 0, c.id, false));
 
   return (
     <Card gap={0}>
+      <View style={{ paddingBottom: 10 }}>
+        <BodyS muted>{t('lm_note')}</BodyS>
+      </View>
       {row(t('lm_total') + ' · ' + (ek != null ? monthName(ek % 12) : ''), monthTotal, 'total', true)}
       {catRows}
       <View style={{ paddingTop: 6, alignItems: 'flex-start' }}><Prov p="user" /></View>
