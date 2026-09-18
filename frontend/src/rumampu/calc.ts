@@ -42,15 +42,22 @@ export function workCostTotal(data: AppData): number {
   return data.workCostEntries.reduce((a, c) => a + (+c.a || 0), 0);
 }
 
-export interface ExpMonth { total: number; days: Set<string> }
+export interface ExpMonth { total: number; days: Set<string>; monthlyTotal: boolean }
 export function expByMonth(data: AppData): Map<number, ExpMonth> {
   const map = new Map<number, ExpMonth>();
   for (const e of data.expenses) {
     const key = (+e.d.slice(0, 4)) * 12 + (+e.d.slice(5, 7) - 1);
-    if (!map.has(key)) map.set(key, { total: 0, days: new Set() });
-    const r = map.get(key)!; r.total += (+e.a || 0); r.days.add(e.d);
+    if (!map.has(key)) map.set(key, { total: 0, days: new Set(), monthlyTotal: false });
+    const r = map.get(key)!;
+    r.total += (+e.a || 0);
+    if (e.method === 'monthly_total') r.monthlyTotal = true;
+    else r.days.add(e.d);
   }
   return map;
+}
+
+export function expenseMonthComplete(month: ExpMonth): boolean {
+  return month.monthlyTotal || month.days.size >= EXP_FULL_DAYS;
 }
 
 export function commitDaily(data: AppData): number {
@@ -65,8 +72,20 @@ export function commitTotal(data: AppData): number {
 
 export function commitFor(data: AppData, key: number): number {
   const e = expByMonth(data).get(key);
-  if (e && e.days.size >= EXP_FULL_DAYS) return commitTotal(data) - commitDaily(data) + e.total;
+  if (e && expenseMonthComplete(e)) return commitTotal(data) - commitDaily(data) + e.total;
   return commitTotal(data);
+}
+
+/** The cash leaving in a month, including every expense already recorded. */
+export function recordedOutFor(data: AppData, key: number): number {
+  const expenses = expByMonth(data).get(key);
+  const workCosts = data.workCostEntries
+    .filter(entry => datedMonthKey(entry.d) === key)
+    .reduce((sum, entry) => sum + (+entry.a || 0), 0);
+  // A full expense month replaces daily estimates. In a partial month the
+  // estimates remain, while its known spending still appears in the outflow.
+  return workCosts + commitFor(data, key)
+    + (expenses && !expenseMonthComplete(expenses) ? expenses.total : 0);
 }
 
 export function monthsAgg(data: AppData): MonthRow[] {
@@ -160,7 +179,7 @@ export function recordSummary(data: AppData): RecordSummary {
 
 export function actualMonths(data: AppData): MonthRow[] {
   const em = expByMonth(data);
-  return monthsAgg(data).filter(r => { const e = em.get(r.y * 12 + r.m); return e && e.days.size >= EXP_FULL_DAYS; });
+  return monthsAgg(data).filter(r => { const e = em.get(r.y * 12 + r.m); return e && expenseMonthComplete(e); });
 }
 
 /* A housing test result is a snapshot of the months it was run against. Once
@@ -193,7 +212,8 @@ export function expCatTotals(data: AppData, key: number): Map<string, number> {
   for (const e of data.expenses) {
     const k = (+e.d.slice(0, 4)) * 12 + (+e.d.slice(5, 7) - 1);
     if (k !== key) continue;
-    totals.set(e.c, (totals.get(e.c) || 0) + (+e.a || 0));
+    const category = e.method === 'monthly_total' ? 'monthly_total' : e.c;
+    totals.set(category, (totals.get(category) || 0) + (+e.a || 0));
   }
   return totals;
 }
@@ -224,7 +244,7 @@ export interface CommitSwapResult {
    replaced by what was actually spent. looseCats holds category ids. */
 export function commitSwap(data: AppData, key: number): CommitSwapResult | null {
   const e = expByMonth(data).get(key);
-  if (!e || e.days.size < EXP_FULL_DAYS) return null;
+  if (!e || !expenseMonthComplete(e)) return null;
   const cats = expCatTotals(data, key);
   const c = data.commitments;
   const lines: CommitSwapLine[] = [];

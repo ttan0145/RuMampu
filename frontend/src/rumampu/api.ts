@@ -129,7 +129,7 @@ export interface ApiExpenseEntry {
   amount: string;
   date: string;
   category_id: number;
-  entry_method: 'manual' | 'receipt';
+  entry_method: 'manual' | 'receipt' | 'monthly_total';
   merchant: string;
   user_confirmed: boolean;
   created_at: string;
@@ -446,7 +446,9 @@ export async function apiIdentityHeaders(): Promise<Record<string, string>> {
    browser queues past six in flight, so a queued write can legitimately take
    well over 25s and still succeed. Aborting it early made the app show
    "could not be saved" for a save the server then completed. */
-export const REQUEST_TIMEOUT_MS = 25000;
+// Account loading on Neon can exceed 25 seconds during a cold connection.
+// Give reads the same budget as writes so a completed response is not aborted.
+export const REQUEST_TIMEOUT_MS = 60000;
 export const WRITE_TIMEOUT_MS = 60000;
 
 export function requestTimeoutMs(init?: RequestInit): number {
@@ -881,7 +883,7 @@ export function createExpense(input: {
   amount: number;
   date: string;
   categoryId: string;
-  entryMethod?: 'manual' | 'receipt';
+  entryMethod?: 'manual' | 'receipt' | 'monthly_total';
   merchant?: string;
   confirmReceipt?: boolean;
 }): Promise<ApiExpenseEntry> {
@@ -899,6 +901,13 @@ export function createExpense(input: {
       merchant: input.merchant || '',
       confirm_receipt: Boolean(input.confirmReceipt),
     }),
+  });
+}
+
+export function updateExpenseCoverage(entryId: string, monthlyTotal: boolean): Promise<ApiExpenseEntry> {
+  return request<ApiExpenseEntry>(`/expenses/${encodeURIComponent(entryId)}/coverage/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ entry_method: monthlyTotal ? 'monthly_total' : 'manual' }),
   });
 }
 

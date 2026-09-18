@@ -15,6 +15,11 @@ function finite(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+function validExpenseLimits(value: unknown): value is Record<string, number> {
+  return record(value) && Object.entries(value).every(([key, amount]) =>
+    key.length > 0 && finite(amount) && amount >= 0);
+}
+
 function daysInMonth(key: string): number | null {
   const match = /^(\d{4})-(\d{2})$/.exec(key);
   if (!match) return null;
@@ -75,7 +80,7 @@ function validKeptTests(value: unknown): value is KeptTest[] {
 export function snapshot(s: AppState): string {
   const payload: JsonRecord = { version: VERSION };
   for (const key of PERSISTED) payload[key] = s[key];
-  payload.data = { cashOnHand: s.data.cashOnHand };
+  payload.data = { cashOnHand: s.data.cashOnHand, expenseLimits: s.data.expenseLimits };
   payload.housingTestResult = getHousingTestResult();
   payload.housingScenario = getHousingScenario();
   return JSON.stringify(payload);
@@ -99,8 +104,13 @@ export function hydrate(s: AppState, raw: string | null): void {
     if (validStringArray(payload.potMovedMonths)) s.potMovedMonths = payload.potMovedMonths;
     if (validStringArray(payload.docsChecked)) s.docsChecked = payload.docsChecked;
     if (validKeptTests(payload.keptTests)) s.keptTests = payload.keptTests;
-    if (record(payload.data) && finite(payload.data.cashOnHand) && payload.data.cashOnHand >= 0) {
-      s.data.cashOnHand = payload.data.cashOnHand;
+    if (record(payload.data)) {
+      if (finite(payload.data.cashOnHand) && payload.data.cashOnHand >= 0) {
+        s.data.cashOnHand = payload.data.cashOnHand;
+      }
+      if (validExpenseLimits(payload.data.expenseLimits)) {
+        s.data.expenseLimits = payload.data.expenseLimits;
+      }
     }
   } catch {
     // Corrupt or incompatible local data is discarded; start with clean state.
@@ -110,6 +120,7 @@ export function hydrate(s: AppState, raw: string | null): void {
 /** Shape the same allow-listed state for the account PATCH endpoint. */
 export function accountSnapshot(s: AppState): {
   cash_on_hand: number;
+  expense_limits: Record<string, number>;
   saving_plan: Record<string, unknown>;
   buffer_state: Record<string, unknown>;
   village_state: Record<string, unknown>;
@@ -121,6 +132,7 @@ export function accountSnapshot(s: AppState): {
   const local = JSON.parse(snapshot(s)) as JsonRecord;
   return {
     cash_on_hand: s.data.cashOnHand,
+    expense_limits: s.data.expenseLimits,
     saving_plan: (local.plan as Record<string, unknown> | null) ?? {},
     buffer_state: (local.buffer as Record<string, unknown> | null) ?? {},
     village_state: (local.village as Record<string, unknown> | null) ?? {},
@@ -148,6 +160,9 @@ export function hydrateAccountState(s: AppState, remote: Record<string, unknown>
     data: { cashOnHand: cash },
   };
   hydrate(s, JSON.stringify(payload));
+  if (validExpenseLimits(remote.expense_limits)) {
+    s.data.expenseLimits = remote.expense_limits;
+  }
   const preferredSourceId = remote.preferred_income_source_id;
   s.preferredIncomeSourceId = preferredSourceId == null ? null : String(preferredSourceId);
 }

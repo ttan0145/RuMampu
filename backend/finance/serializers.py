@@ -473,6 +473,15 @@ class ExpenseEntryCreateSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
+        expense_date = attrs["date"]
+        month_entries = self.context["profile"].expense_entries.filter(
+            expense_date__year=expense_date.year,
+            expense_date__month=expense_date.month,
+        )
+        if attrs["entry_method"] == ExpenseEntry.EntryMethod.MONTHLY_TOTAL and month_entries.exists():
+            raise serializers.ValidationError({"date": "This month already has expense entries."})
+        if month_entries.filter(entry_method=ExpenseEntry.EntryMethod.MONTHLY_TOTAL).exists():
+            raise serializers.ValidationError({"date": "This month already has a whole-month total."})
         if (
             attrs["entry_method"] == ExpenseEntry.EntryMethod.RECEIPT
             and not attrs["confirm_receipt"]
@@ -480,7 +489,10 @@ class ExpenseEntryCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"confirm_receipt": "Review and confirm receipt values before saving."}
             )
-        if attrs["entry_method"] == ExpenseEntry.EntryMethod.MANUAL:
+        if attrs["entry_method"] in (
+            ExpenseEntry.EntryMethod.MANUAL,
+            ExpenseEntry.EntryMethod.MONTHLY_TOTAL,
+        ):
             attrs["merchant"] = ""
         return attrs
 

@@ -2,7 +2,7 @@ import { Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 
-export const API = 'http://localhost:8000/api/v1';
+export const API = `http://localhost:${process.env.PLAYWRIGHT_BACKEND_PORT || '8000'}/api/v1`;
 
 export async function openApp(page: Page): Promise<void> {
   await page.goto('/');

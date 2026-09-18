@@ -23,10 +23,11 @@ export interface Commitments { living: CostItem[]; debts: CostItem[]; savings: C
 export interface House { price: number | null; deposit: number; rate: number; years: number; knownPayment: number | null }
 export interface ExpenseCat { id: string; k?: string; custom?: boolean; name?: string }
 export interface ExpenseEntry {
+  id?: string;
   a: number;
   d: string;
   c: string;
-  method?: 'manual' | 'receipt';
+  method?: 'manual' | 'receipt' | 'monthly_total';
   merchant?: string;
 }
 export interface AfterMonth { y: number; m: number; inc: number; home: number }

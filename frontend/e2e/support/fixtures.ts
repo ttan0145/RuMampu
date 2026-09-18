@@ -56,6 +56,14 @@ export const test = base.extend<{ e2eClientId: string }>({
         window.localStorage.setItem('rumampu_client_id', id);
       }, clientId);
 
+      // Expo may reuse a cached web bundle with the default API port when two
+      // local dev servers run at once. Keep browser calls on this test backend.
+      const backendPort = process.env.PLAYWRIGHT_BACKEND_PORT;
+      if (backendPort && backendPort !== '8000') {
+        await page.route('http://localhost:8000/api/v1/**', route =>
+          route.continue({ url: route.request().url().replace(':8000/', `:${backendPort}/`) }));
+      }
+
       await use(clientId);
     },
     { auto: true },

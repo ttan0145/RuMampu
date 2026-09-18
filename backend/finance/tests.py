@@ -712,6 +712,43 @@ class ExpenseApiTests(TestCase):
         self.assertEqual(len(listed.json()), 1)
         self.assertEqual(ExpenseEntry.objects.get().amount, Decimal("25.50"))
 
+    def test_whole_month_expense_total_is_explicit_and_exclusive(self):
+        response = self.client.post(
+            self.expense_root,
+            data={
+                "amount": "20000.00",
+                "date": "2025-01-15",
+                "category_id": self.category_id(),
+                "entry_method": "monthly_total",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["entry_method"], "monthly_total")
+        self.assertEqual(self.create_expense(date="2025-01-20").status_code, 400)
+
+    def test_existing_single_expense_can_be_classified_as_whole_month_total(self):
+        entry_id = self.create_expense("20000.00", date="2025-01-15").json()["id"]
+        url = f"{self.expense_root}{entry_id}/coverage/"
+        response = self.client.patch(url, data={"entry_method": "monthly_total"}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["entry_method"], "monthly_total")
+        self.assertEqual(ExpenseEntry.objects.get(id=entry_id).amount, Decimal("20000.00"))
+        undo = self.client.patch(url, data={"entry_method": "manual"}, content_type="application/json")
+        self.assertEqual(undo.status_code, 200)
+        self.assertEqual(undo.json()["entry_method"], "manual")
+
+    def test_cannot_classify_multi_entry_month_as_whole_month_total(self):
+        entry_id = self.create_expense(date="2025-01-15").json()["id"]
+        self.create_expense(date="2025-01-20")
+        response = self.client.patch(
+            f"{self.expense_root}{entry_id}/coverage/",
+            data={"entry_method": "monthly_total"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(ExpenseEntry.objects.get(id=entry_id).entry_method, "manual")
+
     def test_records_different_expense_categories_separately(self):
         meals = self.category_id("meals")
         groceries = self.category_id("groc")

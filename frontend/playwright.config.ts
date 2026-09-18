@@ -23,6 +23,9 @@ const python = process.env.PLAYWRIGHT_PYTHON?.trim()
   || (process.platform === 'win32' ? 'python' : 'python3');
 
 const browserChannel = process.env.PLAYWRIGHT_CHANNEL?.trim();
+const useNeon = process.env.PLAYWRIGHT_USE_NEON === '1';
+const backendPort = process.env.PLAYWRIGHT_BACKEND_PORT || '8000';
+const frontendPort = process.env.PLAYWRIGHT_FRONTEND_PORT || '8081';
 
 export default defineConfig({
   testDir: './e2e',
@@ -36,7 +39,7 @@ export default defineConfig({
     ['html', { outputFolder: '../output/playwright/report', open: 'never' }],
   ],
   use: {
-    baseURL: 'http://localhost:8081',
+    baseURL: `http://localhost:${frontendPort}`,
     ...(browserChannel ? { channel: browserChannel } : {}),
     viewport: { width: 390, height: 844 },
     trace: 'retain-on-failure',
@@ -44,29 +47,34 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `${python} manage.py migrate --noinput && ${python} manage.py runserver localhost:8000 --noreload`,
+      command: useNeon
+        ? `${python} manage.py runserver localhost:${backendPort} --noreload`
+        : `${python} manage.py migrate --noinput && ${python} manage.py runserver localhost:${backendPort} --noreload`,
       cwd: '../backend',
       env: {
         ...process.env,
 
         DEBUG: 'True',
         ENABLE_TEST_SCENARIOS: 'True',
+        CORS_ALLOWED_ORIGINS: `http://localhost:${frontendPort},http://127.0.0.1:${frontendPort}`,
 
-        // Acceptance tests must use the local SQLite database, not Neon.
-        PGHOST: '',
-        PGDATABASE: '',
-        PGUSER: '',
-        PGPASSWORD: '',
-        PGPORT: '',
-        PGSSLMODE: '',
+        // Local tests use SQLite; opt-in Epic 4 runs can use backend/.env Neon settings.
+        ...(!useNeon ? {
+          PGHOST: '',
+          PGDATABASE: '',
+          PGUSER: '',
+          PGPASSWORD: '',
+          PGPORT: '',
+          PGSSLMODE: '',
+        } : {}),
       },
-      url: 'http://localhost:8000/api/v1/health/',
+      url: `http://localhost:${backendPort}/api/v1/health/`,
       reuseExistingServer: false,
       timeout: 120_000,
     },
 
     {
-      command: 'npm run web -- --port 8081 --clear',
+      command: `npm run web -- --port ${frontendPort} --clear`,
       cwd: '.',
       env: {
         ...process.env,
@@ -75,9 +83,9 @@ export default defineConfig({
         EXPO_PUBLIC_E2E: '1',
 
         // Override only for Playwright. Keep frontend/.env for Expo Go.
-        EXPO_PUBLIC_PLAYWRIGHT_API_URL: 'http://localhost:8000/api/v1',
+        EXPO_PUBLIC_PLAYWRIGHT_API_URL: `http://localhost:${backendPort}/api/v1`,
       },
-      url: 'http://localhost:8081',
+      url: `http://localhost:${frontendPort}`,
       reuseExistingServer: false,
       timeout: 120_000,
     },

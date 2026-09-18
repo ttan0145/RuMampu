@@ -6,7 +6,7 @@ import { SaveFormat, manipulateAsync } from 'expo-image-manipulator';
 import { useApp } from '../state';
 import { logIt } from '../log';
 import {
-  EXP_FULL_DAYS, expByMonth, expCatTotals, latestExpMonth, monthsAgg, nf, pickMonth, rm, rmx,
+  expByMonth, expCatTotals, expenseMonthComplete, latestExpMonth, monthsAgg, nf, pickMonth, rm, rmx,
 } from '../calc';
 import {
   BodyS, Btn, BtnLine, Card, Chip, Chips, Display, Fig, FromR,
@@ -34,7 +34,7 @@ function useCatLabel() {
   const { S, t } = useApp();
   return (id: string) => {
     const c = S.data.expenseCats.find(x => x.id === id);
-    return c ? (c.custom ? c.name || '' : t(c.k || '')) : id;
+    return id === 'monthly_total' ? t('ex_month_total') : c ? (c.custom ? c.name || '' : t(c.k || '')) : id;
   };
 }
 
@@ -209,7 +209,7 @@ export function ExpensesScreen() {
      to the newest month that holds anything at all. */
   const mpk = pickMonth(S.exMonth, [S.data.expenses, S.data.workCostEntries]);
   const curKey = mpk.key != null ? mpk.key : now.getFullYear() * 12 + now.getMonth();
-  const cur = expByMonth(S.data).get(curKey) || { total: 0, days: new Set<string>() };
+  const cur = expByMonth(S.data).get(curKey) || { total: 0, days: new Set<string>(), monthlyTotal: false };
   const lim = +S.data.expenseLimits.total || 0;
   const pct = lim ? Math.min(100, Math.round(cur.total / lim * 100)) : 0;
 
@@ -249,7 +249,7 @@ export function ExpensesScreen() {
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
         <View style={{ minWidth: 0 }}>
           <Text style={exSt.big}>{rm(cur.total)}</Text>
-          <BodyS muted>{t('ex_sofar', { m: monthName(curKey % 12) })} · {t('ex_days', { d: cur.days.size })}</BodyS>
+          <BodyS muted>{t('ex_sofar', { m: monthName(curKey % 12) })} · {cur.monthlyTotal ? t('ex_month_total') : t('ex_days', { d: cur.days.size })}</BodyS>
         </View>
         <Prov p="user" />
       </View>
@@ -345,7 +345,7 @@ export function ExpensesScreen() {
         </Pressable>
         {/* v24 R7 item 3: bulk entry for a whole past month stays, as a quiet link. */}
         <View style={{ alignItems: 'center', marginTop: 8 }}>
-          <BtnLine label={t('inc_past')} style={{ fontSize: 13.5 }}
+          <BtnLine label={t('ex_month_total')} style={{ fontSize: 13.5 }}
             onPress={() => up(s => { s.pastT = 'ex'; s.sheet = 'pastmonth'; })} />
         </View>
       </InSec>
@@ -425,7 +425,7 @@ export function ExpensesScreen() {
           {recent.map((e, idx) => (
             <InRow key={`${e.d}-${idx}`} first={idx === 0} tint="out"
               icon={<CatIcon id={e.c} data={S.data} size={18} color="#B54F2B" />}
-              title={cats(e.c)}
+              title={e.method === 'monthly_total' ? t('ex_month_total') : cats(e.c)}
               sub={`${+e.d.slice(8, 10)} ${monthName(+e.d.slice(5, 7) - 1)}${e.merchant ? ' · ' + e.merchant : ''}`}
               subTag={e.method === 'receipt' ? t('sc_tag') : undefined}
               amount={rmx(e.a)} />
@@ -468,7 +468,8 @@ export function ExpensesScreen() {
  * 中文：AC1.6.6 按业务月份汇总已确认支出，形成月度摘要。
  */
 export function ExpMonthsScreen() {
-  const { S, t, monthName, up } = useApp();
+  const { S, t, monthName, up, setExpenseMonthlyTotal, toast } = useApp();
+  const [updatingMonth, setUpdatingMonth] = React.useState<number | null>(null);
   const cats = useCatLabel();
   const em = [...expByMonth(S.data).entries()];
   const asc = [...em].sort((a, b) => a[0] - b[0]);
@@ -492,7 +493,7 @@ export function ExpMonthsScreen() {
             <View key={k} style={{ flex: 1, maxWidth: 48, height: '100%', justifyContent: 'flex-end' }}>
               <View style={[
                 { height: barHeight, borderTopLeftRadius: 3, borderTopRightRadius: 3 },
-                SHOW_EXPENSE_COMPLETENESS && v.days.size < EXP_FULL_DAYS
+                SHOW_EXPENSE_COMPLETENESS && !expenseMonthComplete(v)
                   ? { borderWidth: 1.5, borderStyle: 'dashed', borderColor: C.caution }
                   : { backgroundColor: C.ink },
               ]} />
@@ -516,12 +517,34 @@ export function ExpMonthsScreen() {
   const rows = [...em].sort((a, b) => b[0] - a[0]).map(([k, v]) => {
     const y = Math.floor(k / 12), m = k % 12;
     const open = S.exMonthOpen === k;
+    const entries = S.data.expenses.filter(entry => (+entry.d.slice(0, 4)) * 12 + (+entry.d.slice(5, 7) - 1) === k);
+    const soleEntry = entries.length === 1 ? entries[0] : null;
+    const canClassify = soleEntry?.id && (soleEntry.method === 'manual' || soleEntry.method === 'monthly_total');
+    const changeCoverage = async () => {
+      if (!soleEntry?.id || updatingMonth != null) return;
+      setUpdatingMonth(k);
+      try {
+        await setExpenseMonthlyTotal(soleEntry.id, soleEntry.method !== 'monthly_total');
+      } catch {
+        toast(t('ex_save_failed'), 'error');
+      } finally {
+        setUpdatingMonth(null);
+      }
+    };
     let detail: React.ReactNode = null;
     if (open) {
       const totals = expCatTotals(S.data, k);
-      detail = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([c, x]) => (
-        <KV key={c} k={cats(c)}><Fig value={rm(x)} p="calc" cls="body-s" /></KV>
-      ));
+      detail = <>
+        {v.monthlyTotal ? <BodyS muted>{t('ex_no_category_breakdown')}</BodyS>
+          : [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([c, x]) => (
+            <KV key={c} k={cats(c)}><Fig value={rm(x)} p="calc" cls="body-s" /></KV>
+          ))}
+        {canClassify ? <BtnLine
+          label={t(soleEntry.method === 'monthly_total' ? 'ex_mark_daily' : 'ex_mark_month_total')}
+          onPress={() => { void changeCoverage(); }}
+          style={{ fontSize: 13, alignSelf: 'flex-start', opacity: updatingMonth === k ? 0.5 : 1 }}
+        /> : null}
+      </>;
     }
     return (
       <Card key={k} gap={8}>
@@ -532,13 +555,14 @@ export function ExpMonthsScreen() {
           <Display cls="h-m">{monthName(m) + ' ' + y}</Display>
           <Text style={{ fontSize: 16, color: C.ink }}>{open ? '−' : '+'}</Text>
         </Pressable>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          {v.days.size >= EXP_FULL_DAYS ? (
-            <BodyS muted style={{ flexShrink: 1 }}>{t('ex_full') + (usedInTestKeys.has(k) ? ' · ' + t('ex_used') : '')}</BodyS>
-          ) : (
-            <FromR label={t(v.days.size === 1 ? 'ex_partial_one' : 'ex_partial', { d: v.days.size })} />
-          )}
-          <Fig value={rm(v.total)} p="user" />
+        <View style={{ gap: 4 }}>
+          <BodyS muted style={{ flexWrap: 'wrap' }}>
+            {v.monthlyTotal ? t('ex_month_total_status')
+              : expenseMonthComplete(v) ? t('ex_full')
+                : t(v.days.size === 1 ? 'ex_partial_one' : 'ex_partial', { d: v.days.size })}
+            {usedInTestKeys.has(k) ? ' · ' + t('ex_used') : ''}
+          </BodyS>
+          <View style={{ alignItems: 'flex-end' }}><Fig value={rm(v.total)} p="user" /></View>
         </View>
         {detail}
       </Card>

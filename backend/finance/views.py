@@ -494,6 +494,29 @@ class ExpenseEntryListCreateView(APIView):
         return Response(ExpenseEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
 
 
+class ExpenseEntryCoverageView(APIView):
+    """Let a user identify an existing single entry as a whole-month total."""
+
+    def patch(self, request, entry_id):
+        profile = profile_for_request(request)
+        entry = profile.expense_entries.filter(id=entry_id).first()
+        if entry is None:
+            return Response({"detail": "Expense entry not found."}, status=status.HTTP_404_NOT_FOUND)
+        if entry.entry_method not in (ExpenseEntry.EntryMethod.MANUAL, ExpenseEntry.EntryMethod.MONTHLY_TOTAL):
+            return Response({"detail": "Only a manual expense can be classified as a whole-month total."}, status=status.HTTP_400_BAD_REQUEST)
+        method = request.data.get("entry_method")
+        if method not in (ExpenseEntry.EntryMethod.MONTHLY_TOTAL, ExpenseEntry.EntryMethod.MANUAL):
+            return Response({"entry_method": ["Choose monthly_total or manual."]}, status=status.HTTP_400_BAD_REQUEST)
+        if method == ExpenseEntry.EntryMethod.MONTHLY_TOTAL and profile.expense_entries.filter(
+            expense_date__year=entry.expense_date.year,
+            expense_date__month=entry.expense_date.month,
+        ).exclude(id=entry.id).exists():
+            return Response({"detail": "A whole-month total requires one entry for that month."}, status=status.HTTP_400_BAD_REQUEST)
+        entry.entry_method = method
+        entry.save(update_fields=["entry_method"])
+        return Response(ExpenseEntrySerializer(entry).data)
+
+
 class IncomeScanView(APIView):
     @extend_schema(
         operation_id="income_statement_scan",

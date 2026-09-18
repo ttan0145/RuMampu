@@ -4,7 +4,7 @@ import { SvgXml } from 'react-native-svg';
 import { getHousingTestResult } from '../../../services/housingSession';
 import { Route, useApp } from '../state';
 import { useFreshHousingTest } from '../useFreshHousingTest';
-import { commitTotal, expByMonth, housingResultStale, monthsAgg, recSpan, rm } from '../calc';
+import { housingResultStale, monthsAgg, recSpan, recordedOutFor, rm } from '../calc';
 import {
   planEnsure, planPhase, planResolveTarget, planSaved, planToggle, syncBufferTarget, upfrontNeed,
 } from '../plan';
@@ -34,28 +34,24 @@ function Blob({ size, style, color }: { size: number; style: object; color: stri
 function BalPanel() {
   const { S, t, monthName } = useApp();
   const keyOf = (d: string) => (+d.slice(0, 4)) * 12 + (+d.slice(5, 7) - 1);
-  const months = new Map<number, { inc: number; out: number }>();
+  const months = new Map<number, number>();
   for (const e of S.data.income) {
     const k = keyOf(e.d);
-    const m = months.get(k) ?? { inc: 0, out: 0 };
-    m.inc += +e.a || 0;
-    months.set(k, m);
+    months.set(k, (months.get(k) ?? 0) + (+e.a || 0));
   }
-  for (const e of S.data.workCostEntries) {
+  for (const e of [...S.data.expenses, ...S.data.workCostEntries]) {
     const k = keyOf(e.d);
-    if (!months.has(k)) continue;
-    months.get(k)!.out += +e.a || 0;
+    if (!months.has(k)) months.set(k, 0);
   }
-  const commit = commitTotal(S.data);
   const rows = [...months.entries()].sort((a, b) => b[0] - a[0]).slice(0, 6);
   return (
     <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.22)', gap: 6 }}>
-      {rows.length > 1 ? rows.map(([k, m]) => (
+      {rows.length ? rows.map(([k, income]) => (
         <View key={k} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Text style={{ fontFamily: DISP_FONT, fontSize: 12.5, color: '#fff', width: 42 }}>{monthName(k % 12)}</Text>
-          <Text style={bp.cell}>{t('hm_bal_in')} {rm(m.inc)}</Text>
-          <Text style={bp.cell}>{t('hm_bal_out')} {rm(m.out + commit)}</Text>
-          <Text style={[bp.cell, { fontFamily: DISP_FONT }]}>{t('hm_bal_left')} {rm(m.inc - m.out - commit)}</Text>
+          <Text style={bp.cell}>{t('hm_bal_in')} {rm(income)}</Text>
+          <Text style={bp.cell}>{t('hm_bal_out')} {rm(recordedOutFor(S.data, k))}</Text>
+          <Text style={[bp.cell, { fontFamily: DISP_FONT }]}>{t('hm_bal_left')} {rm(income - recordedOutFor(S.data, k))}</Text>
         </View>
       )) : (
         <Text style={bp.cell}>{t('hm_bal_none')}</Text>
@@ -84,6 +80,7 @@ function HomeCards() {
   const recordedKeys = new Set([
     ...S.data.income.map(e => monthKeyOf(e.d)),
     ...S.data.expenses.map(e => monthKeyOf(e.d)),
+    ...S.data.workCostEntries.map(e => monthKeyOf(e.d)),
   ]);
 
   const key = recordedKeys.has(thisKey)
@@ -110,15 +107,7 @@ function HomeCards() {
     ? monthName(key % 12)
     : '';
 
-  const workCosts =
-    key != null
-      ? S.data.workCostEntries
-          .filter(e => monthKeyOf(e.d) === key)
-          .reduce((sum, e) => sum + (+e.a || 0), 0)
-      : 0;
-
-  /* Figma B1: the hero is what's left after work costs and bills. */
-  const saving = income - workCosts - commitTotal(S.data);
+  const saving = income - (key == null ? 0 : recordedOutFor(S.data, key));
 
   return (
     <View>

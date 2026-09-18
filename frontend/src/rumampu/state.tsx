@@ -10,6 +10,7 @@ import {
   ApiWorkCostMonthSummary,
   ApiWorkCostEntry,
   createExpense as createExpenseRequest,
+  updateExpenseCoverage as updateExpenseCoverageRequest,
   createExpenseCategory as createExpenseCategoryRequest,
   createWorkCostCategory as createWorkCostCategoryRequest,
   createWorkCostEntry as createWorkCostEntryRequest,
@@ -282,6 +283,7 @@ function initialState(): AppState {
     data.commitments = { living: [], debts: [], savings: [] };
     data.expenseCats = [];
     data.expenses = [];
+    data.expenseLimits = {};
     // Never inherit demo/mock cash in the real API-backed app. The balance
     // starts at zero and changes only through real user actions/data.
     data.cashOnHand = 0;
@@ -458,10 +460,11 @@ export interface Ctx {
     amount: number;
     date: string;
     categoryId: string;
-    entryMethod?: 'manual' | 'receipt';
+    entryMethod?: 'manual' | 'receipt' | 'monthly_total';
     merchant?: string;
     confirmReceipt?: boolean;
   }) => Promise<void>;
+  setExpenseMonthlyTotal: (entryId: string, monthlyTotal: boolean) => Promise<void>;
   loadHouseCosts: () => Promise<void>;
   toast: (msg: string, tone?: 'success' | 'error') => void;
   toastMsg: { msg: string; key: number; tone: 'success' | 'error' } | null;
@@ -606,7 +609,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const applyAccountState = useCallback((auth: ApiAuthState) => {
     accountAuthenticated.current = true;
-    skipNextAccountSync.current = true;
+    // The account snapshot is recorded below, so the first user edit after
+    // login must be allowed to sync instead of being silently skipped.
+    skipNextAccountSync.current = false;
     setS(prev => {
       const next: AppState = JSON.parse(JSON.stringify(prev));
       /* The account is authoritative: anonymous declarations are discarded
@@ -806,6 +811,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             name: category.name,
           }));
           s.data.expenses = expenses.map(entry => ({
+            id: String(entry.id),
             a: Number(entry.amount),
             d: entry.date,
             c: String(entry.category_id),
@@ -1388,7 +1394,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     amount: number;
     date: string;
     categoryId: string;
-    entryMethod?: 'manual' | 'receipt';
+    entryMethod?: 'manual' | 'receipt' | 'monthly_total';
     merchant?: string;
     confirmReceipt?: boolean;
   }): Promise<void> => {
@@ -1409,6 +1415,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const entry = await createExpenseRequest(input);
       up(s => {
         s.data.expenses.push({
+          id: String(entry.id),
           a: Number(entry.amount),
           d: entry.date,
           c: String(entry.category_id),
@@ -1422,6 +1429,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       up(s => { s.expenseSync = 'error'; });
       throw error;
     }
+  }, [up]);
+
+  const setExpenseMonthlyTotal = useCallback(async (entryId: string, monthlyTotal: boolean): Promise<void> => {
+    const entry = await updateExpenseCoverageRequest(entryId, monthlyTotal);
+    up(s => {
+      const saved = s.data.expenses.find(item => item.id === String(entry.id));
+      if (saved) saved.method = entry.entry_method;
+    });
   }, [up]);
 
   const refreshAccountData = useCallback(async (
@@ -1479,6 +1494,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         name: category.name,
       }));
       s.data.expenses = expenses.map(entry => ({
+        id: String(entry.id),
         a: Number(entry.amount),
         d: entry.date,
         c: String(entry.category_id),
@@ -1650,13 +1666,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, savePreferredIncomeSource, refreshIncomeRecord, refreshAccountData, applyAccountState, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
-    saveExpenseCategory, saveExpenseEntry,
+    saveExpenseCategory, saveExpenseEntry, setExpenseMonthlyTotal,
   }), [
     S, authReady, up, t, monthName, go, goTab, backNav,
     saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, savePreferredIncomeSource, refreshIncomeRecord, refreshAccountData, applyAccountState, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
-    saveExpenseCategory, saveExpenseEntry,
+    saveExpenseCategory, saveExpenseEntry, setExpenseMonthlyTotal,
   ]);
 
   if (!localStateReady) return null;

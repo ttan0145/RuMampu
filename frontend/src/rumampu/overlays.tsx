@@ -935,9 +935,9 @@ export function SheetHost() {
 
   if (sheet === 'pastmonth' || sheet.startsWith('pastmonth:')) {
     const editId = sheet.startsWith('pastmonth:') ? sheet.slice('pastmonth:'.length) : null;
-    /* v24: the same sheet serves expenses (S.pastT === 'ex') with a plain dated entry. */
+    /* An expense entered here is a whole-month total, not one logged day. */
     const forEx = !editId && S.pastT === 'ex';
-    const sel = pastM ?? suggestedPastMonth(S.data.income.map(entry => entry.d));
+    const sel = pastM ?? suggestedPastMonth((forEx ? S.data.expenses : S.data.income).map(entry => entry.d));
     const save = async () => {
       if (saving) return;
       if (!isValidPastMonth(sel)) { setPastError('invalid'); return; }
@@ -947,9 +947,13 @@ export function SheetHost() {
       if (a < 0) { setPastError('amount'); return; }
       if (forEx) {
         if (!(a > 0)) { setPastError('amount'); return; }
+        if (S.data.expenses.some(entry => entry.d.slice(0, 7) === sel)) {
+          setPastError('exists');
+          return;
+        }
         setSaving(true);
         try {
-          await saveExpenseEntry({ amount: a, date: sel + '-15', categoryId: S.expDraft.c || S.data.expenseCats[0]?.id || '' });
+          await saveExpenseEntry({ amount: a, date: sel + '-15', categoryId: S.expDraft.c || S.data.expenseCats[0]?.id || '', entryMethod: 'monthly_total' });
           up(s => { s.sheet = null; });
           toast(t('saved'));
         } catch {
@@ -989,9 +993,9 @@ export function SheetHost() {
     };
     return (
       <SheetFrame pose="counting" onClose={close}>
-        <SheetH3>{editId ? `${t('edit')} ${t('inc_month_total')}` : t('inc_past')}</SheetH3>
+        <SheetH3>{forEx ? t('ex_month_total') : editId ? `${t('edit')} ${t('inc_month_total')}` : t('inc_past')}</SheetH3>
         <View style={{ gap: 8 }}>
-          <BodyS muted>{t('inc_past_hint')}</BodyS>
+          <BodyS muted>{t(forEx ? 'ex_month_total_hint' : 'inc_past_hint')}</BodyS>
           {forEx ? null : <BodyS muted>{t('inc_past_no_min')}</BodyS>}
           {forEx ? null : <BodyS muted>{t('inc_past_month')}</BodyS>}
           <DatePickerField
@@ -1004,7 +1008,7 @@ export function SheetHost() {
           <BodyS muted>{t('inc_amount')}</BodyS>
           <SheetInput keyboardType="decimal-pad" inputMode="decimal" value={pastA}
             onChangeText={value => { setPastA(value); setPastError(null); }} />
-          {pastError ? <BodyS>{t(`inc_past_${pastError}`)}</BodyS> : null}
+          {pastError ? <BodyS>{t(forEx && pastError === 'exists' ? 'ex_month_exists' : `inc_past_${pastError}`)}</BodyS> : null}
           <Btn label={saving ? t('inc_saving') : (editId ? t('done') : t('add'))} onPress={() => { void save(); }} />
         </View>
       </SheetFrame>

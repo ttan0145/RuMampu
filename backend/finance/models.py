@@ -289,6 +289,7 @@ class ExpenseEntry(models.Model):
     class EntryMethod(models.TextChoices):
         MANUAL = "manual", "Manual entry"
         RECEIPT = "receipt", "Receipt confirmed by user"
+        MONTHLY_TOTAL = "monthly_total", "Whole-month expense total"
 
     profile = models.ForeignKey(
         GuestProfile,
