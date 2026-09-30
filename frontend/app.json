@@ -4,17 +4,13 @@
     "slug": "rumampu",
     "version": "1.0.0",
     "orientation": "portrait",
-
     "icon": "./assets/images/RuMampu_AppIcon_Ruma_nobadge_master_2048.png",
-
     "scheme": "rumampu",
     "userInterfaceStyle": "light",
-
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.anonymous.rumampu"
     },
-
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/RuMampu_AppIcon_Ruma_nobadge_master_2048.png",
@@ -25,12 +21,10 @@
       ],
       "package": "com.anonymous.rumampu"
     },
-
     "web": {
       "output": "static",
       "favicon": "./assets/images/RuMampu_AppIcon_Ruma_nobadge_master_2048.png"
     },
-
     "plugins": [
       "expo-router",
       [
@@ -48,13 +42,22 @@
           "cameraPermission": "RuMampu uses the camera to photograph a receipt or an earnings page so you can add it to your record.",
           "photosPermission": "RuMampu opens your photos so you can pick a receipt or an earnings screenshot to add to your record."
         }
-      ]
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow RuMampu to use the microphone for speech-to-text in Ask Ruma.",
+          "speechRecognitionPermission": "Allow RuMampu to convert your speech into text.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
+      ],
+      "expo-localization"
     ],
-
     "experiments": {
       "typedRoutes": true
     },
-
     "extra": {
       "router": {},
       "eas": {

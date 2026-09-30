@@ -4,6 +4,11 @@ import {
   ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getLocales } from 'expo-localization';
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent,
+} from 'expo-speech-recognition';
 import { SvgXml } from 'react-native-svg';
 import { AppState, useApp } from './state';
 import { ApiError, assistantChat } from './api';
@@ -13,6 +18,44 @@ import { RumaHelpAvatar, RumaSignAvatar } from './ruma-view';
 /* Flip to false to hide the whole Ask RuMampu UI (bubble, header
    button, popover), e.g. while the AI backend is unavailable. */
 export const ASSISTANT_UI_ENABLED = true;
+
+/* Speech-to-text uses the device/browser locale rather than the RuMampu UI
+   language. We intentionally constrain recognition to the three languages
+   RuMampu supports: English, Bahasa Malaysia, and Mandarin. */
+function speechLocaleFromSystem(): string {
+  const locale = getLocales()[0];
+  const language = (locale?.languageCode || 'en').toLowerCase();
+  const region = (locale?.regionCode || '').toUpperCase();
+
+  if (language === 'ms' || language === 'bm') return 'ms-MY';
+  if (language === 'zh') {
+    if (region === 'TW') return 'zh-TW';
+    if (region === 'HK' || region === 'MO') return 'zh-HK';
+    return 'zh-CN';
+  }
+  return 'en-MY';
+}
+
+function speechUiText(lang: AppState['lang']) {
+  if (lang === 'ms') return {
+    start: 'Mula input suara', stop: 'Hentikan input suara', listening: 'Sedang mendengar…',
+    denied: 'Akses mikrofon diperlukan untuk input suara.',
+    unavailable: 'Pengecaman suara tidak tersedia pada peranti atau pelayar ini.',
+    failed: 'Tidak dapat mengecam suara. Sila cuba lagi.',
+  };
+  if (lang === 'zh') return {
+    start: '开始语音输入', stop: '停止语音输入', listening: '正在聆听…',
+    denied: '语音输入需要麦克风权限。',
+    unavailable: '此设备或浏览器不支持语音识别。',
+    failed: '无法识别语音，请再试一次。',
+  };
+  return {
+    start: 'Start voice input', stop: 'Stop voice input', listening: 'Listening…',
+    denied: 'Microphone access is required for voice input.',
+    unavailable: 'Speech recognition is not available on this device or browser.',
+    failed: 'Could not recognise speech. Please try again.',
+  };
+}
 
 /* US6.2 — "Ask RuMampu".
 
@@ -148,9 +191,52 @@ export function AssistantSheet() {
   const insets = useSafeAreaInsets();
   const [draft, setDraft] = React.useState('');
   const [sending, setSending] = React.useState(false);
+  const [listening, setListening] = React.useState(false);
   const scrollRef = React.useRef<ScrollView>(null);
+  const speechText = React.useMemo(() => speechUiText(S.lang), [S.lang]);
 
-  const close = () => up(s => { s.assistantOpen = false; });
+  useSpeechRecognitionEvent('start', () => setListening(true));
+  useSpeechRecognitionEvent('end', () => setListening(false));
+  useSpeechRecognitionEvent('result', event => {
+    const transcript = event.results?.[0]?.transcript?.trim();
+    if (transcript) setDraft(transcript);
+  });
+  useSpeechRecognitionEvent('error', event => {
+    setListening(false);
+    if (event.error === 'aborted' || event.error === 'no-speech') return;
+    const message = event.error === 'not-allowed' ? speechText.denied : speechText.failed;
+    toast(message, 'error');
+  });
+
+  const close = () => {
+    if (listening) ExpoSpeechRecognitionModule.abort();
+    up(s => { s.assistantOpen = false; });
+  };
+
+  const toggleSpeech = async () => {
+    if (listening) {
+      ExpoSpeechRecognitionModule.stop();
+      return;
+    }
+
+    if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+      toast(speechText.unavailable, 'error');
+      return;
+    }
+
+    const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    if (!permission.granted) {
+      toast(speechText.denied, 'error');
+      return;
+    }
+
+    ExpoSpeechRecognitionModule.start({
+      lang: speechLocaleFromSystem(),
+      interimResults: true,
+      continuous: false,
+      maxAlternatives: 1,
+    });
+  };
 
   /* A language switch starts a fresh chat: replies written while the app was
      in another language name screens in that language, and the model copies
@@ -246,10 +332,23 @@ export function AssistantSheet() {
                 style={st.input}
                 value={draft}
                 onChangeText={setDraft}
-                placeholder={t('ai_ph')}
+                placeholder={listening ? speechText.listening : t('ai_ph')}
                 placeholderTextColor={C.ink40}
                 onSubmitEditing={() => { void send(); }}
               />
+              <Pressable
+                onPress={() => { void toggleSpeech(); }}
+                disabled={sending}
+                style={[st.micBtn, listening && st.micBtnActive, sending && { opacity: 0.4 }]}
+                accessibilityLabel={listening ? speechText.stop : speechText.start}
+              >
+                <SvgXml
+                  xml={'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>'}
+                  width={22}
+                  height={22}
+                  color={listening ? '#fff' : C.brand}
+                />
+              </Pressable>
               <Pressable
                 onPress={() => { void send(); }}
                 disabled={sending || !draft.trim()}
@@ -317,6 +416,12 @@ const st = StyleSheet.create({
     backgroundColor: C.paper, borderWidth: 1.5, borderColor: C.ink40, borderRadius: 12,
     paddingHorizontal: 12, fontSize: 15, color: C.ink, fontFamily: BODY_FONT,
   },
+  micBtn: {
+    width: 48, height: 48, borderRadius: 12, flexShrink: 0,
+    borderWidth: 1.5, borderColor: C.brand, backgroundColor: C.paper,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  micBtnActive: { backgroundColor: C.brand },
   sendBtn: {
     width: 48, height: 48, borderRadius: 12, flexShrink: 0,
     backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center',
