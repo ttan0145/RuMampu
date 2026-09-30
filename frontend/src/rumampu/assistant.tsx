@@ -4,7 +4,6 @@ import {
   ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getLocales } from 'expo-localization';
 import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
@@ -19,20 +18,11 @@ import { RumaHelpAvatar, RumaSignAvatar } from './ruma-view';
    button, popover), e.g. while the AI backend is unavailable. */
 export const ASSISTANT_UI_ENABLED = true;
 
-/* Speech-to-text uses the device/browser locale rather than the RuMampu UI
-   language. We intentionally constrain recognition to the three languages
-   RuMampu supports: English, Bahasa Malaysia, and Mandarin. */
-function speechLocaleFromSystem(): string {
-  const locale = getLocales()[0];
-  const language = (locale?.languageCode || 'en').toLowerCase();
-  const region = (locale?.regionCode || '').toUpperCase();
-
-  if (language === 'ms' || language === 'bm') return 'ms-MY';
-  if (language === 'zh') {
-    if (region === 'TW') return 'zh-TW';
-    if (region === 'HK' || region === 'MO') return 'zh-HK';
-    return 'zh-CN';
-  }
+/* Keep speech recognition in sync with the language selected inside RuMampu,
+   regardless of the device or browser language. */
+function speechLocaleFromApp(lang: AppState['lang']): string {
+  if (lang === 'ms') return 'ms-MY';
+  if (lang === 'zh') return 'zh-CN';
   return 'en-MY';
 }
 
@@ -231,7 +221,7 @@ export function AssistantSheet() {
     }
 
     ExpoSpeechRecognitionModule.start({
-      lang: speechLocaleFromSystem(),
+      lang: speechLocaleFromApp(S.lang),
       interimResults: true,
       continuous: false,
       maxAlternatives: 1,
