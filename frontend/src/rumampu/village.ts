@@ -84,16 +84,26 @@ export function villagePlaceQueued(s: AppState): void {
    when the plot is empty. */
 export function villageRemove(s: AppState): void {
   const v = villageEnsure(s);
+  const resetRunIfEmpty = () => {
+    if (v.built !== 0) return;
+    v.score = 0;
+    v.moves = 0;
+    v.gain = 0;
+    v.msg = '';
+    /* best is intentionally kept as the all-time high score. */
+  };
   v.pop = [];
   if (v.queued > 0) {
     v.queued--;
     v.built = Math.max(0, v.built - 1);
+    resetRunIfEmpty();
     return;
   }
   const pondok = v.cells.indexOf(1);
   if (pondok >= 0) {
     v.cells[pondok] = 0;
     v.built = Math.max(0, v.built - 1);
+    resetRunIfEmpty();
     return;
   }
   let tier = 0, at = -1;
@@ -120,6 +130,7 @@ export function villageRemove(s: AppState): void {
     }
   }
   v.queued += waiting;
+  resetRunIfEmpty();
 }
 
 /* Slide + merge in one direction; returns the best merged tier, or -1 if nothing moved. */

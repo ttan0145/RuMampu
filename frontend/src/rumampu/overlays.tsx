@@ -318,7 +318,8 @@ function VillageSheet() {
         </View>
       ) : null}
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-        <VStat label={t('vl_score')} value={v.score} gain={v.gain || undefined} />
+        <VStat label={t('vl_score')} value={v.score} />
+        {/* <VStat label={t('vl_score')} value={v.score} gain={v.gain || undefined} /> */}
         <VStat label={t('vl_bestscore')} value={v.best} hi />
         <VStat label={t('vl_moves')} value={v.moves} />
       </View>
