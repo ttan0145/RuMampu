@@ -71,6 +71,136 @@ class AssistantChatApiTests(TestCase):
         self.assertEqual(response.status_code, 429)
 
 
+class AssistantActionPreviewApiTests(TestCase):
+    url = "/api/v1/assistant/action-preview/"
+
+    def setUp(self):
+        self.client = Client()
+
+    def payload(self):
+        return {
+            "text": "add my income today two hundred ringgit",
+            "language": "en",
+            "income_sources": [{"id": "11", "label": "E-hailing"}],
+            "expense_categories": [{"id": "21", "label": "Meals"}],
+            "commitments": [{"id": "31", "label": "Rent"}],
+            "limit_categories": [
+                {"id": "total", "label": "Whole month"},
+                {"id": "21", "label": "Meals"},
+            ],
+            "default_income_source_id": "11",
+        }
+
+    def test_returns_reviewable_action_without_writing(self):
+        expected = {
+            "status": "ready",
+            "message": "",
+            "actions": [{
+                "kind": "income",
+                "amount": "200.00",
+                "date": "2026-10-01",
+                "target_id": "11",
+                "target_label": "E-hailing",
+            }],
+        }
+        with patch(
+            "finance.views.assistant_action_service.preview_action",
+            return_value=expected,
+        ) as preview:
+            response = self.client.post(
+                self.url, data=json.dumps(self.payload()), content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), expected)
+        self.assertEqual(preview.call_args.kwargs["default_income_source_id"], "11")
+
+    def test_rejects_unknown_language(self):
+        payload = self.payload()
+        payload["language"] = "fr"
+        response = self.client.post(
+            self.url, data=json.dumps(payload), content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+
+class AssistantActionServiceTests(TestCase):
+    def setUp(self):
+        from . import assistant_action_service
+
+        self.service = assistant_action_service
+        self.options = {
+            "income_sources": [{"id": "11", "label": "E-hailing"}],
+            "expense_categories": [{"id": "21", "label": "Meals"}],
+            "commitments": [{"id": "31", "label": "Rent"}],
+            "limit_categories": [{"id": "total", "label": "Whole month"}],
+        }
+
+    def preview(self, model_result, **overrides):
+        args = {
+            "text": "spoken command",
+            "language": "en",
+            **self.options,
+            "default_income_source_id": "11",
+            **overrides,
+        }
+        with patch.object(self.service, "_completion", return_value=model_result):
+            return self.service.preview_action(**args)
+
+    def test_income_uses_default_source_and_normalises_amount(self):
+        result = self.preview({
+            "actions": [{
+                "intent": "income", "amount": "200", "date": "2026-10-01", "target_id": None,
+            }],
+        })
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["actions"][0]["amount"], "200.00")
+        self.assertEqual(result["actions"][0]["target_id"], "11")
+
+    def test_numeric_model_target_id_is_normalised(self):
+        result = self.preview({
+            "actions": [{
+                "intent": "expense", "amount": 12, "date": "2026-10-01", "target_id": 21,
+            }],
+        })
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["actions"][0]["target_id"], "21")
+
+    def test_unknown_expense_category_is_not_accepted(self):
+        result = self.preview({
+            "actions": [{
+                "intent": "expense", "amount": 12, "date": "2026-10-01", "target_id": "invented",
+            }],
+        })
+        self.assertEqual(result["status"], "needs_clarification")
+        self.assertEqual(result["actions"], [])
+
+    def test_missing_amount_requires_clarification(self):
+        result = self.preview({
+            "actions": [{
+                "intent": "bill", "amount": None, "date": None, "target_id": "31",
+            }],
+        })
+        self.assertEqual(result["status"], "needs_clarification")
+        self.assertIn("amount", result["message"])
+
+    def test_non_action_falls_back_to_regular_chat(self):
+        result = self.preview({"actions": []})
+        self.assertEqual(result, {"status": "not_action", "message": "", "actions": []})
+
+    def test_returns_every_action_and_keeps_final_setting_correction(self):
+        result = self.preview({"actions": [
+            {"intent": "income", "amount": 286.4, "date": "2026-10-01", "target_id": "11"},
+            {"intent": "expense", "amount": 12.5, "date": "2026-10-01", "target_id": "21"},
+            {"intent": "bill", "amount": 800, "date": None, "target_id": "31"},
+            {"intent": "limit", "amount": 1600, "date": None, "target_id": "total"},
+            {"intent": "bill", "amount": 850, "date": None, "target_id": "31"},
+        ]})
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(len(result["actions"]), 4)
+        self.assertEqual(result["actions"][-1]["kind"], "bill")
+        self.assertEqual(result["actions"][-1]["amount"], "850.00")
+
+
 class AssistantServiceTests(TestCase):
     def setUp(self):
         cache.clear()

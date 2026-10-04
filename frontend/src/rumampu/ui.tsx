@@ -374,7 +374,7 @@ export function TextField({
 }) {
   return (
     <TextInput
-      style={st.input}
+      style={[st.input]}
       value={value}
       onChangeText={onChangeText}
       placeholder={placeholder}

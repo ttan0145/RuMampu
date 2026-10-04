@@ -10,7 +10,8 @@ import {
 } from 'expo-speech-recognition';
 import { SvgXml } from 'react-native-svg';
 import { AppState, useApp } from './state';
-import { ApiError, assistantChat } from './api';
+import { ApiError, AssistantAction, assistantChat, previewAssistantAction } from './api';
+import { rm } from './calc';
 import { BODY_FONT, C, DISP_FONT } from './theme';
 import { RumaHelpAvatar, RumaSignAvatar } from './ruma-view';
 
@@ -177,11 +178,14 @@ function termLabels(S: AppState, t: (k: string) => string): Record<string, strin
 }
 
 export function AssistantSheet() {
-  const { S, t, up, toast } = useApp();
+  const { S, t, up, toast, saveIncomeEntry, saveExpenseEntry, saveCommitmentAmount } = useApp();
   const insets = useSafeAreaInsets();
   const [draft, setDraft] = React.useState('');
   const [sending, setSending] = React.useState(false);
   const [listening, setListening] = React.useState(false);
+  const [pendingActions, setPendingActions] = React.useState<AssistantAction[]>([]);
+  const [actionSaving, setActionSaving] = React.useState(false);
+  const [confirmingOutlier, setConfirmingOutlier] = React.useState(false);
   const scrollRef = React.useRef<ScrollView>(null);
   const speechText = React.useMemo(() => speechUiText(S.lang), [S.lang]);
 
@@ -189,7 +193,9 @@ export function AssistantSheet() {
   useSpeechRecognitionEvent('end', () => setListening(false));
   useSpeechRecognitionEvent('result', event => {
     const transcript = event.results?.[0]?.transcript?.trim();
-    if (transcript) setDraft(transcript);
+    if (transcript) {
+      setDraft(transcript);
+    }
   });
   useSpeechRecognitionEvent('error', event => {
     setListening(false);
@@ -236,17 +242,58 @@ export function AssistantSheet() {
   React.useEffect(() => {
     if (prevLang.current === S.lang) return;
     prevLang.current = S.lang;
+    setPendingActions([]);
+    setConfirmingOutlier(false);
     up(s => { s.assistantMsgs = []; });
   }, [S.lang, up]);
+
+  const shownLabel = (item: { custom?: boolean; name?: string; k?: string }) =>
+    item.custom ? item.name || '' : t(item.k || '');
+
+  const actionSummary = (action: AssistantAction): string => t(
+    `as_action_${action.kind}_summary`,
+    { amount: rm(Number(action.amount)), date: action.date || '', target: action.target_label },
+  );
+
+  const tryFinancialAction = async (content: string) => previewAssistantAction(content, S.lang, {
+    incomeSources: S.data.sources.map(item => ({ id: item.id, label: shownLabel(item) })),
+    expenseCategories: S.data.expenseCats.map(item => ({ id: item.id, label: shownLabel(item) })),
+    commitments: [
+      ...S.data.commitments.living,
+      ...S.data.commitments.debts,
+      ...S.data.commitments.savings,
+    ].map(item => ({ id: item.id, label: shownLabel(item) })),
+    limitCategories: [
+      { id: 'total', label: t('lm_total') },
+      ...S.data.expenseCats.map(item => ({ id: item.id, label: shownLabel(item) })),
+    ],
+    defaultIncomeSourceId: S.preferredIncomeSourceId || S.incomeDraft.s || null,
+  });
 
   const send = async (text?: string) => {
     const content = (text ?? draft).trim();
     if (!content || sending) return;
+    setPendingActions([]);
+    setConfirmingOutlier(false);
     const history = [...S.assistantMsgs, { role: 'user' as const, content }];
     setDraft('');
     setSending(true);
     up(s => { s.assistantMsgs.push({ role: 'user', content }); });
     try {
+      try {
+        const preview = await tryFinancialAction(content);
+        if (preview.status === 'needs_clarification') {
+          up(s => { s.assistantMsgs.push({ role: 'assistant', content: preview.message }); });
+          return;
+        }
+        if (preview.status === 'ready' && preview.actions.length > 0) {
+          setPendingActions(preview.actions);
+          return;
+        }
+      } catch {
+        /* Keep ordinary chat available if the smaller action model is down.
+           The 120B assistant may still explain how to enter the item manually. */
+      }
       const { reply } = await assistantChat(history, S.lang, uiLabels(t), termLabels(S, t));
       up(s => { s.assistantMsgs.push({ role: 'assistant', content: reply }); });
     } catch (error) {
@@ -256,6 +303,57 @@ export function AssistantSheet() {
       if (!limited) toast(message, 'error');
     } finally {
       setSending(false);
+    }
+  };
+
+  const cancelAction = () => {
+    setPendingActions([]);
+    setConfirmingOutlier(false);
+    up(s => { s.assistantMsgs.push({ role: 'assistant', content: t('as_action_cancelled') }); });
+  };
+
+  const confirmAction = async () => {
+    if (pendingActions.length === 0 || actionSaving) return;
+    setActionSaving(true);
+    try {
+      const actionsToSave = [...pendingActions].sort((a, b) =>
+        Number(b.kind === 'income') - Number(a.kind === 'income'));
+      for (const action of actionsToSave) {
+        if (action.kind === 'income') {
+          const result = await saveIncomeEntry({
+            amount: Number(action.amount),
+            date: action.date!,
+            sourceId: action.target_id,
+            confirmOutlier: confirmingOutlier,
+          });
+          if (result === 'outlier') {
+            setConfirmingOutlier(true);
+            up(s => { s.assistantMsgs.push({ role: 'assistant', content: t('as_action_outlier') }); });
+            return;
+          }
+        } else if (action.kind === 'expense') {
+          await saveExpenseEntry({
+            amount: Number(action.amount),
+            date: action.date!,
+            categoryId: action.target_id,
+          });
+        } else if (action.kind === 'bill') {
+          await saveCommitmentAmount(action.target_id, Number(action.amount));
+        } else {
+          up(s => { s.data.expenseLimits[action.target_id] = Number(action.amount); });
+        }
+      }
+      const saved = pendingActions.length === 1
+        ? t(`as_action_${pendingActions[0].kind}_saved`)
+        : t('as_actions_saved', { n: pendingActions.length });
+      setPendingActions([]);
+      setConfirmingOutlier(false);
+      up(s => { s.assistantMsgs.push({ role: 'assistant', content: saved }); });
+      toast(saved);
+    } catch {
+      up(s => { s.assistantMsgs.push({ role: 'assistant', content: t('as_action_save_failed') }); });
+    } finally {
+      setActionSaving(false);
     }
   };
 
@@ -309,10 +407,47 @@ export function AssistantSheet() {
                   <Text style={st.bubbleBotTxt}>{t('as_thinking')}</Text>
                 </View>
               ) : null}
+              {pendingActions.length > 0 ? (
+                <View style={st.actionCard}>
+                  <Text style={st.actionTitle}>{t('as_action_review')}</Text>
+                  <View style={{ gap: 6 }}>
+                    {pendingActions.map((action, index) => (
+                      <Text key={`${action.kind}-${action.target_id}-${index}`} style={st.actionText}>
+                        {`${index + 1}. ${actionSummary(action)}`}
+                      </Text>
+                    ))}
+                  </View>
+                  <View style={st.actionButtons}>
+                    <Pressable
+                      disabled={actionSaving}
+                      onPress={cancelAction}
+                      style={[st.actionCancel, actionSaving && { opacity: 0.5 }]}
+                    >
+                      <Text style={st.actionCancelText}>{t('cancel')}</Text>
+                    </Pressable>
+                    <Pressable
+                      disabled={actionSaving}
+                      onPress={() => { void confirmAction(); }}
+                      style={[st.actionConfirm, actionSaving && { opacity: 0.5 }]}
+                    >
+                      {actionSaving ? <ActivityIndicator size="small" color="#fff" /> : (
+                        <Text style={st.actionConfirmText}>
+                          {t(confirmingOutlier ? 'as_action_confirm_again' : 'as_action_confirm')}
+                        </Text>
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+              ) : null}
             </ScrollView>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {['ai_q1', 'ai_q2', 'ai_q3'].map(k => (
-                <Pressable key={k} onPress={() => { void send(t(k)); }} style={st.sugg}>
+                <Pressable
+                  key={k}
+                  disabled={pendingActions.length > 0}
+                  onPress={() => { void send(t(k)); }}
+                  style={[st.sugg, pendingActions.length > 0 && { opacity: 0.4 }]}
+                >
                   <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink }}>{t(k)}</Text>
                 </Pressable>
               ))}
@@ -322,14 +457,15 @@ export function AssistantSheet() {
                 style={st.input}
                 value={draft}
                 onChangeText={setDraft}
+                editable={pendingActions.length === 0}
                 placeholder={listening ? speechText.listening : t('ai_ph')}
                 placeholderTextColor={C.ink40}
                 onSubmitEditing={() => { void send(); }}
               />
               <Pressable
                 onPress={() => { void toggleSpeech(); }}
-                disabled={sending}
-                style={[st.micBtn, listening && st.micBtnActive, sending && { opacity: 0.4 }]}
+                disabled={sending || pendingActions.length > 0}
+                style={[st.micBtn, listening && st.micBtnActive, (sending || pendingActions.length > 0) && { opacity: 0.4 }]}
                 accessibilityLabel={listening ? speechText.stop : speechText.start}
               >
                 <SvgXml
@@ -341,8 +477,8 @@ export function AssistantSheet() {
               </Pressable>
               <Pressable
                 onPress={() => { void send(); }}
-                disabled={sending || !draft.trim()}
-                style={[st.sendBtn, (sending || !draft.trim()) && { opacity: 0.4 }]}
+                disabled={sending || pendingActions.length > 0 || !draft.trim()}
+                style={[st.sendBtn, (sending || pendingActions.length > 0 || !draft.trim()) && { opacity: 0.4 }]}
                 accessibilityLabel={t('ai_send')}
               >
                 <SvgXml xml={'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 12h15M13 6l6 6-6 6"/></svg>'} width={22} height={22} />
@@ -393,6 +529,23 @@ const st = StyleSheet.create({
   bubbleBot: { alignSelf: 'flex-start', backgroundColor: '#EDF3F2', borderBottomLeftRadius: 4 },
   bubbleUserTxt: { fontFamily: BODY_FONT, fontSize: 14, lineHeight: 19, color: '#fff' },
   bubbleBotTxt: { fontFamily: BODY_FONT, fontSize: 14, lineHeight: 19, color: C.ink },
+  actionCard: {
+    alignSelf: 'stretch', gap: 8, padding: 12, borderRadius: 14,
+    borderWidth: 1.5, borderColor: C.brand, backgroundColor: C.paper,
+  },
+  actionTitle: { fontFamily: DISP_FONT, fontSize: 14, color: C.ink },
+  actionText: { fontFamily: BODY_FONT, fontSize: 13.5, lineHeight: 19, color: C.ink },
+  actionButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 2 },
+  actionCancel: {
+    minHeight: 40, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1.5,
+    borderColor: C.brand, alignItems: 'center', justifyContent: 'center',
+  },
+  actionCancelText: { fontFamily: BODY_FONT, fontSize: 13, color: C.brand },
+  actionConfirm: {
+    minHeight: 40, minWidth: 96, paddingHorizontal: 14, borderRadius: 10,
+    backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center',
+  },
+  actionConfirmText: { fontFamily: BODY_FONT, fontSize: 13, color: '#fff' },
   sugg: {
     borderWidth: 1.5, borderColor: C.ink14, borderRadius: 16,
     paddingVertical: 6, paddingHorizontal: 11, minHeight: 32, justifyContent: 'center',
