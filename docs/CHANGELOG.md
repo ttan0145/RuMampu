@@ -2,6 +2,74 @@
 
 Language: **English** | [Chinese (CN)](CHANGELOG.cn.md)
 
+## 2026-10-05 — Fix input focus, saving reversals and acceptance timing
+
+Status: implemented and verified locally (not committed)
+
+- Hoist Upfront cash's row, input and stage components so typing does not remount the inputs. AC5.2.9 types each character and still checks account cash, date, gap and reload.
+- Persist each saving day's original destination in optional `saving_plan.buffered` (boolean/null array). Undo follows that destination across phase changes and reloads. Older plans remain accepted; their destinations cannot be recovered exactly, so legacy undo caps the reservation at declared savings remaining. Four regressions failed on the earlier implementation and pass after the fix. Backend tests cover round trips and atomic rejection of malformed allocations.
+- Place Ask Ruma at the bottom right on its first layout. The loan-edit test keeps it visible and removes the CSS workaround.
+- Receipt scans wait for category data before matching the returned slug. A browser regression deliberately holds the category response.
+- Guest fixtures use ordinary clicks through the current entry and wait for an actionable tab. Epic 5 account setup waits for login POST success and the login screen to close. TECH-5.5 previously reloaded while login was pending; it now reaches the transfer, server state and reload assertions.
+- Map US3.1 to its official IDs: financing amount is AC3.1.3 (still deferred); AC3.1.6 checks instalment and AC3.1.7 checks known payment. Gate only that US slice (6 executable + 1 deferred / 7), not all of Epic 3.
+- Replace the false arbitrary-rotation invariant with an independent check of chronological suffixes. The buffer algorithm and four fixed amounts are unchanged.
+
+### Verification
+
+- Isolated local SQLite: clean Django check, no migration drift, 178/178 backend tests passed.
+- Both TypeScript checks and traceability passed. OpenAPI validation exits 0 and matches the document; existing diagnostics remain 4 warnings / 77 errors.
+- Focused browser verification: 12/12 passed. One complete Playwright run: 98/98 passed across 13 files in 15.3 minutes, with no skips or retries. SQLite and generated artifacts were isolated outside the repository and removed afterward.
+
+## 2026-10-03 — Acceptance suite back in step with the app; savings counted once; steadier cash buffer; moved-in money kept
+
+Status: built and checked locally; awaiting owner acceptance (not committed)
+
+- **Browser acceptance suite.** The CI step "Run browser acceptance" had failed on every push to main since 2026-09-04. The suite now matches the current main (`aa90231`, merged locally) and the v24/v25 screens:
+  - The shared `openApp()` helper walks the guest entry through the "Continue as a guest?" dialog and keeps the client id the test seeded, so specs that seed their record through the API still see it after onboarding.
+  - Epic 1 to 4, the import regressions and the housing integration test follow the current screens: one income question with a date picker; past months from "Add a month I did not record"; work costs on Daily expenses with "This was for work"; the receipt tab; the quietest-month line and coverage callouts that save as you answer; the loan sheet on the house form; the income drop on the result. Steps that used fixed dates or future days now pick days in last month, so they pass on any day of a month.
+  - Criteria the current screens no longer meet are recorded as explicitly deferred with their reason, not passed: AC1.3.7 (edit a work cost), AC1.4.3 and AC1.4.4 (savings on Bills), AC3.1.3 (financing amount), AC4.4.4 (custom drop), AC4.4.8 and AC4.4.9 (the drop shown as a hypothetical). The traceability gate allows exactly the Epic 1 ones.
+  - Two things the v24 port had dropped are back: "+ Your own cost" in work-cost mode on Daily expenses (AC1.3.4), and the lower-income rule behind an (i) on Income pattern (AC2.3.2). The coverage month cells now expose their checked state to assistive technology.
+  - Removed `work-costs-hardening.spec.ts`: its eight checks drove the old Work costs screen, which nothing has linked to since v24. Two stale assertions went as well (the horizontal-scroll hint on the pattern chart and the original text under a corrected import row).
+  - Three tests that could fail by chance were made steady: the Epic 8 guest-transfer flow now waits for the log-in screen to close before using the tab bar (it failed once under load); the Epic 10 month-end check freezes the clock on the month's second-to-last day instead of the 29th, which February of a common year does not have; and the Epic 10 village merge no longer makes a second move when the first already merged the two tiles (a move that merges nothing clears the message).
+- **Savings counted once.** What the Epic 10 safety buffer already holds is left out of *You have*, the House card and the gap on Home, and Upfront cash and the pot's working say how much is held (`potHeld` and `potForUpfront` in `pot.ts`). Cash already held still does not fill the buffer; that rule (proposed US5.8) waits on the product owner and the Epic 10 owner.
+- **Cash buffer measured as the deepest fall** ([ADR 0005](adr/0005-cash-buffer-deepest-fall.md)): the smallest opening amount that gets through the rest of the record whichever month it started in. `starting_liquidity` adds `fall_start` and `fall_end`, and Cash buffer names those months and shades them. On the fixture, RM 680 becomes RM 1,940 and RM 0 becomes RM 904.74; RM 4,740 is unchanged.
+- **Money moved in from finished months is kept.** `pot_moved` is stored on the account (migration 0019, validated like `cash_on_hand`) and in the local snapshot. Months marked as moved without an amount, from snapshots saved before this, are offered again.
+- Regenerated `docs/openapi.yaml`.
+
+### Verification
+
+- Backend: `check` and `makemigrations --check` clean; 176 tests passed; `spectacular --validate` output identical to `docs/openapi.yaml`.
+- Frontend: `npm run typecheck`; traceability (Epic 1 58 executable + 4 deferred / 62, Epic 2 18/18, Epic 5 36/36); the whole Playwright suite (93 tests) in batches on 2026-10-03: Epics 1 and 2 22/22; Epics 3 and 4, housing integration, sign-up and import 12/12; Epic 4 expenses and Epic 5 25/25; Epics 6 and 8 28/29 with the guest-transfer test failing once on time and passing on three reruns after the wait was added; Epic 10 5/5. After the three test fixes, Epics 8 and 10 were run together (29 passed; the village test then failed once on the tile placement, which led to its fix) and Epic 10 twice over (see below).
+- Not run here: the PostgreSQL job (no local PostgreSQL; migration 0019 is a plain field addition) and the suite in one Linux run as CI does it.
+
+## 2026-10-01 — OpenAPI contract refreshed
+
+- Regenerated `docs/openapi.yaml` from the backend. The committed file had fallen behind the code: it lacked six endpoints (`auth/export`, `auth/guest-transfer`, `auth/record`, `expenses/{entry_id}/coverage`, `housing/saved-tests/{test_id}` and `income/scan`) and three schemas, and still listed the older expense entry-method enum. The CI step that compares the committed file with a fresh `spectacular` run could not pass.
+- Checked the way CI does: `spectacular --validate` succeeds and its output is identical to the committed file.
+
+## 2026-10-01 — Epic 5 homeownership preparation tools (v5)
+
+Status: built; acceptance checks pass locally, awaiting owner acceptance
+
+- Re-baselined Epic 5 on the v5 requirements (Drive, Iteration 3: `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v5.docx`): 36 acceptance criteria, where the earlier repository snapshot had 25. The v5 text is in [`EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md`](requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md), and the traceability gate checks Epic 5 against it. User stories 5.5 to 5.7 (Learn explanations added for Iteration 3) are not built.
+- Reopened the House → Prepare for a house entry and the Money → Cash buffer shortcut, which had pointed at the "Coming soon" placeholder since 2026-09-15. The placeholder screen and its route stay registered.
+- Added what was missing or never shown: the Cash buffer option on Prepare (AC5.1.2), the zero-deposit explanation on Upfront cash (AC5.2.8), and the "65% check: needs review" notice on Documents & financing (AC5.4.6). The wording already existed in the string table.
+- New in v5: a "Cash I already have" entry on Upfront cash, saved with the day it was reported (AC5.2.9, AC5.2.10). The account state gains `cash_on_hand_date` (migration 0018, validated on the server) and the local snapshot keeps it too.
+- "You have" is now one pot (cash already had, plus what the plan added, plus what finished months moved in). Upfront cash, the House card (AC5.1.5), Home and the Saving plan show the same total, and the "How this adds up" sheet lists all three parts (AC5.2.17).
+- The cash-buffer chart puts its zero line where zero falls (AC5.3.7), and its month abbreviations no longer wrap onto two lines.
+- Gave the upfront-cash and running-balance charts accessible labels and stable test ids so their values can be asserted, and made the first-home switch expose its on/off state to assistive technology.
+- Added `epic5.spec.ts` (36 acceptance criteria, each registered once, plus two engineering regressions) and arithmetic tests for the upfront fee scales and the pot. `npm run test:e2e:epic5` runs both files.
+- Added backend tests for the cash buffer on the 12-month fixture (RM 680, RM 0 and RM 4,740, with every monthly balance) and for the cash date.
+- Restored the US8.4 navigation check to expect the Prepare screen instead of the placeholder.
+- Recorded the acceptance record and five open points in the [Epic 5 index](epic-5/README.md): the pot reading is an unconfirmed interpretation and the Saving plan still subtracts only the cash entered, the upfront figures are calculated in the frontend although ADR 0004 names Django as the authority, some required wording sits behind the (i) button, the published sources need reverification, and the Learn stories are not built.
+
+### Verification
+
+- Backend suite: 172 tests passed, including the 3 cash-buffer regressions and the 2 cash-date tests; Django checks and migration-drift checks are clean. The new field is not part of any OpenAPI schema, because the account-state endpoints declare none.
+- `npm run typecheck`, the traceability gate (Epic 5 at 36/36) and `npm run test:e2e:epic5` (16 tests) pass. Epics 6, 8 and 10 (34 tests) pass with the pot changes.
+- Each new criterion fails its check when the behaviour is broken on purpose (cash date, pot total, zero line, group order, placeholder, earnest deposit, exemption limit, House card), and so do the three earlier gaps, a wrong chart scale and wrapped month labels.
+- The full Playwright run covered 98 tests: 59 passed and 39 failed, none of them in Epic 5. The 39 are the Epic 1, 2, 3 and 4, import, work-cost and `housing-integration` specs that already fail on the untouched commit `707e2c0` (eight of them, covering every failure type, were re-run there). Most are caused by the older `openApp()` helper leaving the "Continue as a guest?" dialog open, which blocks the first tap; two wait for wording that the v22 Home no longer shows. One date-dependent Epic 10 test passed on the first of the month but breaks on the last day of a month. These were not fixed here.
+
 ## 2026-09-11 — Editable confirmed income imports
 
 - Enabled confirmed CSV income entries to use the existing income edit flow while retaining their `CSV` provenance tag.

@@ -2,7 +2,7 @@
 
 Language: **English** | [Chinese (CN)](EPIC_1_2_5_IMPLEMENTATION_MATRIX.cn.md)
 
-Updated: 2026-08-25
+Updated: 2026-10-03
 
 This matrix uses the latest project boundaries to distinguish production-backed behaviour, frontend-only prototypes, and unimplemented work. `Built` is used only when executable code and acceptance evidence exist.
 
@@ -12,16 +12,18 @@ The production-development baseline was completed on 2026-08-24: modular monolit
 
 ## Epic 1 — Income Builder
 
+Re-verified on 2026-10-03 against the v24/v25 screens: 58 of the 62 criteria pass in `epic1.spec.ts`, and 4 are recorded as explicitly deferred with their reason (the traceability gate allows exactly these). The per-story acceptance records linked below were written for the v22 screens.
+
 | User story | Current status | Code/evidence | Next step |
 |---|---|---|---|
-| US1.1 Record income from different sources | Complete (10/10 AC) | Income UI; `finance` source/entry APIs; relevant backend regressions; real Playwright flow and refresh persistence; [acceptance record](epic-1/US1.1_RECORD_INCOME.md) | None. Edit/delete are outside formal US1.1 criteria and need a separate requirement if desired. |
-| US1.2 Add historical income | Complete (4/4 AC) | Any past month; no minimum history; mutual exclusion of `historical_total` and itemised income; recorded-month count; persistence; [acceptance record](epic-1/US1.2_HISTORICAL_INCOME.md) | None. |
-| US1.3 Record direct work-related costs | Complete (6/6 AC) | Default/custom cost APIs; independent amount updates; income-after-cost calculation; persistence; [acceptance record](epic-1/US1.3_WORK_COSTS.md) | None. Historical cost versions and source allocation are outside current criteria. |
-| US1.4 Record regular commitments | Complete (6/6 AC) | Living/debt/savings API groups; independent updates; total calculation; persistence; [acceptance record](epic-1/US1.4_COMMITMENTS.md) | None. Treatment of rent in purchase scenarios belongs to the corresponding scenario requirement. |
-| US1.5 Record daily expenses | Complete (6/6 AC) | Default/custom `ExpenseCategory` API; positive amount and calendar-date validation; `ExpenseEntry` API; persistence; [acceptance record](epic-1/US1.5_MANUAL_EXPENSES.md) | None. Edit/delete are outside current criteria. |
-| US1.6 Review daily expenses | Complete (6/6 AC) | Latest recorded month, total, day count, and entries; manual/receipt/summary entry points; cross-month summary; API and guest isolation; [acceptance record](epic-1/US1.6_EXPENSE_REVIEW.md) | None. The existing 20-day completeness rule does not change the factual recorded-day count. |
-| US1.7 Receipt starting point | Complete (10/10 AC) | Photo/file selection; visible reading state; receipt provenance; editable confirmation; retake; confirmed API persistence; [acceptance record](epic-1/US1.7_RECEIPT_STARTING_POINT.md) | Production OCR and source-image storage require a separate package after privacy policy is defined. |
-| US1.8 Historical import | Complete (8/8 AC) | UTF-8 CSV upload; row-level amount/date/source preview; invalid rows; transactional import after explicit confirmation; limited history and analysis integration; [acceptance record](epic-1/US1.8_HISTORICAL_IMPORT.md) | None. Other file formats and bank-specific templates need separate requirements. |
+| US1.1 Record income from different sources | 11/12 AC; AC1.1.8 deferred | One amount and one date picker (v24); sources and a custom source; amount validation; the high-entry warning; editing with the date-change confirmation; [acceptance record](epic-1/US1.1_RECORD_INCOME.md) | AC1.1.8 (`Your Data` on each entry) stays deferred, as before. |
+| US1.2 Add historical income | Complete (4/4 AC) | "Add a month I did not record" opens the past-month sheet; the current month cannot be picked; recorded-month count; [acceptance record](epic-1/US1.2_HISTORICAL_INCOME.md) | None. |
+| US1.3 Record direct work-related costs | 9/10 AC; AC1.3.7 deferred | Work costs are recorded on Daily expenses with "This was for work" (v24, v5 Amendments 2 and 3) and listed in their own table; "+ Your own cost" restored on 2026-10-03; income after work costs per month on Income pattern; [acceptance record](epic-1/US1.3_WORK_COSTS.md) | AC1.3.7 (edit a work cost): the v24 table has no edit action and the old Work costs screen is no longer reachable. Needs a decision and an app change. |
+| US1.4 Record regular commitments | 4/6 AC; AC1.4.3 and AC1.4.4 deferred | Living costs and debt repayments on Bills; total tagged `CALCULATED`; one provenance tag per group; [acceptance record](epic-1/US1.4_COMMITMENTS.md) | The v24 Bills screen keeps living costs and debts only (commit a1e6fbf), while AC1.4.3 and AC1.4.4 ask for a savings section. The product owner decides whether to bring it back or amend the criteria. |
+| US1.5 Record daily expenses | Complete (6/6 AC) | One amount and one date picker; default and custom categories; [acceptance record](epic-1/US1.5_MANUAL_EXPENSES.md) | None. |
+| US1.6 Review daily expenses | Complete (6/6 AC) | Month total, recorded days and entries; Manual, Scan and Import tabs; monthly summary; [acceptance record](epic-1/US1.6_EXPENSE_REVIEW.md) | None. |
+| US1.7 Receipt starting point | Complete (10/10 AC) | The receipt tab on Daily expenses: photo area, camera, sample, reading state, editable confirmation tagged "from receipt", retake; [acceptance record](epic-1/US1.7_RECEIPT_STARTING_POINT.md) | Production OCR and source-image storage require a separate package after privacy policy is defined. |
+| US1.8 Historical import | Complete (8/8 AC) | UTF-8 CSV upload; row-level preview; invalid rows; import only after confirmation; analysis integration; [acceptance record](epic-1/US1.8_HISTORICAL_IMPORT.md) | None. Other file formats and bank-specific templates need separate requirements. |
 
 ### First-loop data boundary
 
@@ -36,33 +38,33 @@ The production-development baseline was completed on 2026-08-24: modular monolit
 
 | User story | Current status | Code/evidence | Next step |
 |---|---|---|---|
-| US2.1 Month-by-month view | Complete (3/3 AC) | Backend aggregation; versioned pattern API; accessible scrollable chart; empty/negative/12-month tests; [acceptance record](epic-2/US2.1_MONTH_BY_MONTH.md) | Historical work-cost versions require a separate requirement. |
-| US2.2 Typical and extreme months | Complete (6/6 AC) | Decimal mean, median, high, low, range, population standard deviation; limited-history UI; [acceptance record](epic-2/US2.2_TYPICAL_AND_EXTREMES.md) | None. |
-| US2.3 Lower-income months | Complete (2/2 AC) | Tied recorded-minimum rule and factual explanation; [acceptance record](epic-2/US2.3_LOWER_INCOME.md) | Epic 3 actual-shortfall reasons remain a future extension. |
-| US2.4 Coverage check | Complete (7/7 AC) | Guest-isolated model/API; explicit Check; persisted represented/unrepresented results and factual observations; [acceptance record](epic-2/US2.4_COVERAGE_CHECK.md) | Account-level declarations wait for an identity requirement. |
+| US2.1 Month-by-month view | Complete (3/3 AC) | Backend aggregation; versioned pattern API; one labelled bar per recorded month; [acceptance record](epic-2/US2.1_MONTH_BY_MONTH.md) | v24 dropped the horizontal-scroll hint; the criteria do not need it. |
+| US2.2 Typical and extreme months | Complete (6/6 AC) | Average, median, highest, lowest and the recorded range; limited-history note; [acceptance record](epic-2/US2.2_TYPICAL_AND_EXTREMES.md) | v24 no longer shows the standard deviation (the API still returns it); AC2.2.6 is met by the recorded range. |
+| US2.3 Lower-income months | Complete (2/2 AC) | The quietest recorded month, named after work costs; the rule ("not a financial standard or a prediction") behind its (i), restored on 2026-10-03; [acceptance record](epic-2/US2.3_LOWER_INCOME.md) | Epic 3 actual-shortfall reasons remain a future extension. |
+| US2.4 Coverage check | Complete (7/7 AC) | Answers and month cells save as they are made (v24, no Check button); gap, covered and info callouts from the saved answer; month cells expose their checked state (2026-10-03); [acceptance record](epic-2/US2.4_COVERAGE_CHECK.md) | Account-level declarations wait for an identity requirement. |
 
-Epic 2 is backend-authoritative and complete at 18/18 AC. It returns descriptive facts without unsupported thresholds, stability conclusions, forecasts, or risk bands. See the [Epic 2 index](epic-2/README.md).
+Epic 2 is backend-authoritative and re-verified at 18/18 AC on 2026-10-03. It returns descriptive facts without unsupported thresholds, stability conclusions, forecasts, or risk bands. See the [Epic 2 index](epic-2/README.md).
 
 ## Epic 5 — Homeownership Preparation
 
-| User story | Current status | Main gap |
-|---|---|---|
-| US5.1 Review upfront purchase cash | Frontend mock calculation | Amount provenance, effective date, and editable assumptions are not persisted. |
-| US5.2 Compare cash on hand with upfront need | Frontend prototype | Savings snapshot is not connected to the API. |
-| US5.3 Review cash buffer | Pure calculation and screen exist | Add tests after correcting rent/commitment rules. |
-| US5.4 Documents and financing | Frontend checklist prototype | Checklist state is not persisted; SJKP rules and source dates need reverification. |
+| User story | Current status | Code/evidence | Open point |
+|---|---|---|---|
+| US5.1 Access homeownership preparation tools | Built (5/5 AC) | Prepare lists Upfront cash, Cash buffer, and Documents & financing; entry points reopened from House and Money; the House card states what is set aside; [acceptance index](epic-5/README.md) | None. |
+| US5.2 Check upfront cash readiness | Built (17/17 AC) | Dated cash entry saved to the account (`cash_on_hand_date`, migration 0018); "You have" is one pot shared with Home and the House card, less what the safety buffer already holds (2026-10-03); fee engine pinned by band-edge tests; chart geometry, colours, grouping, sources, and the first-home switch checked in the browser | Cash already held does not fill the safety buffer until the "buffer first" rule (proposed US5.8) is agreed with the Epic 10 owner; the Saving plan's own "still to save" still subtracts only the cash entered; the figures are calculated in the frontend although ADR 0004 names Django as the authority. |
+| US5.3 Estimate a cash buffer from recorded short months | Built (7/7 AC) | Server-calculated buffer, now the deepest fall whichever month the record starts in ([ADR 0005](adr/0005-cash-buffer-deepest-fall.md)); the months of that fall named and shaded; backend regressions on the 12-month fixture; zero line where zero falls | The product owner should confirm the deepest-fall reading of AC5.3.2 (RM 680 became RM 1,940 on the fixture). |
+| US5.4 Review financing preparation documents | Built (7/7 AC) | Five-item checklist; SJKP criteria with source and date; "needs review" instead of a verdict; disclaimer | SJKP criteria and the Aug 2026 reference date need reverification before release. |
 
-Official Epic 5 rules may support checklists and information only. They must not produce approval, eligibility, or affordability conclusions.
+The 36 criteria come from the [v5 baseline](requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md). User stories 5.5 to 5.7 (Learn explanations, added for Iteration 3) are not built. Official Epic 5 rules may support checklists and information only. They must not produce approval, eligibility, or affordability conclusions. See the [Epic 5 index](epic-5/README.md) for the acceptance record and open points.
 
 ## Recommended implementation order
 
 1. Foundation and API contract — complete.
-2. E1.1 income sources and entries — complete, 10/10 AC.
-3. E1.2 historical monthly income — complete, 4/4 AC, with month-level consistency defined.
-4. E1.3 persisted work costs — complete, 6/6 AC.
-5. E1.4 persisted commitments — complete, 6/6 AC; scenario-specific rent rules remain with scenario work.
+2. E1.1 income sources and entries — 11/12 AC, AC1.1.8 deferred.
+3. E1.2 historical monthly income — complete, 4/4 AC.
+4. E1.3 work costs — 9/10 AC; editing a work cost (AC1.3.7) needs restoring.
+5. E1.4 commitments — 4/6 AC; the savings section (AC1.4.3, AC1.4.4) needs a product-owner decision.
 6. E1.5/E1.6 daily-expense entry and review — complete, 6/6 AC each.
 7. E1.7 receipt starting point — complete, 10/10 AC, with production OCR separated from human confirmation.
-8. E1.8 historical CSV import — complete, 8/8 AC, including preview, invalid rows, confirmation, and analysis integration.
+8. E1.8 historical CSV import — complete, 8/8 AC.
 9. E2 backend-authoritative income pattern and coverage — complete, 18/18 AC.
-10. E5 persist savings, upfront costs, and checklist data before integrating reverified official rules.
+10. E5 preparation tools — built, 36/36 AC (v5) with executable evidence. Remaining: agree the buffer-first pot rule with Epic 10, confirm the deepest-fall buffer, move the upfront fee scales into the backend, reverify the published sources, and deliver the Iteration 3 Learn stories 5.5 to 5.7.

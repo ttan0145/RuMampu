@@ -1,7 +1,7 @@
 import { expect, Page } from '@playwright/test';
-import { e2ePost, test } from './support/fixtures';
+import { e2eGet, e2ePost, test } from './support/fixtures';
 
-import { ac } from './support/acceptance';
+import { ac, deferredAc } from './support/acceptance';
 import { API, captureEvidence, openApp } from './support/app';
 
 async function openHousingResult(page: Page): Promise<void> {
@@ -15,51 +15,17 @@ async function openHousingResult(page: Page): Promise<void> {
 
   await openApp(page);
 
-  await expect(
-    page.getByText('Test', { exact: true }).last()
-  ).toBeVisible();
-
-  await page
-    .getByText('Test', { exact: true })
-    .last()
-    .click();
-
-  await expect(
-    page.getByText('Property price (RM)', { exact: true })
-  ).toBeVisible();
-
-  const inputs = page.locator('input:visible');
-
-  await inputs.nth(0).fill('250000');
-  await inputs.nth(1).fill('0');
-  await inputs.nth(2).fill('4.3');
-  await inputs.nth(3).fill('35');
-
-  await page
-    .getByText('The house', { exact: true })
-    .click();
-
-  await expect(
-    page.getByText('RM 250,000.00', { exact: true })
-  ).toBeVisible();
-
-  await page
-    .getByText(/Total monthly cost/)
-    .last()
-    .click();
-
-  await expect(
-    page.getByText('Total monthly cost', { exact: true })
-  ).toBeVisible();
-
-  await page
-    .getByText(/Run the test/)
-    .last()
-    .click();
-
-  await expect(
-    page.getByText(/recorded months would have run short/)
-  ).toBeVisible();
+  // v24 house test: the price, then the default deposit, rate and tenure
+  // (RM 250,000 costs RM 1,382.37 a month with them).
+  await page.getByRole('tab', { name: 'House', exact: true }).click();
+  await page.getByText('Test a house', { exact: true }).click();
+  await expect(page.getByText('Property price', { exact: true })).toBeVisible();
+  await page.locator('input:visible').nth(0).fill('250000');
+  await page.getByText('The house', { exact: true }).click();
+  await expect(page.getByText('Total monthly cost', { exact: true })).toBeVisible();
+  await expect(page.getByText('RM 1,382.37', { exact: true })).toBeVisible();
+  await page.getByText('Run the test', { exact: true }).last().click();
+  await expect(page.getByText('2 of 12 months would run short', { exact: true })).toBeVisible();
 }
 
 async function openPaymentComparison(page: Page): Promise<void> {
@@ -69,16 +35,6 @@ async function openPaymentComparison(page: Page): Promise<void> {
 
   await expect(
     page.getByText('Same recorded months, three payments.', { exact: true })
-  ).toBeVisible();
-}
-
-async function openIncomeShock(page: Page): Promise<void> {
-  await openHousingResult(page);
-
-  await page.getByText('If income drops', { exact: true }).click();
-
-  await expect(
-    page.getByText('Hypothetical scenario, not prediction.', { exact: true })
   ).toBeVisible();
 }
 
@@ -161,133 +117,68 @@ test.describe('Epic 4 — Cash-Flow Forecast & Adjustment Planner', { tag: '@epi
   });
 
   test('US4.4 — Test lower income scenarios', { tag: '@us4.4' }, async ({ page }) => {
-    await openIncomeShock(page);
+    await openHousingResult(page);
+    // v24 keeps the income drop as one quiet row on the result's chart card:
+    // "If income drops" with 0%, -10% and -20%, and the result above it is re-run.
+    const row = page.getByText('If income drops', { exact: true }).locator('xpath=..');
+    const option = (label: string) => row.getByText(label, { exact: true });
 
-    const current = page.getByRole('radio', {
-      name: '0%',
-      exact: true,
+    await ac('AC4.4.1', 'Provide 0% scenario', async () => {
+      await expect(option('0%')).toBeVisible();
     });
-
-    const lower10 = page.getByRole('radio', {
-      name: '−10%',
-      exact: true,
+    await ac('AC4.4.2', 'Provide 10% scenario', async () => {
+      await expect(option('−10%')).toBeVisible();
     });
-
-    const lower20 = page.getByRole('radio', {
-      name: '−20%',
-      exact: true,
+    await ac('AC4.4.3', 'Provide 20% scenario', async () => {
+      await expect(option('−20%')).toBeVisible();
     });
+    deferredAc(
+      'AC4.4.4',
+      'Provide custom percentage',
+      'The v24 result offers 0%, -10% and -20% only. The If income drops screen that took a custom percentage is still in the code but nothing links to it, so restoring Custom needs a decision and a change to the app.',
+    );
 
-    const custom = page.getByRole('radio', {
-      name: 'Custom',
-      exact: true,
+    // The server's figures for the same saved scenario at a 20% drop.
+    const scenarios = await (await e2eGet(page, `${API}/housing/scenarios/`)).json();
+    const scenario = scenarios.find((item: { property_price: string | null }) => Number(item.property_price) === 250000);
+    expect(scenario).toBeTruthy();
+    const stressed = await (await e2ePost(page, `${API}/housing/test-result/`, {
+      data: { scenario_id: scenario.id, income_shock_percent: '20.00' },
+    })).json();
+    expect(stressed.short_month_count).toBeGreaterThan(2);
+    const money = (value: number) => `RM ${value.toLocaleString('en-MY', {
+      minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+      maximumFractionDigits: 2,
+    })}`;
+
+    await option('−20%').click();
+    await ac('AC4.4.5', 'Display stressed short-month count', async () => {
+      await expect(page.getByText(`${stressed.short_month_count} of 12 months would run short`, { exact: true })).toBeVisible();
+      await expect(page.getByText('2 of 12 months would run short', { exact: true })).toHaveCount(0);
     });
-
-    await ac('AC4.4.1', 'Test current recorded income', async () => {
-      await expect(current).toBeVisible();
+    await ac('AC4.4.6', 'Display largest stressed gap', async () => {
+      await expect(page.getByText(new RegExp(`Largest gap ${money(stressed.largest_gap).replace(/[.]/g, '\\.')}\\.`))).toBeVisible();
     });
-
-    await ac('AC4.4.2', 'Test income at 10 percent lower', async () => {
-      await expect(lower10).toBeVisible();
-    });
-
-    await ac('AC4.4.3', 'Test income at 20 percent lower', async () => {
-      await expect(lower20).toBeVisible();
-    });
-
-    await ac('AC4.4.4', 'Test a custom income reduction percentage', async () => {
-      await expect(custom).toBeVisible();
-      await custom.click();
-      const customInput = page.getByLabel('Custom income shock percentage');
-      await expect(customInput).toBeVisible();
-      await expect(customInput).toHaveAttribute('inputmode', 'decimal');
-      await customInput.fill('15.5');
-      await page.getByRole('button', { name: 'Done', exact: true }).click();
-      await expect(page.getByLabel('Income shock 15.5% result')).toBeVisible();
-    });
-
-    await ac('AC4.4.8', 'Identify income shock as hypothetical', async () => {
-      await expect(
-        page.getByText('Hypothetical scenario, not prediction.', { exact: true })
-      ).toBeVisible();
-    });
-
-    await ac('AC4.4.9', 'Avoid presenting the scenario as a prediction', async () => {
-      await expect(
-        page.getByText('Hypothetical scenario, not prediction.', { exact: true })
-      ).toBeVisible();
-    });
-
-    await current.click();
-
-    await expect(current).toHaveAttribute('aria-checked', 'true');
-
-    await ac('AC4.4.5', 'Display current income shock result', async () => {
-      await expect(page.getByLabel('Income shock 0% result')).toBeVisible();
-    });
-
-    await ac('AC4.4.6', 'Display largest gap for current income', async () => {
-      const gap0 = page.getByText(/largest gap RM/i);
-
-      if (await gap0.isVisible().catch(() => false)) {
-        await expect(gap0).toBeVisible();
+    await ac('AC4.4.7', 'Display month-by-month stressed chart', async () => {
+      for (const month of ['AUG', 'SEP', 'OCT', 'NOV', 'DEC', 'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL']) {
+        await expect(page.getByText(month, { exact: true }).first()).toBeVisible();
       }
+      await expect(page.getByText('This home’s monthly cost', { exact: true })).toBeVisible();
     });
-
-    await ac('AC4.4.7', 'Display recorded-month chart for current income', async () => {
-      await expect(
-        page.getByLabel('Income shock 0% recorded-month chart')
-      ).toBeVisible();
-    });
-
-    await captureEvidence(page, 'epic-4', '04-us4.4-current-income.png');
-
-    await lower10.click();
-
-    await expect(lower10).toHaveAttribute('aria-checked', 'true');
-
-    await ac('AC4.4.5', 'Display 10 percent lower income result', async () => {
-      await expect(page.getByLabel('Income shock 10% result')).toBeVisible();
-    });
-
-    await ac('AC4.4.6', 'Display largest gap for 10 percent lower income', async () => {
-      const gap10 = page.getByText(/largest gap RM/i);
-
-      if (await gap10.isVisible().catch(() => false)) {
-        await expect(gap10).toBeVisible();
-      }
-    });
-
-    await ac('AC4.4.7', 'Display recorded-month chart for 10 percent lower income', async () => {
-      await expect(
-        page.getByLabel('Income shock 10% recorded-month chart')
-      ).toBeVisible();
-    });
-
-    await captureEvidence(page, 'epic-4', '05-us4.4-income-10-lower.png');
-
-    await lower20.click();
-
-    await expect(lower20).toHaveAttribute('aria-checked', 'true');
-
-    await ac('AC4.4.5', 'Display 20 percent lower income result', async () => {
-      await expect(page.getByLabel('Income shock 20% result')).toBeVisible();
-    });
-
-    await ac('AC4.4.6', 'Display largest gap for 20 percent lower income', async () => {
-      const gap20 = page.getByText(/largest gap RM/i);
-
-      if (await gap20.isVisible().catch(() => false)) {
-        await expect(gap20).toBeVisible();
-      }
-    });
-
-    await ac('AC4.4.7', 'Display recorded-month chart for 20 percent lower income', async () => {
-      await expect(
-        page.getByLabel('Income shock 20% recorded-month chart')
-      ).toBeVisible();
-    });
-
+    deferredAc(
+      'AC4.4.8',
+      'Identify the scenario as an assumption',
+      'The v24 result re-runs at the chosen drop but no longer marks it as an assumption; that note lived on the If income drops screen, which nothing links to now.',
+    );
+    deferredAc(
+      'AC4.4.9',
+      'Avoid presenting the stress test as a prediction',
+      'The "hypothetical about your recorded months, not about what lies ahead" wording sits on the unlinked If income drops screen and is not shown on the v24 result.',
+    );
     await captureEvidence(page, 'epic-4', '06-us4.4-income-20-lower.png');
+
+    // Back to the recorded income.
+    await option('0%').click();
+    await expect(page.getByText('2 of 12 months would run short', { exact: true })).toBeVisible();
   });
 });

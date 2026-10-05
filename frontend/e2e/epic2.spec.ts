@@ -40,6 +40,32 @@ async function assertForbiddenConclusionsAbsent(page: Page): Promise<void> {
   await expect(body).not.toContainText(/stable income/i);
 }
 
+/* The v24 coverage callouts, worded for an English record that runs {a} to {b}. */
+function gapCallout(page: Page, months: string) {
+  return page.getByText(`Your record has not seen ${months} yet`, { exact: true });
+}
+
+function coveredCallout(page: Page) {
+  return page.getByText('Your record covers your quiet months', { exact: true });
+}
+
+/* Adds a whole past month from the quiet link on Income (v24 R7). */
+async function addPastMonth(page: Page, monthLabel: string, amount: string): Promise<void> {
+  await page.getByText('Add a month I did not record', { exact: true }).click();
+  const sheet = page.getByRole('dialog');
+  await sheet.getByLabel('Choose month').click();
+  const year = monthLabel.slice(4);
+  const field = sheet.getByLabel('Choose month');
+  for (let i = 0; i < 3 && !(await page.getByRole('button', { name: monthLabel, exact: true }).isVisible().catch(() => false)); i += 1) {
+    const shown = Number((await field.innerText()).match(/\d{4}/)?.[0]);
+    await page.getByRole('button', { name: Number(year) < shown ? 'Previous year' : 'Next year', exact: true }).click();
+  }
+  await page.getByRole('button', { name: monthLabel, exact: true }).click();
+  await sheet.locator('input').fill(amount);
+  await sheet.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+}
+
 async function openTwelveMonthPattern(page: Page): Promise<void> {
   await loadTwelveMonthScenario(page);
   await openApp(page);
@@ -66,17 +92,13 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
     expect(saved.ok()).toBeTruthy();
     await openApp(page);
     await openMoneyScreen(page, 'Coverage check');
-    await expect(page.getByText('Not yet represented in your recorded income: Mar.', { exact: true })).toBeVisible();
+    await expect(gapCallout(page, 'Mar')).toBeVisible();
     await openMoneyScreen(page, 'Income');
-    await page.locator('input:visible').first().fill('1500');
-    await page.getByText('Per month', { exact: true }).click();
-    await page.getByLabel('Choose month').click();
-    await page.getByRole('button', { name: 'Mar 2026', exact: true }).click();
-    await page.getByRole('button', { name: 'Add income', exact: true }).click();
+    await addPastMonth(page, 'Mar 2026', '1500');
     await expect(page.getByText('Monthly total', { exact: true })).toBeVisible();
     await openMoneyScreen(page, 'Coverage check');
-    await expect(page.getByText('Represented in your recorded income: Mar.', { exact: true })).toBeVisible();
-    await expect(page.getByText(/Not yet represented in your recorded income/)).toHaveCount(0);
+    await expect(coveredCallout(page)).toBeVisible();
+    await expect(gapCallout(page, 'Mar')).toHaveCount(0);
   });
 
   test('US2.1 — View income month by month', { tag: '@us2.1' }, async ({ page }) => {
@@ -92,7 +114,6 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
     await ac('AC2.1.2', 'Display month labels', async () => {
       await expect(page.getByLabel(/Aug 25: RM 4,030.00 calculated usable income/)).toBeVisible();
       await expect(page.getByLabel(/Feb 26: RM 3,160.00 calculated usable income/)).toBeVisible();
-      await expect(page.getByText('Scroll horizontally to see all recorded months.', { exact: true })).toBeVisible();
     });
     await ac('AC2.1.3', 'Reflect different monthly amounts', async () => {
       const augustHeight = await page.getByTestId('income-bar-2025-08').evaluate(
@@ -125,26 +146,31 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
       await expect(page.getByText(/calculated/i).first()).toBeVisible();
     });
     await ac('AC2.2.6', 'Explain variation', async () => {
-      await expect(page.getByText('RM 2,710.00', { exact: true })).toBeVisible();
-      await expect(page.getByText('RM 699.16', { exact: true })).toBeVisible();
+      await expect(page.getByText('Recorded range', { exact: true }).locator('xpath=..')).toContainText('RM 2,710.00');
     });
     await assertForbiddenConclusionsAbsent(page);
-    await page.getByText('Standard deviation', { exact: true }).scrollIntoViewIfNeeded();
+    await page.getByText('Recorded range', { exact: true }).scrollIntoViewIfNeeded();
     await captureEvidence(page, 'epic-2', 'ac2.2.1-6__income-statistics.png');
   });
 
   test('US2.3 — Identify lower-income months', { tag: '@us2.3' }, async ({ page }) => {
     await openTwelveMonthPattern(page);
 
+    const quietest = page.getByText('Your quietest recorded month is Feb: RM 3,160.00 after work costs.', { exact: true });
     await ac('AC2.3.1', 'Use the recorded-history rule', async () => {
       await expect(page.getByLabel(/Feb 26: RM 3,160.00 calculated usable income, lowest recorded month/)).toBeVisible();
-      await expect(page.getByText('Below that line: Feb 2026.', { exact: true })).toBeVisible();
+      await expect(quietest).toBeVisible();
     });
     await ac('AC2.3.2', 'Explain the identification', async () => {
-      await expect(page.getByText(/not a financial standard or a prediction/i)).toBeVisible();
+      await page.getByTestId('pattern-quietest').getByLabel('What this is').click();
+      await expect(page.getByText(
+        'A lower-income month here means the lowest usable-income month in your current record. It is not a financial standard or a prediction.',
+        { exact: true },
+      )).toBeVisible();
+      await page.getByText('Done', { exact: true }).last().click();
       await assertForbiddenConclusionsAbsent(page);
     });
-    await page.getByText('Below that line: Feb 2026.', { exact: true }).scrollIntoViewIfNeeded();
+    await quietest.scrollIntoViewIfNeeded();
     await captureEvidence(page, 'epic-2', 'ac2.3.1-2__lower-income-month.png', { resetScroll: false });
   });
 
@@ -173,27 +199,33 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
       await expect(page.getByRole('checkbox', { name: 'Jan' })).toBeChecked();
       await expect(page.getByRole('checkbox', { name: 'Mar' })).toBeChecked();
       await expect(page.getByRole('checkbox', { name: 'Aug' })).toBeChecked();
-      await expect(page.getByText(/Represented in your recorded income/)).toHaveCount(0);
     });
-    await page.getByRole('button', { name: 'Check coverage' }).click();
     await ac('AC2.4.5', 'Warn about uncovered slower months', async () => {
-      await expect(page.getByText('Not yet represented in your recorded income: Mar.', { exact: true })).toBeVisible();
-    });
-    await ac('AC2.4.6', 'Confirm represented slower months', async () => {
-      await expect(page.getByText('Represented in your recorded income: Jan, Aug.', { exact: true })).toBeVisible();
+      // The record runs Jan to Aug 2026, so March has not been recorded yet.
+      await expect(gapCallout(page, 'Mar')).toBeVisible();
+      await expect(page.getByText(
+        'You said Mar is usually slower, but your record only runs Jan to Aug. Until then the test may look better than a real slow month.',
+        { exact: true },
+      )).toBeVisible();
+      // The warning comes from the saved answer, so it is still there when the app is opened again.
       await page.reload();
       await openApp(page);
       await openMoneyScreen(page, 'Coverage check');
-      await expect(page.getByText('Not yet represented in your recorded income: Mar.', { exact: true })).toBeVisible();
+      await expect(gapCallout(page, 'Mar')).toBeVisible();
+    });
+    await ac('AC2.4.6', 'Confirm represented slower months', async () => {
+      await page.getByRole('checkbox', { name: 'Mar' }).click();
+      await expect(coveredCallout(page)).toBeVisible();
+      await expect(page.getByText('Jan, Aug are inside Jan to Aug, so the house test already counts them.', { exact: true })).toBeVisible();
     });
     await captureEvidence(page, 'epic-2', 'ac2.4.1-6__coverage-months.png');
     await ac('AC2.4.7', 'Respond to No or Not sure', async () => {
       await page.getByRole('radio', { name: 'No', exact: true }).click();
-      await page.getByRole('button', { name: 'Check coverage' }).click();
-      await expect(page.getByText(/Across 2 recorded months, usable income ranges from RM 1,000.00 to RM 1,600.00/)).toBeVisible();
+      await expect(page.getByText('Every month counts the same', { exact: true })).toBeVisible();
+      await expect(page.getByText(/Your recorded amounts differ month to month\. The test still only knows Jan to Aug\./)).toBeVisible();
       await page.getByRole('radio', { name: 'Not sure' }).click();
-      await page.getByRole('button', { name: 'Check coverage' }).click();
-      await expect(page.getByText(/These facts cannot confirm whether your usual slower periods are represented/)).toBeVisible();
+      await expect(page.getByRole('radio', { name: 'Not sure' })).toBeChecked();
+      await expect(page.getByText('Every month counts the same', { exact: true })).toBeVisible();
     });
     await assertForbiddenConclusionsAbsent(page);
     await captureEvidence(page, 'epic-2', 'ac2.4.7__coverage-factual-observation.png');
@@ -249,8 +281,7 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
     await openMoneyScreen(page, 'Coverage check');
     await page.getByRole('radio', { name: 'Yes' }).click();
     await page.getByRole('checkbox', { name: 'Jan' }).click();
-    await page.getByRole('button', { name: 'Check coverage' }).click();
-    await expect(page.getByText('Represented in your recorded income: Jan.', { exact: true })).toBeVisible();
+    await expect(coveredCallout(page)).toBeVisible();
 
     let failNextPut = true;
     await page.route('**/api/v1/income-coverage/', async route => {
@@ -267,14 +298,15 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
     });
 
     await page.getByRole('radio', { name: 'No', exact: true }).click();
-    await page.getByRole('button', { name: 'Check coverage' }).click();
     await expect(page.getByText(/last server-confirmed answer/)).toBeVisible();
-    await expect(page.getByText('Represented in your recorded income: Jan.', { exact: true })).toBeVisible();
+    await expect(coveredCallout(page)).toBeVisible();
     await expect(page.getByRole('radio', { name: 'No', exact: true })).toBeChecked();
     await captureEvidence(page, 'epic-2', 'tech-e2-03__coverage-save-failure.png');
 
-    await page.getByRole('button', { name: 'Check coverage' }).click();
-    await expect(page.getByText(/Across 1 recorded months, usable income ranges from RM 1,000.00/)).toBeVisible();
+    // Choosing the answer again retries the save.
+    await page.getByRole('radio', { name: 'No', exact: true }).click();
+    await expect(page.getByText('Every month counts the same', { exact: true })).toBeVisible();
+    await expect(page.getByText(/last server-confirmed answer/)).toHaveCount(0);
     await page.reload();
     await openApp(page);
     await openMoneyScreen(page, 'Coverage check');

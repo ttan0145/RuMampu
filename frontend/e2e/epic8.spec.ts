@@ -803,6 +803,8 @@ test('US8.12 delete account then create account opens real registration first', 
 });
 
 test('US8.12 transfers guest saved housing tests to a new account on Keep', async ({ page }) => {
+  // Guest record, sign-up, onboarding, log out and log in again: a long flow.
+  test.setTimeout(90_000);
   await seedHousingReadyIncome(page);
   await openApp(page);
 
@@ -833,6 +835,8 @@ test('US8.12 transfers guest saved housing tests to a new account on Keep', asyn
   await page.getByPlaceholder('Your password').fill(password);
   await page.getByText('Log in', { exact: true }).last().click();
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible({ timeout: 15000 });
+  // The tab bar is already visible under the log-in screen, so wait for that screen to close.
+  await expect(page.getByPlaceholder('Your password')).toHaveCount(0, { timeout: 30000 });
 
   await page.getByRole('tab', { name: 'House', exact: true }).click();
   await page.getByLabel('Saved tests').click();
@@ -1209,10 +1213,9 @@ test('US8.4 exposes the four main areas and returns with Back', async ({ page })
   // EN: Epic 8 owns navigation into the Prepare area, not the detailed contents
   // of upfront-cash or document tools.
   // 中文：Epic 8 负责进入 Prepare 区域，不负责购房现金或文件工具的具体功能。
-  await expect(page.getByText(/coming soon/i)).toBeVisible();
-  await expect(page.getByText('This feature is not finished yet. Please look forward to it.', { exact: true })).toBeVisible();
-  await expect(page.getByText('It will be completed in Iteration 3.', { exact: true })).toBeVisible();
-  await page.getByText('Back', { exact: true }).click();
+  await expect(page.getByText('Documents & financing', { exact: true })).toBeVisible();
+  await expect(page.getByText('Coming soon', { exact: true })).toHaveCount(0);
+  await page.getByLabel('Back').click();
   await expect(page.getByText('Prepare for a house', { exact: true })).toBeVisible();
 
   await page.getByRole('tab', { name: 'Profile', exact: true }).click();

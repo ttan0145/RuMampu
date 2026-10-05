@@ -1,7 +1,14 @@
-import { expect } from '@playwright/test';
+import { expect, Page } from '@playwright/test';
 import path from 'node:path';
 import { API, openApp, openMoneyScreen } from './support/app';
 import { e2eGet, test } from './support/fixtures';
+
+/* v24 lists one month of income at a time; the filter above the list picks it. */
+async function showIncomeMonth(page: Page, label: string): Promise<void> {
+  await page.getByText('Month', { exact: true }).locator('xpath=../..').click();
+  await page.getByRole('dialog').getByText(label, { exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+}
 
 test.describe('US1.8 comprehensive fixture regression', { tag: ['@us1.8', '@hardening'] }, () => {
   test('TECH-IMPORT-01 — mixed 12-month CSV previews, confirms, aggregates, and persists', async ({ page }) => {
@@ -91,20 +98,22 @@ test.describe('US1.8 comprehensive fixture regression', { tag: ['@us1.8', '@hard
     await expect(page.getByText('3 income records added. Your analyses now use them.', { exact: true })).toBeVisible();
 
     await openMoneyScreen(page, 'Income');
+    await showIncomeMonth(page, 'May 2026');
     const importedRow = page.getByText('RM 900', { exact: true }).locator('..');
     await expect(importedRow).toContainText('CSV');
     await importedRow.getByLabel('edit').click();
 
-    const amountInput = page.locator('input:visible').first();
+    const sheet = page.getByRole('dialog');
+    const amountInput = sheet.locator('input');
     await expect(amountInput).toHaveValue('900');
     await amountInput.fill('975.50');
-    await page.getByText('Freelance', { exact: true }).last().click();
+    await sheet.getByText('Freelance', { exact: true }).click();
 
     const updateResponsePromise = page.waitForResponse(response => (
       response.request().method() === 'PATCH'
       && /\/api\/v1\/income\/entries\/\d+\/$/.test(response.url())
     ));
-    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await sheet.getByRole('button', { name: 'Done', exact: true }).click();
     const updateResponse = await updateResponsePromise;
     expect(updateResponse.status(), await updateResponse.text()).toBe(200);
     expect(await updateResponse.json()).toMatchObject({
@@ -119,6 +128,7 @@ test.describe('US1.8 comprehensive fixture regression', { tag: ['@us1.8', '@hard
     await page.reload();
     await openApp(page);
     await openMoneyScreen(page, 'Income');
+    await showIncomeMonth(page, 'May 2026');
     const persistedRow = page.getByText('RM 975.50', { exact: true }).locator('..');
     await expect(persistedRow).toContainText('Freelance');
     await expect(persistedRow).toContainText('CSV');
@@ -148,9 +158,9 @@ test.describe('US1.8 comprehensive fixture regression', { tag: ['@us1.8', '@hard
     expect(updateResponse.status(), await updateResponse.text()).toBe(200);
 
     await expect(page.getByText(/^4 ready$/i)).toBeVisible();
-    await expect(page.getByText(/^1 need attention$/i)).toBeVisible();
+    await expect(page.getByText(/^1 need attention$/i).first()).toBeVisible();
     await expect(page.getByText('RM 725.25 · 2026-06-20 · Weekend shift', { exact: true })).toBeVisible();
-    await expect(page.getByText('Original: oops · 2026-06-20 · Broken amount', { exact: true })).toBeVisible();
+    // v24 no longer prints the original row text under a corrected row (the imp_raw string is unused).
 
     await page.getByRole('button', { name: 'Confirm and add 4 records', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Choose a .csv file', exact: true })).toBeVisible();

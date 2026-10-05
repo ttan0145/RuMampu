@@ -215,10 +215,15 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
     });
 
     await ac('AC10.6.2', 'Swipe slides and merges', async () => {
-      // Two tiles anywhere on a 4x4 plot end up adjacent after down, then right.
+      // Two tiles anywhere on a 4x4 plot merge after down, then right. If they start in
+      // the same column, down already merges them, and a second move that changes nothing
+      // clears the message, so right is only pressed when down did not merge.
+      const built = page.getByText('You built a Kampung house!', { exact: true });
       await page.getByRole('dialog').getByText('↓', { exact: true }).click();
-      await page.getByRole('dialog').getByText('→', { exact: true }).click();
-      await expect(page.getByText('You built a Kampung house!', { exact: true })).toBeVisible();
+      if (!(await built.isVisible().catch(() => false))) {
+        await page.getByRole('dialog').getByText('→', { exact: true }).click();
+      }
+      await expect(built).toBeVisible();
       const { village } = await localState(page);
       expect(village!.cells.filter(Boolean)).toEqual([2]);
     });
@@ -410,10 +415,12 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
   test('US10.10 — Month end is explained in the last days', { tag: '@us10.10' }, async ({ page }) => {
     await startWithTwelveMonths(page);
     await keepAffordableTest(page);
-    // Freeze the clock on the 29th so the plan believes the month is ending.
+    // Freeze the clock on the second-to-last day of this month so the plan believes the
+    // month is ending (a fixed 29th does not exist in February of a common year).
     // (Set after onboarding: the splash never clears under a frozen clock.)
     const now = new Date();
-    await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), 29, 10, 0, 0));
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), lastDay - 1, 10, 0, 0));
     await openPlan(page);
 
     await ac('AC10.10.1', 'Month end explained before it happens', async () => {

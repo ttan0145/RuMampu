@@ -78,7 +78,7 @@ that every Epic is closed. Formal AC registration remains in the existing suites
 | AC1.3.7/8/9/10 | TECH-LIVE-02: single-record edit, cross-month move, unavailable prior-month net, reload, calculated RM 2,975 | No exhaustive date/boundary matrix |
 | AC2.1.1/2/3 | TECH-LIVE-02: one-month chart and API both show RM 2,975 | One-month integration smoke, not full Epic 2 acceptance |
 | AC3.2.4/5, AC3.3.1, AC3.4.1/2/3 | TECH-LIVE-02: real pre-check and housing results at RM 1,230 and RM 3,030; latter gap RM 55 | Uses Home → Re-test the house; not all navigation routes |
-| Partial-load recovery | Local TECH-WC-05/06/07 in `e2e/work-costs-hardening.spec.ts` | Faults are injected locally, never into the production script |
+| Partial-load recovery | None since 2026-10-03: the local TECH-WC checks drove the old Work costs screen, which v24 replaced with Daily expenses, and were removed | Faults were injected locally, never into the production script |
 
 The separate observed Result/Back navigation loop, production Debug configuration,
 UI redesign, native-device compatibility and exhaustive Epic coverage are not

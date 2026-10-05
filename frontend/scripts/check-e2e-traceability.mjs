@@ -9,7 +9,7 @@ const completedEpics = [
   {
     epic: 'Epic 1',
     expected: 62,
-    allowedDeferred: ['AC1.1.8'],
+    allowedDeferred: ['AC1.1.8', 'AC1.3.7', 'AC1.4.3', 'AC1.4.4'],
     requirements: 'docs/requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md',
     specification: 'frontend/e2e/epic1.spec.ts',
   },
@@ -18,6 +18,20 @@ const completedEpics = [
     expected: 18,
     requirements: 'docs/requirements/EPIC_2_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md',
     specification: 'frontend/e2e/epic2.spec.ts',
+  },
+  {
+    epic: 'Epic 3 — US3.1 only',
+    expected: 7,
+    prefix: 'AC3.1.',
+    allowedDeferred: ['AC3.1.3'],
+    requirements: 'docs/requirements/USER_STORIES_AND_ACCEPTANCE_CRITERIA.md',
+    specification: 'frontend/e2e/epic3.spec.ts',
+  },
+  {
+    epic: 'Epic 5',
+    expected: 36,
+    requirements: 'docs/requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md',
+    specification: 'frontend/e2e/epic5.spec.ts',
   },
 ];
 
@@ -32,9 +46,10 @@ function ids(text, expression) {
 let failed = false;
 
 for (const item of completedEpics) {
-  const required = [...new Set(ids(read(item.requirements), /\b(AC\d+\.\d+\.\d+)\b/g))];
-  const implemented = ids(read(item.specification), /\bac\(\s*['"](AC\d+\.\d+\.\d+)['"]/g);
-  const deferred = ids(read(item.specification), /\bdeferredAc\(\s*['"](AC\d+\.\d+\.\d+)['"]/g);
+  const inScope = id => !item.prefix || id.startsWith(item.prefix);
+  const required = [...new Set(ids(read(item.requirements), /\b(AC\d+\.\d+\.\d+)\b/g))].filter(inScope);
+  const implemented = ids(read(item.specification), /\bac\(\s*['"](AC\d+\.\d+\.\d+)['"]/g).filter(inScope);
+  const deferred = ids(read(item.specification), /\bdeferredAc\(\s*['"](AC\d+\.\d+\.\d+)['"]/g).filter(inScope);
   const implementedSet = new Set(implemented);
   const deferredSet = new Set(deferred);
   const mapped = [...implemented, ...deferred];

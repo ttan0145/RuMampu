@@ -1,64 +1,41 @@
-import { Page } from '@playwright/test';
+import { expect, Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 
 export const API = `http://localhost:${process.env.PLAYWRIGHT_BACKEND_PORT || '8000'}/api/v1`;
 
+/**
+ * Entry point for the Epic 1 to 4 specs, which seed their record through the
+ * API before the app opens. The guest entry now asks "Continue as a guest?"
+ * and rotates the anonymous client id, so the id the fixture seeded is pinned
+ * and the shared guest walk below is reused instead of a fixed list of taps.
+ */
 export async function openApp(page: Page): Promise<void> {
-  await page.goto('/');
-
-  const splash = page.getByLabel('RuMampu');
-  if (await splash.isVisible().catch(() => false)) await splash.click();
-
-  // The v22 UI adds language, introduction, and guest-auth steps before the
-  // existing optional profile questions. Complete that real flow so every
-  // acceptance test starts from the same app state without bypassing the UI.
-  for (const label of ['Next', 'Nice to meet you →', 'Continue as guest', 'Next', 'Skip']) {
-    const control = page.getByText(label, { exact: true }).last();
-    if (await control.isVisible().catch(() => false)) await control.click();
-  }
-
+  await pinGuestClientId(page);
+  await openGuestApp(page);
   await page.getByText('Money', { exact: true }).last().waitFor({ state: 'visible' });
 }
 
 /**
  * Completes the current entry flow as a guest: sign-in screen, the guest
- * confirmation dialog, "What RuMampu does", the two get-to-know steps (skipped),
- * and lands on Home. Mirrors the Epic 8 spec's onboarding walk so tests written
- * after the Epic 8 flow change start from a clean Home without touching the
- * older openApp() that Epics 1 to 4 still rely on.
+ * confirmation dialog, "What RuMampu does", optional get-to-know questions (skipped),
+ * and lands on Home. Uses normal clicks and waits for an actionable tab so every spec
+ * starts from a clean Home; openApp() adds the pinned client id on top.
  */
 export async function openGuestApp(page: Page): Promise<void> {
   await page.goto('/');
-  const splash = page.getByLabel('RuMampu');
-  if (await splash.isVisible().catch(() => false)) {
-    await splash.click({ force: true });
-    await splash.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => undefined);
-  }
-  const clickIfVisible = async (locator: ReturnType<Page['getByText']>): Promise<boolean> => {
-    if (!(await locator.isVisible().catch(() => false))) return false;
-    await locator.click({ force: true, timeout: 3000 }).catch(() => undefined);
-    await page.waitForTimeout(150);
-    return true;
-  };
-  for (let step = 0; step < 14; step += 1) {
-    const dialogConfirm = page.getByRole('dialog').getByRole('button', { name: 'Continue as guest', exact: true });
-    if (await dialogConfirm.isVisible().catch(() => false)) {
-      await dialogConfirm.click({ force: true, timeout: 3000 });
-      await page.waitForTimeout(150);
-      continue;
-    }
-    if (await clickIfVisible(page.getByText('Continue as guest', { exact: true }).last())) continue;
-    if (await clickIfVisible(page.getByText('Nice to meet you →', { exact: true }))) continue;
-    if (await clickIfVisible(page.getByText(/^Skip$/i).last())) continue;
-    if (await clickIfVisible(page.getByText(/^Next$/i).last())) continue;
-    if (await clickIfVisible(page.getByText('Start using RuMampu', { exact: true }).last())) continue;
-    if (await page.getByRole('tab', { name: 'Home', exact: true }).isVisible().catch(() => false)) break;
-    await page.waitForTimeout(150);
-  }
-  await page.getByRole('tab', { name: 'Home', exact: true }).waitFor({ state: 'visible' });
-  // Any leftover sheet (guest confirmation) would block taps on the tab bar.
-  await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 3000 }).catch(() => undefined);
+  // Normal clicks wait for the splash and bootstrap instead of bypassing them.
+  await page.getByText('Continue as guest', { exact: true }).last().click({ timeout: 30000 });
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Continue as guest', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText('What RuMampu does', { exact: true })).toBeVisible({ timeout: 30000 });
+  await page.getByText('Next', { exact: true }).last().click();
+  // Skip completes the optional get-to-know flow; it does not advance one page.
+  await page.getByText(/^Skip$/i).last().click();
+  await page.getByRole('tab', { name: 'Home', exact: true }).click({ trial: true, timeout: 30000 });
+  await expect(page.getByText('What RuMampu does', { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/^Skip$/i)).toHaveCount(0);
 }
 
 /**
@@ -86,15 +63,10 @@ export async function pinGuestClientId(page: Page): Promise<void> {
   });
 }
 
-/** Reloads a returning guest straight to Home (splash dismissed if shown). */
+/** Reloads a returning session and waits until overlays stop intercepting Home. */
 export async function reloadApp(page: Page): Promise<void> {
   await page.reload();
-  const splash = page.getByLabel('RuMampu');
-  if (await splash.isVisible().catch(() => false)) {
-    await splash.click({ force: true });
-    await splash.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => undefined);
-  }
-  await page.getByRole('tab', { name: 'Home', exact: true }).waitFor({ state: 'visible', timeout: 15000 });
+  await page.getByRole('tab', { name: 'Home', exact: true }).click({ trial: true, timeout: 30000 });
 }
 
 export async function openMoneyScreen(page: Page, label: string): Promise<void> {

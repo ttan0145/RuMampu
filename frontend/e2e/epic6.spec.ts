@@ -43,6 +43,44 @@ async function openReceiptScan(page: Page): Promise<void> {
 }
 
 test.describe('Epic 6 — AI Insights & Alerts', { tag: '@epic6' }, () => {
+  test('TECH-RECEIPT-01 — A fast receipt waits for the category record', { tag: '@hardening' }, async ({ page }) => {
+    const registered = await page.request.post(`${API}/auth/register/`, {
+      data: { email: `receipt-race-${Date.now()}@example.com`, password: 'Passw0rd123' },
+    });
+    expect(registered.status()).toBe(201);
+    const { token } = await registered.json();
+    const updated = await page.request.patch(`${API}/auth/me/`, {
+      headers: { Authorization: `Token ${token}` },
+      data: { onboarding_completed: true, preferred_language: 'en' },
+    });
+    expect(updated.status()).toBe(200);
+    await page.addInitScript(value => localStorage.setItem('rumampu_auth_token', value), token);
+    let release!: () => void;
+    const categories = new Promise<void>(resolve => { release = resolve; });
+    await page.route('**/api/v1/expense-categories/', async route => {
+      await categories;
+      await route.continue();
+    });
+    await answerScan(page, { is_receipt: true, merchant: 'Fast receipt', date: '2026-09-10', total: '12.50', category_slug: 'meals' });
+    try {
+      await page.goto('/');
+      await page.getByRole('tab', { name: 'Home', exact: true }).click({ trial: true, timeout: 30000 });
+      await openMoneyScreen(page, 'Daily expenses');
+      await page.getByText('Scan', { exact: true }).click();
+      await choosePhoto(page);
+      // With categories held back, there must be no incomplete review draft.
+      await expect(page.getByText('Read from your receipt. Check it before saving.', { exact: true })).toHaveCount(0);
+      release();
+      await expect(page.locator('input:visible').nth(0)).toHaveValue('Fast receipt');
+      await expect(page.getByText('AI SUGGESTION', { exact: true })).toBeVisible();
+      await expect(page.getByText('Meals', { exact: true })).toBeVisible();
+      await page.getByText('Add expense', { exact: true }).click();
+      await expect(page.getByText(/Saved\./).first()).toBeVisible();
+      const response = await page.request.get(`${API}/expenses/`, { headers: { Authorization: `Token ${token}` } });
+      expect(await response.json()).toEqual([expect.objectContaining({ merchant: 'Fast receipt', amount: '12.50', user_confirmed: true })]);
+    } finally { release(); }
+  });
+
   test('US6.1 — Scan and categorise expenses from receipts', { tag: '@us6.1' }, async ({ page }) => {
     await answerScan(page, { is_receipt: true, merchant: 'Restoran Nasi Kandar Lin', date: '2026-09-10', total: '12.50', category_slug: 'meals' });
     await openReceiptScan(page);
