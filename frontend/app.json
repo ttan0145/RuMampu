@@ -12,6 +12,7 @@
       "bundleIdentifier": "com.anonymous.rumampu"
     },
     "android": {
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/RuMampu_AppIcon_Ruma_nobadge_master_2048.png",
         "backgroundColor": "#5F9EA0"
