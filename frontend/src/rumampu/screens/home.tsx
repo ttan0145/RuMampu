@@ -6,15 +6,16 @@ import { Route, useApp } from '../state';
 import { useFreshHousingTest } from '../useFreshHousingTest';
 import { housingResultStale, monthsAgg, recSpan, recordedOutFor, rm } from '../calc';
 import {
-  planEnsure, planPhase, planResolveTarget, planSaved, planToggle, syncBufferTarget, upfrontNeed,
+  planEnsure, planPhase, planResolveTarget, planSaved, planToggle, potGap, potLevel, potSplit, syncBufferTarget,
 } from '../plan';
-import { potForUpfront, potSum } from '../pot';
 import { villageEnsure } from '../village';
 import { IsoIsland } from '../isosvg';
 import { RUMA_IMG } from '../ruma';
 import { BODY_FONT, C, DISP_FONT } from '../theme';
-import { BodyS, Display } from '../ui';
+import { BodyS, DemoChip, Display } from '../ui';
 import { ScreenShell } from './shell';
+import { SayCard } from '../say';
+import { GuideTarget } from '../tour';
 
 
 /* v22 home: total-saving hero + last-month income/expense card, a slim
@@ -426,14 +427,12 @@ export function PlanCard() {
       {/* v24 potmini: the pot, named, on Home — jar level and gap line against
           the upfront need (shield semantics: declared savings + moved-in months). */}
       {(() => {
-        const potTotal = potSum(S);
-        const need = upfrontNeed(S);
-        /* The gap and the jar compare the upfront need with what counts towards it:
-           what the cash-buffer shield holds is not counted again (same as Upfront cash). */
-        const towardsUpfront = potForUpfront(S);
-        const gap = Math.max(0, need - towardsUpfront);
-        const gapLine = !need ? t('sp_pot1h') : gap > 0 ? t('hm_togo', { g: rm(gap) }) : t('hm_ready');
-        const lvl = need > 0 ? Math.min(1, towardsUpfront / need) : (towardsUpfront > 0 ? 1 : 0);
+        /* v26: counted once, measured against the safety buffer and upfront cash together. */
+        const q = potSplit(S, result);
+        const potTotal = q.pot;
+        const gap = potGap(q);
+        const gapLine = gap == null ? t('sp_pot1h') : gap > 0 ? t('hm_togo', { g: rm(gap) }) : t('hm_ready');
+        const lvl = potLevel(q);
         const fh = 12.5 * lvl, fy = 19.5 - fh;
         const jar = `<svg width="32" height="32" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
 <rect x="8" y="2.6" width="8" height="2.6" rx="1.2" fill="none" stroke="#4A9195" stroke-width="1.6"/>
@@ -689,11 +688,11 @@ export function HomeScreen() {
     /* Empty record: Ruma welcomes, one button to start, and three friendly
        cards explain how the app works. The meadow stays behind it all. */
     return (
-      <ScreenShell brand bg={<HomeMeadow />}>
+      <ScreenShell brand right={<DemoChip />} bg={<HomeMeadow />}>
         <View style={{ alignItems: 'center', gap: 12, paddingTop: 6 }}>
           <RumaHero />
           <Display cls="h-l" style={{ textAlign: 'center', maxWidth: 280 }}>{t('inc_empty')}</Display>
-          <AddIncomeCta label={t('inc_add')} onPress={() => go('income')} />
+          <GuideTarget id="home.add"><AddIncomeCta label={t('inc_add')} onPress={() => go('income')} /></GuideTarget>
         </View>
         <Text style={{
           fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.88, textTransform: 'uppercase',
@@ -709,11 +708,13 @@ export function HomeScreen() {
   }
 
   return (
-    <ScreenShell brand>
-      <HomeCards />
-      <HouseTestRow />
+    <ScreenShell brand right={<DemoChip />}>
+      <GuideTarget id="home.hero"><HomeCards /></GuideTarget>
+      {/* v27b2: Say an entry sits above the house test. */}
+      <GuideTarget id="home.say"><SayCard /></GuideTarget>
+      <GuideTarget id="home.test"><HouseTestRow /></GuideTarget>
       <HomePurposeControl />
-      <PlanCard />
+      <GuideTarget id="home.plan"><PlanCard /></GuideTarget>
     </ScreenShell>
   );
 }

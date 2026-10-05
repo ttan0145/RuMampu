@@ -4,7 +4,7 @@ import { isValidIsoDate } from './validation';
 
 const VERSION = 1;
 const PERSISTED = ['plan', 'buffer', 'village', 'planHorizon',
-  'potMovedMonths', 'potMoved', 'docsChecked', 'keptTests'] as const;
+  'potMovedMonths', 'potMoved', 'docsChecked', 'keptTests', 'tipsOff', 'seenG', 'lnProg'] as const;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -118,6 +118,13 @@ export function hydrate(s: AppState, raw: string | null): void {
     if (s.potMovedMonths.length && !(s.potMoved > 0)) s.potMovedMonths = [];
     if (validStringArray(payload.docsChecked)) s.docsChecked = payload.docsChecked;
     if (validKeptTests(payload.keptTests)) s.keptTests = payload.keptTests;
+    /* v27b screen tips stay on this device. Under Playwright they stay off. */
+    if (typeof payload.tipsOff === 'boolean' && process.env.EXPO_PUBLIC_E2E !== '1') s.tipsOff = payload.tipsOff;
+    if (validStringArray(payload.seenG)) s.seenG = payload.seenG as AppState['seenG'];
+    /* v26 learning progress stays on this device: pages read per lesson. */
+    if (record(payload.lnProg) && Object.values(payload.lnProg).every(v => finite(v) && v >= 0)) {
+      s.lnProg = payload.lnProg as Record<string, number>;
+    }
     if (record(payload.data)) {
       if (finite(payload.data.cashOnHand) && payload.data.cashOnHand >= 0) {
         s.data.cashOnHand = payload.data.cashOnHand;

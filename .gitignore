@@ -19,3 +19,14 @@ output/playwright/*/test-results/
 
 # Local Windows launchers (not committed)
 run-dev.cmd
+
+# Price model (ml/): raw inputs and run outputs are large and can be rebuilt
+ml/data/Open_Transaction_Data*.csv
+ml/data/*.osm.pbf
+ml/data/napic_clean.parquet
+ml/data/napic_clean.csv.gz
+ml/data/scheme_features.csv
+ml/data/scheme_locations.csv
+ml/data/dosm_district.geojson
+ml/out/
+ml_price_model/

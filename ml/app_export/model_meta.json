@@ -1,0 +1,24 @@
+{
+ "model_version": "pm-2026Q2-v3",
+ "data_source": "NAPIC Open Transaction Data",
+ "data_window": [
+  "2021Q1",
+  "2026Q2"
+ ],
+ "price_level_quarter": "2026Q2",
+ "test_window": [
+  "2025Q3",
+  "2026Q2"
+ ],
+ "test_sales": 32070,
+ "overall": {
+  "median_APE": 0.1115,
+  "within_20pct": 0.739,
+  "coverage80": 0.77
+ },
+ "trend_backtest": {
+  "rmse_log_pct": 3.44,
+  "coverage80": 0.94
+ },
+ "notes": "What-if ranges, not valuations. Recent NAPIC quarters are incomplete (about 1/3 of usual records from 2024Q4)."
+}

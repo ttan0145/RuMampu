@@ -150,3 +150,33 @@ export interface SaveHousingTestPayload {
   income_shock_percent?: number;
   result: HousingTestResult;
 }
+
+/* Price Explorer: the offline price model's results (see ml/ and
+   backend/apps/housing/price_explorer.py). Prices are ranges, never one figure. */
+export type PxType = 'terrace' | 'condo' | 'semi_detached' | 'low_cost_house' | 'flat'
+  | 'townhouse' | 'detached' | 'cluster' | 'low_cost_flat';
+export type PxSize = 'small' | 'typical' | 'large';
+export interface PxBand { p10: number; p50: number; p90: number }
+
+export interface PxAreasResponse {
+  model_version: string; budget: number;
+  window: { from: string; to: string } | null;
+  areas: Array<{ district: string; sales: number; share_under: number | null; typical: number | null }>;
+}
+export interface PxHomeResponse {
+  model_version: string; district: string; state_code: string; property_type: PxType;
+  tenure: 'F' | 'L'; tenures_available: Array<'F' | 'L'>; size_band: PxSize;
+  sizes: Partial<Record<PxSize, number>>; size_m2: number; storeys: number; n_sales_2y: number;
+  today: PxBand;
+  future: Array<PxBand & { years: 1 | 2 | 3; prob_lower: number | null }>;
+  trend: { annual: number; low: number; high: number; quality: 'good' | 'fair' | 'thin' } | null;
+  accuracy: { median_APE: number; within_10pct: number; within_20pct: number; coverage80: number } | null;
+  drivers: Array<{ feature: string; description: string; band: string; reference: string; effect_pct: number }>;
+  meta: {
+    price_level_quarter: string; test_window: string[]; test_sales: number | null;
+    overall: { median_APE: number; within_20pct: number; coverage80: number } | null; notes: string;
+  };
+}
+export interface PxTrendResponse {
+  model_version: string; quarters: string[]; state: Array<number | null>; national: number[]; sales: number[];
+}

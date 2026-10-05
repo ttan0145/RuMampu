@@ -64,7 +64,8 @@ async function keepAffordableTest(page: Page): Promise<void> {
 async function openPlan(page: Page): Promise<void> {
   await page.getByRole('tab', { name: 'Home', exact: true }).click();
   await page.getByText(/^Saving plan · /).click();
-  await expect(page.getByText('Shuffle the days left', { exact: true })).toBeVisible();
+  // v27b3: the day controls sit in one row; Shuffle shows with the whole month.
+  await expect(page.getByRole('button', { name: 'Skip days', exact: true })).toBeVisible();
 }
 
 async function showWholeMonth(page: Page): Promise<void> {
@@ -73,9 +74,9 @@ async function showWholeMonth(page: Page): Promise<void> {
 }
 
 /* Day chips are buttons whose accessible name starts with the day number
-   ("12 52", "12 ✓ 52" once saved, "12 –" once skipped). */
+   ("12 RM 52", "12 RM ✓ 52" once saved, "12 skip" once skipped). */
 function dayChip(page: Page, day: number) {
-  return page.getByRole('button', { name: new RegExp(`^${day} `) }).first();
+  return page.getByRole('button', { name: new RegExp(`^${day} (RM|skip)`) }).first();
 }
 
 test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' }, () => {
@@ -135,8 +136,8 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
 
     await ac('AC10.1.2', 'Target follows my chosen horizon', async () => {
       const before = (await localState(page)).plan!.target;
-      await page.getByText('What my record allows', { exact: true }).first().click();
-      await page.getByText('36 months', { exact: true }).click();
+      // v27b3: the horizon is a row of chips under "Spread it over".
+      await page.getByRole('button', { name: '36 months', exact: true }).click();
       await expect(page.getByText(/for 36 months/)).toBeVisible();
       const after = (await localState(page)).plan!.target;
       expect(after).toBeLessThan(before);
@@ -215,15 +216,16 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
     });
 
     await ac('AC10.6.2', 'Swipe slides and merges', async () => {
-      // Two tiles anywhere on a 4x4 plot merge after down, then right. If they start in
-      // the same column, down already merges them, and a second move that changes nothing
-      // clears the message, so right is only pressed when down did not merge.
-      const built = page.getByText('You built a Kampung house!', { exact: true });
+      // The two Pondoks land on random squares. Down merges them when they
+      // share a column; otherwise both reach the bottom row and right merges
+      // them. A second swipe after a merge would move the house and clear the
+      // message, so swipe right only when two houses are still apart.
       await page.getByRole('dialog').getByText('↓', { exact: true }).click();
-      if (!(await built.isVisible().catch(() => false))) {
+      if ((await localState(page)).village!.cells.filter(Boolean).length === 2) {
         await page.getByRole('dialog').getByText('→', { exact: true }).click();
       }
-      await expect(built).toBeVisible();
+      await expect(page.getByText('You built a Kampung house!', { exact: true })).toBeVisible();
+      await captureEvidence(page, 'epic-10', 'ac10.6.2__merge-kampung.png', { resetScroll: false });
       const { village } = await localState(page);
       expect(village!.cells.filter(Boolean)).toEqual([2]);
     });
@@ -242,12 +244,12 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
       const { village } = await localState(page);
       expect(village!.cells.filter(Boolean)).toEqual([1]);
       expect(village!.built).toBe(1);
+      await captureEvidence(page, 'epic-10', 'ac10.3.3__undo.png');
     });
 
     await ac('AC10.4.2', 'Target reached is stated', async () => {
       await openPlan(page);
-      await page.getByText('What my record allows', { exact: true }).first().click();
-      await page.getByText('36 months', { exact: true }).click();
+      await page.getByRole('button', { name: '36 months', exact: true }).click();
       await showWholeMonth(page);
       const { plan } = await localState(page);
       for (let day = 1; day <= plan!.n; day += 1) {
@@ -294,13 +296,17 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
     await ac('AC10.9.1', 'Skip a day', async () => {
       if (daysLeft < 2) return;
       const target = today + 1;
-      await dayChip(page, target).click({ delay: 900 });
-      await expect(dayChip(page, target)).toContainText('–');
+      // v27b3: "Skip days" turns on skip mode; a tap then skips a day not yet saved.
+      await page.getByRole('button', { name: 'Skip days', exact: true }).click();
+      await expect(page.getByText('Tap a day to skip it. Its amount spreads over the days left.', { exact: true })).toBeVisible();
+      await dayChip(page, target).click();
+      await expect(dayChip(page, target)).toContainText('skip');
       const { plan } = await localState(page);
       expect(plan!.skipped?.[target - 1]).toBe(true);
       expect(plan!.amounts[target - 1]).toBe(0);
       expect(plan!.amounts.reduce((a, b) => a + b, 0)).toBe(plan!.target);
-      await expect(page.getByText('Hold a day to skip it. Its amount spreads over the days left.', { exact: true })).toBeVisible();
+      await captureEvidence(page, 'epic-10', 'ac10.9.1__skipped-day.png');
+      await page.getByRole('button', { name: 'Skip days', exact: true }).click();
     });
 
     await ac('AC10.9.2', 'Pause a month', async () => {
@@ -309,6 +315,7 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
       await expect(page.getByText('Plan paused. No day counts as missed, the village stays as it is, and you can resume any time.', { exact: true })).toBeVisible();
       await expect(page.getByText('Resume the plan', { exact: true })).toBeVisible();
       expect((await localState(page)).village).toEqual(villageBefore);
+      await captureEvidence(page, 'epic-10', 'ac10.9.2__paused.png');
       await page.getByText('Resume the plan', { exact: true }).click();
       await expect(page.getByText('Pause this month', { exact: true })).toBeVisible();
     });
@@ -322,8 +329,10 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
     await ac('AC10.11.1', 'Reset the plan with a confirmation', async () => {
       await page.getByText('Reset this month’s plan', { exact: true }).click();
       await expect(page.getByText('Tap again to reset. Your record, village and declared savings are kept.', { exact: true })).toBeVisible();
+      await captureEvidence(page, 'epic-10', 'ac10.11.1__reset-confirmation.png');
       expect((await localState(page)).plan!.done.filter(Boolean)).toHaveLength(1);
-      await page.getByText('Reset this month’s plan', { exact: true }).click();
+      // The armed button now carries the confirmation; the second tap is on it.
+      await page.getByText('Tap again to reset. Your record, village and declared savings are kept.', { exact: true }).click();
       await expect(page.getByText('Plan reset. Record, village and savings kept.', { exact: true })).toBeVisible();
       expect((await localState(page)).plan!.done.filter(Boolean)).toHaveLength(0);
     });
@@ -359,6 +368,7 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
       for (const line of ['What the plan has added', 'Moved in from finished months', 'In the pot']) {
         await expect(page.getByText(line, { exact: true })).toBeVisible();
       }
+      await captureEvidence(page, 'epic-10', 'ac10.4.3__pot-breakdown.png', { resetScroll: false });
       await page.getByText('Done', { exact: true }).last().click();
     });
 
@@ -400,6 +410,7 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
       await page.getByRole('tab', { name: 'Profile', exact: true }).click();
       await page.getByText('Delete guest record', { exact: true }).click();
       await expect(page.getByText('Delete guest record?', { exact: true })).toBeVisible();
+      await captureEvidence(page, 'epic-10', 'ac10.13.2__delete-confirmation.png', { resetScroll: false });
       await page.getByRole('dialog').getByText('Delete guest record', { exact: true }).click();
       // Deleting the guest record starts a fresh guest on Home: no months, no plan, no village.
       await expect(page.getByText('Add last week’s earnings. That’s enough to start.', { exact: true })).toBeVisible({ timeout: 15000 });
@@ -407,6 +418,7 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
       const cleared = await localState(page);
       expect(cleared.plan).toBeNull();
       expect(cleared.village).toBeNull();
+      await captureEvidence(page, 'epic-10', 'ac10.13.2__guest-record-deleted.png');
     });
 
     await captureEvidence(page, 'epic-10', 'ac10.4_10.8_10.10_10.13__pot-and-persistence.png');
@@ -415,16 +427,15 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
   test('US10.10 — Month end is explained in the last days', { tag: '@us10.10' }, async ({ page }) => {
     await startWithTwelveMonths(page);
     await keepAffordableTest(page);
-    // Freeze the clock on the second-to-last day of this month so the plan believes the
-    // month is ending (a fixed 29th does not exist in February of a common year).
+    // Freeze the clock on the 29th so the plan believes the month is ending.
     // (Set after onboarding: the splash never clears under a frozen clock.)
     const now = new Date();
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), lastDay - 1, 10, 0, 0));
+    await page.clock.setFixedTime(new Date(now.getFullYear(), now.getMonth(), 29, 10, 0, 0));
     await openPlan(page);
 
     await ac('AC10.10.1', 'Month end explained before it happens', async () => {
       await expect(page.getByText('The month is ending: unsaved days reset with the new month; your village and declared savings carry over.', { exact: true })).toBeVisible();
+      await captureEvidence(page, 'epic-10', 'ac10.10.1__month-end-notice.png');
     });
   });
 });

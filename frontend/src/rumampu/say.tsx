@@ -1,0 +1,736 @@
+import React from 'react';
+import {
+  AccessibilityInfo, ActivityIndicator, Animated, Easing, Pressable, StyleSheet, Text, TextInput, View,
+} from 'react-native';
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent,
+} from 'expo-speech-recognition';
+import { SvgXml } from 'react-native-svg';
+import { AppState, VoiceItem, VoiceState, useApp } from './state';
+import { previewAssistantAction } from './api';
+import { rmx } from './calc';
+import { BODY_FONT, C, DISP_FONT, XBOLD_FONT } from './theme';
+import { Ico } from './svgs';
+import { getSpeechOwner, setSpeechOwner, speechLocale } from './speech';
+
+/* v27b3 Say an entry. The person says, or types, what they earned or spent.
+   The words go to the same reader Ask Ruma uses, which proposes entries and
+   never saves; if it cannot be reached, a small parser in the app drafts them
+   instead. Every draft is shown, can be corrected, and nothing is saved until
+   Save. Where the device cannot hear, an example plays so the flow can still
+   be tried. */
+
+const SAMPLES: Record<AppState['lang'], string[]> = {
+  en: ['Got 250 from Grab today, then spent 30 on lunch', 'Spent 45 on petrol yesterday', 'My freelance client paid me 600'],
+  ms: ['Hari ni dapat dua ratus lima puluh dari Grab, lepas tu makan tiga puluh', 'Semalam isi minyak empat puluh lima', 'Klien freelance bayar saya enam ratus'],
+  zh: ['今天Grab赚了两百五十，然后吃饭花了三十', '昨天加油花了四十五', '自由职业客户付了我六百'],
+};
+
+const MIC_XML = (color: string, size: number) =>
+  `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5.5 10.5a6.5 6.5 0 0 0 13 0"/><path d="M12 17v4.5"/><path d="M8.5 21.5h7"/></svg>`;
+
+function isoOffset(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+/* ---------- the fallback parser (ported from the prototype) ---------- */
+
+const UNITS: Record<string, number> = {
+  satu: 1, dua: 2, tiga: 3, empat: 4, lima: 5, enam: 6, tujuh: 7, lapan: 8, sembilan: 9, sepuluh: 10, sebelas: 11,
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+  thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
+  twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
+};
+
+/* number words to digits: "dua ratus lima puluh" 250, "seribu lima ratus" 1500, "two hundred and fifty" 250 */
+function numberWords(s: string): string {
+  const out: string[] = [];
+  let on = false, total = 0, hund = 0, unit = 0;
+  const flush = () => { if (on) { out.push(String(total + hund + unit)); on = false; total = 0; hund = 0; unit = 0; } };
+  for (const w of s.split(/\s+/)) {
+    if (!w) continue;
+    if (/^\d+(\.\d+)?k$/.test(w)) { flush(); out.push(String(parseFloat(w) * 1000)); continue; }
+    if (UNITS[w] != null) { on = true; unit += UNITS[w]; continue; }
+    if (w === 'seratus') { on = true; hund += 100; continue; }
+    if (w === 'seribu') { on = true; total += 1000; continue; }
+    if (on && w === 'belas') { unit += 10; continue; }
+    if (on && w === 'puluh') { unit *= 10; continue; }
+    if (on && (w === 'ratus' || w === 'hundred')) { hund += (unit || 1) * 100; unit = 0; continue; }
+    if (on && (w === 'ribu' || w === 'thousand')) { total += ((hund + unit) || 1) * 1000; hund = 0; unit = 0; continue; }
+    if (on && w === 'and') continue;
+    flush(); out.push(w);
+  }
+  flush();
+  return out.join(' ');
+}
+
+function chineseNumber(str: string): number {
+  const D: Record<string, number> = { 零: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  const U: Record<string, number> = { 十: 10, 百: 100, 千: 1000 };
+  let total = 0, sec = 0, num = 0;
+  for (const ch of str) {
+    if (D[ch] != null) num = D[ch];
+    else if (U[ch]) { sec += (num || 1) * U[ch]; num = 0; }
+    else if (ch === '万') { total += (sec + num) * 10000; sec = 0; num = 0; }
+  }
+  return total + sec + num;
+}
+
+export function parseSpokenEntries(text: string, S: AppState): VoiceItem[] {
+  let s = ` ${String(text || '').toLowerCase()} `;
+  s = s.replace(/rm\s*/g, ' ').replace(/(\d),(\d{3})/g, '$1$2');
+  s = s.replace(/[零一二两三四五六七八九十百千万]+/g, m => ` ${chineseNumber(m)} `);
+  s = s.replace(/[，。;!?、]/g, ' | ').replace(/,\s/g, ' | ').replace(/\.(\s|$)/g, ' | ');
+  s = numberWords(s);
+  const dOff = /semalam|yesterday|昨天/.test(s) ? -1 : (/kelmarin|前天/.test(s) ? -2 : 0);
+  const parts = s.split(/\||\blepas tu\b|\blepastu\b|\bpastu\b|\band then\b|\bthen\b|然后|接着/);
+  const sourceBy = (slugs: string[]) => S.data.sources.find(x => slugs.some(sl => x.k === `src_${sl}`))?.id;
+  const catBy = (slug: string) => S.data.expenseCats.find(x => x.k === `xc_${slug}`)?.id;
+  const defaultSource = S.preferredIncomeSourceId || S.incomeDraft.s || S.data.sources[0]?.id;
+  const items: VoiceItem[] = [];
+  for (const p of parts) {
+    const m = p.match(/(\d+(?:\.\d+)?)/);
+    if (!m) continue;
+    const a = Math.round(parseFloat(m[1]) * 100) / 100;
+    if (!(a > 0)) continue;
+    const incW = /dapat|dpt|earn|earned|\bgot\b|\bmade\b|income|gaji|terima|received|paid me|bayar saya|klien|client|赚|收入|拿到|付了我|客户/;
+    const expW = /makan|beli|belanja|spent|spend|bayar|paid|\bpay\b|minyak|petrol|parking|\btol\b|toll|花|吃|买|加油/;
+    const iI = p.search(incW), iE = p.search(expW);
+    let kind: 'in' | 'out';
+    let flag = false;
+    if (iI >= 0 && (iE < 0 || /paid me|bayar saya|klien|client|付了我|客户/.test(p))) kind = 'in';
+    else if (iE >= 0) kind = 'out';
+    else { kind = /grab|foodpanda|lalamove|shopee|freelance/.test(p) ? 'in' : 'out'; flag = true; }
+    const it: VoiceItem = { kind, a, d: isoOffset(dOff), flag };
+    if (kind === 'in') {
+      const sid = /foodpanda|panda|lalamove|shopee|deliver/.test(p) ? sourceBy(['deliv', 'delivery', 'food'])
+        : /grab|e-hailing|ehailing/.test(p) ? sourceBy(['ehail'])
+          : /freelance|klien|client|projek|project|自由职业/.test(p) ? sourceBy(['freelance'])
+            : /part.?time|gaji/.test(p) ? sourceBy(['parttime']) : undefined;
+      it.s = sid || defaultSource;
+    } else {
+      const slug = /makan|lunch|dinner|breakfast|food|nasi|kopi|吃|饭|餐/.test(p) ? 'meals'
+        : /barang|grocer|pasar|mart|kedai|超市|菜/.test(p) ? 'groc'
+          : /minyak|petrol|parking|\btol\b|toll|lrt|\bbas\b|bus|加油|停车/.test(p) ? 'transp'
+            : /\bmak\b|ayah|family|keluarga|anak|家/.test(p) ? 'family' : 'other';
+      it.c = catBy(slug) || S.data.expenseCats[0]?.id;
+    }
+    items.push(it);
+  }
+  return items;
+}
+
+/* ---------- the voice draft: listening, reading, saving ---------- */
+
+function useReducedMotion(): boolean {
+  const [reduce, setReduce] = React.useState(false);
+  React.useEffect(() => {
+    let alive = true;
+    AccessibilityInfo.isReduceMotionEnabled().then(v => { if (alive) setReduce(v); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
+  return reduce;
+}
+
+function useSayDraft() {
+  const { S, t, up, toast, saveIncomeEntry, saveExpenseEntry } = useApp();
+  const textRef = React.useRef('');
+  const simTimer = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const SRef = React.useRef(S);
+  SRef.current = S;
+  const [saving, setSaving] = React.useState(false);
+
+  const setVoice = React.useCallback((v: VoiceState | null) => up(s => { s.voice = v; }), [up]);
+
+  const shownLabel = (item: { custom?: boolean; name?: string; k?: string }) =>
+    item.custom ? item.name || '' : t(item.k || '');
+
+  /* Read the words: the shared reader first, the app's own parser if the
+     reader is unreachable or finds nothing to enter. */
+  const finish = React.useCallback(async (text: string, demo?: boolean) => {
+    const said = text.trim();
+    if (!said) { setVoice(null); return; }
+    setVoice({ stage: 'parsing', text: said, items: [], demo });
+    const S0 = SRef.current;
+    const local = () => parseSpokenEntries(said, SRef.current);
+    let items: VoiceItem[] = [];
+    let note: string | undefined;
+    try {
+      const preview = await previewAssistantAction(said, S0.lang, {
+        incomeSources: S0.data.sources.map(item => ({ id: item.id, label: shownLabel(item) })),
+        expenseCategories: S0.data.expenseCats.map(item => ({ id: item.id, label: shownLabel(item) })),
+        commitments: [
+          ...S0.data.commitments.living, ...S0.data.commitments.debts, ...S0.data.commitments.savings,
+        ].map(item => ({ id: item.id, label: shownLabel(item) })),
+        limitCategories: [
+          { id: 'total', label: t('lm_total') },
+          ...S0.data.expenseCats.map(item => ({ id: item.id, label: shownLabel(item) })),
+        ],
+        defaultIncomeSourceId: S0.preferredIncomeSourceId || S0.incomeDraft.s || null,
+      });
+      if (preview.status === 'ready') {
+        items = preview.actions
+          .filter(a => a.kind === 'income' || a.kind === 'expense')
+          .map(a => ({
+            kind: a.kind === 'income' ? 'in' : 'out',
+            a: Number(a.amount),
+            d: a.date || isoOffset(0),
+            ...(a.kind === 'income' ? { s: a.target_id } : { c: a.target_id }),
+          }) as VoiceItem);
+      } else if (preview.status === 'needs_clarification') {
+        note = preview.message;
+      }
+      if (!items.length) items = local();
+    } catch {
+      items = local();
+    }
+    if (!SRef.current.voice) return; /* closed while reading */
+    setVoice({ stage: 'done', text: said, items, demo, note: items.length ? undefined : note });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setVoice, t]);
+
+  const stopSim = () => { if (simTimer.current) { clearInterval(simTimer.current); simTimer.current = null; } };
+
+  /* No microphone: type the example out, then read it like speech. */
+  const simulate = React.useCallback((text: string, demo: boolean) => {
+    stopSim();
+    setVoice({ stage: 'listen', text: '', items: [], demo });
+    let i = 0;
+    simTimer.current = setInterval(() => {
+      i += 2;
+      if (!SRef.current.voice) { stopSim(); return; }
+      const part = text.slice(0, i);
+      up(s => { if (s.voice) s.voice.text = part; });
+      if (i >= text.length) {
+        stopSim();
+        setTimeout(() => { void finish(text, demo); }, 380);
+      }
+    }, 40);
+  }, [finish, setVoice, up]);
+
+  const sample = (i: number) => (SAMPLES[SRef.current.lang] || SAMPLES.en)[i] || SAMPLES.en[0];
+  const exampleIndex = React.useRef(0);
+
+  const start = React.useCallback(async () => {
+    stopSim();
+    textRef.current = '';
+    const fallback = () => {
+      exampleIndex.current = (exampleIndex.current + 1) % 3;
+      simulate(sample(0), true);
+    };
+    let available = false;
+    try { available = ExpoSpeechRecognitionModule.isRecognitionAvailable(); } catch { available = false; }
+    if (!available) { fallback(); return; }
+    setVoice({ stage: 'listen', text: '', items: [] });
+    try {
+      const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!permission.granted) { fallback(); return; }
+      setSpeechOwner('say');
+      ExpoSpeechRecognitionModule.start({
+        lang: speechLocale(SRef.current.lang), interimResults: true, continuous: false, maxAlternatives: 1,
+      });
+    } catch {
+      fallback();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setVoice, simulate]);
+
+  const mine = () => getSpeechOwner() === 'say';
+  useSpeechRecognitionEvent('result', event => {
+    if (!mine()) return;
+    const said = event.results?.[0]?.transcript ?? '';
+    textRef.current = said;
+    up(s => { if (s.voice && s.voice.stage === 'listen') s.voice.text = said; });
+  });
+  useSpeechRecognitionEvent('end', () => {
+    if (!mine()) return;
+    setSpeechOwner(null);
+    const V = SRef.current.voice;
+    if (!V || V.stage !== 'listen' || V.demo) return;
+    if (textRef.current.trim()) void finish(textRef.current);
+    else setVoice(null);
+  });
+  useSpeechRecognitionEvent('error', event => {
+    if (!mine()) return;
+    setSpeechOwner(null);
+    if (event.error === 'aborted') return;
+    /* blocked, or no speech service: say so, then play an example */
+    if (!textRef.current.trim()) simulate(sample(0), true);
+  });
+
+  /* Stop listening; a finished draft is kept, so closing the card by mistake loses nothing. */
+  const halt = React.useCallback(() => {
+    stopSim();
+    if (getSpeechOwner() === 'say') {
+      try { ExpoSpeechRecognitionModule.abort(); } catch { /* not listening */ }
+      setSpeechOwner(null);
+    }
+    up(s => { if (s.voice && (s.voice.stage === 'listen' || s.voice.stage === 'parsing')) s.voice = null; });
+  }, [up]);
+
+  const micTap = () => {
+    const V = SRef.current.voice;
+    if (V && V.stage === 'listen') {
+      if (getSpeechOwner() === 'say') {
+        try { ExpoSpeechRecognitionModule.stop(); } catch { /* already stopped */ }
+      } else {
+        stopSim();
+        void finish(V.text, V.demo);
+      }
+      return;
+    }
+    void start();
+  };
+
+  const reset = () => {
+    halt();
+    setVoice(null);
+    let available = false;
+    try { available = ExpoSpeechRecognitionModule.isRecognitionAvailable(); } catch { available = false; }
+    if (available) void start();
+  };
+
+  const edit = (i: number, fn: (it: VoiceItem) => void) => up(s => {
+    const it = s.voice?.items[i];
+    if (it) { fn(it); s.voice!.outlier = false; }
+  });
+
+  const close = React.useCallback(() => {
+    halt();
+    up(s => { s.sayOpen = false; s.qSay = false; });
+  }, [halt, up]);
+
+  const save = async (onSaved: (msg: string) => void) => {
+    const V = SRef.current.voice;
+    if (!V || !V.items.length || saving) return;
+    setSaving(true);
+    const said: string[] = [];
+    try {
+      /* Income first: an unusually large one stops the save so it can be checked. */
+      const order = V.items.map((it, i) => ({ it, i })).sort((a, b) => Number(b.it.kind === 'in') - Number(a.it.kind === 'in'));
+      for (const { it } of order) {
+        const a = Math.round((Number(it.a) || 0) * 100) / 100;
+        if (!(a > 0)) continue;
+        if (it.kind === 'in') {
+          const result = await saveIncomeEntry({ amount: a, date: it.d, sourceId: it.s, confirmOutlier: !!V.outlier });
+          if (result === 'outlier') {
+            up(s => { if (s.voice) s.voice.outlier = true; });
+            toast(t('as_action_outlier'), 'error');
+            return;
+          }
+          said.push(t('vo_saved_in', { a: rmx(a) }));
+        } else {
+          await saveExpenseEntry({ amount: a, date: it.d, categoryId: it.c || SRef.current.data.expenseCats[0]?.id || '' });
+          said.push(t('vo_saved_out', { a: rmx(a) }));
+        }
+      }
+      if (!said.length) return;
+      up(s => { s.voice = null; });
+      onSaved(t('vo_saved_l', { l: said.join(', ') }));
+    } catch {
+      toast(t('as_action_save_failed'), 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  React.useEffect(() => () => stopSim(), []);
+
+  return { start, micTap, reset, edit, close, halt, save, saving, simulate, finish, sample };
+}
+
+/* ---------- pieces ---------- */
+
+function Pulse({ on, size }: { on: boolean; size: number }) {
+  const a = React.useRef(new Animated.Value(0)).current;
+  const b = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    if (!on) { a.stopAnimation(); b.stopAnimation(); a.setValue(0); b.setValue(0); return undefined; }
+    const loop = (v: Animated.Value, delay: number) => Animated.loop(Animated.sequence([
+      Animated.delay(delay),
+      Animated.timing(v, { toValue: 1, duration: 1600, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+      Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true }),
+    ]));
+    const la = loop(a, 0), lb = loop(b, 800);
+    la.start(); lb.start();
+    return () => { la.stop(); lb.stop(); };
+  }, [on, a, b]);
+  if (!on) return null;
+  const ring = (v: Animated.Value) => (
+    <Animated.View pointerEvents="none" style={{
+      position: 'absolute', left: -10, top: -10, width: size + 20, height: size + 20, borderRadius: (size + 20) / 2,
+      borderWidth: 3, borderColor: C.short,
+      opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.75, 0] }),
+      transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.28] }) }],
+    }} />
+  );
+  return <>{ring(a)}{ring(b)}</>;
+}
+
+function Eyebrow({ children }: { children: React.ReactNode }) {
+  return <Text style={sy.eyebrow}>{children}</Text>;
+}
+
+/* A compact stand-in for a <select>: the current choice, and the options below it when open. */
+function InlineSelect({ value, options, onChange, label }: {
+  value: string; options: { v: string; l: string }[]; onChange: (v: string) => void; label: string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const cur = options.find(o => o.v === value);
+  return (
+    <View style={{ alignItems: 'flex-end', maxWidth: '62%' }}>
+      <Pressable onPress={() => setOpen(o => !o)} accessibilityRole="button" accessibilityLabel={label}
+        style={sy.select}>
+        <Text numberOfLines={1} style={sy.selectTxt}>{cur ? cur.l : '-'}</Text>
+        <Text style={{ fontSize: 12, color: C.ink64 }}>{'▾'}</Text>
+      </Pressable>
+      {open ? (
+        <View style={sy.selectList}>
+          {options.map(o => (
+            <Pressable key={o.v} onPress={() => { onChange(o.v); setOpen(false); }}
+              style={[sy.selectOpt, o.v === value && { backgroundColor: C.card }]}>
+              <Text style={[sy.selectTxt, o.v === value && { fontFamily: DISP_FONT }]}>{o.l}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function DraftCard({ it, i, edit, remove }: {
+  it: VoiceItem; i: number; edit: (i: number, fn: (it: VoiceItem) => void) => void; remove: (i: number) => void;
+}) {
+  const { S, t, monthName } = useApp();
+  const inc = it.kind === 'in';
+  const days = [0, -1, -2].map(o => ({ v: isoOffset(o), l: t(o === 0 ? 'vo_today' : o === -1 ? 'vo_yday' : 'vo_2d') }));
+  if (!days.some(d => d.v === it.d)) {
+    const [y, m, d] = it.d.split('-').map(Number);
+    days.push({ v: it.d, l: `${d} ${monthName((m || 1) - 1)} ${y}` });
+  }
+  const list = inc ? S.data.sources : S.data.expenseCats;
+  const opts = list.map(x => ({ v: x.id, l: x.custom ? x.name || '' : t(x.k || '') }));
+  const [amt, setAmt] = React.useState(String(it.a));
+  React.useEffect(() => { setAmt(String(it.a)); }, [it.a]);
+  return (
+    <View style={sy.vent}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 30 }}>
+        <Text style={[sy.ventK, { color: inc ? '#1E7A33' : '#B8421A' }]}>{t(inc ? 'vo_in' : 'vo_out')}</Text>
+        {it.flag ? <Text style={sy.vflag}>{t('vo_flag')}</Text> : null}
+        <View style={{ flex: 1 }} />
+        <Pressable hitSlop={6} onPress={() => edit(i, x => {
+          x.kind = x.kind === 'in' ? 'out' : 'in';
+          x.flag = false;
+          if (x.kind === 'in' && !x.s) x.s = S.preferredIncomeSourceId || S.incomeDraft.s || S.data.sources[0]?.id;
+          if (x.kind === 'out' && !x.c) x.c = S.data.expenseCats[0]?.id;
+        })}>
+          <Text style={sy.vswap}>{t(inc ? 'vo_to_out' : 'vo_to_in')}</Text>
+        </Pressable>
+        <Pressable hitSlop={6} onPress={() => remove(i)} style={{ marginLeft: 10 }}>
+          <Text style={[sy.vswap, { color: C.ink64, textDecorationColor: C.ink40 }]}>{t('vo_del')}</Text>
+        </Pressable>
+      </View>
+      <View style={sy.vrow}>
+        <Text style={sy.vrowK}>{t('vo_amt')}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 13, color: C.ink64 }}>RM</Text>
+          <TextInput
+            value={amt}
+            onChangeText={v => { setAmt(v); edit(i, x => { x.a = v; }); }}
+            keyboardType="decimal-pad"
+            inputMode="decimal"
+            accessibilityLabel={t('vo_amt')}
+            style={sy.vamtIn}
+          />
+        </View>
+      </View>
+      <View style={sy.vrow}>
+        <Text style={sy.vrowK}>{t('vo_date')}</Text>
+        <InlineSelect label={t('vo_date')} value={it.d} options={days} onChange={v => edit(i, x => { x.d = v; })} />
+      </View>
+      <View style={sy.vrow}>
+        <Text style={sy.vrowK}>{t(inc ? 'vo_src' : 'vo_cat')}</Text>
+        <InlineSelect label={t(inc ? 'vo_src' : 'vo_cat')} value={(inc ? it.s : it.c) || ''} options={opts}
+          onChange={v => edit(i, x => { if (inc) x.s = v; else x.c = v; })} />
+      </View>
+    </View>
+  );
+}
+
+/* The open card's contents, shared by Home and the + menu. */
+function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => void }) {
+  const { S, t, up } = useApp();
+  const d = useSayDraft();
+  const [typed, setTyped] = React.useState('');
+  const reduce = useReducedMotion();
+  const fade = React.useRef(new Animated.Value(0)).current;
+  const V = S.voice || { stage: 'idle', text: '', items: [] } as VoiceState;
+  const stage = V.stage;
+
+  /* Opening starts listening straight away, only where the device can hear,
+     and never over a draft still waiting to be saved. */
+  React.useEffect(() => {
+    Animated.timing(fade, { toValue: 1, duration: reduce ? 0 : 260, easing: Easing.out(Easing.ease), useNativeDriver: true }).start();
+    let available = false;
+    try { available = ExpoSpeechRecognitionModule.isRecognitionAvailable(); } catch { available = false; }
+    if (available && (!S.voice || S.voice.stage === 'idle')) void d.start();
+    return () => d.halt();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const status = V.demo && stage !== 'idle' ? t('vo_demo')
+    : stage === 'listen' ? t('vo_listening')
+      : stage === 'parsing' ? t('as_thinking')
+        : stage === 'done' ? t('vo_done') : t('vo_hint');
+  const n = V.items.length;
+  const listening = stage === 'listen';
+
+  return (
+    <Animated.View style={{ opacity: fade, gap: 14 }}>
+      {/* The badge and the close button sit in the corners, so the mic can take the top centre. */}
+      <View style={{ height: 0, zIndex: 3, position: 'relative' }}>
+        <Pressable onPress={d.close} accessibilityLabel={t('close')} accessibilityRole="button"
+          style={sy.vx}>
+          <Text style={{ fontSize: 18, color: C.ink }}>{'✕'}</Text>
+        </Pressable>
+      </View>
+      <View style={{ alignItems: 'center', paddingTop: 12 }}>
+        <View style={sy.badge}><Text style={sy.badgeTxt}>{t('vo_badge').toUpperCase()}</Text></View>
+        <Pressable onPress={d.micTap} accessibilityRole="button"
+          accessibilityLabel={t(listening ? 'vo_stop' : 'vo_tap')}
+          style={[sy.vmic, listening && sy.vmicOn]}>
+          <Pulse on={listening && !reduce} size={84} />
+          <SvgXml xml={MIC_XML('#FFFFFF', 36)} width={36} height={36} />
+        </Pressable>
+        <Text accessibilityRole="header" style={sy.vttl}>{title}</Text>
+        <Text accessibilityLiveRegion="polite" style={sy.vostat}>{status}</Text>
+      </View>
+
+      {stage !== 'idle' ? (
+        <View style={{ gap: 6 }}>
+          <Eyebrow>{t('vo_said')}</Eyebrow>
+          <View style={sy.vsaid}>
+            <Text style={sy.vsaidTxt}>{`“${V.text}”`}</Text>
+            {stage === 'parsing' ? <ActivityIndicator size="small" color={C.ink64} style={{ marginTop: 6, alignSelf: 'flex-start' }} /> : null}
+          </View>
+        </View>
+      ) : null}
+
+      {stage === 'idle' ? (
+        <>
+          <View style={{ gap: 8 }}>
+            <Eyebrow>{t('vo_try')}</Eyebrow>
+            {(SAMPLES[S.lang] || SAMPLES.en).map((x, i) => (
+              <Pressable key={i} onPress={() => d.simulate(x, false)} style={sy.vtry}>
+                <Text style={sy.vtryTxt}>{`“${x}”`}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <View style={{ gap: 6 }}>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 13, color: C.ink64 }}>{t('vo_type')}</Text>
+            <TextInput
+              value={typed}
+              onChangeText={setTyped}
+              placeholder={t('vo_type_ph')}
+              placeholderTextColor={C.ink40}
+              accessibilityLabel={t('vo_type')}
+              onSubmitEditing={() => { if (typed.trim()) { void d.finish(typed); setTyped(''); } }}
+              style={sy.input}
+            />
+            <Pressable onPress={() => { if (typed.trim()) { void d.finish(typed); setTyped(''); } }}
+              style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}>
+              <Text style={sy.btnLine}>{t('vo_go')}</Text>
+            </Pressable>
+          </View>
+        </>
+      ) : null}
+
+      {stage === 'done' ? (
+        <>
+          {V.note ? (
+            <View style={sy.noteC}><Text style={sy.noteTxt}>{V.note}</Text></View>
+          ) : null}
+          {n ? (
+            <>
+              <View style={{ gap: 8 }}>
+                <Eyebrow>{t('vo_check')}</Eyebrow>
+                {V.items.map((it, i) => (
+                  <DraftCard key={i} it={it} i={i} edit={d.edit}
+                    remove={k => up(s => { s.voice?.items.splice(k, 1); })} />
+                ))}
+              </View>
+              {V.outlier ? (
+                <View style={sy.noteC}><Text style={sy.noteTxt}>{t('as_action_outlier')}</Text></View>
+              ) : null}
+              <Pressable onPress={() => { void d.save(onSaved); }} disabled={d.saving}
+                accessibilityRole="button" style={[sy.btn, d.saving && { opacity: 0.6 }]}>
+                {d.saving ? <ActivityIndicator color="#fff" /> : (
+                  <Text style={sy.btnTxt}>
+                    {V.outlier ? t('as_action_confirm_again') : n === 2 ? t('vo_save_2') : n > 1 ? t('vo_save_n', { n }) : t('vo_save')}
+                  </Text>
+                )}
+              </Pressable>
+            </>
+          ) : (!V.note ? (
+            <View style={sy.noteC}><Text style={sy.noteTxt}>{t('vo_none')}</Text></View>
+          ) : null)}
+          <View style={{ alignItems: 'center' }}>
+            <Pressable onPress={d.reset} style={{ minHeight: 44, justifyContent: 'center' }}>
+              <Text style={sy.btnLine}>{t('vo_again')}</Text>
+            </Pressable>
+          </View>
+        </>
+      ) : null}
+
+      <Text style={sy.foot}>{`${t('vo_foot')} ${t('vo_privacy')}`}</Text>
+    </Animated.View>
+  );
+}
+
+/* ---------- Home: the card that opens in place ---------- */
+
+export function SayCard() {
+  const { S, t, up, toast, leaveSampleMonths } = useApp();
+  if (!S.sayOpen) {
+    return (
+      <Pressable
+        onPress={() => { if (S.demo) leaveSampleMonths(); up(s => { s.sayOpen = true; s.qSay = false; }); }}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: false }}
+        style={({ pressed }) => [sy.mosay, pressed && { opacity: 0.9 }]}
+      >
+        <SvgXml pointerEvents="none" style={StyleSheet.absoluteFillObject as object} width="100%" height="100%"
+          xml={'<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><defs><linearGradient id="sc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E3F1F0"/><stop offset="1" stop-color="#FFFFFF"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#sc)"/></svg>'} />
+        <View style={sy.mosayIc}><SvgXml xml={MIC_XML('#FFFFFF', 22)} width={22} height={22} /></View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={sy.mosayB}>{t('mo_say_t')}</Text>
+          <Text style={sy.mosaySm}>{t('mo_say_d')}</Text>
+        </View>
+      </Pressable>
+    );
+  }
+  return (
+    <View style={[sy.saybox, sy.sayboxOpen]} accessibilityLabel={t('mo_say_t')}>
+      {/* the open card's soft teal wash, fading to white below the microphone */}
+      <SvgXml pointerEvents="none" style={StyleSheet.absoluteFillObject as object} width="100%" height="100%"
+        xml={'<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><defs><linearGradient id="sw" x1="0" y1="0" x2="0" y2="210" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#E6F2F1"/><stop offset="1" stop-color="#FFFFFF"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#sw)"/></svg>'} />
+      <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16 }}>
+        <SayBody title={t('mo_say_t')} onSaved={msg => { up(s => { s.sayOpen = false; }); toast(msg); }} />
+      </View>
+    </View>
+  );
+}
+
+/* ---------- the + menu: Say it grows upward into the same card ---------- */
+
+export function QuickSay({ width, maxHeight }: { width: number; maxHeight: number }) {
+  const { t, up, toast } = useApp();
+  return (
+    <View style={[sy.qsay, { width }]}>
+      <Animated.ScrollView style={{ maxHeight }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16 }}
+        keyboardShouldPersistTaps="handled">
+        <SayBody title={t('qk_voice')} onSaved={msg => { up(s => { s.qSay = false; s.sheet = null; }); toast(msg); }} />
+      </Animated.ScrollView>
+    </View>
+  );
+}
+
+export function QuickSayPill() {
+  const { S, t, up, leaveSampleMonths } = useApp();
+  return (
+    <Pressable onPress={() => { if (S.demo) leaveSampleMonths(); up(s => { s.qSay = true; s.sayOpen = false; }); }} style={sy.qitem}
+      accessibilityRole="button" accessibilityState={{ expanded: false }}>
+      <Ico name="mic" size={22} color={C.brand} />
+      <Text style={{ fontFamily: DISP_FONT, fontSize: 14.5, color: C.ink }}>{t('qk_voice')}</Text>
+    </Pressable>
+  );
+}
+
+const sy = StyleSheet.create({
+  mosay: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, width: '100%', minHeight: 62,
+    paddingVertical: 10, paddingHorizontal: 14, borderRadius: 16, borderWidth: 1.5, borderColor: C.brand,
+    backgroundColor: '#FFFFFF', overflow: 'hidden',
+  },
+  mosayIc: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center' },
+  mosayB: { fontFamily: DISP_FONT, fontSize: 16, color: C.ink },
+  mosaySm: { fontFamily: BODY_FONT, fontSize: 12.5, lineHeight: 16, color: C.ink64, marginTop: 2 },
+  saybox: { position: 'relative', borderRadius: 16, borderWidth: 1.5, borderColor: C.brand, overflow: 'hidden', backgroundColor: '#FFFFFF' },
+  sayboxOpen: {
+    shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.12, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 4,
+  },
+  vx: {
+    position: 'absolute', right: -10, top: -8, width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  badge: {
+    position: 'absolute', left: 0, top: 2, minHeight: 19, paddingVertical: 1, paddingHorizontal: 8,
+    borderRadius: 10, backgroundColor: C.caution,
+  },
+  badgeTxt: { fontSize: 10, fontWeight: '700', letterSpacing: 0.4, color: C.ink },
+  vmic: {
+    width: 84, height: 84, borderRadius: 42, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center',
+    shadowColor: 'rgba(74,145,149,1)', shadowOpacity: 0.42, shadowRadius: 26, shadowOffset: { width: 0, height: 12 }, elevation: 6,
+  },
+  vmicOn: { backgroundColor: C.short, shadowColor: 'rgba(241,89,42,1)' },
+  vttl: { marginTop: 20, fontFamily: DISP_FONT, fontSize: 20, lineHeight: 26, color: C.ink, textAlign: 'center' },
+  vostat: { marginTop: 4, fontFamily: BODY_FONT, fontSize: 14, lineHeight: 19, color: C.ink64, textAlign: 'center' },
+  eyebrow: { fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.88, textTransform: 'uppercase', color: C.ink64 },
+  vsaid: { backgroundColor: '#EEF4F3', borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, minHeight: 48 },
+  vsaidTxt: { fontFamily: BODY_FONT, fontSize: 16, lineHeight: 23, fontStyle: 'italic', color: C.ink },
+  vtry: { borderWidth: 1, borderColor: C.ink14, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#FFFFFF' },
+  vtryTxt: { fontFamily: BODY_FONT, fontSize: 13.5, lineHeight: 19, color: C.ink },
+  input: {
+    minHeight: 48, backgroundColor: C.paper, borderWidth: 1.5, borderColor: C.ink40, borderRadius: 12,
+    paddingHorizontal: 14, fontSize: 16, color: C.ink, fontFamily: BODY_FONT,
+  },
+  btnLine: { fontFamily: BODY_FONT, fontSize: 16, color: C.ink, textDecorationLine: 'underline', textDecorationColor: C.brand },
+  vent: { borderWidth: 1, borderColor: C.ink14, borderRadius: 16, paddingTop: 10, paddingHorizontal: 14, paddingBottom: 4, backgroundColor: '#FFFFFF' },
+  ventK: { fontFamily: XBOLD_FONT, fontSize: 11.5, letterSpacing: 0.7, textTransform: 'uppercase' },
+  vflag: {
+    marginLeft: 6, fontFamily: DISP_FONT, fontSize: 11, color: '#7A5800', backgroundColor: '#FFF3D1',
+    borderRadius: 8, paddingVertical: 2, paddingHorizontal: 8, overflow: 'hidden',
+  },
+  vswap: { fontFamily: BODY_FONT, fontSize: 12, color: C.brand, textDecorationLine: 'underline' },
+  vrow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, minHeight: 46,
+    borderTopWidth: 1, borderTopColor: C.ink14,
+  },
+  vrowK: { fontFamily: BODY_FONT, fontSize: 14, color: C.ink },
+  vamtIn: {
+    width: 110, minHeight: 40, textAlign: 'right', borderWidth: 1.5, borderColor: C.ink40, borderRadius: 10,
+    paddingHorizontal: 10, fontSize: 16, color: C.ink, fontFamily: BODY_FONT, backgroundColor: C.paper,
+  },
+  select: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: 10,
+    borderWidth: 1.5, borderColor: C.ink40, borderRadius: 10, backgroundColor: C.paper, maxWidth: '100%',
+  },
+  selectTxt: { fontFamily: BODY_FONT, fontSize: 14, color: C.ink, flexShrink: 1 },
+  selectList: {
+    marginTop: 4, marginBottom: 6, borderWidth: 1, borderColor: C.ink14, borderRadius: 10, backgroundColor: C.paper,
+    overflow: 'hidden', alignSelf: 'stretch', minWidth: 160,
+  },
+  selectOpt: { minHeight: 40, paddingHorizontal: 12, justifyContent: 'center' },
+  noteC: {
+    borderLeftWidth: 4, borderLeftColor: C.caution, paddingVertical: 8, paddingHorizontal: 12,
+    backgroundColor: C.card, borderTopRightRadius: 10, borderBottomRightRadius: 10,
+  },
+  noteTxt: { fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: C.ink },
+  btn: { minHeight: 52, backgroundColor: C.brand, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
+  btnTxt: { color: '#fff', fontFamily: DISP_FONT, fontSize: 19 },
+  foot: { fontFamily: BODY_FONT, fontSize: 12, lineHeight: 17, color: C.ink64 },
+  qsay: {
+    backgroundColor: '#FFFFFF', borderRadius: 22, overflow: 'hidden',
+    shadowColor: 'rgba(31,44,45,1)', shadowOpacity: 0.3, shadowRadius: 30, shadowOffset: { width: 0, height: 12 }, elevation: 10,
+  },
+  qitem: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff', borderRadius: 24,
+    paddingHorizontal: 16, width: 200, minHeight: 46,
+    shadowColor: 'rgba(31,44,45,1)', shadowOpacity: 0.22, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 6,
+  },
+});

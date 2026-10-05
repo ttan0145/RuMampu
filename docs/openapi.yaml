@@ -5,6 +5,54 @@ info:
   description: Versioned API for RuMampu's irregular-income housing readiness tool.
     RuMampu is not a lender, credit score or loan approval predictor.
 paths:
+  /api/v1/assistant/action-preview/:
+    post:
+      operationId: assistant_action_preview
+      description: Parse a submitted command into a proposal; this endpoint never
+        writes data.
+      summary: Create a reviewable preview from a financial command
+      tags:
+      - Assistant
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantActionPreviewRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AssistantActionPreviewRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AssistantActionPreviewRequestRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantActionPreviewResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/assistant/chat/:
     post:
       operationId: assistant_chat
@@ -487,6 +535,283 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PreHousingCheckResult'
+          description: ''
+  /api/v1/housing/price-explorer/areas/:
+    get:
+      operationId: housing_price_explorer_areas_retrieve
+      parameters:
+      - in: query
+        name: budget
+        schema:
+          type: integer
+          maximum: 10000000
+          minimum: 50000
+        required: true
+      - in: query
+        name: property_type
+        schema:
+          enum:
+          - cluster
+          - condo
+          - detached
+          - flat
+          - low_cost_flat
+          - low_cost_house
+          - semi_detached
+          - terrace
+          - townhouse
+          type: string
+          minLength: 1
+        description: |-
+          * `cluster` - cluster
+          * `condo` - condo
+          * `detached` - detached
+          * `flat` - flat
+          * `low_cost_flat` - low_cost_flat
+          * `low_cost_house` - low_cost_house
+          * `semi_detached` - semi_detached
+          * `terrace` - terrace
+          * `townhouse` - townhouse
+        required: true
+      - in: query
+        name: state
+        schema:
+          enum:
+          - JHR
+          - KDH
+          - KTN
+          - KUL
+          - LBN
+          - MLK
+          - NSN
+          - PHG
+          - PJY
+          - PLS
+          - PNG
+          - PRK
+          - SBH
+          - SGR
+          - SWK
+          - TRG
+          type: string
+          minLength: 1
+        description: |-
+          * `JHR` - JHR
+          * `KDH` - KDH
+          * `KTN` - KTN
+          * `KUL` - KUL
+          * `LBN` - LBN
+          * `MLK` - MLK
+          * `NSN` - NSN
+          * `PHG` - PHG
+          * `PJY` - PJY
+          * `PLS` - PLS
+          * `PNG` - PNG
+          * `PRK` - PRK
+          * `SBH` - SBH
+          * `SGR` - SGR
+          * `SWK` - SWK
+          * `TRG` - TRG
+        required: true
+      tags:
+      - housing
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/housing/price-explorer/home/:
+    get:
+      operationId: housing_price_explorer_home_retrieve
+      parameters:
+      - in: query
+        name: district
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 60
+        required: true
+      - in: query
+        name: property_type
+        schema:
+          enum:
+          - cluster
+          - condo
+          - detached
+          - flat
+          - low_cost_flat
+          - low_cost_house
+          - semi_detached
+          - terrace
+          - townhouse
+          type: string
+          minLength: 1
+        description: |-
+          * `cluster` - cluster
+          * `condo` - condo
+          * `detached` - detached
+          * `flat` - flat
+          * `low_cost_flat` - low_cost_flat
+          * `low_cost_house` - low_cost_house
+          * `semi_detached` - semi_detached
+          * `terrace` - terrace
+          * `townhouse` - townhouse
+        required: true
+      - in: query
+        name: size
+        schema:
+          enum:
+          - small
+          - typical
+          - large
+          type: string
+          default: typical
+          minLength: 1
+        description: |-
+          * `small` - small
+          * `typical` - typical
+          * `large` - large
+      - in: query
+        name: tenure
+        schema:
+          enum:
+          - F
+          - L
+          type: string
+          default: F
+          minLength: 1
+        description: |-
+          * `F` - F
+          * `L` - L
+      tags:
+      - housing
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/housing/price-explorer/trend/:
+    get:
+      operationId: housing_price_explorer_trend_retrieve
+      parameters:
+      - in: query
+        name: property_type
+        schema:
+          enum:
+          - cluster
+          - condo
+          - detached
+          - flat
+          - low_cost_flat
+          - low_cost_house
+          - semi_detached
+          - terrace
+          - townhouse
+          type: string
+          minLength: 1
+        description: |-
+          * `cluster` - cluster
+          * `condo` - condo
+          * `detached` - detached
+          * `flat` - flat
+          * `low_cost_flat` - low_cost_flat
+          * `low_cost_house` - low_cost_house
+          * `semi_detached` - semi_detached
+          * `terrace` - terrace
+          * `townhouse` - townhouse
+        required: true
+      - in: query
+        name: state
+        schema:
+          enum:
+          - JHR
+          - KDH
+          - KTN
+          - KUL
+          - LBN
+          - MLK
+          - NSN
+          - PHG
+          - PJY
+          - PLS
+          - PNG
+          - PRK
+          - SBH
+          - SGR
+          - SWK
+          - TRG
+          type: string
+          minLength: 1
+        description: |-
+          * `JHR` - JHR
+          * `KDH` - KDH
+          * `KTN` - KTN
+          * `KUL` - KUL
+          * `LBN` - LBN
+          * `MLK` - MLK
+          * `NSN` - NSN
+          * `PHG` - PHG
+          * `PJY` - PJY
+          * `PLS` - PLS
+          * `PNG` - PNG
+          * `PRK` - PRK
+          * `SBH` - SBH
+          * `SGR` - SGR
+          * `SWK` - SWK
+          * `TRG` - TRG
+        required: true
+      tags:
+      - housing
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
           description: ''
   /api/v1/housing/saved-tests/:
     get:
@@ -1449,6 +1774,79 @@ components:
       required:
       - code
       - message
+    AssistantActionOptionRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 80
+        label:
+          type: string
+          minLength: 1
+          maxLength: 120
+      required:
+      - id
+      - label
+    AssistantActionPreviewRequestRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        language:
+          allOf:
+          - $ref: '#/components/schemas/LanguageEnum'
+          default: en
+        income_sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantActionOptionRequest'
+        expense_categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantActionOptionRequest'
+        commitments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantActionOptionRequest'
+        limit_categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantActionOptionRequest'
+        default_income_source_id:
+          type: string
+          nullable: true
+          maxLength: 80
+      required:
+      - commitments
+      - expense_categories
+      - income_sources
+      - limit_categories
+      - text
+    AssistantActionPreviewResponse:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/AssistantActionPreviewResponseStatusEnum'
+        message:
+          type: string
+        actions: {}
+      required:
+      - actions
+      - message
+      - status
+    AssistantActionPreviewResponseStatusEnum:
+      enum:
+      - not_action
+      - needs_clarification
+      - ready
+      type: string
+      description: |-
+        * `not_action` - not_action
+        * `needs_clarification` - needs_clarification
+        * `ready` - ready
     AssistantChatRequestRequest:
       type: object
       properties:
@@ -2229,7 +2627,7 @@ components:
           type: string
           maxLength: 255
         status:
-          $ref: '#/components/schemas/StatusEnum'
+          $ref: '#/components/schemas/IncomeImportBatchStatusEnum'
         total_rows:
           type: integer
           readOnly: true
@@ -2264,6 +2662,14 @@ components:
       - ready_count
       - rows
       - total_rows
+    IncomeImportBatchStatusEnum:
+      enum:
+      - preview
+      - confirmed
+      type: string
+      description: |-
+        * `preview` - Awaiting confirmation
+        * `confirmed` - Confirmed
     IncomeImportRow:
       type: object
       properties:
@@ -2903,14 +3309,6 @@ components:
       - financing_rate
       - property_price
       - tenure_years
-    StatusEnum:
-      enum:
-      - preview
-      - confirmed
-      type: string
-      description: |-
-        * `preview` - Awaiting confirmation
-        * `confirmed` - Confirmed
     WorkCostBasisEnum:
       enum:
       - recorded_entries_by_month

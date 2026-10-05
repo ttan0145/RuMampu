@@ -651,3 +651,28 @@ class AssistantChatRequestSerializer(serializers.Serializer):
 
 class AssistantChatResponseSerializer(serializers.Serializer):
     reply = serializers.CharField()
+
+
+class AssistantActionOptionSerializer(serializers.Serializer):
+    id = serializers.CharField(max_length=80, trim_whitespace=True)
+    label = serializers.CharField(max_length=120, trim_whitespace=True)
+
+
+class AssistantActionPreviewRequestSerializer(serializers.Serializer):
+    text = serializers.CharField(max_length=2000, trim_whitespace=True)
+    language = serializers.ChoiceField(choices=["en", "ms", "zh"], default="en")
+    income_sources = AssistantActionOptionSerializer(many=True, max_length=100)
+    expense_categories = AssistantActionOptionSerializer(many=True, max_length=100)
+    commitments = AssistantActionOptionSerializer(many=True, max_length=100)
+    limit_categories = AssistantActionOptionSerializer(many=True, max_length=101)
+    default_income_source_id = serializers.CharField(
+        max_length=80, required=False, allow_blank=True, allow_null=True,
+    )
+
+
+class AssistantActionPreviewResponseSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(
+        choices=["not_action", "needs_clarification", "ready"]
+    )
+    message = serializers.CharField(allow_blank=True)
+    actions = serializers.JSONField()

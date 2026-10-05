@@ -24,6 +24,8 @@ export function planEnsure(s: AppState): PlanState {
 }
 
 export function planRegen(p: PlanState, fromDay = 0): void {
+  /* v27b: days before the plan's start ask nothing. */
+  fromDay = Math.max(fromDay, p.from ?? 0);
   const idx: number[] = [];
   let fixed = 0;
   const skipped = p.skipped ?? [];
@@ -125,6 +127,57 @@ export function planPause(s: AppState): void {
 export function planReset(s: AppState): void {
   s.plan = null;
   planEnsure(s);
+}
+
+/* v26/v27b: one pot, counted once. What the plan put aside plus months the
+   person moved in. While a house test is kept, the part of it that fills the
+   safety buffer is held there first, and only the rest counts toward upfront
+   cash, so the same ringgit is never shown against both goals. */
+export interface PotSplit { pot: number; bt: number; buf: number; up: number; need: number }
+
+export function potSplit(s: AppState, result: HousingTestResult | null): PotSplit {
+  const pot = Math.max(0, (s.village?.savedRm ?? 0) + s.potMoved);
+  const bt = result ? bufferTargetOf(result) : 0;
+  const buf = Math.min(pot, bt);
+  return { pot, bt, buf, up: pot - buf, need: result ? upfrontNeed(s) : 0 };
+}
+
+/* How full the pot is, measured against both goals together. */
+export function potLevel(q: PotSplit): number {
+  const goal = q.bt + q.need;
+  return goal > 0 ? Math.min(1, q.pot / goal) : (q.pot > 0 ? 1 : 0);
+}
+
+/* What is still short of both goals together; null when there is no goal yet. */
+export function potGap(q: PotSplit): number | null {
+  const goal = q.bt + q.need;
+  return goal > 0 ? Math.max(0, goal - q.pot) : null;
+}
+
+/* LeanKit 10.10.3 — finished months and what each left over (the
+   remaining-balance formula). The person moves a month into the pot by their
+   own control, and can take it out again; `on` marks a month already moved. */
+export function planMonthRows(s: AppState, commitMonthly: number): { key: string; left: number; on: boolean }[] {
+  const now = new Date();
+  const thisKey = now.getFullYear() * 12 + now.getMonth();
+  const keyOf = (d: string) => (+d.slice(0, 4)) * 12 + (+d.slice(5, 7) - 1);
+  const months = new Map<number, number>();
+  for (const e of s.data.income) {
+    const k = keyOf(e.d);
+    if (k < thisKey) months.set(k, (months.get(k) ?? 0) + (+e.a || 0));
+  }
+  for (const e of s.data.workCostEntries) {
+    const k = keyOf(e.d);
+    if (months.has(k)) months.set(k, (months.get(k) ?? 0) - (+e.a || 0));
+  }
+  return [...months.entries()]
+    .map(([k, v]) => {
+      const key = `${Math.floor(k / 12)}-${String((k % 12) + 1).padStart(2, '0')}`;
+      return { key, left: Math.round(v - commitMonthly), on: s.potMovedMonths.includes(key) };
+    })
+    .filter(m => m.left > 0 || m.on)
+    .sort((a, b) => b.key.localeCompare(a.key))
+    .slice(0, 6);
 }
 
 /* LeanKit 10.10.3 — what a finished month left (the remaining-balance
@@ -312,16 +365,25 @@ export function planResolveTarget(s: AppState, result: HousingTestResult | null)
   const phase = planPhase(s, result);
   if (phase !== 'buffer' && phase !== 'village') return;
   const p = planEnsure(s);
+  /* v27b: the split is redrawn only when what it was worked out from changes:
+     the phase, the goal, the declared pot, the chosen horizon or what the
+     record says a month leaves. Ticking days never redraws it. */
+  const goal = phase === 'buffer' ? (bufferEnsure(s).target ?? 0) : upfrontNeed(s);
+  const sig = [phase, goal, s.data.cashOnHand, s.planHorizon ?? 0, monthlySaveCapacity(s) ?? 0].join('|');
+  if (p.sig === sig) return;
+  const today = Math.max(0, Math.min(new Date().getDate() - 1, p.n - 1));
   const done = planSaved(p);
   let desired: number;
   if (phase === 'buffer') {
     desired = Math.max(0, (bufferEnsure(s).target ?? 0) - bufferEnsure(s).saved + done);
   } else {
+    /* A month set part way through asks only for the days left of it. */
     const remaining = Math.max(0, upfrontNeed(s) - s.data.cashOnHand + done);
-    desired = Math.max(done, Math.min(remaining, planMonthlyAsk(s)));
+    const ask = Math.ceil(planMonthlyAsk(s) * Math.max(1, p.n - today) / p.n);
+    desired = Math.max(done, Math.min(remaining, ask));
   }
-  if (p.target !== desired) {
-    p.target = desired;
-    planRegen(p);
-  }
+  p.sig = sig;
+  p.target = desired;
+  p.from = today;
+  planRegen(p, today);
 }

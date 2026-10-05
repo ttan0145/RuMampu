@@ -852,6 +852,50 @@ export function assistantChat(
   });
 }
 
+export interface AssistantActionOption {
+  id: string;
+  label: string;
+}
+
+export type AssistantAction = {
+  kind: 'income' | 'expense' | 'bill' | 'limit';
+  amount: string;
+  date: string | null;
+  target_id: string;
+  target_label: string;
+};
+
+export type AssistantActionPreview = {
+  status: 'not_action' | 'needs_clarification' | 'ready';
+  message: string;
+  actions: AssistantAction[];
+};
+
+export function previewAssistantAction(
+  text: string,
+  language: string,
+  options: {
+    incomeSources: AssistantActionOption[];
+    expenseCategories: AssistantActionOption[];
+    commitments: AssistantActionOption[];
+    limitCategories: AssistantActionOption[];
+    defaultIncomeSourceId?: string | null;
+  },
+): Promise<AssistantActionPreview> {
+  return request<AssistantActionPreview>('/assistant/action-preview/', {
+    method: 'POST',
+    body: JSON.stringify({
+      text,
+      language,
+      income_sources: options.incomeSources,
+      expense_categories: options.expenseCategories,
+      commitments: options.commitments,
+      limit_categories: options.limitCategories,
+      default_income_source_id: options.defaultIncomeSourceId || null,
+    }),
+  });
+}
+
 export interface ApiReceiptScanResult {
   is_receipt: boolean;
   merchant: string | null;

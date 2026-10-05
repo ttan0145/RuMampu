@@ -4,12 +4,13 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { SaveFormat, manipulateAsync } from 'expo-image-manipulator';
 import { useApp } from '../state';
+import { GuideTarget } from '../tour';
 import { logIt } from '../log';
 import {
   expByMonth, expCatTotals, expenseMonthComplete, latestExpMonth, monthsAgg, nf, pickMonth, rm, rmx,
 } from '../calc';
 import {
-  BodyS, Btn, BtnLine, Card, Chip, Chips, Display, Fig, FromR,
+  BodyS, Btn, BtnLine, WholeMonthBtn, Card, Chip, Chips, Display, Fig, FromR,
   IcLab, KV, NoteC, NumInput, P, Prov, StackS, TextField,
   CardI, MonthBtn,
 } from '../ui';
@@ -245,6 +246,7 @@ export function ExpensesScreen() {
   };
 
   const summary = (
+    <GuideTarget id="ex.sum">
     <View style={exSt.exsum}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
         <View style={{ minWidth: 0 }}>
@@ -272,6 +274,7 @@ export function ExpensesScreen() {
         </View>
       )}
     </View>
+    </GuideTarget>
   );
 
   const manual = (
@@ -347,11 +350,8 @@ export function ExpensesScreen() {
           style={({ pressed }) => [exSt.btnOut, (pressed || saving) && { opacity: 0.85 }]}>
           <Text style={{ color: '#fff', fontFamily: DISP_FONT, fontSize: 19 }}>{saving ? t('ex_saving') : t('ex_add')}</Text>
         </Pressable>
-        {/* v24 R7 item 3: bulk entry for a whole past month stays, as a quiet link. */}
-        <View style={{ alignItems: 'center', marginTop: 8 }}>
-          <BtnLine label={t('ex_month_total')} style={{ fontSize: 13.5 }}
-            onPress={() => up(s => { s.pastT = 'ex'; s.sheet = 'pastmonth'; })} />
-        </View>
+        {/* v27 (I2-F04): a whole past month is a button that says what it adds. */}
+        <GuideTarget id="ex.wm"><WholeMonthBtn title={t('ex_month_total')} sub={t('wm_btn_ex')} onPress={() => up(s => { s.pastT = 'ex'; s.sheet = 'pastmonth'; })} /></GuideTarget>
       </InSec>
     </>
   );

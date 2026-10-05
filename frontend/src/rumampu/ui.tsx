@@ -2,14 +2,15 @@ import React from 'react';
 import {
   Pressable, StyleSheet, Text, TextInput, TextStyle, View, ViewStyle,
 } from 'react-native';
-import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from './theme';
+import { BODY_FONT, C, DISP_FONT, SEMI_FONT, XBOLD_FONT } from './theme';
 import { Ico } from './svgs';
 import { RumaAvatar } from './ruma-view';
 import { useApp } from './state';
+import { GuideBtn } from './tour';
 
 /* UI primitives — each maps 1:1 to a CSS class in the prototype. */
 
-export const PROV_G: Record<string, string> = { user: '●', official: '○', calc: '▸', assume: '▩' };
+export const PROV_G: Record<string, string> = { user: '●', official: '○', calc: '▸', assume: '▩', model: '◇' };
 
 /* v24 monthBtn (.fhsel): the month-filter field above a recent list. */
 export function MonthBtn({ act, monthKey }: { act: 'incmonth' | 'exmonth'; monthKey: number | null }) {
@@ -144,6 +145,7 @@ export function Hdr({ back, title, brand, greet, right }: {
             </Text>
           </View>
           {right}
+          <GuideBtn />
         </View>
         {title ? (
           <Text style={{
@@ -166,6 +168,7 @@ export function Hdr({ back, title, brand, greet, right }: {
         {title || ''}
       </Text>
       {right}
+      <GuideBtn />
       {/* US6.2 / AC6.2.15: every pushed screen keeps an assistant entry, now
           the floating bubble (assistant.AssistantFab) rather than a header button. */}
     </View>
@@ -374,7 +377,7 @@ export function TextField({
 }) {
   return (
     <TextInput
-      style={st.input}
+      style={[st.input]}
       value={value}
       onChangeText={onChangeText}
       placeholder={placeholder}
@@ -442,6 +445,51 @@ export function EditList({
         />
       ))}
     </>
+  );
+}
+
+/* A labelled on/off switch with an optional hint under the label. */
+export function SwRow({ on, onPress, label, hint }: { on: boolean; onPress: () => void; label: string; hint?: string }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="switch" accessibilityState={{ checked: on }}
+      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 48 }}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 15, color: C.ink }}>{label}</Text>
+        {hint ? <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, lineHeight: 17, color: C.ink64, marginTop: 2 }}>{hint}</Text> : null}
+      </View>
+      <View style={{
+        width: 46, height: 28, borderRadius: 14, padding: 3, backgroundColor: on ? C.brand : C.ink14,
+        alignItems: on ? 'flex-end' : 'flex-start', justifyContent: 'center',
+      }}>
+        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' }} />
+      </View>
+    </Pressable>
+  );
+}
+
+/* v27b: while sample months show, Home and Money say so in the header. */
+export function DemoChip() {
+  const { S, t, toast } = useApp();
+  if (!S.demo) return null;
+  return (
+    <Pressable onPress={() => toast(t('demo_note'))} accessibilityRole="button" style={st.demochip}>
+      <Text style={st.demochipTxt}>{t('demo_chip').toUpperCase()}</Text>
+    </Pressable>
+  );
+}
+
+/* v27 (I2-F04): a whole past month is a button that says what it adds. */
+export function WholeMonthBtn({ title, sub, onPress }: { title: string; sub: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button"
+      style={({ pressed }) => [st.wmbtn, pressed && { opacity: 0.85 }]}>
+      <Ico name="calsum" size={22} color={C.brand} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 16, lineHeight: 20, color: C.brand }}>{title}</Text>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, lineHeight: 16, color: C.ink64, marginTop: 2 }}>{sub}</Text>
+      </View>
+      <Text style={{ fontSize: 22, lineHeight: 24, color: C.brand }}>{'›'}</Text>
+    </Pressable>
   );
 }
 
@@ -525,4 +573,11 @@ const st = StyleSheet.create({
     borderRadius: 10, alignSelf: 'flex-start', justifyContent: 'center',
   },
   fromrTxt: { fontSize: 11, letterSpacing: 0.55, color: C.ink64, fontWeight: '600' },
+  demochip: { backgroundColor: C.caution, paddingVertical: 5, paddingHorizontal: 9, borderRadius: 9, marginRight: 6 },
+  demochipTxt: { fontFamily: XBOLD_FONT, fontSize: 11, letterSpacing: 0.44, color: C.ink },
+  wmbtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, width: '100%', minHeight: 58, marginTop: 10,
+    paddingVertical: 10, paddingHorizontal: 14, borderRadius: 14, backgroundColor: C.paper,
+    borderWidth: 1.5, borderColor: C.brand,
+  },
 });

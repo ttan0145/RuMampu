@@ -108,10 +108,12 @@ export function IncomePatternChart({
 }
 
 export function Waterline({
-  rows, cost, small, lineLabel, prov, noLabels, monthName, xGap,
+  rows, cost, small, lineLabel, prov, noLabels, monthName, xGap, values,
 }: {
   rows: WlRow[]; cost: number; small?: boolean; lineLabel?: boolean; prov?: string;
   noLabels?: boolean; monthName: (m: number) => string; xGap?: number;
+  /* v27b: each bar's figure above it (the after-buying comparison) */
+  values?: boolean;
 }) {
   const max = Math.max(cost, ...rows.map(r => r.surplus), 1) * 1.12;
   const pct = (v: number) => Math.max(0, v / max * 100);
@@ -126,6 +128,11 @@ export function Waterline({
           return (
             <View key={i} style={[wl.col, { minWidth: small ? 6 : 14 }]}>
               <View style={[wl.bar, { height: `${h}%` }]} />
+              {values ? (
+                <Text style={[wl.val, { bottom: `${Math.max(h, r.short && r.gap > 0 ? linePct : h)}%` }]}>
+                  {Math.round(r.surplus).toLocaleString('en-MY')}
+                </Text>
+              ) : null}
               {r.short && r.gap > 0 ? (
                 <View style={[wl.gap, { bottom: `${h}%`, height: `${linePct - h}%` }]} />
               ) : null}
@@ -281,6 +288,10 @@ export function Shimmer({ label }: { label: string }) {
 }
 
 const wl = StyleSheet.create({
+  val: {
+    position: 'absolute', left: -6, right: -6, marginBottom: 3, textAlign: 'center',
+    fontFamily: DISP_FONT, fontSize: 10, color: C.ink64, fontVariant: ['tabular-nums'],
+  },
   wrap: { paddingTop: 10, paddingRight: 34, paddingBottom: 26, paddingLeft: 2, marginRight: -20 },
   wrapSmall: { paddingTop: 8, paddingRight: 6, paddingBottom: 4, paddingLeft: 2 },
   plot: { position: 'relative', flexDirection: 'row', alignItems: 'flex-end' },

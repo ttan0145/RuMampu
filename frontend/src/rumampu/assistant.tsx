@@ -1,7 +1,7 @@
 import React from 'react';
 import {
-  ActivityIndicator, Animated, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable,
-  ScrollView, StyleSheet, Text, TextInput, View,
+  AccessibilityInfo, ActivityIndicator, Animated, AppState as NativeAppState, Easing, Keyboard, KeyboardAvoidingView, Modal,
+  PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -10,9 +10,13 @@ import {
 } from 'expo-speech-recognition';
 import { SvgXml } from 'react-native-svg';
 import { AppState, useApp } from './state';
-import { ApiError, assistantChat } from './api';
+import { ApiError, AssistantAction, assistantChat, previewAssistantAction } from './api';
+import { rm } from './calc';
 import { BODY_FONT, C, DISP_FONT } from './theme';
-import { RumaHelpAvatar, RumaSignAvatar } from './ruma-view';
+import { RumaHelpAvatar } from './ruma-view';
+import { RUMA_IMG } from './ruma';
+import { getSpeechOwner, setSpeechOwner } from './speech';
+import { GuideTarget, onScrollSettle } from './tour';
 
 /* Flip to false to hide the whole Ask RuMampu UI (bubble, header
    button, popover), e.g. while the AI backend is unavailable. */
@@ -20,7 +24,7 @@ export const ASSISTANT_UI_ENABLED = true;
 
 /* Keep speech recognition in sync with the language selected inside RuMampu,
    regardless of the device or browser language. */
-function speechLocaleFromApp(lang: AppState['lang']): string {
+export function speechLocaleFromApp(lang: AppState['lang']): string {
   if (lang === 'ms') return 'ms-MY';
   if (lang === 'zh') return 'zh-CN';
   return 'en-MY';
@@ -56,89 +60,177 @@ function speechUiText(lang: AppState['lang']) {
    (AC6.2.11/AC6.2.12: the page underneath stays visible). */
 
 
-/* .aifloat — free drag inside the frame, snaps to the nearer side edge. */
-/* Room left under the open pop-up for the parked bubble: its 56px plus a gap. */
-const FAB_PARK_GAP = 64;
+/* v27b2 Ask Ruma at the edge: Ruma alone, peeking in from the right edge at a
+   slight lean, about 40 x 62 visible with the rest past the edge. It slides up
+   and down the edge, and once moved the person's place wins over the automatic
+   one. Waves twice on arrival, then once every twelve seconds. The tap area is
+   48 x 64. It stays put while the chat is open, dimmed under the veil. */
+const EDGE_W = 48;
+const EDGE_H = 64;
+/* Room the tab bar takes at the bottom of the frame. */
+const TABBAR_H = 76;
 
 export function AssistantFab() {
   const { S, t, up } = useApp();
-  const frame = React.useRef({ w: 390, h: 700 });
-  const pos = React.useRef(new Animated.ValueXY({ x: 390 - 64, y: 700 - 140 })).current;
-  const start = React.useRef({ x: 390 - 64, y: 700 - 140 });
-  const laidOut = React.useRef(false);
+  const insets = useSafeAreaInsets();
+  const [frameH, setFrameH] = React.useState(700);
+  const minY = 60;
+  const maxY = Math.max(minY, frameH - TABBAR_H - insets.bottom - EDGE_H + 10);
+  const clamp = React.useCallback((y: number) => Math.max(minY, Math.min(maxY, y)), [maxY]);
+  const yNow = clamp(S.aiY ?? Math.round(frameH * 0.56));
+  const top = React.useRef(new Animated.Value(yNow)).current;
+  const startY = React.useRef(yNow);
+  const dragging = React.useRef(false);
   const moved = React.useRef(false);
+  const [reduce, setReduce] = React.useState(false);
+  const enter = React.useRef(new Animated.Value(0)).current;
+  const wave = React.useRef(new Animated.Value(0)).current;
 
-  const pan = React.useRef(PanResponder.create({
-    onMoveShouldSetPanResponder: (_e, g) => Math.hypot(g.dx, g.dy) > 6,
-    onPanResponderGrant: () => { moved.current = false; },
+  React.useEffect(() => {
+    let alive = true;
+    AccessibilityInfo.isReduceMotionEnabled().then(v => { if (alive) setReduce(v); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
+
+  /* Slide in from the edge, wave twice, then once every twelve seconds. */
+  React.useEffect(() => {
+    if (reduce) { enter.setValue(1); wave.setValue(0); return undefined; }
+    Animated.timing(enter, { toValue: 1, duration: 550, easing: Easing.bezier(0.2, 0.9, 0.3, 1.2), useNativeDriver: true }).start();
+    const swing = (d: number) => Animated.sequence([
+      Animated.timing(wave, { toValue: -1, duration: d, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(wave, { toValue: 1, duration: d * 2, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(wave, { toValue: 0, duration: d, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ]);
+    const arrival = Animated.sequence([Animated.delay(700), swing(300), swing(300)]);
+    const every = Animated.loop(Animated.sequence([
+      Animated.delay(10560),
+      Animated.timing(wave, { toValue: -1, duration: 360, useNativeDriver: true }),
+      Animated.timing(wave, { toValue: 1, duration: 360, useNativeDriver: true }),
+      Animated.timing(wave, { toValue: -0.5, duration: 360, useNativeDriver: true }),
+      Animated.timing(wave, { toValue: 0, duration: 360, useNativeDriver: true }),
+    ]));
+    const all = Animated.sequence([arrival, every]);
+    all.start();
+    return () => all.stop();
+  }, [reduce, enter, wave]);
+
+  /* Settle wherever the person left it, or the app's spot, when nothing is being dragged. */
+  React.useEffect(() => {
+    if (dragging.current) return;
+    Animated.timing(top, { toValue: yNow, duration: reduce ? 0 : 300, easing: Easing.bezier(0.4, 0, 0.2, 1), useNativeDriver: false }).start();
+  }, [yNow, top, reduce]);
+
+  /* v27b2 park: until the person moves Ruma, settle where Ruma covers the least
+     along the right edge: controls and figures first, then words. Web only,
+     where the page can be read; elsewhere Ruma keeps its spot. */
+  const frameRef = React.useRef<View>(null);
+  const park = React.useCallback(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined' || S.aiY != null || dragging.current) return;
+    const host = frameRef.current as unknown as HTMLElement | null;
+    const screen = document.querySelector('[data-testid="screen-scroll"]');
+    if (!host || !host.getBoundingClientRect || !screen) return;
+    const pr = host.getBoundingClientRect();
+    const h = EDGE_H;
+    const inks: [DOMRect, number][] = [];
+    screen.querySelectorAll('*').forEach(node => {
+      const e = node as HTMLElement;
+      const r = e.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0 || r.right < pr.right - 40) return;
+      const ctl = e.getAttribute('role') === 'button' || /^(BUTTON|INPUT|SELECT|TEXTAREA|A)$/.test(e.tagName);
+      let ink = ctl || e.tagName === 'IMG' || e.tagName.toLowerCase() === 'svg';
+      if (!ink) for (let k = 0; k < e.childNodes.length; k++) { const nd = e.childNodes[k]; if (nd.nodeType === 3 && (nd.textContent || '').trim()) { ink = true; break; } }
+      if (ink) {
+        const num = !ctl && /[0-9]/.test(e.textContent || '');
+        inks.push([r, ctl ? 5 : num ? 4 : e.tagName === 'IMG' ? 0.6 : 1]);
+      }
+    });
+    const cover = (y: number) => {
+      const T = pr.top + y, B = pr.top + y + h, L = pr.right - 42;
+      let a = 0;
+      for (const [r, wt] of inks) {
+        const ow = Math.min(pr.right, r.right) - Math.max(L, r.left), oh = Math.min(B, r.bottom) - Math.max(T, r.top);
+        if (ow > 0 && oh > 0) a += ow * oh * wt;
+      }
+      return a;
+    };
+    const pref = pr.height * 0.56;
+    let best = Infinity, by = pref;
+    for (let y = minY; y <= maxY; y += 6) {
+      const sc = cover(y) + Math.abs(y - pref) * 0.6;
+      if (sc < best) { best = sc; by = y; }
+    }
+    Animated.timing(top, { toValue: Math.round(by), duration: reduce ? 0 : 300, easing: Easing.bezier(0.4, 0, 0.2, 1), useNativeDriver: false }).start();
+  }, [S.aiY, maxY, top, reduce]);
+  React.useEffect(() => {
+    const timer = setTimeout(park, 450);
+    return () => clearTimeout(timer);
+  }, [park, S.route, S.sayOpen, S.sheet, S.lnPg, S.lnArt, S.data]);
+  React.useEffect(() => onScrollSettle(park), [park]);
+
+  const pan = React.useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dy) > 6,
+    onPanResponderGrant: () => {
+      dragging.current = true;
+      moved.current = false;
+      top.stopAnimation(v => { startY.current = v; });
+    },
     onPanResponderMove: (_e, g) => {
       moved.current = true;
-      pos.setValue({
-        x: Math.max(8, Math.min(frame.current.w - 64, start.current.x + g.dx)),
-        y: Math.max(60, Math.min(frame.current.h - 140, start.current.y + g.dy)),
-      });
+      top.setValue(clamp(startY.current + g.dy));
     },
     onPanResponderRelease: (_e, g) => {
-      if (!moved.current) return;
-      const x = start.current.x + g.dx + 28 < frame.current.w / 2 ? 8 : frame.current.w - 64;
-      const y = Math.max(60, Math.min(frame.current.h - 140, start.current.y + g.dy));
-      start.current = { x, y };
-      Animated.spring(pos, { toValue: { x, y }, useNativeDriver: false, friction: 7 }).start();
-      /* Like the prototype's __aiDragged flag: swallow only the click that
-         ends this drag, never the following taps. */
+      dragging.current = false;
+      const y = clamp(startY.current + g.dy);
+      up(s => { s.aiY = y; });
+      /* swallow only the click that ends this drag, never the following taps */
       setTimeout(() => { moved.current = false; }, 80);
     },
-    onPanResponderTerminate: () => { setTimeout(() => { moved.current = false; }, 80); },
-  })).current;
+    onPanResponderTerminate: () => {
+      dragging.current = false;
+      setTimeout(() => { moved.current = false; }, 80);
+    },
+  }), [clamp, top, up]);
 
-  /* While the chat is open the bubble slides to the bottom-right corner, just
-     under the pop-up and clear of its header, then springs back to where the
-     user last left it once the chat closes (user ruling 15 Sep). */
-  const open = S.assistantOpen;
-  React.useEffect(() => {
-    const target = open
-      ? { x: frame.current.w - 64, y: frame.current.h - 140 }
-      : start.current;
-    Animated.spring(pos, { toValue: target, useNativeDriver: false, friction: 8, tension: 70 }).start();
-  }, [open, pos]);
-
-  /* The floating bubble is the one entry to Ask RuMampu on every screen, tab
-     roots and pushed screens alike (user ruling 15 Sep: no header robot on
-     Income, Expenses and the rest; the bubble simply floats everywhere). */
   if (!ASSISTANT_UI_ENABLED || !S.onboarded || !S.knew) return null;
 
+  const rot = wave.interpolate({ inputRange: [-1, 1], outputRange: ['-8deg', '8deg'] });
   return (
     <View
+      ref={frameRef}
       pointerEvents="box-none"
       style={[StyleSheet.absoluteFillObject, { zIndex: 20 }]}
-      onLayout={e => {
-        const { width: w, height: h } = e.nativeEvent.layout;
-        frame.current = { w, h };
-        const x = laidOut.current ? Math.max(8, Math.min(start.current.x, w - 64)) : w - 64;
-        const y = laidOut.current ? Math.max(60, Math.min(start.current.y, h - 140)) : Math.max(60, h - 140);
-        laidOut.current = true;
-        start.current = { x, y };
-        /* A layout change (rotation, browser resize) must not un-park an open chat. */
-        pos.setValue(open ? { x: w - 64, y: h - 140 } : { x, y });
-      }}
+      onLayout={e => setFrameH(e.nativeEvent.layout.height)}
     >
-      {/* Hidden while the chat is open: the chat layer draws the EXIT sign at
-          the parked spot itself, and a dimmed twin under it read as a second
-          button. The position still animates, so the bubble springs back from
-          the corner when the chat closes. */}
       <Animated.View
         {...pan.panHandlers}
-        pointerEvents={open ? 'none' : 'auto'}
-        style={{ position: 'absolute', opacity: open ? 0 : 1, transform: pos.getTranslateTransform() }}
+        style={{ position: 'absolute', right: 0, top, width: EDGE_W, height: EDGE_H }}
       >
+        <GuideTarget id="aiedge">
         <Pressable
           onPressIn={() => { moved.current = false; }}
-          onPress={() => { if (!moved.current) up(s => { s.assistantOpen = true; }); }}
+          onPress={() => {
+            if (moved.current) return;
+            top.stopAnimation(v => up(s => { s.aiAnchor = v + 8; s.assistantOpen = true; }));
+          }}
+          accessibilityRole="button"
           accessibilityLabel={t('ai_title')}
-          style={({ pressed }) => [st.aibtn, pressed && { transform: [{ scale: 1.06 }] }]}
+          style={{ width: EDGE_W, height: EDGE_H, overflow: 'visible' }}
         >
-          <RumaHelpAvatar size={56} ring />
+          {/* the peeking Ruma: past the right edge, leaning in at -12 degrees */}
+          <Animated.View pointerEvents="none" style={[st.rpk, {
+            transform: [
+              { translateX: enter.interpolate({ inputRange: [0, 1], outputRange: [45, 0] }) },
+              { rotate: '-12deg' },
+            ],
+          }]}>
+            <Animated.Image
+              source={{ uri: RUMA_IMG.wave }}
+              resizeMode="contain"
+              style={[{ width: 64, height: 62, transform: [{ scaleX: -1 }, { rotate: rot }] }, st.rpkImg]}
+            />
+          </Animated.View>
         </Pressable>
+        </GuideTarget>
       </Animated.View>
     </View>
   );
@@ -179,29 +271,108 @@ function termLabels(S: AppState, t: (k: string) => string): Record<string, strin
 }
 
 export function AssistantSheet() {
-  const { S, t, up, toast } = useApp();
+  const { S, t, up, toast, saveIncomeEntry, saveExpenseEntry, saveCommitmentAmount } = useApp();
   const insets = useSafeAreaInsets();
+  /* v27b2: the chat opens beside Ruma, on whichever side has more room; on a
+     short screen with no room either side, it drops from the top. On web the
+     app sits in a 390-wide phone frame centred in the window. */
+  const { width: W0, height: H0 } = useWindowDimensions();
+  const pop = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    if (!S.assistantOpen) { pop.setValue(0); return; }
+    Animated.spring(pop, { toValue: 1, friction: 7, tension: 120, useNativeDriver: true }).start();
+  }, [S.assistantOpen, pop]);
   const [draft, setDraft] = React.useState('');
   const [sending, setSending] = React.useState(false);
   const [listening, setListening] = React.useState(false);
+  const [pendingActions, setPendingActions] = React.useState<AssistantAction[]>([]);
+  const [actionSaving, setActionSaving] = React.useState(false);
+  const [confirmingOutlier, setConfirmingOutlier] = React.useState(false);
+  const [inputHeight, setInputHeight] = React.useState(48);
+  const [keyboardVisible, setKeyboardVisible] = React.useState(false);
+  const [webKeyboardInset, setWebKeyboardInset] = React.useState(0);
   const scrollRef = React.useRef<ScrollView>(null);
   const speechText = React.useMemo(() => speechUiText(S.lang), [S.lang]);
 
-  useSpeechRecognitionEvent('start', () => setListening(true));
-  useSpeechRecognitionEvent('end', () => setListening(false));
+  /* The Say an entry card shares the microphone; only react to speech this
+     chat started. */
+  const mine = () => getSpeechOwner() === 'assistant';
+  useSpeechRecognitionEvent('start', () => { if (mine()) setListening(true); });
+  useSpeechRecognitionEvent('end', () => { if (mine()) setListening(false); });
   useSpeechRecognitionEvent('result', event => {
+    if (!mine()) return;
     const transcript = event.results?.[0]?.transcript?.trim();
-    if (transcript) setDraft(transcript);
+    if (transcript) {
+      setDraft(transcript);
+    }
   });
   useSpeechRecognitionEvent('error', event => {
+    if (!mine()) return;
     setListening(false);
     if (event.error === 'aborted' || event.error === 'no-speech') return;
     const message = event.error === 'not-allowed' ? speechText.denied : speechText.failed;
     toast(message, 'error');
   });
 
+  const stopSpeech = React.useCallback(() => {
+    // Abort unconditionally: the browser may have opened the microphone before
+    // the async `start` event has updated `listening` in React state.
+    // The Say an entry card shares the microphone; leave its recording alone.
+    if (getSpeechOwner() === 'say') return;
+    ExpoSpeechRecognitionModule.abort();
+    setListening(false);
+  }, []);
+
+  React.useEffect(() => {
+    if (!S.assistantOpen) stopSpeech();
+  }, [S.assistantOpen, stopSpeech]);
+
+  React.useEffect(() => {
+    const nativeState = Platform.OS === 'web' ? null : NativeAppState.addEventListener('change', state => {
+      if (state !== 'active') stopSpeech();
+    });
+    const onVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') stopSpeech();
+    };
+    const onPageHide = () => stopSpeech();
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityChange);
+      window.addEventListener('pagehide', onPageHide);
+    }
+    return () => {
+      nativeState?.remove();
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+        window.removeEventListener('pagehide', onPageHide);
+      }
+      stopSpeech();
+    };
+  }, [stopSpeech]);
+
+  React.useEffect(() => {
+    if (Platform.OS === 'web') {
+      const viewport = window.visualViewport;
+      if (!viewport) return;
+      const updateInset = () => {
+        const inset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+        setWebKeyboardInset(inset > 80 ? inset : 0);
+      };
+      updateInset();
+      viewport.addEventListener('resize', updateInset);
+      viewport.addEventListener('scroll', updateInset);
+      return () => {
+        viewport.removeEventListener('resize', updateInset);
+        viewport.removeEventListener('scroll', updateInset);
+      };
+    }
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+
   const close = () => {
-    if (listening) ExpoSpeechRecognitionModule.abort();
+    stopSpeech();
+    Keyboard.dismiss();
     up(s => { s.assistantOpen = false; });
   };
 
@@ -222,6 +393,7 @@ export function AssistantSheet() {
       return;
     }
 
+    setSpeechOwner('assistant');
     ExpoSpeechRecognitionModule.start({
       lang: speechLocaleFromApp(S.lang),
       interimResults: true,
@@ -238,17 +410,58 @@ export function AssistantSheet() {
   React.useEffect(() => {
     if (prevLang.current === S.lang) return;
     prevLang.current = S.lang;
+    setPendingActions([]);
+    setConfirmingOutlier(false);
     up(s => { s.assistantMsgs = []; });
   }, [S.lang, up]);
+
+  const shownLabel = (item: { custom?: boolean; name?: string; k?: string }) =>
+    item.custom ? item.name || '' : t(item.k || '');
+
+  const actionSummary = (action: AssistantAction): string => t(
+    `as_action_${action.kind}_summary`,
+    { amount: rm(Number(action.amount)), date: action.date || '', target: action.target_label },
+  );
+
+  const tryFinancialAction = async (content: string) => previewAssistantAction(content, S.lang, {
+    incomeSources: S.data.sources.map(item => ({ id: item.id, label: shownLabel(item) })),
+    expenseCategories: S.data.expenseCats.map(item => ({ id: item.id, label: shownLabel(item) })),
+    commitments: [
+      ...S.data.commitments.living,
+      ...S.data.commitments.debts,
+      ...S.data.commitments.savings,
+    ].map(item => ({ id: item.id, label: shownLabel(item) })),
+    limitCategories: [
+      { id: 'total', label: t('lm_total') },
+      ...S.data.expenseCats.map(item => ({ id: item.id, label: shownLabel(item) })),
+    ],
+    defaultIncomeSourceId: S.preferredIncomeSourceId || S.incomeDraft.s || null,
+  });
 
   const send = async (text?: string) => {
     const content = (text ?? draft).trim();
     if (!content || sending) return;
+    setPendingActions([]);
+    setConfirmingOutlier(false);
     const history = [...S.assistantMsgs, { role: 'user' as const, content }];
     setDraft('');
     setSending(true);
     up(s => { s.assistantMsgs.push({ role: 'user', content }); });
     try {
+      try {
+        const preview = await tryFinancialAction(content);
+        if (preview.status === 'needs_clarification') {
+          up(s => { s.assistantMsgs.push({ role: 'assistant', content: preview.message }); });
+          return;
+        }
+        if (preview.status === 'ready' && preview.actions.length > 0) {
+          setPendingActions(preview.actions);
+          return;
+        }
+      } catch {
+        /* Keep ordinary chat available if the smaller action model is down.
+           The 120B assistant may still explain how to enter the item manually. */
+      }
       const { reply } = await assistantChat(history, S.lang, uiLabels(t), termLabels(S, t));
       up(s => { s.assistantMsgs.push({ role: 'assistant', content: reply }); });
     } catch (error) {
@@ -261,32 +474,106 @@ export function AssistantSheet() {
     }
   };
 
+  const cancelAction = () => {
+    setPendingActions([]);
+    setConfirmingOutlier(false);
+    up(s => { s.assistantMsgs.push({ role: 'assistant', content: t('as_action_cancelled') }); });
+  };
+
+  const confirmAction = async () => {
+    if (pendingActions.length === 0 || actionSaving) return;
+    setActionSaving(true);
+    try {
+      const actionsToSave = [...pendingActions].sort((a, b) =>
+        Number(b.kind === 'income') - Number(a.kind === 'income'));
+      for (const action of actionsToSave) {
+        if (action.kind === 'income') {
+          const result = await saveIncomeEntry({
+            amount: Number(action.amount),
+            date: action.date!,
+            sourceId: action.target_id,
+            confirmOutlier: confirmingOutlier,
+          });
+          if (result === 'outlier') {
+            setConfirmingOutlier(true);
+            up(s => { s.assistantMsgs.push({ role: 'assistant', content: t('as_action_outlier') }); });
+            return;
+          }
+        } else if (action.kind === 'expense') {
+          await saveExpenseEntry({
+            amount: Number(action.amount),
+            date: action.date!,
+            categoryId: action.target_id,
+          });
+        } else if (action.kind === 'bill') {
+          await saveCommitmentAmount(action.target_id, Number(action.amount));
+        } else {
+          up(s => { s.data.expenseLimits[action.target_id] = Number(action.amount); });
+        }
+      }
+      const saved = pendingActions.length === 1
+        ? t(`as_action_${pendingActions[0].kind}_saved`)
+        : t('as_actions_saved', { n: pendingActions.length });
+      setPendingActions([]);
+      setConfirmingOutlier(false);
+      up(s => { s.assistantMsgs.push({ role: 'assistant', content: saved }); });
+      toast(saved);
+    } catch {
+      up(s => { s.assistantMsgs.push({ role: 'assistant', content: t('as_action_save_failed') }); });
+    } finally {
+      setActionSaving(false);
+    }
+  };
+
   if (!ASSISTANT_UI_ENABLED || !S.assistantOpen) return null;
+
+  const framed = Platform.OS === 'web' && W0 > 430;
+  const H = framed ? Math.min(844, H0) : H0 - insets.top;
+  const offY = framed ? (H0 - H) / 2 : insets.top;
+  const offX = framed ? (W0 - 390) / 2 : 0;
+  const aTop = S.aiAnchor ?? H / 2 - 28;
+  const roomAbove = aTop - 24;
+  const roomBelow = H - aTop - 160;
+  const above = roomAbove >= roomBelow;
+  const fits = Math.max(roomAbove, roomBelow) >= 372;
+  /* While the keyboard is up the chat sits just above it (teammate's keyboard
+     handling); otherwise it opens beside Ruma (v27b2). */
+  const keyboardUp = Platform.OS === 'web' ? webKeyboardInset > 0 : keyboardVisible;
+  const place = keyboardUp
+    ? { bottom: Platform.OS === 'web' ? webKeyboardInset + 12 : 12 + insets.bottom, maxHeight: H - 60 - (Platform.OS === 'web' ? webKeyboardInset : 0) }
+    : !fits
+      ? { top: offY + 12, maxHeight: H - 92 }
+      : above
+        ? { bottom: H0 - (offY + aTop) + 12, maxHeight: Math.min(roomAbove, H - 140) }
+        : { top: offY + aTop + 68, maxHeight: roomBelow };
 
   return (
     <Modal transparent animationType="fade" visible onRequestClose={close}>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={close}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+        keyboardVerticalOffset={insets.top}
+      >
+        <Pressable style={StyleSheet.absoluteFill} onPress={close} accessible={false}>
           <View style={{ flex: 1, backgroundColor: 'rgba(15,32,33,0.28)' }} />
         </Pressable>
-        <KeyboardAvoidingView pointerEvents="box-none" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          {/* Right-anchored like the prototype's .aipop, lifted one bubble height
-              so the parked bubble (bottom-right, see AssistantFab) stays in view
-              under the pop-up instead of behind it. */}
-          <View pointerEvents="box-none" style={[
-            { width: '100%', alignItems: 'flex-end', paddingRight: 12, marginBottom: 84 + FAB_PARK_GAP + insets.bottom },
-            Platform.OS === 'web' ? { alignSelf: 'center', maxWidth: 390 } : null,
-          ]}>
-          <View style={st.pop}>
+        <Animated.View style={[st.pop, place, { position: 'absolute', right: offX + 12 }, {
+          opacity: pop,
+          transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }],
+        }]}>
             <View style={st.header}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
                 <RumaHelpAvatar size={44} />
                 <Text style={st.title}>{t('ai_title')}</Text>
               </View>
+              <Pressable onPress={close} accessibilityRole="button" accessibilityLabel={t('close')}
+                style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginRight: -10 }}>
+                <Text style={{ fontSize: 18, color: C.ink }}>{'✕'}</Text>
+              </Pressable>
             </View>
             <ScrollView
               ref={scrollRef}
-              style={{ flexGrow: 0, maxHeight: 320 }}
+              style={{ flexGrow: 0, flexShrink: 1, maxHeight: 320 }}
               contentContainerStyle={{ gap: 8, paddingVertical: 10 }}
               onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
             >
@@ -311,27 +598,72 @@ export function AssistantSheet() {
                   <Text style={st.bubbleBotTxt}>{t('as_thinking')}</Text>
                 </View>
               ) : null}
+              {pendingActions.length > 0 ? (
+                <View style={st.actionCard}>
+                  <Text style={st.actionTitle}>{t('as_action_review')}</Text>
+                  <View style={{ gap: 6 }}>
+                    {pendingActions.map((action, index) => (
+                      <Text key={`${action.kind}-${action.target_id}-${index}`} style={st.actionText}>
+                        {`${index + 1}. ${actionSummary(action)}`}
+                      </Text>
+                    ))}
+                  </View>
+                  <View style={st.actionButtons}>
+                    <Pressable
+                      disabled={actionSaving}
+                      onPress={cancelAction}
+                      style={[st.actionCancel, actionSaving && { opacity: 0.5 }]}
+                    >
+                      <Text style={st.actionCancelText}>{t('cancel')}</Text>
+                    </Pressable>
+                    <Pressable
+                      disabled={actionSaving}
+                      onPress={() => { void confirmAction(); }}
+                      style={[st.actionConfirm, actionSaving && { opacity: 0.5 }]}
+                    >
+                      {actionSaving ? <ActivityIndicator size="small" color="#fff" /> : (
+                        <Text style={st.actionConfirmText}>
+                          {t(confirmingOutlier ? 'as_action_confirm_again' : 'as_action_confirm')}
+                        </Text>
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+              ) : null}
             </ScrollView>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {['ai_q1', 'ai_q2', 'ai_q3'].map(k => (
-                <Pressable key={k} onPress={() => { void send(t(k)); }} style={st.sugg}>
+                <Pressable
+                  key={k}
+                  disabled={pendingActions.length > 0}
+                  onPress={() => { void send(t(k)); }}
+                  style={[st.sugg, pendingActions.length > 0 && { opacity: 0.4 }]}
+                >
                   <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink }}>{t(k)}</Text>
                 </Pressable>
               ))}
             </View>
             <View style={st.inputRow}>
               <TextInput
-                style={st.input}
+                style={[st.input, { height: inputHeight }]}
                 value={draft}
                 onChangeText={setDraft}
+                editable={pendingActions.length === 0}
+                multiline
+                submitBehavior="submit"
+                scrollEnabled={inputHeight >= 112}
+                onContentSizeChange={event => {
+                  const nextHeight = Math.max(48, Math.min(112, event.nativeEvent.contentSize.height + 2));
+                  setInputHeight(nextHeight);
+                }}
                 placeholder={listening ? speechText.listening : t('ai_ph')}
                 placeholderTextColor={C.ink40}
                 onSubmitEditing={() => { void send(); }}
               />
               <Pressable
                 onPress={() => { void toggleSpeech(); }}
-                disabled={sending}
-                style={[st.micBtn, listening && st.micBtnActive, sending && { opacity: 0.4 }]}
+                disabled={sending || pendingActions.length > 0}
+                style={[st.micBtn, listening && st.micBtnActive, (sending || pendingActions.length > 0) && { opacity: 0.4 }]}
                 accessibilityLabel={listening ? speechText.stop : speechText.start}
               >
                 <SvgXml
@@ -343,47 +675,33 @@ export function AssistantSheet() {
               </Pressable>
               <Pressable
                 onPress={() => { void send(); }}
-                disabled={sending || !draft.trim()}
-                style={[st.sendBtn, (sending || !draft.trim()) && { opacity: 0.4 }]}
+                disabled={sending || pendingActions.length > 0 || !draft.trim()}
+                style={[st.sendBtn, (sending || pendingActions.length > 0 || !draft.trim()) && { opacity: 0.4 }]}
                 accessibilityLabel={t('ai_send')}
               >
                 <SvgXml xml={'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 12h15M13 6l6 6-6 6"/></svg>'} width={22} height={22} />
               </Pressable>
             </View>
             <Text style={st.disclaimer}>{t('as_disclaimer')}</Text>
-          </View>
-          </View>
-        </KeyboardAvoidingView>
-        {/* The one way out: Ruma's EXIT sign as a real button above the dimming
-            layer, at exactly the spot the parked bubble slides to (bottom-right,
-            8px in, 56px tall, 84px up). No ✕ in the header (user ruling 15 Sep). */}
-        <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 84, alignItems: 'center' }}>
-          <View pointerEvents="box-none" style={{ width: '100%', maxWidth: Platform.OS === 'web' ? 390 : undefined, alignItems: 'flex-end', paddingRight: 8 }}>
-            <Pressable
-              onPress={close}
-              accessibilityLabel={t('done')}
-              style={({ pressed }) => [st.aibtn, pressed && { transform: [{ scale: 1.06 }] }]}
-            >
-              <RumaSignAvatar size={56} ring />
-            </Pressable>
-          </View>
-        </View>
-      </View>
+        </Animated.View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const st = StyleSheet.create({
-  aibtn: {
-    width: 56, height: 56, borderRadius: 28, backgroundColor: '#E4EFEC',
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: 'rgba(31,63,65,1)', shadowOpacity: 0.35, shadowRadius: 22, shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
+  /* .aipop: min(332px, 100% - 24px) wide, beside Ruma */
+  rpk: {
+    position: 'absolute', right: -24, bottom: 0, width: 64, height: 62,
+    transformOrigin: 'right bottom',
   },
+  rpkImg: Platform.OS === 'web'
+    ? ({ filter: 'drop-shadow(-2px 3px 4px rgba(31,63,65,.35))', transformOrigin: '50% 88%' } as object)
+    : { transformOrigin: '50% 88%' },
   pop: {
     backgroundColor: C.paper,
     borderRadius: 22,
-    width: 332, maxWidth: '100%',
+    width: 332, maxWidth: '94%', overflow: 'hidden',
     paddingHorizontal: 16, paddingTop: 14, paddingBottom: 14,
     shadowColor: 'rgba(15,32,33,1)', shadowOpacity: 0.4, shadowRadius: 56, shadowOffset: { width: 0, height: 22 },
     elevation: 14,
@@ -395,18 +713,36 @@ const st = StyleSheet.create({
   bubbleBot: { alignSelf: 'flex-start', backgroundColor: '#EDF3F2', borderBottomLeftRadius: 4 },
   bubbleUserTxt: { fontFamily: BODY_FONT, fontSize: 14, lineHeight: 19, color: '#fff' },
   bubbleBotTxt: { fontFamily: BODY_FONT, fontSize: 14, lineHeight: 19, color: C.ink },
+  actionCard: {
+    alignSelf: 'stretch', gap: 8, padding: 12, borderRadius: 14,
+    borderWidth: 1.5, borderColor: C.brand, backgroundColor: C.paper,
+  },
+  actionTitle: { fontFamily: DISP_FONT, fontSize: 14, color: C.ink },
+  actionText: { fontFamily: BODY_FONT, fontSize: 13.5, lineHeight: 19, color: C.ink },
+  actionButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 2 },
+  actionCancel: {
+    minHeight: 40, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1.5,
+    borderColor: C.brand, alignItems: 'center', justifyContent: 'center',
+  },
+  actionCancelText: { fontFamily: BODY_FONT, fontSize: 13, color: C.brand },
+  actionConfirm: {
+    minHeight: 40, minWidth: 96, paddingHorizontal: 14, borderRadius: 10,
+    backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center',
+  },
+  actionConfirmText: { fontFamily: BODY_FONT, fontSize: 13, color: '#fff' },
   sugg: {
     borderWidth: 1.5, borderColor: C.ink14, borderRadius: 16,
     paddingVertical: 6, paddingHorizontal: 11, minHeight: 32, justifyContent: 'center',
   },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 10 },
   input: {
     /* minWidth 0: a web text input will not shrink below ~20 characters on its
        own, so with a larger phone font it pushed the Send button out of the
        pop-up. Letting it shrink keeps the row inside the card. */
-    flex: 1, minWidth: 0, minHeight: 48,
+    flex: 1, minWidth: 0, minHeight: 48, maxHeight: 112,
     backgroundColor: C.paper, borderWidth: 1.5, borderColor: C.ink40, borderRadius: 12,
-    paddingHorizontal: 12, fontSize: 15, color: C.ink, fontFamily: BODY_FONT,
+    paddingHorizontal: 12, paddingVertical: 12, fontSize: 15, lineHeight: 20,
+    color: C.ink, fontFamily: BODY_FONT, textAlignVertical: 'top',
   },
   micBtn: {
     width: 48, height: 48, borderRadius: 12, flexShrink: 0,

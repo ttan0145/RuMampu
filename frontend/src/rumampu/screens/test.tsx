@@ -17,7 +17,7 @@ import { SvgXml } from 'react-native-svg';
 import { useApp } from '../state';
 import { useFreshHousingTest } from '../useFreshHousingTest';
 import { logIt } from '../log';
-import { monthsAgg, nf, rm } from '../calc';
+import { commitTotal, monthsAgg, nf, rm } from '../calc';
 import { upfrontNeed } from '../fees';
 import { potForUpfront, potHeld } from '../pot';
 import { unrepresentedCoverageMonths } from '../money';
@@ -31,6 +31,8 @@ import { RUMA_IMG } from '../ruma';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { Band, Waterline } from '../charts';
 import { ScreenShell } from './shell';
+import { GuideTarget } from '../tour';
+import { LearnStrip } from './learn';
 import { useHousingCalculation } from '../useHousingCalculation';
 import { ApiError } from '../../../services/api';
 
@@ -43,6 +45,23 @@ function extrasTotal(data: { homeCosts: { a: number }[] }): number {
   return data.homeCosts.reduce((a, c) => a + (+c.a || 0), 0);
 }
 
+/* The price a monthly instalment repays over the loan, before the deposit. */
+function priceForInstalment(m: number, rate: number, years: number): number {
+  const r = rate / 1200, n = years * 12;
+  if (m <= 0) return 0;
+  if (r === 0) return m * n;
+  return m * (1 - Math.pow(1 + r, -n)) / r;
+}
+
+function IcLabB({ name, label }: { name: string; label: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 13, flexShrink: 1 }}>
+      <Ico name={name} />
+      <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink }}>{label}</Text>
+    </View>
+  );
+}
+
 function useRunTest() {
   const { S, t, up, go, toast } = useApp();
   const [running, setRunning] = React.useState(false);
@@ -50,6 +69,12 @@ function useRunTest() {
     const h = S.data.house;
     if (h.knownPayment == null && !((h.price || 0) > 0)) {
       toast(t('tx_need_price'), 'error');
+      return;
+    }
+    /* v27b: the test takes commitments off every month, so with none entered
+       every month looks better than it was. Ask once before running. */
+    if (commitTotal(S.data) === 0 && !S.noBills) {
+      up(s => { s.sheet = 'nobills'; });
       return;
     }
     setRunning(true);
@@ -91,6 +116,13 @@ function useRunTest() {
       }
     })();
   };
+  /* "I have no commitments" in the sheet asks this screen to run the test. */
+  React.useEffect(() => {
+    if (!S.runPending) return;
+    up(s => { s.runPending = false; });
+    run();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [S.runPending]);
   return { run, running };
 }
 
@@ -348,8 +380,10 @@ export function HousehomeScreen() {
     return { label: held > 0 ? `${label} · ${t('hc_held', { h: rm(held) })}` : label, pct };
   })();
 
+  const HUB_ID: Record<string, string> = { house: 'hh.test', homecosts: 'hh.costs', prepare_soon: 'hh.prep', learn: 'hh.learn' };
   const card = (to: Parameters<typeof go>[0], icon: string, title: string, desc: string, strip: React.ReactNode) => (
-    <Pressable key={to} onPress={() => go(to)} style={tx.hcard}>
+    <GuideTarget key={to} id={HUB_ID[to] || `hh.${to}`}>
+    <Pressable onPress={() => go(to)} style={tx.hcard}>
       <View style={tx.hblob} pointerEvents="none" />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, width: '100%' }}>
         <View style={tx.hcardIc}><Ico name={icon} size={24} color={C.brand} /></View>
@@ -361,6 +395,7 @@ export function HousehomeScreen() {
       </View>
       {strip}
     </Pressable>
+    </GuideTarget>
   );
 
   const stripLbl = (label: string) => (
@@ -369,6 +404,7 @@ export function HousehomeScreen() {
 
   return (
     <ScreenShell greet title={t('tab_test')} bg={<HouseMeadow />} right={
+      <GuideTarget id="hh.saved">
       <Pressable onPress={() => go('savedtests')} style={tx.savedchip} accessibilityLabel={t('sv_title')}>
         <SvgXml xml={`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="${C.ink}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M6.5 3.5h11V21L12 17l-5.5 4z"/></svg>`} width={13} height={13} />
         <Text style={{ fontFamily: SEMI_FONT, fontSize: 12, color: C.ink }}>{t('sv_title')}</Text>
@@ -376,6 +412,7 @@ export function HousehomeScreen() {
           <View style={tx.savedchipN}><Text style={{ fontFamily: DISP_FONT, fontSize: 10, color: '#fff' }}>{S.keptTests.length}</Text></View>
         ) : null}
       </Pressable>
+      </GuideTarget>
     }>
       {card('house', 'house', 'hh_test', 'hh_test_d', (
         <View style={{ gap: 7, width: '100%' }}>
@@ -418,6 +455,13 @@ export function HousehomeScreen() {
           {stripLbl(prepStrip.label)}
         </View>
       ))}
+      {/* v26/v27b: What buying involves, with pages read and badges earned. */}
+      {card('learn', 'book', 'hh_learn', 'hh_learn_d', <LearnStrip />)}
+      {/* v27b: the way into "I've bought a home", where the earlier test sits beside what happened */}
+      <Pressable onPress={() => go('pv_switch')} accessibilityRole="button" style={tx.hhbought}>
+        <IcLabB name="swap" label={t('pv_home_t')} />
+        <Text style={{ fontSize: 18, color: C.ink }}>{'\u203A'}</Text>
+      </Pressable>
     </ScreenShell>
   );
 }
@@ -624,9 +668,14 @@ export function ResultScreen() {
     </View>
   );
 
-  const caveat = un.length
-    ? <NoteC><BodyS>{t('rs_limit_slow', { m: un.map(monthName).join(', ') })}</BodyS></NoteC>
-    : n < 4 ? <NoteC><BodyS>{t('rs_limit_thin', { n })}</BodyS></NoteC> : null;
+  const caveat = (
+    <>
+      {commitTotal(S.data) === 0 ? <NoteC><BodyS>{t('rs_nobills')}</BodyS></NoteC> : null}
+      {un.length
+        ? <NoteC><BodyS>{t('rs_limit_slow', { m: un.map(monthName).join(', ') })}</BodyS></NoteC>
+        : n < 4 ? <NoteC><BodyS>{t('rs_limit_thin', { n })}</BodyS></NoteC> : null}
+    </>
+  );
 
   const legend = (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 8 }}>
@@ -667,6 +716,16 @@ export function ResultScreen() {
       <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: C.ink, marginTop: 4 }}>
         {cost > lo ? t('rx_try', { p: rm(lo) }) : t('rx_try_ok')}
       </Text>
+      {/* v27b: what that payment buys, at the rate, loan length and deposit entered. A rough guide. */}
+      {cost > lo && lo > extrasTotal(S.data) ? (
+        <BodyS muted style={{ marginTop: 4 }}>
+          {t('rx_try_price', {
+            price: rm(Math.round((priceForInstalment(lo - extrasTotal(S.data), S.data.house.rate, S.data.house.years)
+              + (+S.data.house.deposit || 0)) / 1000) * 1000),
+            r: S.data.house.rate, y: S.data.house.years,
+          })}
+        </BodyS>
+      ) : null}
       {cost > lo ? (
         <View style={{ marginTop: 10 }}>
           <Btn label={t('rx_try_btn', { p: rm(lo) })} onPress={() => up(x => { x.tryPay = lo; })} />
@@ -725,6 +784,8 @@ export function ResultScreen() {
   ) : null;
 
   const keepTest = () => {
+    /* v27b: a test on sample months is for looking around; it is never kept. */
+    if (S.demo) { toast(t('demo_note')); return; }
     const scenario = getHousingScenario();
     const duplicate = S.keptTests.some(test => (
       test.pay === Math.round(cost)
@@ -796,19 +857,21 @@ export function ResultScreen() {
   return (
     <ScreenShell back title={t('rs_title')}>
       {viewingBanner}
-      {verdict}
+      <GuideTarget id="rx.verdict">{verdict}</GuideTarget>
       {caveat}
+      <GuideTarget id="rx.chart">
       <View style={tx.txcard}>
         <Waterline rows={rows} cost={cost} lineLabel prov="calc" monthName={monthName} />
         {legend}
         {shockChips}
       </View>
-      {tryCard}
+      </GuideTarget>
+      {tryCard ? <GuideTarget id="rx.try">{tryCard}</GuideTarget> : null}
       {S.viewTestName ? null : (
         <View style={{ flexDirection: 'row', gap: 10 }}>
-          <View style={{ flex: 1 }}>
+          <GuideTarget id="rx.keep" style={{ flex: 1 }}>
             <Btn label={t('rx_keep')} onPress={keepTest} />
-          </View>
+          </GuideTarget>
           <Pressable onPress={() => go('house')} style={[tx.btnQuiet, { flex: 1, justifyContent: 'center' }]}>
             <P>{t('rx_change')}</P>
           </Pressable>
@@ -826,6 +889,12 @@ export function ResultScreen() {
           <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 15, color: C.ink64 }}>{t('cp_tile_d')}</Text>
         </Pressable>
       </View>
+      <Pressable onPress={() => { up(x2 => { x2.px.budget = null; }); go('priceexplorer'); }} style={[tx.hubtile, { flex: 0 }]}
+        accessibilityRole="button" testID="rx-px">
+        <View style={tx.hubIc}><Ico name="search" size={22} color="#fff" /></View>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 15, lineHeight: 20, color: C.ink }}>{t('px_tile')}</Text>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 15, color: C.ink64 }}>{t('px_tile_d')}</Text>
+      </Pressable>
       <BtnLine label={t('rx_how')} onPress={() => up(x2 => { x2.howOpen = !x2.howOpen; })} />
       {S.howOpen ? <Card><BodyS>{t('rs_how_body', { c: nf(cost) })}</BodyS></Card> : null}
     </ScreenShell>
@@ -1071,6 +1140,11 @@ export function ShockScreen() {
 }
 
 const tx = StyleSheet.create({
+  hhbought: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', minHeight: 50,
+    paddingVertical: 6, paddingHorizontal: 16, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed',
+    borderColor: 'rgba(60,81,82,0.22)',
+  },
   txintro: {
     backgroundColor: '#D3E7E5', borderRadius: 20, paddingVertical: 14, paddingHorizontal: 16,
     flexDirection: 'row', gap: 12, alignItems: 'center',

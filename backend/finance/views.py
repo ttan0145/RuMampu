@@ -3,7 +3,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from . import assistant_service, receipt_service
+from . import assistant_action_service, assistant_service, receipt_service
 from .import_service import confirm_income_import, preview_income_import, update_income_import_row
 from .models import (
     CommitmentItem,
@@ -17,6 +17,8 @@ from .models import (
 )
 from .serializers import (
     ApiErrorSerializer,
+    AssistantActionPreviewRequestSerializer,
+    AssistantActionPreviewResponseSerializer,
     AssistantChatRequestSerializer,
     AssistantChatResponseSerializer,
     CommitmentItemSerializer,
@@ -622,6 +624,35 @@ class AssistantChatView(APIView):
                 status=exc.status,
             )
         return Response(AssistantChatResponseSerializer({"reply": reply}).data)
+
+
+class AssistantActionPreviewView(APIView):
+    """Parse a submitted command into a proposal; this endpoint never writes data."""
+
+    @extend_schema(
+        operation_id="assistant_action_preview",
+        summary="Create a reviewable preview from a financial command",
+        tags=["Assistant"],
+        request=AssistantActionPreviewRequestSerializer,
+        responses={
+            200: AssistantActionPreviewResponseSerializer,
+            400: ApiErrorSerializer,
+            502: ApiErrorSerializer,
+            503: ApiErrorSerializer,
+        },
+    )
+    def post(self, request):
+        profile_for_request(request)
+        serializer = AssistantActionPreviewRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            result = assistant_action_service.preview_action(**serializer.validated_data)
+        except assistant_service.AssistantError as exc:
+            return Response(
+                {"error": {"code": exc.code, "message": exc.message}},
+                status=exc.status,
+            )
+        return Response(AssistantActionPreviewResponseSerializer(result).data)
 
 
 # EN: Create the unconfirmed, reviewable preview for US1.8.

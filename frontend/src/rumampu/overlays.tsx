@@ -21,6 +21,8 @@ import { logIt } from './log';
 import { DatePickerField } from './date-picker';
 import { isValidMoneyText } from './validation';
 import { deleteSavedHousingTest, updateSavedHousingTest } from '../../services/housingService';
+import { QuickSay, QuickSayPill } from './say';
+import { GuideTarget } from './tour';
 
 /* ---------- bottom sheets ---------- */
 
@@ -154,8 +156,10 @@ const QK_OUT_ICO = 'receipt';
 function QuickMenu() {
   const { S, t, up, go } = useApp();
   const insets = useSafeAreaInsets();
+  /* v27b3: Say it opens in place, so the menu measures the phone it sits in. */
+  const [box, setBox] = React.useState({ w: 390, h: 844 });
   if (S.sheet !== 'quick' && S.sheet !== 'quick2') return null;
-  const close = () => up(s => { s.sheet = null; });
+  const close = () => up(s => { s.sheet = null; s.qSay = false; });
 
   const spGo = (kind: 'in' | 'out') => {
     up(s => {
@@ -172,7 +176,8 @@ function QuickMenu() {
   );
 
   return (
-    <View style={[StyleSheet.absoluteFill, { zIndex: 44 }]} pointerEvents="box-none">
+    <View style={[StyleSheet.absoluteFill, { zIndex: 44 }]} pointerEvents="box-none"
+      onLayout={e => { const { width: w, height: h } = e.nativeEvent.layout; setBox({ w, h }); }}>
       <Pressable style={StyleSheet.absoluteFill} onPress={close}>
         <View style={{ flex: 1, backgroundColor: 'rgba(60,81,82,0.45)' }} />
       </Pressable>
@@ -192,7 +197,11 @@ function QuickMenu() {
             up(s => { s.sheet = null; s.exMode = 'type'; });
             go('expenses');
           }, 50),
-          item(t('qk_scan'), <Ico name="camera" size={22} />, () => up(s => { s.sheet = 'quick2'; }), 0),
+          item(t('qk_scan'), <Ico name="camera" size={22} />, () => up(s => { s.sheet = 'quick2'; s.qSay = false; }), 0),
+          /* v27b3: Say it sits nearest the + button and grows upward into the voice card. */
+          S.qSay
+            ? <QuickSay key="qsay" width={Math.min(358, box.w - 32)} maxHeight={Math.max(220, box.h - 284)} />
+            : <QuickSayPill key="qsay" />,
         ]}
       </View>
     </View>
@@ -370,7 +379,7 @@ function VillageSheet() {
 export function SheetHost() {
   const {
     S, t, up, monthName, saveIncomeEntry, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource,
-    saveWorkCostCategory, saveExpenseCategory, saveExpenseEntry, refreshSavedHousingTests, toast, enterGuestMode,
+    saveWorkCostCategory, saveExpenseCategory, saveExpenseEntry, refreshSavedHousingTests, toast, enterGuestMode, go,
   } = useApp();
   const sheet = S.sheet;
   const close = () => up(s => { s.sheet = null; });
@@ -531,6 +540,8 @@ export function SheetHost() {
             <View style={{ marginTop: 6, alignItems: 'flex-start' }}>
               <Text style={{ fontFamily: SEMI_FONT, fontSize: 11, color: C.ink64 }}>{PROV_G.user} {t('prov_user')}</Text>
             </View>
+            {/* v27b: nothing moves into the pot on its own */}
+            <BodyS muted style={{ marginTop: 6 }}>{t('ph_note')}</BodyS>
             <View style={{ marginTop: 14 }}>
               <Btn label={t('done')} onPress={close} />
             </View>
@@ -611,6 +622,22 @@ export function SheetHost() {
   }
 
   /* v22 peek sheets — Ruma leans over the top edge. */
+  /* v27b: commitments first, before a house test. */
+  if (sheet === 'nobills') {
+    return (
+      <SheetFrame pose="curious" onClose={close}>
+        <SheetH3>{t('nb_t')}</SheetH3>
+        <BodyS>{t('nb_b')}</BodyS>
+        <View style={{ marginTop: 16 }}>
+          <Btn label={t('nb_add')} onPress={() => { up(s => { s.sheet = null; }); go('commit'); }} />
+        </View>
+        <View style={{ alignItems: 'center', marginTop: 4 }}>
+          <BtnLine label={t('nb_none')} style={{ fontSize: 14 }}
+            onPress={() => up(s => { s.sheet = null; s.noBills = true; s.runPending = true; })} />
+        </View>
+      </SheetFrame>
+    );
+  }
   if (sheet === 'plinfo') return <PeekSheet pose="steady" title={t('pl_title')} body={t('pl_note')} onClose={close} doneLabel={t('done')} />;
   if (sheet === 'potadd') return <PeekSheet pose="counting" title={t('sp_add_t')} body={t('sp_add_b')} onClose={close} doneLabel={t('done')} />;
   if (sheet === 'mailhow') return <PeekSheet pose="listening" title={t('mh_title')} body={t('mh_body')} onClose={close} doneLabel={t('done')} />;
@@ -724,7 +751,7 @@ export function SheetHost() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink64 }}>RM</Text>
             <View style={{ flex: 1 }}>
-              <SheetInput keyboardType="number-pad" inputMode="numeric" value={limitA} onChangeText={setLimitA} placeholder="1500" />
+              <SheetInput keyboardType="number-pad" inputMode="numeric" value={limitA} onChangeText={setLimitA} placeholder={t('eg_ph', { v: 1500 })} />
             </View>
           </View>
           <BodyS muted>{t('ex_limit_hint')}</BodyS>
@@ -1219,12 +1246,12 @@ export function TabBar() {
   const tabBtn = (id: Tab, k: string) => {
     const on = active === id;
     return (
+      <GuideTarget key={id} id={`tab.${id}`} style={{ flex: 1 }}>
       <Pressable
-        key={id}
         onPress={() => goTab(id)}
         accessibilityRole="tab"
         accessibilityState={{ selected: on }}
-        style={{ flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 4 }}
+        style={{ minHeight: 56, alignItems: 'center', justifyContent: 'center', gap: 4 }}
       >
         <SvgXml xml={tabIcoXml(id, on)} width={24} height={24} />
         <Text style={{
@@ -1232,6 +1259,7 @@ export function TabBar() {
           color: on ? C.ink : C.ink64,
         }}>{t(k)}</Text>
       </Pressable>
+      </GuideTarget>
     );
   };
 
@@ -1246,13 +1274,14 @@ export function TabBar() {
       {tabBtn('home', 'tab_home')}
       {tabBtn('money', 'tab_money')}
       <View style={{ flex: 1, alignItems: 'center', alignSelf: 'stretch', justifyContent: 'flex-end' }}>
+        <GuideTarget id="tab.fab" style={{ marginTop: -30, marginBottom: 8, borderRadius: 30 }}>
         <Pressable
-          onPress={() => up(s => { s.sheet = s.sheet === 'quick2' ? 'quick' : (s.sheet === 'quick' ? null : 'quick'); })}
+          onPress={() => up(s => { s.sheet = s.sheet === 'quick2' ? 'quick' : (s.sheet === 'quick' ? null : 'quick'); s.qSay = false; })}
           accessibilityLabel={t('qk_title')}
           style={({ pressed }) => [{
             width: 60, height: 60, borderRadius: 30,
             backgroundColor: quickOpen || quickBack ? C.ink : C.brand,
-            marginTop: -30, marginBottom: 8, borderWidth: 4, borderColor: C.paper,
+            borderWidth: 4, borderColor: C.paper,
             alignItems: 'center', justifyContent: 'center',
             shadowColor: quickOpen || quickBack ? 'rgba(31,44,45,1)' : 'rgba(74,145,149,1)',
             shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 8 },
@@ -1265,6 +1294,7 @@ export function TabBar() {
             style={quickOpen ? { transform: [{ rotate: '45deg' }] } : undefined}
           />
         </Pressable>
+        </GuideTarget>
       </View>
       {tabBtn('test', 'tab_test')}
       {tabBtn('profile', 'tab_profile')}

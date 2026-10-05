@@ -163,16 +163,19 @@ test.describe('Epic 6 — AI Insights & Alerts', { tag: '@epic6' }, () => {
       await expect(page.getByText('AI SUGGESTION', { exact: true })).toHaveCount(0);
     });
 
+    await captureEvidence(page, 'epic-6', 'ac6.1.9-10__partial-receipt.png');
+
     await page.getByText('Retake', { exact: true }).click();
     await answerScan(page, { is_receipt: false, merchant: null, date: null, total: null, category_slug: null });
     await choosePhoto(page);
     await expect(page.getByText('That photo doesn’t look like a receipt. Try a clearer photo of the receipt itself.', { exact: true })).toBeVisible();
+    await captureEvidence(page, 'epic-6', 'ac6.1.9__not-a-receipt.png');
 
     await answerScan(page, { status: 502 });
     await choosePhoto(page);
     // Shown as a note under the scan area and as a toast, so two matches.
     await expect(page.getByText('The receipt could not be read right now. Try again, or add the expense manually.', { exact: true }).first()).toBeVisible();
-    await captureEvidence(page, 'epic-6', 'ac6.1.9-10__partial-receipt.png');
+    await captureEvidence(page, 'epic-6', 'ac6.1.9__scan-failed.png');
   });
 
   test('US6.2 — Ask RuMampu about my financial situation', { tag: '@us6.2' }, async ({ page }) => {
@@ -208,8 +211,11 @@ test.describe('Epic 6 — AI Insights & Alerts', { tag: '@epic6' }, () => {
     });
 
     await ac('AC6.2.15', 'Display the AI assistant as a floating bubble', async () => {
-      // One bubble, not a header control: it exists exactly once on the page.
+      // v27b2: Ruma peeks in from the right edge, one control on every screen, not a header button.
       await expect(page.getByLabel('Ask Ruma')).toHaveCount(1);
+      const box = await page.getByLabel('Ask Ruma').boundingBox();
+      const vw = page.viewportSize()!.width;
+      expect(box && Math.round(box.x + box.width)).toBeGreaterThanOrEqual(vw - 2);
     });
 
     await ac('AC6.2.11', 'Open the assistant from any logged-in page', async () => {
@@ -245,6 +251,7 @@ test.describe('Epic 6 — AI Insights & Alerts', { tag: '@epic6' }, () => {
       const messages = requests[0].messages as Array<{ role: string; content: string }>;
       expect(messages[messages.length - 1]).toMatchObject({ role: 'user', content: 'How much did I earn last month?' });
     });
+    await captureEvidence(page, 'epic-6', 'ac6.2.2-3__record-answer.png', { resetScroll: false });
 
     await ac('AC6.2.14', 'Guide users to relevant RuMampu features', async () => {
       await page.getByPlaceholder('Type a question').fill('Where do I add income?');
@@ -266,6 +273,7 @@ test.describe('Epic 6 — AI Insights & Alerts', { tag: '@epic6' }, () => {
       await page.getByLabel('Send').click();
       await expect(page.getByText(/Only 1 month is recorded/)).toBeVisible();
     });
+    await captureEvidence(page, 'epic-6', 'ac6.2.8__limited-information.png', { resetScroll: false });
 
     // Rate limit and errors are shown as app copy, never as a blank reply.
     await page.unroute(ASSISTANT_CHAT);
@@ -273,11 +281,12 @@ test.describe('Epic 6 — AI Insights & Alerts', { tag: '@epic6' }, () => {
     await page.getByPlaceholder('Type a question').fill('One more');
     await page.getByLabel('Send').click();
     await expect(page.getByText('The assistant has reached today’s message limit. Try again tomorrow.', { exact: true })).toBeVisible();
+    await captureEvidence(page, 'epic-6', 'us6.2__rate-limit.png', { resetScroll: false });
 
     await captureEvidence(page, 'epic-6', 'ac6.2.1-15__ask-ruma.png', { resetScroll: false });
 
-    // Closing is the EXIT sign only; the bubble comes back.
-    await page.getByLabel('Done').click();
+    // v27b2: the chat closes with its ✕; Ruma stays on the edge.
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
     await expect(page.getByPlaceholder('Type a question')).toHaveCount(0);
     await expect(page.getByLabel('Ask Ruma')).toBeVisible();
 

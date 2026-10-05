@@ -1,0 +1,183 @@
+name,network,opened,lat,lon
+KB07 UKM,KTM Komuter,2000-01-01,2.93958,101.78779
+Tasek Gelugor,KTM Komuter';KTM ETS,2000-01-01,5.48213,100.49791
+KJ10 KLCC,Kelana Jaya Line,2000-01-01,3.15925,101.71337
+AG7 SP7 KJ13 Masjid Jamek,Rapid KL,2000-01-01,3.14941,101.69646
+KLIA T1,KLIA Transit;KLIA Ekspres,2000-01-01,2.75473,101.70464
+Bukit Ketri,KTM Komuter,2000-01-01,6.52356,100.25686
+SP12 Cheras,Sri Petaling Line,2000-01-01,3.11272,101.71432
+AG10 SP10 Pudu,Ampang Line;Sri Petaling Line,2000-01-01,3.13493,101.71203
+AG13 Maluri,Ampang Line,2000-01-01,3.1233,101.72693
+AG12 Miharja,Ampang Line,2000-01-01,3.12096,101.71787
+AG9 SP9 Hang Tuah,Ampang Line;Sri Petaling Line,2000-01-01,3.1401,101.70623
+AG3 SP3 Titiwangsa,Ampang Line;Sri Petaling Line,2000-01-01,3.17355,101.69527
+SP14 Bandar Tun Razak,Sri Petaling Line,2000-01-01,3.08966,101.71245
+MR1 KL Sentral (Monorail),KL Monorail,2000-01-01,3.13292,101.68767
+AG11 SP11 Chan Sow Lin,Ampang Line;Sri Petaling Line,2000-01-01,3.12781,101.71562
+KJ18 Kerinchi,Kelana Jaya Line,2000-01-01,3.1155,101.66851
+AG5 SP5 Sultan Ismail,Ampang Line;Sri Petaling Line,2000-01-01,3.16126,101.69415
+AG8 SP8 Plaza Rakyat,Ampang Line;Sri Petaling Line,2000-01-01,3.14432,101.70207
+MR11 Titiwangsa,KL Monorail,2000-01-01,3.17323,101.69599
+MR2 Tun Sambanthan,KL Monorail,2000-01-01,3.13146,101.69091
+AG1 SP1 Sentul Timur,Ampang Line;Sri Petaling Line,2000-01-01,3.18592,101.69531
+SP18 Sri Petaling,Sri Petaling Line,2000-01-01,3.06143,101.68707
+KJ4 Sri Rampai,Kelana Jaya Line,2000-01-01,3.19897,101.73746
+MR3 Maharajalela,KL Monorail,2000-01-01,3.13888,101.6992
+KJ8 Damai,Kelana Jaya Line,2000-01-01,3.16451,101.72434
+AG4 SP4 PWTC,Ampang Line;Sri Petaling Line,2000-01-01,3.16658,101.69358
+KJ16 Bangsar,Kelana Jaya Line,2000-01-01,3.12738,101.67895
+KJ19 Universiti,Rapid KL,2000-01-01,3.11456,101.66174
+KJ17 Abdullah Hukum,Kelana Jaya Line,2000-01-01,3.11876,101.67293
+SP17 Bukit Jalil,Ampang Line (Sri Petaling Line),2000-01-01,3.05815,101.6922
+MR8 Bukit Nanas,Rapid KL,2000-01-01,3.15611,101.70488
+KB04 Bandar Tasik Selatan,KTM Komuter,2000-01-01,3.07627,101.71111
+SP13 Salak Selatan,Sri Petaling Line,2000-01-01,3.10212,101.70627
+MR10 Chow Kit,KL Monorail,2000-01-01,3.16737,101.69838
+AG14 Pandan Jaya,Ampang Line,2000-01-01,3.1302,101.73897
+MR6 Bukit Bintang,KL Monorail,2000-01-01,3.14606,101.71151
+MR7 Raja Chulan,KL Monorail,2000-01-01,3.1509,101.71041
+MR5 Imbi,KL Monorail,2000-01-01,3.14278,101.70937
+KJ3 Wangsa Maju,Kelana Jaya Line,2000-01-01,3.20567,101.73199
+MR9 Medan Tuanku,KL Monorail,2000-01-01,3.15926,101.69889
+SP15 Bandar Tasik Selatan,Sri Petaling Line,2000-01-01,3.07609,101.71138
+AG6 SP6 Bandaraya,Ampang Line;Sri Petaling Line,2000-01-01,3.15559,101.69448
+SP16 Sungai Besi,Sri Petaling Line,2000-01-01,3.06393,101.70807
+KG16 Pasar Seni,Kajang Line,2000-01-01,3.14237,101.69603
+KJ21 Asia Jaya,Kelana Jaya Line,2000-01-01,3.10437,101.63788
+KJ23 Taman Bahagia,Kelana Jaya Line,2000-01-01,3.11068,101.61276
+KJ24 Kelana Jaya,Kelana Jaya Line,2000-01-01,3.11246,101.60459
+ERL Bandar Tasik Selatan,KLIA Transit,2000-01-01,3.07644,101.71036
+KJ20 Taman Jaya,Kelana Jaya Line,2000-01-01,3.10401,101.6454
+KJ2 Taman Melati,Kelana Jaya Line,2000-01-01,3.21964,101.72177
+KJ1 Gombak,Kelana Jaya Line,2000-01-01,3.23115,101.72441
+KJ6 Jelatek,Kelana Jaya Line,2000-01-01,3.16724,101.73531
+KJ5 Setiawangsa,Kelana Jaya Line,2000-01-01,3.17589,101.73593
+KJ14 Pasar Seni,Kelana Jaya Line,2000-01-01,3.1424,101.69531
+KJ7 Dato' Keramat,Kelana Jaya Line,2000-01-01,3.16508,101.73186
+KJ22 Taman Paramount,Kelana Jaya Line,2000-01-01,3.10476,101.62309
+KB01 Mid Valley,KTM Komuter,2000-01-01,3.11878,101.67881
+KD13 Bukit Badak,Port Klang Line,2000-01-01,3.03627,101.47032
+AG15 Pandan Indah,Ampang Line,2000-01-01,3.13475,101.74666
+ERL Salak Tinggi,KLIA Transit,2000-01-01,2.82539,101.71308
+KD19 Pelabuhan Klang,KTM Komuter,2000-01-01,2.99963,101.39137
+AG2 SP2 Sentul,Ampang Line;Sri Petaling Line,2000-01-01,3.17859,101.69549
+KD18 Jalan Kastam,KTM Komuter,2000-01-01,3.01303,101.40261
+KD17 Kampung Raja Uda,KTM Komuter,2000-01-01,3.02015,101.41024
+KD15 Teluk Pulai,KTM Komuter,2000-01-01,3.04088,101.43213
+KD10 Batu Tiga,Port Klang Line,2000-01-01,3.07586,101.55976
+KD03 Pantai Dalam,KTM Komuter,2000-01-01,3.09567,101.67004
+KC01 Sentul,KTM Komuter,2000-01-01,3.18237,101.68881
+KC02 Batu Kentonmen,KTM Komuter,2000-01-01,3.19836,101.68107
+KC03 Kampung Batu,KTM Komuter,2000-01-01,3.2048,101.67565
+KC04 Taman Wahyu,KTM Komuter,2000-01-01,3.21463,101.67221
+KB09 Batang Benar,KTM Komuter,2000-01-01,2.83049,101.827
+Nibong Tebal,KTM Komuter;KTM ETS,2000-01-01,5.16944,100.47981
+Simpang Ampat,KTM Komuter;KTM ETS,2000-01-01,5.28613,100.48093
+Bukit Mertajam,KTM Komuter;KTM ETS,2000-01-01,5.36639,100.44786
+Bukit Tengah,KTM Komuter,2000-01-01,5.3646,100.42166
+AG16 Cempaka,Ampang Line,2000-01-01,3.13847,101.75302
+AG17 Cahaya,Ampang Line,2000-01-01,3.14061,101.75655
+AG18 Ampang,Ampang Line,2000-01-01,3.15039,101.76024
+SP22 Kinrara BK 5,Sri Petaling Line,2000-01-01,3.05045,101.64425
+SP20 Muhibbah,Sri Petaling Line,2000-01-01,3.06193,101.66257
+SP19 Awan Besar,Sri Petaling Line,2000-01-01,3.06209,101.67059
+SP31 KJ37 Putra Heights,Sri Petaling Line;Kelana Jaya Line,2000-01-01,2.99609,101.57547
+SP21 Alam Sutera,Sri Petaling Line,2000-01-01,3.05467,101.65652
+SP24 IOI Puchong Jaya,Sri Petaling Line,2000-01-01,3.04815,101.6211
+SP25 Pusat Bandar Puchong,Ampang Line,2000-01-01,3.03326,101.61608
+SP26 Taman Perindustrian Puchong,Sri Petaling Line,2000-01-01,3.02273,101.61354
+SP27 Bandar Puteri,Sri Petaling Line,2000-01-01,3.01697,101.61295
+SP29 Puchong Prima,Sri Petaling Line,2000-01-01,2.99991,101.59676
+KJ35 Alam Megah,Kelana Jaya Line,2000-01-01,3.02317,101.57215
+KJ34 USJ21,Kelana Jaya Line,2000-01-01,3.0298,101.58185
+KJ33 Wawasan,Kelana Jaya Line,2000-01-01,3.0351,101.58817
+KJ32 Taipan,Kelana Jaya Line,2000-01-01,3.04794,101.59031
+KJ29 SS15,Kelana Jaya Line,2000-01-01,3.07575,101.58621
+SP28 Puchong Perdana,Sri Petaling Line,2000-01-01,3.00785,101.60525
+KJ36 Subang Alam,Kelana Jaya Line,2000-01-01,3.00974,101.57212
+KJ31 USJ7,Kelana Jaya Line,2000-01-01,3.05447,101.59204
+KJ30 SS18,Kelana Jaya Line,2000-01-01,3.06701,101.58614
+KJ28 Subang Jaya,Kelana Jaya Line,2000-01-01,3.08491,101.58727
+KJ26 Ara Damansara,Kelana Jaya Line,2000-01-01,3.10842,101.58652
+KJ27 Glenmarie,Rapid KL,2000-01-01,3.09583,101.59022
+KJ25 Lembah Subang,Kelana Jaya Line,2000-01-01,3.11211,101.59122
+Taiping,KTM Komuter;KTM ETS,2000-01-01,4.85285,100.7322
+KA10 Rawang,KTM Komuter,2000-01-01,3.3189,101.57501
+PY04 Sungai Buloh,Putrajaya Line,2022-06-16,3.20628,101.58176
+PY03 Kampung Selamat,Putrajaya Line,2022-06-16,3.19725,101.57841
+KG07 Surian,Kajang Line,2000-01-01,3.14959,101.59387
+KG08 Mutiara Damansara,Kajang Line,2000-01-01,3.15523,101.60877
+KG09 Bandar Utama,Kajang Line,2000-01-01,3.14667,101.61875
+KG10 Taman Tun Dr Ismail,Sungai Buloh-Kajang Line,2000-01-01,3.13602,101.63088
+KG12 Phileo Damansara,Kajang Line,2000-01-01,3.12925,101.64292
+KG13 Pusat Bandar Damansara,Kajang Line,2000-01-01,3.14335,101.66241
+KG14 Semantan,Kajang Line,2000-01-01,3.15102,101.66551
+KG04 PY01 Kwasa Damansara,Kajang Line;Putrajaya Line,2016-12-16,3.17634,101.57235
+KG05 Kwasa Sentral,Kajang Line,2000-01-01,3.16971,101.56477
+KG06 Kota Damansara,Sungai Buloh-Kajang Line,2000-01-01,3.15019,101.57884
+KG17 Merdeka,Kajang Line,2000-01-01,3.1429,101.70205
+KA13 Rasa,KTM Komuter,2000-01-01,3.50025,101.63408
+KG23 Taman Pertama,Kajang Line,2000-01-01,3.1125,101.72934
+KG24 Taman Midah,Kajang Line,2000-01-01,3.10449,101.73221
+KG25 Taman Mutiara,Kajang Line,2000-01-01,3.09115,101.74039
+KG26 Taman Connaught,Kajang Line,2000-01-01,3.07922,101.74506
+KG27 Taman Suntex,Kajang Line,2000-01-01,3.07168,101.76346
+KG28 Sri Raya,Kajang Line,2000-01-01,3.06212,101.77302
+KG29 Bandar Tun Hussein Onn,Kajang Line,2000-01-01,3.04843,101.77506
+KG30 Batu 11 Cheras,Kajang Line,2000-01-01,3.04139,101.77335
+KG31 Bukit Dukung,Kajang Line,2000-01-01,3.02653,101.7711
+KG33 Sungai Jernih,Kajang Line,2000-01-01,3.00092,101.78409
+KG34 Stadium Kajang,Kajang Line,2000-01-01,2.99415,101.78619
+KG35 Kajang,Kajang Line,2000-01-01,2.98318,101.79035
+KB13 Seremban,KTM Komuter,2000-01-01,2.71873,101.9407
+KD01 Abdullah Hukum,Port Klang Line,2000-01-01,3.1189,101.67329
+KG18A Bukit Bintang,Kajang Line,2000-01-01,3.14643,101.71089
+KG22 Maluri,Kajang Line,2000-01-01,3.12439,101.72738
+KG15 Muzium Negara,Kajang Line,2000-01-01,3.13721,101.68706
+KL Sentral,KTM Intercity;KLIA Transit;KLIA Ekspres;Kelana Jaya Line,2000-01-01,3.13431,101.68643
+Gurun,KTM ETS;KTM Komuter,2000-01-01,5.8245,100.47771
+KG21 Cochrane,Kajang Line,2000-01-01,3.13249,101.72302
+KG20 PY23 Tun Razak Exchange,Kajang Line;Putrajaya Line,2000-01-01,3.14272,101.71999
+PY14 Kentonmen,Putrajaya Line,2023-03-16,3.19559,101.67957
+PY13 Kampung Batu,Putrajaya Line,2022-06-16,3.20599,101.67508
+PY12 Sri Delima,Putrajaya Line,2022-06-16,3.20721,101.66556
+PY11 Jinjang,Putrajaya Line,2022-06-16,3.20952,101.65577
+PY10 Kepong Baru,Putrajaya Line,2022-06-16,3.21162,101.64823
+PY09 Metro Prima,Putrajaya Line,2022-06-16,3.21447,101.64021
+PY08 Sri Damansara Timur,Putrajaya Line,2022-06-16,3.2078,101.62866
+PY07 Sri Damansara Sentral,Putrajaya Line,2022-06-16,3.19849,101.62108
+PY06 Sri Damansara Barat,Putrajaya Line,2022-06-16,3.1982,101.60819
+PY05 Damansara Damai,Putrajaya Line,2022-06-16,3.19979,101.59262
+PY16 Sentul Barat,Putrajaya Line,2023-03-16,3.17889,101.68501
+PY15 Jalan Ipoh,Putrajaya Line,2023-03-16,3.18953,101.68106
+PY38 16 Sierra,Putrajaya Line,2023-03-16,2.96544,101.6548
+PY39 Cyberjaya Utara,Putrajaya Line,2023-03-16,2.94939,101.6574
+KB06A Kajang 2,Seremban Line,2023-03-13,2.96264,101.79209
+PY40 Cyberjaya City Centre,Putrajaya Line,2023-03-16,2.93901,101.66561
+PY41 Putrajaya Sentral,Putrajaya Line,2023-03-16,2.93151,101.67149
+PY29 Sungai Besi,Putrajaya Line,2023-03-16,3.06408,101.70842
+PY34 UPM,Putrajaya Line,2023-03-16,3.00852,101.70553
+Alor Setar,KTM Komuter Utara;KTM ETS,2000-01-01,6.11321,100.36958
+PY28 Taman Naga Emas,Putrajaya Line,2023-03-16,3.0777,101.6995
+PY32 Serdang Raya Selatan,Putrajaya Line,2023-03-16,3.02862,101.7074
+PY31 Serdang Raya Utara,Putrajaya Line,2023-03-16,3.0419,101.70489
+PY33 Serdang Jaya,Putrajaya Line,2023-03-16,3.02165,101.7089
+PY27 Kuchai,Putrajaya Line,2023-03-16,3.08938,101.69402
+KJ12 Dang Wangi,Kelana Jaya Line,2000-01-01,3.15662,101.70209
+KLIA T2,KLIA Transit;KLIA Ekspres,2000-01-01,2.74445,101.6852
+PY36 Taman Equine,Putrajaya Line,2023-03-16,2.98947,101.67267
+PY37 Putra Permai,Putrajaya Line,2023-03-16,2.98324,101.66074
+KA08 Sungai Buloh,KTM ETS,2000-01-01,3.20618,101.58011
+KC05 Batu Caves,KTM Komuter,2000-01-01,3.23797,101.68145
+KD14 Klang,KTM Komuter,2000-01-01,3.04311,101.44959
+PY20 Ampang Park,Sungai Buloh-Serdang-Putrajaya Line,2023-03-16,3.16186,101.71792
+PY21 Persiaran KLCC,Putrajaya Line,2023-03-16,3.15691,101.718
+PY17 Titiwangsa,Putrajaya Line,2023-03-16,3.17433,101.69638
+PY18 Hospital Kuala Lumpur,Putrajaya Line,2023-03-16,3.1738,101.70146
+PY19 Raja Uda,Putrajaya Line,2023-03-16,3.16782,101.71099
+PY22 Conlay,Putrajaya Line,2023-03-16,3.15092,101.71832
+PY24 Chan Sow Lin,Putrajaya Line,2023-03-16,3.12854,101.71673
+ERL Putrajaya/Cyberjaya,KLIA Transit,2000-01-01,2.93179,101.67099
+KB06 Kajang,Seremban Line,2000-01-01,2.98292,101.79056
+KJ9 Ampang Park,Kelana Jaya Line,2000-01-01,3.16013,101.71886
+KB12 Tiroi,KTM Komuter,2000-01-01,2.74121,101.87179

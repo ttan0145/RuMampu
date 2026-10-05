@@ -329,3 +329,77 @@ def house_costs(request):
         "affordable_threshold": AFFORDABLE_THRESHOLD,
         "states": states,
     })
+
+
+# ---- Price Explorer (the offline price model's results) ----------------------
+from django.utils.decorators import method_decorator
+from drf_spectacular.utils import OpenApiParameter
+from rest_framework import serializers
+
+from . import price_explorer as px
+
+
+class _PxBase(serializers.Serializer):
+    property_type = serializers.ChoiceField(choices=sorted(px.TYPES))
+
+
+class PxAreasQuery(_PxBase):
+    state = serializers.ChoiceField(choices=sorted(px.STATE_NAME))
+    budget = serializers.IntegerField(min_value=50_000, max_value=10_000_000)
+
+
+class PxHomeQuery(_PxBase):
+    district = serializers.CharField(max_length=60)
+    tenure = serializers.ChoiceField(choices=['F', 'L'], default='F')
+    size = serializers.ChoiceField(choices=['small', 'typical', 'large'], default='typical')
+
+
+class PxTrendQuery(_PxBase):
+    state = serializers.ChoiceField(choices=sorted(px.STATE_NAME))
+
+
+def _version_or_503():
+    v = px.active_version()
+    return v, (None if v else Response({"detail": "price model not loaded"}, status=503))
+
+
+class PriceExplorerAreasView(APIView):
+    @extend_schema(parameters=[PxAreasQuery], responses={200: dict, 503: dict})
+    def get(self, request):
+        q = PxAreasQuery(data=request.query_params)
+        q.is_valid(raise_exception=True)
+        v, err = _version_or_503()
+        if err:
+            return err
+        budget = int(round(q.validated_data['budget'], -4))            # 10k steps keep caching effective
+        data = px.areas(v, q.validated_data['state'], q.validated_data['property_type'], budget)
+        return Response({"model_version": v.version, "budget": budget, **data})
+
+
+@method_decorator(cache_page(60 * 60 * 6), name='get')            # model data changes quarterly
+class PriceExplorerHomeView(APIView):
+    @extend_schema(parameters=[PxHomeQuery], responses={200: dict, 404: dict, 503: dict})
+    def get(self, request):
+        q = PxHomeQuery(data=request.query_params)
+        q.is_valid(raise_exception=True)
+        v, err = _version_or_503()
+        if err:
+            return err
+        d = q.validated_data
+        data = px.home(v, d['district'], d['property_type'], d['tenure'], d['size'])
+        if data is None:
+            return Response({"detail": "not enough sales for this district and type"}, status=404)
+        meta = {k: v.meta.get(k) for k in ('price_level_quarter', 'test_window', 'test_sales', 'overall', 'notes')}
+        return Response({"model_version": v.version, "meta": meta, **data})
+
+
+@method_decorator(cache_page(60 * 60 * 6), name='get')
+class PriceExplorerTrendView(APIView):
+    @extend_schema(parameters=[PxTrendQuery], responses={200: dict, 503: dict})
+    def get(self, request):
+        q = PxTrendQuery(data=request.query_params)
+        q.is_valid(raise_exception=True)
+        v, err = _version_or_503()
+        if err:
+            return err
+        return Response({"model_version": v.version, **px.trend(v, q.validated_data['state'], q.validated_data['property_type'])})
