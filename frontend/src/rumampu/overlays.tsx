@@ -8,6 +8,7 @@ import { TAB_OF, Tab, useApp } from './state';
 import { STRINGS, Lang } from './strings';
 import { actualMonths, commitFor, commitSwap, monthKeysOf, monthsAgg, pickMonth, rm } from './calc';
 import { PLAN_HORIZONS, monthlySaveCapacity, planHorizonEffective, planResolveTarget } from './plan';
+import { potHeld, potParts } from './pot';
 import { getHousingTestResult } from '../../services/housingSession';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from './theme';
 import { Btn, BtnLine, BodyS, EditList, NumInput, PROV_G } from './ui';
@@ -504,11 +505,12 @@ export function SheetHost() {
     );
   }
 
-  /* v24 pothow: what the pot is actually made of (shield semantics: the plan's
-     declared savings plus what finished months moved in). */
+  /* v24 pothow: what the pot is actually made of: what I already had (the cash
+     reported on Upfront cash), what the plan has added, and what finished months
+     moved in. The three sum to the pot (AC10.4.3, AC5.2.17). */
   if (sheet === 'pothow') {
-    const planPart = S.village?.savedRm ?? 0;
-    const moved = S.potMoved;
+    const { had, plan: planPart, moved, total: potTotal } = potParts(S);
+    const held = potHeld(S);
     const kvRow = (lbl: string, v: number, bold?: boolean) => (
       <View key={lbl} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 32 }}>
         <Text style={{ fontFamily: bold ? DISP_FONT : BODY_FONT, fontSize: 13.5, color: C.ink }}>{lbl}</Text>
@@ -518,10 +520,14 @@ export function SheetHost() {
     return (
       <SheetFrame pose="counting" onClose={close}>
             <SheetH3>{t('ph_title')}</SheetH3>
+            {kvRow(t('ph_had'), had)}
             {kvRow(t('ph_plan'), planPart)}
             {kvRow(t('ph_moved'), moved)}
             <View style={{ height: 1, backgroundColor: C.ink14, marginVertical: 6 }} />
-            {kvRow(t('ph_total'), planPart + moved, true)}
+            {kvRow(t('ph_total'), potTotal, true)}
+            {/* Part of the pot already promised to the cash buffer, so not counted
+                again towards the upfront cash. */}
+            {held > 0 ? kvRow(t('ph_held'), held) : null}
             <View style={{ marginTop: 6, alignItems: 'flex-start' }}>
               <Text style={{ fontFamily: SEMI_FONT, fontSize: 11, color: C.ink64 }}>{PROV_G.user} {t('prov_user')}</Text>
             </View>

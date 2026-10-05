@@ -1,9 +1,10 @@
 import type { AppState, BufferState, KeptTest, PlanState, VillageState } from './state';
 import { getHousingScenario, getHousingTestResult, hydrateHousingSession } from '../../services/housingSession';
+import { isValidIsoDate } from './validation';
 
 const VERSION = 1;
 const PERSISTED = ['plan', 'buffer', 'village', 'planHorizon',
-  'potMovedMonths', 'docsChecked', 'keptTests'] as const;
+  'potMovedMonths', 'potMoved', 'docsChecked', 'keptTests'] as const;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -42,6 +43,9 @@ function validPlan(value: unknown): value is PlanState {
   if (value.skipped !== undefined
     && (!Array.isArray(value.skipped) || value.skipped.length !== n
       || !value.skipped.every(item => typeof item === 'boolean'))) return false;
+  if (value.buffered !== undefined
+    && (!Array.isArray(value.buffered) || value.buffered.length !== n
+      || !value.buffered.every(item => item === null || typeof item === 'boolean'))) return false;
   return value.paused === undefined || typeof value.paused === 'boolean';
 }
 
@@ -80,7 +84,11 @@ function validKeptTests(value: unknown): value is KeptTest[] {
 export function snapshot(s: AppState): string {
   const payload: JsonRecord = { version: VERSION };
   for (const key of PERSISTED) payload[key] = s[key];
-  payload.data = { cashOnHand: s.data.cashOnHand, expenseLimits: s.data.expenseLimits };
+  payload.data = {
+    cashOnHand: s.data.cashOnHand,
+    cashOnHandDate: s.data.cashOnHandDate,
+    expenseLimits: s.data.expenseLimits,
+  };
   payload.housingTestResult = getHousingTestResult();
   payload.housingScenario = getHousingScenario();
   return JSON.stringify(payload);
@@ -102,11 +110,24 @@ export function hydrate(s: AppState, raw: string | null): void {
       s.planHorizon = payload.planHorizon as number | null;
     }
     if (validStringArray(payload.potMovedMonths)) s.potMovedMonths = payload.potMovedMonths;
+    if (finite(payload.potMoved) && payload.potMoved >= 0) s.potMoved = payload.potMoved;
+    /* A month is only ever moved in with money left over, so months marked as moved
+       with nothing in potMoved come from snapshots saved before the amount was kept
+       (AC10.13.1). Offer those months again instead of hiding money that is no
+       longer counted anywhere. */
+    if (s.potMovedMonths.length && !(s.potMoved > 0)) s.potMovedMonths = [];
     if (validStringArray(payload.docsChecked)) s.docsChecked = payload.docsChecked;
     if (validKeptTests(payload.keptTests)) s.keptTests = payload.keptTests;
     if (record(payload.data)) {
       if (finite(payload.data.cashOnHand) && payload.data.cashOnHand >= 0) {
         s.data.cashOnHand = payload.data.cashOnHand;
+      }
+      /* The day the cash was reported (AC5.2.10). Absent in older snapshots, so only an
+         explicit null or a real YYYY-MM-DD day changes it. */
+      if (payload.data.cashOnHandDate === null) {
+        s.data.cashOnHandDate = null;
+      } else if (typeof payload.data.cashOnHandDate === 'string' && isValidIsoDate(payload.data.cashOnHandDate)) {
+        s.data.cashOnHandDate = payload.data.cashOnHandDate;
       }
       if (validExpenseLimits(payload.data.expenseLimits)) {
         s.data.expenseLimits = payload.data.expenseLimits;
@@ -120,24 +141,28 @@ export function hydrate(s: AppState, raw: string | null): void {
 /** Shape the same allow-listed state for the account PATCH endpoint. */
 export function accountSnapshot(s: AppState): {
   cash_on_hand: number;
+  cash_on_hand_date: string | null;
   expense_limits: Record<string, number>;
   saving_plan: Record<string, unknown>;
   buffer_state: Record<string, unknown>;
   village_state: Record<string, unknown>;
   plan_horizon: number | null;
   pot_moved_months: string[];
+  pot_moved: number;
   docs_checked: string[];
   kept_tests: unknown[];
 } {
   const local = JSON.parse(snapshot(s)) as JsonRecord;
   return {
     cash_on_hand: s.data.cashOnHand,
+    cash_on_hand_date: s.data.cashOnHandDate,
     expense_limits: s.data.expenseLimits,
     saving_plan: (local.plan as Record<string, unknown> | null) ?? {},
     buffer_state: (local.buffer as Record<string, unknown> | null) ?? {},
     village_state: (local.village as Record<string, unknown> | null) ?? {},
     plan_horizon: (local.planHorizon as number | null) ?? null,
     pot_moved_months: (local.potMovedMonths as string[]) ?? [],
+    pot_moved: (local.potMoved as number) ?? 0,
     docs_checked: (local.docsChecked as string[]) ?? [],
     kept_tests: (local.keptTests as unknown[]) ?? [],
   };
@@ -155,9 +180,10 @@ export function hydrateAccountState(s: AppState, remote: Record<string, unknown>
     village: remote.village_state,
     planHorizon: remote.plan_horizon,
     potMovedMonths: remote.pot_moved_months,
+    potMoved: typeof remote.pot_moved === 'number' ? remote.pot_moved : Number(remote.pot_moved),
     docsChecked: remote.docs_checked,
     keptTests: remote.kept_tests,
-    data: { cashOnHand: cash },
+    data: { cashOnHand: cash, cashOnHandDate: remote.cash_on_hand_date ?? null },
   };
   hydrate(s, JSON.stringify(payload));
   if (validExpenseLimits(remote.expense_limits)) {

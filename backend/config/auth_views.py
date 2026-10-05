@@ -3,6 +3,7 @@ import calendar
 import json
 import math
 import re
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
@@ -57,6 +58,7 @@ def _auth_payload(user, token=None):
     payload = {
         "user": _user_payload(user),
         "cash_on_hand": float(state.cash_on_hand),
+        "cash_on_hand_date": state.cash_on_hand_date.isoformat() if state.cash_on_hand_date else None,
         "upfront_costs": state.upfront_costs,
         "docs_checked": state.docs_checked,
         "bought_home": state.bought_home,
@@ -67,6 +69,7 @@ def _auth_payload(user, token=None):
         "village_state": state.village_state,
         "plan_horizon": state.plan_horizon,
         "pot_moved_months": state.pot_moved_months,
+        "pot_moved": float(state.pot_moved),
         "kept_tests": state.kept_tests,
         "onboarding_completed": state.onboarding_completed,
         "preferred_language": state.preferred_language,
@@ -79,10 +82,13 @@ def _auth_payload(user, token=None):
 
 
 _APP_STATE_FIELDS = {
-    "cash_on_hand", "upfront_costs", "docs_checked", "bought_home",
+    "cash_on_hand", "cash_on_hand_date", "upfront_costs", "docs_checked", "bought_home",
     "expense_limits", "compare_payments", "saving_plan", "buffer_state",
-    "village_state", "plan_horizon", "pot_moved_months", "kept_tests",
+    "village_state", "plan_horizon", "pot_moved_months", "pot_moved", "kept_tests",
     "onboarding_completed", "preferred_language", "preferred_income_source_id",}
+
+# Fields whose explicit null is a valid value (it clears them).
+_NULLABLE_APP_STATE_FIELDS = {"plan_horizon", "cash_on_hand_date"}
 
 
 def _valid_number(value, *, integer=False, minimum=None):
@@ -99,7 +105,7 @@ def _valid_plan(value):
     if not isinstance(value, dict):
         return False
     required = {"key", "target", "n", "amounts", "done", "seed"}
-    if set(value) - required - {"skipped", "paused"} or not required <= set(value):
+    if set(value) - required - {"skipped", "paused", "buffered"} or not required <= set(value):
         return False
     key = value["key"]
     match = re.fullmatch(r"(\d{4})-(\d{2})", key) if isinstance(key, str) else None
@@ -124,6 +130,10 @@ def _valid_plan(value):
     if "skipped" in value and (not isinstance(value["skipped"], list)
                                or len(value["skipped"]) != n
                                or not all(isinstance(item, bool) for item in value["skipped"])):
+        return False
+    if "buffered" in value and (not isinstance(value["buffered"], list)
+                                or len(value["buffered"]) != n
+                                or not all(item is None or isinstance(item, bool) for item in value["buffered"])):
         return False
     return "paused" not in value or isinstance(value["paused"], bool)
 
@@ -170,7 +180,7 @@ def _valid_village_state(value):
 
 
 def _validate_app_state_field(field, value):
-    if field == "cash_on_hand":
+    if field in {"cash_on_hand", "pot_moved"}:
         if isinstance(value, bool):
             return None
         try:
@@ -179,7 +189,21 @@ def _validate_app_state_field(field, value):
             return None
         if not amount.is_finite() or amount < 0 or amount.as_tuple().exponent < -2:
             return None
+        if amount >= Decimal("10000000000"):
+            return None
         return amount
+    if field == "cash_on_hand_date":
+        # The day the user reported their cash, as YYYY-MM-DD. A day later than
+        # tomorrow is refused so a wrong device clock cannot store a future date.
+        if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+            return None
+        try:
+            reported = date.fromisoformat(value)
+        except ValueError:
+            return None
+        if reported > timezone.localdate() + timedelta(days=1):
+            return None
+        return reported
     if field in {"upfront_costs", "docs_checked", "compare_payments", "pot_moved_months", "kept_tests"}:
         if not isinstance(value, list):
             return None
@@ -558,15 +582,12 @@ class MeView(APIView):
             if field not in request.data:
                 continue
             value = _validate_app_state_field(field, request.data[field])
-            if value is None and (field != "plan_horizon" or request.data[field] is not None):
+            if value is None and (field not in _NULLABLE_APP_STATE_FIELDS or request.data[field] is not None):
                 return Response(
                     {"error": {"code": f"invalid_{field}", "message": f"Invalid {field}."}},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            if field == "cash_on_hand":
-                changed = state.cash_on_hand != value
-            else:
-                changed = getattr(state, field) != value
+            changed = getattr(state, field) != value
             if changed:
                 setattr(state, field, value)
                 update_fields.append(field)

@@ -8,6 +8,7 @@ import { housingResultStale, monthsAgg, recSpan, recordedOutFor, rm } from '../c
 import {
   planEnsure, planPhase, planResolveTarget, planSaved, planToggle, syncBufferTarget, upfrontNeed,
 } from '../plan';
+import { potForUpfront, potSum } from '../pot';
 import { villageEnsure } from '../village';
 import { IsoIsland } from '../isosvg';
 import { RUMA_IMG } from '../ruma';
@@ -425,11 +426,14 @@ export function PlanCard() {
       {/* v24 potmini: the pot, named, on Home — jar level and gap line against
           the upfront need (shield semantics: declared savings + moved-in months). */}
       {(() => {
-        const potTotal = (v?.savedRm ?? 0) + S.potMoved;
+        const potTotal = potSum(S);
         const need = upfrontNeed(S);
-        const gap = Math.max(0, need - potTotal);
+        /* The gap and the jar compare the upfront need with what counts towards it:
+           what the cash-buffer shield holds is not counted again (same as Upfront cash). */
+        const towardsUpfront = potForUpfront(S);
+        const gap = Math.max(0, need - towardsUpfront);
         const gapLine = !need ? t('sp_pot1h') : gap > 0 ? t('hm_togo', { g: rm(gap) }) : t('hm_ready');
-        const lvl = need > 0 ? Math.min(1, potTotal / need) : (potTotal > 0 ? 1 : 0);
+        const lvl = need > 0 ? Math.min(1, towardsUpfront / need) : (towardsUpfront > 0 ? 1 : 0);
         const fh = 12.5 * lvl, fy = 19.5 - fh;
         const jar = `<svg width="32" height="32" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
 <rect x="8" y="2.6" width="8" height="2.6" rx="1.2" fill="none" stroke="#4A9195" stroke-width="1.6"/>

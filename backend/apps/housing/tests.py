@@ -3,12 +3,13 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from rest_framework.authtoken.models import Token
 
 from finance.models import FinancialPeriod, GuestProfile, IncomeEntry, WorkCostEntry
 
 from .models import HousingScenario, SavedHousingTest
+from .services import _starting_liquidity
 
 
 User = get_user_model()
@@ -438,3 +439,155 @@ class HousingTestResultApiTests(HousingApiTestMixin, TestCase):
         self.assertEqual(payload["short_month_count"], 1)
         self.assertEqual(payload["largest_gap"], 20.0)
         self.assertEqual(payload["starting_liquidity"]["required_amount"], 20.0)
+
+
+@override_settings(ENABLE_TEST_SCENARIOS=True)
+class GigDriverStartingLiquidityTests(HousingApiTestMixin, TestCase):
+    """US5.3 regression: the cash buffer for the shared twelve-month fixture.
+
+    After work costs and commitments the fixture leaves these amounts each month
+    before any housing cost, August 2025 to July 2026: 1620, 2050, 1750, 2230,
+    3110, 1220, 640, 2470, 1460, 2250, 1760 and 2390. A tested monthly home cost
+    is taken off every month, and the buffer is the deepest fall of the running
+    total from an earlier high (or from the start) to a later low, so it covers
+    the record whichever month it began in. December is the best month and
+    January and February the worst, so the deepest fall usually runs from
+    December to February. The Epic 5 Playwright flow reads the same figures.
+    """
+
+    load_url = "/api/v1/dev/scenarios/my-gig-driver-12m/load/"
+    test_url = "/api/v1/housing/test-result/"
+
+    def setUp(self):
+        self.client = Client()
+        loaded = self.client.post(
+            self.load_url, data={"confirm_reset": True}, content_type="application/json"
+        )
+        self.assertEqual(loaded.status_code, 201)
+
+    def result_for_monthly_cost(self, monthly_cost):
+        created = self.client.post(
+            self.scenarios_url,
+            data={
+                **self.scenario_payload,
+                "deposit": "0.00",
+                "known_monthly_payment": monthly_cost,
+                "additional_costs": [],
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(created.status_code, 201)
+        response = self.client.post(
+            self.test_url,
+            data={"scenario_id": created.json()["id"]},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        return response.json()
+
+    def balances(self, payload):
+        return [row["closing_balance"] for row in payload["starting_liquidity"]["months"]]
+
+    def test_mixed_months_need_a_buffer_equal_to_the_deepest_fall(self):
+        payload = self.result_for_monthly_cost("1900.00")
+        liquidity = payload["starting_liquidity"]
+
+        self.assertEqual(payload["short_month_count"], 6)
+        self.assertEqual(payload["largest_gap"], 1260.0)
+        balances = self.balances(payload)
+        self.assertEqual(
+            balances,
+            [-280.0, -130.0, -280.0, 50.0, 1260.0, 580.0, -680.0, -110.0, -550.0, -200.0, -340.0, 150.0],
+        )
+        # From the December high of RM 1,260 to the February low of RM -680.
+        self.assertEqual(liquidity["required_amount"], 1940.0)
+        self.assertEqual(liquidity["fall_start"], {"year": 2025, "month": 12})
+        self.assertEqual(liquidity["fall_end"], {"year": 2026, "month": 2})
+        # Counting only from August would have said RM 680.
+        self.assertEqual(-min(balances), 680.0)
+
+    def test_a_record_that_never_goes_below_zero_can_still_need_a_buffer(self):
+        payload = self.result_for_monthly_cost("1382.37")
+        liquidity = payload["starting_liquidity"]
+
+        balances = self.balances(payload)
+        self.assertEqual(len(balances), 12)
+        self.assertEqual(balances[0], 237.63)
+        self.assertEqual(balances[-1], 6361.56)
+        self.assertGreaterEqual(min(balances), 0.0)
+        # Started in January, the months to February would have run RM 904.74 short.
+        self.assertEqual(liquidity["required_amount"], 904.74)
+        self.assertEqual(liquidity["fall_start"], {"year": 2025, "month": 12})
+        self.assertEqual(liquidity["fall_end"], {"year": 2026, "month": 2})
+
+    def test_a_cost_every_month_carries_needs_no_buffer(self):
+        payload = self.result_for_monthly_cost("600.00")
+        liquidity = payload["starting_liquidity"]
+
+        self.assertEqual(payload["short_month_count"], 0)
+        self.assertEqual(liquidity["required_amount"], 0.0)
+        self.assertIsNone(liquidity["fall_start"])
+        self.assertIsNone(liquidity["fall_end"])
+
+    def test_a_cost_above_every_month_keeps_the_running_balance_negative(self):
+        payload = self.result_for_monthly_cost("2300.00")
+        liquidity = payload["starting_liquidity"]
+
+        self.assertEqual(liquidity["required_amount"], 4740.0)
+        self.assertEqual(
+            self.balances(payload),
+            [-680.0, -930.0, -1480.0, -1550.0, -740.0, -1820.0, -3480.0, -3310.0, -4150.0, -4200.0, -4740.0, -4650.0],
+        )
+        # The fall runs from the start of the record to June.
+        self.assertIsNone(liquidity["fall_start"])
+        self.assertEqual(liquidity["fall_end"], {"year": 2026, "month": 6})
+
+
+class StartingLiquidityPathTests(TestCase):
+    """Cover every start within the fixed chronological record, without wrapping."""
+
+    FIXTURE = [
+        (2025, 8, 1620), (2025, 9, 2050), (2025, 10, 1750), (2025, 11, 2230),
+        (2025, 12, 3110), (2026, 1, 1220), (2026, 2, 640), (2026, 3, 2470),
+        (2026, 4, 1460), (2026, 5, 2250), (2026, 6, 1760), (2026, 7, 2390),
+    ]
+
+    def months(self, rows, monthly_cost):
+        return [
+            {"year": year, "month": month, "post_housing_residual": Decimal(left) - Decimal(monthly_cost)}
+            for year, month, left in rows
+        ]
+
+    def test_buffer_covers_every_chronological_suffix_without_rotating_months(self):
+        from_august = _starting_liquidity(self.months(self.FIXTURE, "1900"))
+        from_january = _starting_liquidity(self.months(self.FIXTURE[5:], "1900"))
+
+        # Independent definition: opening cash needed for each chronological
+        # suffix. The largest such need is the whole record's buffer.
+        needs = []
+        for start in range(len(self.FIXTURE)):
+            balance = Decimal(0)
+            needed = Decimal(0)
+            for _, _, left in self.FIXTURE[start:]:
+                balance += Decimal(left) - Decimal(1900)
+                needed = max(needed, -balance)
+            needs.append(needed)
+        self.assertEqual(max(needs), Decimal("1940.00"))
+        self.assertEqual(from_august["required_amount"], max(needs))
+        # A shorter record can have a smaller buffer: arbitrary rotations are
+        # not invariant and would change the chronology of the data.
+        from_february = _starting_liquidity(self.months(self.FIXTURE[6:], "1900"))
+        self.assertEqual(from_february["required_amount"], Decimal("1260.00"))
+
+        self.assertEqual(from_august["required_amount"], Decimal("1940.00"))
+        self.assertEqual(from_january["required_amount"], Decimal("1940.00"))
+        self.assertIsNone(from_january["fall_start"])
+        self.assertEqual(from_january["fall_end"], {"year": 2026, "month": 2})
+
+    def test_an_empty_record_needs_no_buffer(self):
+        result = _starting_liquidity([])
+
+        self.assertEqual(result["required_amount"], Decimal("0.00"))
+        self.assertEqual(result["months"], [])
+        self.assertIsNone(result["fall_start"])
+        self.assertIsNone(result["fall_end"])

@@ -19,6 +19,7 @@ import { useFreshHousingTest } from '../useFreshHousingTest';
 import { logIt } from '../log';
 import { monthsAgg, nf, rm } from '../calc';
 import { upfrontNeed } from '../fees';
+import { potForUpfront, potHeld } from '../pot';
 import { unrepresentedCoverageMonths } from '../money';
 import {
   BodyS, Btn, BtnLine, Card, CardI, Chip, Chips, Display, Divider, EditList,
@@ -334,13 +335,17 @@ export function HousehomeScreen() {
     return { label: t('hc_span', { a: lo.toFixed(1), b: hi.toFixed(1), s: stateData.name }), a: pos(lo), b: pos(hi) };
   })();
 
-  /* v24 hcPrepStrip: the pot against the upfront need. */
+  /* v24 hcPrepStrip: the pot against the upfront need (AC5.1.5). It reads the same
+     figure the Upfront cash screen calls "You have": the pot less what the
+     cash-buffer shield already holds. */
   const prepStrip = (() => {
     const need = upfrontNeed(S);
-    const have = S.data.cashOnHand;
+    const have = potForUpfront(S);
+    const held = potHeld(S);
     if (!need) return { label: t('hc_needprice') };
     const pct = Math.min(100, Math.round(have / need * 100));
-    return { label: have > 0 ? t('hc_pot', { a: rm(have), b: rm(need) }) : t('hc_pot0'), pct };
+    const label = have > 0 || held > 0 ? t('hc_pot', { a: rm(have), b: rm(need) }) : t('hc_pot0');
+    return { label: held > 0 ? `${label} · ${t('hc_held', { h: rm(held) })}` : label, pct };
   })();
 
   const card = (to: Parameters<typeof go>[0], icon: string, title: string, desc: string, strip: React.ReactNode) => (
@@ -403,7 +408,7 @@ export function HousehomeScreen() {
           {stripLbl(costStrip.label)}
         </View>
       ))}
-      {card('prepare_soon', 'wallet', 'hh_prep', 'hh_prep_d', (
+      {card('prepare', 'wallet', 'hh_prep', 'hh_prep_d', (
         <View style={{ gap: 7, width: '100%' }}>
           {prepStrip.pct != null ? (
             <View style={{ height: 8, borderRadius: 5, backgroundColor: C.ink14, overflow: 'hidden' }}>

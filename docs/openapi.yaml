@@ -61,6 +61,43 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: No GROQ_API_KEY configured.
+  /api/v1/auth/export/:
+    get:
+      operationId: auth_export_retrieve
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - json
+          - xlsx
+      tags:
+      - auth
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/guest-transfer/:
+    get:
+      operationId: auth_guest_transfer_retrieve
+      tags:
+      - auth
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: auth_guest_transfer_create
+      tags:
+      - auth
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/auth/login/:
     post:
       operationId: auth_login_create
@@ -125,6 +162,17 @@ paths:
       - {}
       responses:
         '200':
+          description: No response body
+  /api/v1/auth/record/:
+    delete:
+      operationId: auth_record_destroy
+      tags:
+      - auth
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '204':
           description: No response body
   /api/v1/auth/register/:
     post:
@@ -307,6 +355,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/expenses/{entry_id}/coverage/:
+    patch:
+      operationId: expenses_coverage_partial_update
+      description: Let a user identify an existing single entry as a whole-month total.
+      parameters:
+      - in: path
+        name: entry_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - expenses
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/expenses/receipt-scan/:
     post:
       operationId: expense_receipt_scan
@@ -440,6 +506,85 @@ paths:
       - tokenAuth: []
       responses:
         '200':
+          description: No response body
+    patch:
+      operationId: housing_saved_tests_partial_update
+      tags:
+      - housing
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: housing_saved_tests_destroy
+      tags:
+      - housing
+      security:
+      - tokenAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/housing/saved-tests/{test_id}/:
+    get:
+      operationId: housing_saved_tests_retrieve_2
+      parameters:
+      - in: path
+        name: test_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - housing
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: housing_saved_tests_create_2
+      parameters:
+      - in: path
+        name: test_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - housing
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: housing_saved_tests_partial_update_2
+      parameters:
+      - in: path
+        name: test_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - housing
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: housing_saved_tests_destroy_2
+      parameters:
+      - in: path
+        name: test_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - housing
+      security:
+      - tokenAuth: []
+      responses:
+        '204':
           description: No response body
   /api/v1/housing/scenarios/:
     get:
@@ -997,6 +1142,55 @@ paths:
               schema:
                 $ref: '#/components/schemas/IncomeRecord'
           description: ''
+  /api/v1/income/scan/:
+    post:
+      operationId: income_statement_scan
+      description: Sends the photo to a vision model and returns one draft row per
+        earning found. Nothing is saved; the user reviews the rows and records them
+        through the normal income-entry endpoint.
+      summary: Read an earnings statement photo into draft income rows
+      tags:
+      - Income
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiptScanRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReceiptScanRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReceiptScanRequestRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncomeScanResult'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The vision model call failed.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No GROQ_API_KEY configured.
   /api/v1/income/sources/:
     get:
       operationId: income_sources_list
@@ -1266,6 +1460,18 @@ components:
           allOf:
           - $ref: '#/components/schemas/LanguageEnum'
           default: en
+        ui_labels:
+          type: object
+          additionalProperties:
+            type: string
+            minLength: 1
+            maxLength: 60
+        term_labels:
+          type: object
+          additionalProperties:
+            type: string
+            minLength: 1
+            maxLength: 60
       required:
       - messages
     AssistantChatResponse:
@@ -1438,6 +1644,16 @@ components:
       - date
       - entry_method
       - id
+    ExpenseEntryCreateEntryMethodEnum:
+      enum:
+      - manual
+      - receipt
+      - monthly_total
+      type: string
+      description: |-
+        * `manual` - Manual entry
+        * `receipt` - Receipt confirmed by user
+        * `monthly_total` - Whole-month expense total
     ExpenseEntryCreateRequest:
       type: object
       properties:
@@ -1453,7 +1669,7 @@ components:
           minimum: 1
         entry_method:
           allOf:
-          - $ref: '#/components/schemas/ExpenseEntryMethodEnum'
+          - $ref: '#/components/schemas/ExpenseEntryCreateEntryMethodEnum'
           default: manual
         merchant:
           type: string
@@ -1467,14 +1683,6 @@ components:
       - amount
       - category_id
       - date
-    ExpenseEntryMethodEnum:
-      enum:
-      - manual
-      - receipt
-      type: string
-      description: |-
-        * `manual` - Manual entry
-        * `receipt` - Receipt confirmed by user
     Health:
       type: object
       properties:
@@ -2218,6 +2426,35 @@ components:
       - profile_id
       - recorded_month_count
       - sources
+    IncomeScanResult:
+      type: object
+      properties:
+        is_earnings:
+          type: boolean
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/IncomeScanRow'
+      required:
+      - is_earnings
+      - rows
+    IncomeScanRow:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+          nullable: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        low_confidence:
+          type: boolean
+      required:
+      - amount
+      - date
+      - low_confidence
     IncomeSource:
       type: object
       properties:
@@ -2529,6 +2766,18 @@ components:
         * `none` - none
         * `housing_created` - housing_created
         * `existing_and_worsened_by_housing` - existing_and_worsened_by_housing
+    StartingLiquidityMonthReference:
+      type: object
+      properties:
+        year:
+          type: integer
+        month:
+          type: integer
+          maximum: 12
+          minimum: 1
+      required:
+      - month
+      - year
     StartingLiquidityMonthResult:
       type: object
       properties:
@@ -2556,7 +2805,21 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/StartingLiquidityMonthResult'
+        fall_start:
+          allOf:
+          - $ref: '#/components/schemas/StartingLiquidityMonthReference'
+          nullable: true
+          description: Month whose closing balance is the high the deepest fall starts
+            from; null when it starts at the beginning of the record.
+        fall_end:
+          allOf:
+          - $ref: '#/components/schemas/StartingLiquidityMonthReference'
+          nullable: true
+          description: Month where the deepest fall reaches its lowest balance; null
+            when the balance never falls.
       required:
+      - fall_end
+      - fall_start
       - months
       - required_amount
     StatelessFinancialMonthRequest:

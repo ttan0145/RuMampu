@@ -104,6 +104,9 @@ export interface KeptTest {
 export interface PlanState {
   key: string; target: number; n: number; amounts: number[]; done: boolean[]; seed: number;
   skipped?: boolean[]; paused?: boolean;
+  /* Allocation when each day was saved: true = buffer, false = village.
+     null is an older saved day whose allocation was never recorded. */
+  buffered?: (boolean | null)[];
 }
 
 /* v22 saving village: a 4x4 merge board (2048-style) that grows with the plan. */
@@ -287,6 +290,7 @@ function initialState(): AppState {
     // Never inherit demo/mock cash in the real API-backed app. The balance
     // starts at zero and changes only through real user actions/data.
     data.cashOnHand = 0;
+    data.cashOnHandDate = null;
   }
   const today = todayIso();
   return {

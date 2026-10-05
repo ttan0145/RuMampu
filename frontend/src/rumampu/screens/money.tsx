@@ -224,7 +224,7 @@ export function MoneyScreen() {
         </View>
       </View>
       {group('mo_rec', [['income', 'money_income', 'banknote'], ['expenses', 'money_expenses', 'receipt'], ['commit', 'bl_title', 'calendar']])}
-      {group('mo_savings', [['plan', 'pl_title', 'calday'], ['prepare_soon', 'pr_buffer', 'ring']])}
+      {group('mo_savings', [['plan', 'pl_title', 'calday'], ['buffer', 'pr_buffer', 'ring']])}
       {group('mo_insights', [['pattern', 'money_pattern', 'bars'], ['coverage', 'money_coverage', 'search'], ['record', 'money_record', 'book']])}
     </ScreenShell>
   );
@@ -1297,8 +1297,13 @@ export function PatternScreen() {
         /* v24 pt_quietx: the quietest recorded month, after work costs. */
         const qm = [...pattern.months].reduce<typeof pattern.months[number] | null>(
           (acc, m) => (acc == null || +m.usable_income < +acc.usable_income ? m : acc), null);
+        /* AC2.3.2: the rule behind "quietest" (from this record, not a financial standard)
+           sits behind the (i), like the other v24 explanations. */
         return qm ? (
-          <P>{t('pt_quietx', { m: `${monthName(+qm.month.slice(5, 7) - 1)}`, v: formatApiMoney(qm.usable_income) })}</P>
+          <View testID="pattern-quietest" style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <P style={{ flexShrink: 1 }}>{t('pt_quietx', { m: `${monthName(+qm.month.slice(5, 7) - 1)}`, v: formatApiMoney(qm.usable_income) })}</P>
+            <CardI t="pt_low" b={['pt_rule']} p="calc" />
+          </View>
         ) : null;
       })()}
       {(() => {
@@ -1465,7 +1470,7 @@ export function CoverageScreen() {
               return (
                 <Pressable key={month}
                   disabled={controlsDisabled}
-                  accessibilityRole="checkbox" accessibilityState={{ checked: on }}
+                  accessibilityRole="checkbox" accessibilityState={{ checked: on }} aria-checked={on}
                   onPress={() => toggleMonth(month)}
                   style={{
                     flexBasis: '22%', flexGrow: 1, minHeight: 48, borderRadius: 12,

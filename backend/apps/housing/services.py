@@ -207,22 +207,39 @@ def property_price_from_monthly_payment(monthly_payment, annual_rate, years, dep
 
 
 def _starting_liquidity(monthly):
-    """Return the opening buffer needed to keep the tested path non-negative."""
+    """Return the opening buffer needed to keep the tested path non-negative.
+
+    The record could have begun in any of its months, so the buffer is the
+    deepest fall of the running balance from an earlier high (or from the start)
+    to a later low. That is the smallest opening amount that gets through the
+    rest of the record whichever recorded month it started in. Measuring only
+    from the first recorded month made the figure depend on where the record
+    happens to begin. The months where the deepest fall starts and bottoms out
+    are returned so the screen can show where the figure comes from.
+    """
 
     balance = Decimal('0')
-    lowest_balance = Decimal('0')
+    high = Decimal('0')
+    high_month = None
+    deepest = Decimal('0')
+    fall_start = None
+    fall_end = None
     rows = []
     for month in monthly:
         balance += _decimal(month['post_housing_residual'])
-        lowest_balance = min(lowest_balance, balance)
-        rows.append({
-            'year': month['year'],
-            'month': month['month'],
-            'closing_balance': _money(balance),
-        })
+        here = {'year': month['year'], 'month': month['month']}
+        if balance >= high:
+            high, high_month = balance, here
+        elif high - balance > deepest:
+            deepest, fall_start, fall_end = high - balance, high_month, here
+        rows.append({**here, 'closing_balance': _money(balance)})
     return {
-        'required_amount': _money(max(Decimal('0'), -lowest_balance)),
+        'required_amount': _money(deepest),
         'months': rows,
+        # Null when the fall runs from the start of the record.
+        'fall_start': fall_start,
+        # Null when the running balance never falls.
+        'fall_end': fall_end,
     }
 
 

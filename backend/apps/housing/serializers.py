@@ -214,9 +214,22 @@ class StartingLiquidityMonthResultSerializer(serializers.Serializer):
     closing_balance = serializers.FloatField()
 
 
+class StartingLiquidityMonthReferenceSerializer(serializers.Serializer):
+    year = serializers.IntegerField()
+    month = serializers.IntegerField(min_value=1, max_value=12)
+
+
 class StartingLiquidityResultSerializer(serializers.Serializer):
     required_amount = serializers.FloatField(min_value=0)
     months = StartingLiquidityMonthResultSerializer(many=True)
+    fall_start = StartingLiquidityMonthReferenceSerializer(
+        allow_null=True,
+        help_text="Month whose closing balance is the high the deepest fall starts from; null when it starts at the beginning of the record.",
+    )
+    fall_end = StartingLiquidityMonthReferenceSerializer(
+        allow_null=True,
+        help_text="Month where the deepest fall reaches its lowest balance; null when the balance never falls.",
+    )
 
 
 class HousingTestResultSerializer(serializers.Serializer):

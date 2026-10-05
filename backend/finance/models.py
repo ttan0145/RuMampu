@@ -452,6 +452,8 @@ class UserAppState(models.Model):
         related_name="rumampu_app_state",
     )
     cash_on_hand = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # The day the user reported cash_on_hand (AC5.2.10); null until they enter it.
+    cash_on_hand_date = models.DateField(null=True, blank=True)
     upfront_costs = models.JSONField(default=list, blank=True)
     docs_checked = models.JSONField(default=list, blank=True)
     bought_home = models.BooleanField(default=False)
@@ -462,6 +464,9 @@ class UserAppState(models.Model):
     village_state = models.JSONField(default=dict, blank=True)
     plan_horizon = models.PositiveSmallIntegerField(null=True, blank=True)
     pot_moved_months = models.JSONField(default=list, blank=True)
+    # The ringgit moved into the pot from those months. Kept beside the months so
+    # a reload cannot drop the amount while the months stay marked as moved.
+    pot_moved = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     kept_tests = models.JSONField(default=list, blank=True)
     onboarding_completed = models.BooleanField(default=False)
     preferred_language = models.CharField(max_length=5, blank=True, default="")

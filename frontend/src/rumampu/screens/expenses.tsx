@@ -318,6 +318,10 @@ export function ExpensesScreen() {
                 on={(workCat ?? S.data.workCostCategories[0]?.id) === x.id}
                 onPress={() => setWorkCat(x.id)} />
             ))}
+            {/* AC1.3.4: a work cost of my own kind. The sheet was only reachable from the
+                old Work costs screen, which v24 folded into this switch. */}
+            <InChip dashed tint="out" label={t('wc_own').replace(/^\+\s*|^＋\s*/, '')}
+              onPress={() => up(s => { s.sheet = 'wcown'; })} />
           </View>
         ) : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -433,7 +437,7 @@ export function ExpensesScreen() {
         </View>
         </>
       ) : null}
-      <View style={[exSt.cardTint, { paddingVertical: 4 }]}>
+      <View testID="work-cost-table" style={[exSt.cardTint, { paddingVertical: 4 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 40 }}>
           <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink }}>{t('wc_tbl')}</Text>
           <Prov p="user" />
@@ -680,6 +684,9 @@ function ExpenseScanBody() {
      the review/edit/confirm boundary stays the authoritative behaviour). */
   React.useEffect(() => {
     if (S.exMode !== 'scan' || st !== 'read') return;
+    // Category IDs arrive separately from the receipt. Wait for the record
+    // before matching its slug, otherwise a fast scan loses its suggestion.
+    if (S.expenseSync === 'loading') return;
     const picked = getPickedReceipt();
     const useApi = INCOME_API_ENABLED && S.scan.thumb != null && picked != null;
 
@@ -750,7 +757,7 @@ function ExpenseScanBody() {
       }
     })();
     return () => { active = false; };
-  }, [S.exMode, st, up]);
+  }, [S.exMode, S.expenseSync, st, up]);
 
   /* Quick-menu shortcut: Add → Scan a receipt → Expense goes straight to
      the camera instead of stopping at the picker step. */

@@ -1,10 +1,12 @@
-from datetime import date
+from datetime import date, timedelta
+from decimal import Decimal
 from io import BytesIO
 
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.contrib.auth.tokens import default_token_generator
 from django.test import Client, TestCase, override_settings
+from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from openpyxl import load_workbook
@@ -48,6 +50,38 @@ def workbook_values(workbook):
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class AuthApiRegressionTests(TestCase):
+    def test_saving_plan_allocation_survives_account_round_trip(self):
+        user = User.objects.create_user(username="saving-allocation@example.com", password="Passw0rd123")
+        token = Token.objects.create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+        plan = {"key": "2026-10", "target": 140, "n": 31,
+                "amounts": [100, 40] + [0] * 29, "done": [True, True] + [False] * 29,
+                "seed": 1, "buffered": [True, False, None] + [False] * 28}
+        response = client.patch("/api/v1/auth/me/", {"saving_plan": plan}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(client.get("/api/v1/auth/me/").json()["saving_plan"], plan)
+        # Older devices can still save a plan without the optional field.
+        del plan["buffered"]
+        response = client.patch("/api/v1/auth/me/", {"saving_plan": plan}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(client.get("/api/v1/auth/me/").json()["saving_plan"], plan)
+
+    def test_invalid_saving_allocation_is_rejected_atomically(self):
+        user = User.objects.create_user(username="invalid-allocation@example.com", password="Passw0rd123")
+        token = Token.objects.create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+        plan = {"key": "2026-10", "target": 100, "n": 31,
+                "amounts": [100] + [0] * 30, "done": [True] + [False] * 30, "seed": 1}
+        for invalid in ([True], [1] * 31, ["buffer"] * 31, "buffer"):
+            with self.subTest(buffered=invalid):
+                response = client.patch("/api/v1/auth/me/", {
+                    "saving_plan": {**plan, "buffered": invalid}, "cash_on_hand": 999,
+                }, content_type="application/json")
+                self.assertEqual(response.status_code, 400)
+                state = client.get("/api/v1/auth/me/").json()
+                self.assertEqual(state["saving_plan"], {})
+                self.assertEqual(state["cash_on_hand"], 0)
+
     def test_password_reset_response_does_not_reveal_registered_emails(self):
         User.objects.create_user(
             username="known@example.com",
@@ -255,6 +289,119 @@ class AuthApiRegressionTests(TestCase):
             rejected.json()["error"]["code"],
             "invalid_preferred_income_source",
         )
+
+    def test_account_state_keeps_the_cash_snapshot_date_with_the_amount(self):
+        """AC5.2.9 and AC5.2.10: the cash a user reports is saved with the day they reported it."""
+        user = User.objects.create_user(
+            username="cash-date@example.com",
+            email="cash-date@example.com",
+            password="Passw0rd123",
+        )
+        token, _ = Token.objects.get_or_create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+        fresh = client.get("/api/v1/auth/me/").json()
+        self.assertEqual(fresh["cash_on_hand"], 0.0)
+        self.assertIsNone(fresh["cash_on_hand_date"])
+
+        reported = timezone.localdate().isoformat()
+        saved = client.patch(
+            "/api/v1/auth/me/",
+            data={"cash_on_hand": 8000, "cash_on_hand_date": reported},
+            content_type="application/json",
+        )
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json()["cash_on_hand"], 8000.0)
+        self.assertEqual(saved.json()["cash_on_hand_date"], reported)
+        self.assertEqual(UserAppState.objects.get(user=user).cash_on_hand_date, date.fromisoformat(reported))
+
+        login = Client().post(
+            "/api/v1/auth/login/",
+            data={"username": "cash-date@example.com", "password": "Passw0rd123"},
+            content_type="application/json",
+        )
+        self.assertEqual(login.status_code, 200)
+        self.assertEqual(login.json()["cash_on_hand"], 8000.0)
+        self.assertEqual(login.json()["cash_on_hand_date"], reported)
+
+        # Sending only a new amount leaves the recorded day alone.
+        client.patch("/api/v1/auth/me/", data={"cash_on_hand": 9000}, content_type="application/json")
+        self.assertEqual(client.get("/api/v1/auth/me/").json()["cash_on_hand_date"], reported)
+
+        # An explicit null clears it.
+        cleared = client.patch(
+            "/api/v1/auth/me/",
+            data={"cash_on_hand": 0, "cash_on_hand_date": None},
+            content_type="application/json",
+        )
+        self.assertEqual(cleared.status_code, 200)
+        self.assertEqual(cleared.json()["cash_on_hand"], 0.0)
+        self.assertIsNone(cleared.json()["cash_on_hand_date"])
+
+    def test_account_state_rejects_a_cash_snapshot_date_that_is_not_a_real_recent_day(self):
+        user = User.objects.create_user(
+            username="cash-bad-date@example.com",
+            email="cash-bad-date@example.com",
+            password="Passw0rd123",
+        )
+        token, _ = Token.objects.get_or_create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+        too_far_ahead = (timezone.localdate() + timedelta(days=3)).isoformat()
+        for bad in ["2026-13-40", "30/09/2026", "tomorrow", "2026-9-30", 20260930, True, ["2026-09-30"], too_far_ahead]:
+            with self.subTest(value=bad):
+                response = client.patch(
+                    "/api/v1/auth/me/",
+                    data={"cash_on_hand": 100, "cash_on_hand_date": bad},
+                    content_type="application/json",
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json()["error"]["code"], "invalid_cash_on_hand_date")
+
+        state = UserAppState.objects.get(user=user)
+        self.assertIsNone(state.cash_on_hand_date)
+        self.assertEqual(state.cash_on_hand, 0)
+
+    def test_account_state_keeps_the_amount_moved_into_the_pot_with_its_months(self):
+        """AC10.13.1: the ringgit moved in from finished months survive a new session."""
+        user = User.objects.create_user(
+            username="pot-moved@example.com",
+            email="pot-moved@example.com",
+            password="Passw0rd123",
+        )
+        token, _ = Token.objects.get_or_create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+        self.assertEqual(client.get("/api/v1/auth/me/").json()["pot_moved"], 0.0)
+
+        saved = client.patch(
+            "/api/v1/auth/me/",
+            data={"pot_moved_months": ["2026-08", "2026-09"], "pot_moved": 1475},
+            content_type="application/json",
+        )
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json()["pot_moved"], 1475.0)
+        self.assertEqual(saved.json()["pot_moved_months"], ["2026-08", "2026-09"])
+
+        login = Client().post(
+            "/api/v1/auth/login/",
+            data={"username": "pot-moved@example.com", "password": "Passw0rd123"},
+            content_type="application/json",
+        )
+        self.assertEqual(login.status_code, 200)
+        self.assertEqual(login.json()["pot_moved"], 1475.0)
+        self.assertEqual(login.json()["pot_moved_months"], ["2026-08", "2026-09"])
+
+        for bad in [-1, "lots", 10.005, True, None, 10_000_000_000]:
+            with self.subTest(value=bad):
+                response = client.patch(
+                    "/api/v1/auth/me/",
+                    data={"pot_moved": bad},
+                    content_type="application/json",
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json()["error"]["code"], "invalid_pot_moved")
+        self.assertEqual(UserAppState.objects.get(user=user).pot_moved, Decimal("1475.00"))
 
     def test_login_invalid_credentials_are_generic_for_email_or_password(self):
         User.objects.create_user(

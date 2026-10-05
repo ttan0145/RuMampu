@@ -17,7 +17,7 @@ export function planEnsure(s: AppState): PlanState {
   const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   const n = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
   if (!s.plan || s.plan.key !== key) {
-    s.plan = { key, target: 0, n, amounts: new Array(n).fill(0), done: new Array(n).fill(false), seed: 1 };
+    s.plan = { key, target: 0, n, amounts: new Array(n).fill(0), done: new Array(n).fill(false), buffered: new Array(n).fill(false), seed: 1 };
     planRegen(s.plan);
   }
   return s.plan;
@@ -71,6 +71,8 @@ export function planToggle(s: AppState, i: number): void {
   const p = planEnsure(s);
   if (p.paused) return;             /* 10.9.2: a paused month changes nothing */
   if (p.skipped?.[i]) return;       /* unskip first, then save */
+  if (!p.buffered) p.buffered = p.done.map(done => done ? null : false);
+  const allocation = p.done[i] ? p.buffered[i] : planPhase(s, getHousingTestResult()) === 'buffer';
   p.done[i] = !p.done[i];
   const amount = p.amounts[i];
   /* LeanKit 10.3 Amendment 1: a tick is savings the user DECLARED — the app
@@ -83,13 +85,23 @@ export function planToggle(s: AppState, i: number): void {
   /* Epic 10: while the shield is filling, saved days feed the buffer, not the
      game. Setup/explain/village (and pre-Epic-10 sessions) keep the village
      mechanic exactly as before. */
-  if (planPhase(s, getHousingTestResult()) === 'buffer') {
-    if (p.done[i]) addToBuffer(s, amount);
-    else removeFromBuffer(s, amount);
-    return;
+  if (p.done[i]) {
+    p.buffered[i] = allocation;
+    if (allocation) addToBuffer(s, amount);
+    else villageSpawn(s);
+  } else {
+    p.buffered[i] = false;
+    if (allocation === true) removeFromBuffer(s, amount);
+    else if (allocation === false) villageRemove(s);
+    else {
+      /* Old snapshots did not record destinations. Do not guess from today's
+         phase: cap the reservation at the declared savings still remaining. */
+      const b = bufferEnsure(s);
+      const excess = Math.max(0, b.saved + b.overflow - vv.savedRm);
+      if (excess > 0) removeFromBuffer(s, excess);
+      else if (planPhase(s, getHousingTestResult()) !== 'buffer') villageRemove(s);
+    }
   }
-  if (p.done[i]) villageSpawn(s);
-  else villageRemove(s);
 }
 
 /* LeanKit 10.9.1 — toggle a day between skipped and planned. Its amount is

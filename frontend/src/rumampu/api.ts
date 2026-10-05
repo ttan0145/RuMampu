@@ -223,6 +223,8 @@ export interface ApiUser {
 export interface ApiAuthState {
   user: ApiUser;
   cash_on_hand: number | string;
+  /** YYYY-MM-DD the user reported cash_on_hand, or null. */
+  cash_on_hand_date: string | null;
   upfront_costs: unknown[];
   docs_checked: string[];
   bought_home: boolean;
@@ -233,6 +235,8 @@ export interface ApiAuthState {
   village_state: Record<string, unknown>;
   plan_horizon: number | null;
   pot_moved_months: string[];
+  /** Ringgit moved into the pot from those months. Older servers omit it. */
+  pot_moved?: number | string;
   kept_tests: unknown[];
   onboarding_completed: boolean;
   preferred_language: 'en' | 'ms' | 'zh' | '';
@@ -246,11 +250,13 @@ export interface ApiAuthResponse extends ApiAuthState {
 
 export interface AccountStatePatch {
   cash_on_hand: number;
+  cash_on_hand_date: string | null;
   saving_plan: Record<string, unknown>;
   buffer_state: Record<string, unknown>;
   village_state: Record<string, unknown>;
   plan_horizon: number | null;
   pot_moved_months: string[];
+  pot_moved: number;
   docs_checked: string[];
   kept_tests: unknown[];
 }

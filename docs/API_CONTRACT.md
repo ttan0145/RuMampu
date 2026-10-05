@@ -379,7 +379,7 @@ The formal housing-test flow is:
 2. request `/housing/pre-check/` for the navigation decision; and
 3. submit its `scenario_id` to `/housing/test-result/` for the displayed historical result.
 
-The test-result request may include `tested_monthly_home_cost` for a non-persisted payment comparison and `income_shock_percent` from 0 through 90 for a hypothetical income-drop case. Both reuse the saved scenario's rate, tenure, deposit, additional costs, and the backend finance record. They do not mutate the scenario. The response includes the tested monthly result, shortfalls, carrying range, indicative price conversion, and `starting_liquidity` path.
+The test-result request may include `tested_monthly_home_cost` for a non-persisted payment comparison and `income_shock_percent` from 0 through 90 for a hypothetical income-drop case. Both reuse the saved scenario's rate, tenure, deposit, additional costs, and the backend finance record. They do not mutate the scenario. The response includes the tested monthly result, shortfalls, carrying range, indicative price conversion, and `starting_liquidity` path. `starting_liquidity.required_amount` is the deepest fall of the running balance from an earlier high (or from the start) to a later low, so it covers the record whichever recorded month it started in; `fall_start` and `fall_end` name the months where that fall starts and bottoms out (see [ADR 0005](adr/0005-cash-buffer-deepest-fall.md)).
 
 `POST /api/v1/housing/test/` remains a compatibility endpoint for older stateless clients. The formal frontend does not call it and does not submit a client-derived copy of financial months.
 
@@ -400,3 +400,7 @@ After changing a serializer, view, or URL, run:
 ```
 
 Review and commit the generated file with the code change. Swagger UI is available at `/api/docs/`; ReDoc at `/api/redoc/`.
+
+### 2026-10-05: Saving-day allocations
+
+`saving_plan.buffered` is an optional array with one entry per day: `true` for buffer savings, `false` for village savings, or `null` for a legacy saved day without allocation history. Plans from older clients remain accepted. Invalid length or types return 400 without applying any part of the PATCH. New saves are undone using their original allocation. Legacy allocations cannot be recovered exactly; undo caps reserved funds at the declared savings remaining.

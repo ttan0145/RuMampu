@@ -8,6 +8,7 @@ import {
   planReset, planResolveTarget, planSaved, planShuffleLeft, planSkip, planToggle, syncBufferTarget, upfrontNeed,
   planHorizonEffective, planMonthlyAsk,
 } from '../plan';
+import { potSum } from '../pot';
 import { commitTotal } from '../calc';
 import { villageEnsure } from '../village';
 import { logIt } from '../log';
@@ -115,7 +116,7 @@ export function PlanScreen() {
 
   const paused = !!p.paused;
   const monthEnding = p.n - (today + 1) <= 2;
-  const potTotal = (v?.savedRm ?? 0) + S.potMoved;
+  const potTotal = potSum(S);
   const monthsLeft = planMonthsLeft(S, commitTotal(S.data));
 
   const toggle = (i: number) => {
@@ -282,7 +283,7 @@ export function PlanScreen() {
               <Text style={{ fontFamily: BODY_FONT, fontSize: 12, lineHeight: 16, color: C.ink64, marginTop: 1 }}>{t('sp_pot1h')}</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={{ fontFamily: DISP_FONT, fontSize: 20, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(potTotal)}</Text>
+              <Text testID="plan-pot-total" style={{ fontFamily: DISP_FONT, fontSize: 20, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(potTotal)}</Text>
               <Prov p="user" />
             </View>
           </View>

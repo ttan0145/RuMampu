@@ -379,7 +379,7 @@ API 不返回预测、稳定性、风险或固定阈值结论。
 2. 请求 `/housing/pre-check/`，以其响应决定导航；
 3. 将 `scenario_id` 提交到 `/housing/test-result/`，获得展示用历史测试结果。
 
-测试请求可以携带 `tested_monthly_home_cost`，用于不持久化的付款比较；也可以携带 0 至 90 的 `income_shock_percent`，用于假设收入下降场景。两者都会复用已保存 scenario 的利率、年期、头期、附加成本及后端财务记录，且不会修改 scenario。响应包括测试月度结果、短缺、承担区间、参考房价换算及 `starting_liquidity` 路径。
+测试请求可以携带 `tested_monthly_home_cost`，用于不持久化的付款比较；也可以携带 0 至 90 的 `income_shock_percent`，用于假设收入下降场景。两者都会复用已保存 scenario 的利率、年期、头期、附加成本及后端财务记录，且不会修改 scenario。响应包括测试月度结果、短缺、承担区间、参考房价换算及 `starting_liquidity` 路径。`starting_liquidity.required_amount` 是运行余额从之前某个高点（或从开头）到之后低点的最大跌幅，因此不论记录从哪个月开始都能撑过去；`fall_start` 和 `fall_end` 给出这段跌幅开始和跌到最低的月份（见 [ADR 0005](adr/0005-cash-buffer-deepest-fall.cn.md)）。
 
 `POST /api/v1/housing/test/` 仅作为旧版无状态客户端的兼容端点保留。正式前端不再调用它，也不会提交由客户端计算的财务月份副本。
 
@@ -400,3 +400,7 @@ API 不返回预测、稳定性、风险或固定阈值结论。
 ```
 
 生成文件必须与代码一同评审和提交。Swagger UI 位于 `/api/docs/`，ReDoc 位于 `/api/redoc/`。
+
+### 2026-10-05：储蓄打卡分配记录
+
+`saving_plan.buffered` 是可选数组，长度须等于当月天数；每项为 `true`（存入缓冲）、`false`（存入村庄）或 `null`（旧打卡没有分配记录）。旧客户端不提供该字段仍可保存；非法长度或类型返回 400，整次 PATCH 不落库。撤销新打卡按原分配处理，不按当前阶段处理。旧记录无法精确还原分配，撤销时至少把缓冲保留额限制在仍声明存下的金额以内。

@@ -42,6 +42,8 @@ export interface AppData {
   house: House;
   homeCosts: CostItem[];
   cashOnHand: number;
+  /* YYYY-MM-DD the user reported cashOnHand (AC5.2.10); null until they enter it. */
+  cashOnHandDate: string | null;
   upfront: CostItem[];
   comparePayments: number[];
   expenseCats: ExpenseCat[];
@@ -84,6 +86,7 @@ export const MOCK: AppData = {
     {id:'maint',k:'hc_maint',a:150},{id:'insure',k:'hc_insure',a:55},{id:'assess',k:'hc_assess',a:20},{id:'quit',k:'hc_quit',a:5},{id:'parking',k:'hc_parking',a:0},{id:'other',k:'hc_other',a:0}
   ],
   cashOnHand: 0,
+  cashOnHandDate: null,
   upfront: [
     /* v24: only amounts with no published figure are entered by the user, with
        no default. Legal, valuation and stamp duty are worked out from the

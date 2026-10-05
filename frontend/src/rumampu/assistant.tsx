@@ -63,8 +63,9 @@ const FAB_PARK_GAP = 64;
 export function AssistantFab() {
   const { S, t, up } = useApp();
   const frame = React.useRef({ w: 390, h: 700 });
-  const pos = React.useRef(new Animated.ValueXY({ x: 390 - 68, y: 700 - 240 })).current;
-  const start = React.useRef({ x: 390 - 68, y: 700 - 240 });
+  const pos = React.useRef(new Animated.ValueXY({ x: 390 - 64, y: 700 - 140 })).current;
+  const start = React.useRef({ x: 390 - 64, y: 700 - 140 });
+  const laidOut = React.useRef(false);
   const moved = React.useRef(false);
 
   const pan = React.useRef(PanResponder.create({
@@ -113,8 +114,9 @@ export function AssistantFab() {
       onLayout={e => {
         const { width: w, height: h } = e.nativeEvent.layout;
         frame.current = { w, h };
-        const x = Math.min(start.current.x, w - 64);
-        const y = Math.min(start.current.y, h - 140);
+        const x = laidOut.current ? Math.max(8, Math.min(start.current.x, w - 64)) : w - 64;
+        const y = laidOut.current ? Math.max(60, Math.min(start.current.y, h - 140)) : Math.max(60, h - 140);
+        laidOut.current = true;
         start.current = { x, y };
         /* A layout change (rotation, browser resize) must not un-park an open chat. */
         pos.setValue(open ? { x: w - 64, y: h - 140 } : { x, y });

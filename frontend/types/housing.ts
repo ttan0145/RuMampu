@@ -99,6 +99,11 @@ export interface StartingLiquidityResult {
     month: number;
     closing_balance: number;
   }>;
+  /* Where the deepest fall starts (null: at the start of the record) and bottoms
+     out (null: the balance never falls). Absent from results kept before they
+     were added. */
+  fall_start?: { year: number; month: number } | null;
+  fall_end?: { year: number; month: number } | null;
 }
 
 export interface HousingTestResult {

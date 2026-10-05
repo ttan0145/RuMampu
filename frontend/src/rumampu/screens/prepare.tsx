@@ -1,16 +1,17 @@
 import React from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getHousingTestResult } from '../../../services/housingSession';
-import { useApp } from '../state';
+import { todayIso, useApp } from '../state';
 import { nf, rm } from '../calc';
 import { useHousingCalculation } from '../useHousingCalculation';
 import { upfrontFees, upfrontNeed } from '../fees';
+import { potForUpfront, potHeld } from '../pot';
 import {
   Badge, BodyS, Btn, BtnLine, BtnQuiet, Card, Display, Divider, EditList, NumInput,
   Fig, FigRow, IcLab, KV, NoteC, P, Prov,
   CardI,
 } from '../ui';
-import { BODY_FONT, C, DISP_FONT } from '../theme';
+import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { Waterline } from '../charts';
 import { ScreenShell } from './shell';
 import { SheetFrame } from '../overlays';
@@ -21,6 +22,7 @@ export function PrepareBody() {
   return (
     <View style={{ gap: 16 }}>
       <BtnQuiet onPress={() => go('upfront')}><IcLab name="wallet"><P>{t('pr_upfront')}</P></IcLab></BtnQuiet>
+      <BtnQuiet onPress={() => go('buffer')}><IcLab name="ring"><P>{t('pr_buffer')}</P></IcLab></BtnQuiet>
       <BtnQuiet onPress={() => go('docs')}><IcLab name="file"><P>{t('pr_docs')}</P></IcLab></BtnQuiet>
       <Divider />
       <BtnQuiet style={{ paddingVertical: 12 }} onPress={() => go('pv_switch')}>
@@ -60,13 +62,87 @@ export function PrepareComingSoonScreen() {
   );
 }
 
+/* Stable component types preserve input focus when the app state changes. */
+/* v24 R8f: a row that needs explaining carries an (i), not a paragraph. Short
+   factual notes (like the exemption) stay on the row. */
+const Row = ({ id, label, kind, note, info, children }: {
+  id?: string; label: string; kind: 'user' | 'calc' | 'official' | 'assume'; note?: string;
+  info?: React.ReactNode; children: React.ReactNode;
+}) => (
+  <View testID={id ? `upfront-row-${id}` : undefined}
+    style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, minHeight: 44, paddingVertical: 6 }}>
+    <View style={{ flex: 1, minWidth: 0 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <P style={{ fontSize: 14.5 }}>{label}</P>
+        {info}
+      </View>
+      <Prov p={kind} />
+      {note ? <BodyS muted style={{ fontSize: 11.5, marginTop: 2 }}>{note}</BodyS> : null}
+    </View>
+    {children}
+  </View>
+);
+const Amt = ({ v }: { v: number }) => (
+  <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(v)}</Text>
+);
+const Input = ({ id }: { id: string }) => {
+  const { S, t, up } = useApp();
+  const setItem = (id: string, n: number) => up(s => {
+    const it = s.data.upfront.find(x => x.id === id);
+    if (it) it.a = Math.max(0, n);
+  });
+  const it = S.data.upfront.find(x => x.id === id) ?? { a: 0, ex: 0 };
+  return (
+    <View style={{ width: 110 }}>
+      <NumInput value={+it.a || ''} placeholder={String(it.ex ?? 0)} decimal={false} alignRight
+        onNum={n => setItem(id, n)} accessibilityLabel={t((it as { k?: string }).k || '')} />
+    </View>
+  );
+};
+const Switch = ({ on, onPress, label, info }: { on: boolean; onPress: () => void; label: string; info?: React.ReactNode }) => (
+  <Pressable onPress={onPress} accessibilityRole="switch" accessibilityState={{ checked: on }} aria-checked={on}
+    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: 48 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
+      <P style={{ fontSize: 14.5 }}>{label}</P>
+      {info}
+    </View>
+    <View style={{
+      width: 46, height: 28, borderRadius: 14, padding: 3,
+      backgroundColor: on ? C.brand : C.ink14,
+      alignItems: on ? 'flex-end' : 'flex-start', justifyContent: 'center',
+    }}>
+      <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' }} />
+    </View>
+  </Pressable>
+);
+const Stage = ({ n, k, info, children }: { n: number; k: string; info?: React.ReactNode; children: React.ReactNode }) => {
+  const { t } = useApp();
+  return (
+    <View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 12, color: '#fff' }}>{n}</Text>
+        </View>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.99, textTransform: 'uppercase', color: C.ink64 }}>{t(k)}</Text>
+        {info}
+      </View>
+      <Card gap={0} style={{ marginTop: 8 }}>{children}</Card>
+    </View>
+  );
+};
+
 export function UpfrontScreen() {
-  const { S, t, up, toast } = useApp();
+  const { S, t, up, toast, monthName } = useApp();
   const f = upfrontFees(S);
   const src = f.src;
   const dep = src.price ? src.dep : S.data.house.deposit;
   const need = upfrontNeed(S);
-  const have = S.data.cashOnHand;
+  /* AC5.2.17: "You have" is the one pot (cash already had + what the plan added +
+     what finished months moved in), stated once; the gap is what I need less it.
+     What the cash-buffer shield already holds is left out, so no ringgit counts
+     for both the buffer and the upfront cash, and the screen says how much. */
+  const held = potHeld(S);
+  const have = potForUpfront(S);
   const gap = Math.max(0, need - have);
   const loan = Math.max(0, src.price - src.dep);
   const earnest = S.data.upfront.find(x => x.id === 'earnest') ?? { a: 0, ex: 0 };
@@ -79,69 +155,18 @@ export function UpfrontScreen() {
     .map((k, i) => ({ k, i }))
     .filter(x => x.k.propertyPrice != null && Number(x.k.propertyPrice) > 0);
 
-  const setItem = (id: string, n: number) => up(s => {
-    const it = s.data.upfront.find(x => x.id === id);
-    if (it) it.a = Math.max(0, n);
+  /* AC5.2.9 and AC5.2.10: the cash the user already has is their own entry, saved
+     with the day it was reported. Clearing it clears the day. */
+  const setCash = (n: number) => up(s => {
+    const cash = Math.max(0, Math.round((+n || 0) * 100) / 100);
+    s.data.cashOnHand = cash;
+    s.data.cashOnHandDate = cash > 0 ? todayIso() : null;
   });
+  const cashDay = S.data.cashOnHandDate;
+  const cashNote = cashDay
+    ? t('uf_cash_on', { d: `${+cashDay.slice(8, 10)} ${monthName(+cashDay.slice(5, 7) - 1)} ${cashDay.slice(0, 4)}` })
+    : undefined;
 
-  /* v24 R8f: a row that needs explaining carries an (i), not a paragraph. Short
-     factual notes (like the exemption) stay on the row. */
-  const Row = ({ label, kind, note, info, children }: {
-    label: string; kind: 'user' | 'calc' | 'official' | 'assume'; note?: string;
-    info?: React.ReactNode; children: React.ReactNode;
-  }) => (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, minHeight: 44, paddingVertical: 6 }}>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <P style={{ fontSize: 14.5 }}>{label}</P>
-          {info}
-        </View>
-        <Prov p={kind} />
-        {note ? <BodyS muted style={{ fontSize: 11.5, marginTop: 2 }}>{note}</BodyS> : null}
-      </View>
-      {children}
-    </View>
-  );
-  const Amt = ({ v }: { v: number }) => (
-    <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(v)}</Text>
-  );
-  const Input = ({ id }: { id: string }) => {
-    const it = S.data.upfront.find(x => x.id === id) ?? { a: 0, ex: 0 };
-    return (
-      <View style={{ width: 110 }}>
-        <NumInput value={+it.a || ''} placeholder={String(it.ex ?? 0)} decimal={false} alignRight
-          onNum={n => setItem(id, n)} accessibilityLabel={t((it as { k?: string }).k || '')} />
-      </View>
-    );
-  };
-  const Switch = ({ on, onPress, label, info }: { on: boolean; onPress: () => void; label: string; info?: React.ReactNode }) => (
-    <Pressable onPress={onPress} accessibilityRole="switch" accessibilityState={{ checked: on }}
-      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, minHeight: 48 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
-        <P style={{ fontSize: 14.5 }}>{label}</P>
-        {info}
-      </View>
-      <View style={{
-        width: 46, height: 28, borderRadius: 14, padding: 3,
-        backgroundColor: on ? C.brand : C.ink14,
-        alignItems: on ? 'flex-end' : 'flex-start', justifyContent: 'center',
-      }}>
-        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' }} />
-      </View>
-    </Pressable>
-  );
-  const Stage = ({ n, k, info, children }: { n: number; k: string; info?: React.ReactNode; children: React.ReactNode }) => (
-    <View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ fontFamily: DISP_FONT, fontSize: 12, color: '#fff' }}>{n}</Text>
-        </View>
-        <Text style={{ fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.99, textTransform: 'uppercase', color: C.ink64 }}>{t(k)}</Text>
-        {info}
-      </View>
-      <Card gap={0} style={{ marginTop: 8 }}>{children}</Card>
-    </View>
-  );
 
   return (
     <ScreenShell back title={t('pr_upfront')}>
@@ -159,15 +184,32 @@ export function UpfrontScreen() {
       ) : (
         <NoteC><BodyS>{t('uf_notest')}</BodyS></NoteC>
       )}
-      <KV k={t('uf_have')}><Fig value={rm(have)} p="user" cls="h-l" /></KV>
+      <KV k={t('uf_have')}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Fig value={rm(have)} p="user" cls="h-l" />
+          {/* The pot behind "You have": what I already had, what the plan added, what was moved in. */}
+          <Pressable onPress={() => up(s => { s.sheet = 'pothow'; })} accessibilityLabel={t('ph_title')} hitSlop={8}
+            style={{
+              width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: C.ink40,
+              alignItems: 'center', justifyContent: 'center', marginLeft: 6,
+            }}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 11, color: C.ink64 }}>i</Text>
+          </Pressable>
+        </View>
+      </KV>
+      {held > 0 ? (
+        <View testID="upfront-held"><BodyS muted>{t('uf_held', { a: rm(held) })}</BodyS></View>
+      ) : null}
       <KV k={t('uf_need')}><Fig value={rm(need)} p="calc" cls="h-l" /></KV>
       <KV k={t('uf_gap')}><Fig value={rm(gap)} p="calc" cls="h-l" /></KV>
-      <View style={{ paddingTop: 10, paddingRight: 34, paddingBottom: 8, paddingLeft: 2 }}>
+      <View style={{ paddingTop: 10, paddingRight: 34, paddingBottom: 8, paddingLeft: 2 }}
+        accessibilityRole="image" accessibilityLabel={t('uf_ch_alt', { h: rm(have), n: rm(need) })}>
         <View style={{ height: 120, alignItems: 'center', justifyContent: 'flex-end' }}>
           <View style={{ width: 120, height: '100%', justifyContent: 'flex-end' }}>
-            <View style={{ height: `${pct(have)}%`, backgroundColor: C.ink, borderTopLeftRadius: 3, borderTopRightRadius: 3 }} />
+            <View testID="upfront-available"
+              style={{ height: `${pct(have)}%`, backgroundColor: C.ink, borderTopLeftRadius: 3, borderTopRightRadius: 3 }} />
             {gap > 0 ? (
-              <View style={{
+              <View testID="upfront-gap" style={{
                 position: 'absolute', left: '15%', width: '70%',
                 bottom: `${pct(have)}%`, height: `${pct(need) - pct(have)}%`,
                 backgroundColor: C.short, borderRadius: 2, opacity: 0.95,
@@ -188,7 +230,19 @@ export function UpfrontScreen() {
         </View>
         <View style={{ marginTop: 6, alignItems: 'flex-start' }}><Prov p="calc" /></View>
       </View>
-      {dep === 0 ? null : <KV k={t('uf_dep')}><Fig value={rm(dep)} p="user" /></KV>}
+      {/* AC5.2.9 / AC5.2.10: the cash I already have, entered by me and dated. */}
+      <Card gap={0}>
+        <Row id="cash" label={t('uf_cash_l')} kind="user" note={cashNote}
+          info={<CardI t="uf_cash_l" b={['uf_cash_h']} p="user" />}>
+          <View style={{ width: 110 }}>
+            <NumInput value={+S.data.cashOnHand || ''} placeholder="0" alignRight
+              onNum={setCash} accessibilityLabel={t('uf_cash_l')} />
+          </View>
+        </Row>
+      </Card>
+      {dep === 0
+        ? (src.price ? <NoteC><BodyS>{t('uf_dep0')}</BodyS></NoteC> : null)
+        : <KV k={t('uf_dep')}><Fig value={rm(dep)} p="user" /></KV>}
       {/* v24: the first-home stamp exemption, with the rule it applies. */}
       <Card gap={4}>
         <Switch on={S.firstHome} onPress={() => up(s => { s.firstHome = !s.firstHome; })}
@@ -208,12 +262,12 @@ export function UpfrontScreen() {
       <Stage n={2} k="uf_s2">
         {src.price ? (
           <>
-            <Row label={t('uf_baldp')} kind="calc"><Amt v={bal} /></Row>
-            <Row label={t('uf_spa')} kind="official"><Amt v={f.spa} /></Row>
-            <Row label={t('uf_stampT')} kind="official" note={stampNote || t('uf_stampT_h', { p: rm(src.price) })}><Amt v={f.t} /></Row>
-            <Row label={t('uf_loanlegal')} kind="official"><Amt v={f.loanLegal} /></Row>
-            <Row label={t('uf_stampL')} kind="official" note={stampNote || t('uf_stampL_h', { p: rm(loan) })}><Amt v={f.l} /></Row>
-            <Row label={t('uf_val')} kind="assume"><Amt v={f.val} /></Row>
+            <Row id="baldp" label={t('uf_baldp')} kind="calc"><Amt v={bal} /></Row>
+            <Row id="spa" label={t('uf_spa')} kind="official"><Amt v={f.spa} /></Row>
+            <Row id="stampT" label={t('uf_stampT')} kind="official" note={stampNote || t('uf_stampT_h', { p: rm(src.price) })}><Amt v={f.t} /></Row>
+            <Row id="loanlegal" label={t('uf_loanlegal')} kind="official"><Amt v={f.loanLegal} /></Row>
+            <Row id="stampL" label={t('uf_stampL')} kind="official" note={stampNote || t('uf_stampL_h', { p: rm(loan) })}><Amt v={f.l} /></Row>
+            <Row id="val" label={t('uf_val')} kind="assume"><Amt v={f.val} /></Row>
             <Row label={t('uf_mrta')} kind="user" info={<CardI t="uf_mrta" b={['uf_mrta_h']} p="user" />}><Input id="mrta" /></Row>
           </>
         ) : (
@@ -287,10 +341,28 @@ export function BufferScreen() {
     m: row.month - 1,
     bal: row.closing_balance,
   }));
-  const maxAbs = Math.max(...rows.map(r => Math.abs(r.bal)), 1);
-  const mid = 52;
+  /* AC5.3.7: the zero line sits where zero falls between the highest and the lowest
+     running balance, so a chart that is all above (or all below) zero uses the whole
+     plot and no bar is clipped. One scale serves both sides of the line. */
+  const plotH = 104;
+  const hi = Math.max(0, ...rows.map(r => r.bal));
+  const lo = Math.min(0, ...rows.map(r => r.bal));
+  const span = hi - lo;
+  const unit = span > 0 ? plotH / span : 0;
+  const zeroTop = Math.min(
+    plotH - (lo < 0 ? 3 : 0),
+    Math.max(hi > 0 ? 3 : 0, span > 0 ? hi * unit : plotH / 2),
+  );
   const first = rows[0];
   const last = rows[rows.length - 1];
+  /* The buffer is the deepest fall from an earlier high (ADR 0005). Name the months it
+     ran between and shade them on the chart, so the figure can be traced to the bars. */
+  const at = (ref?: { year: number; month: number } | null) =>
+    ref ? rows.findIndex(r => r.y === ref.year && r.m === ref.month - 1) : -1;
+  const fallEnd = liquidity.required_amount > 0 ? at(liquidity.fall_end) : -1;
+  const fallStart = fallEnd >= 0 ? at(liquidity.fall_start) : -1;
+  const when = (i: number) => t('bf_when', { m: monthName(rows[i].m), y: rows[i].y });
+  const fallFrom = fallStart + 1;
   return (
     <ScreenShell back title={t('pr_buffer')}>
       {/* v24 R8i: the definition stays on screen; the basis moves behind the (i). */}
@@ -299,6 +371,15 @@ export function BufferScreen() {
         <CardI t="pr_buffer" b={[]} p="calc" x={[t('bf_basis', { a: monthName(first.m), b: monthName(last.m) })]} />
       </View>
       <BodyS muted>{t('bf_def')}</BodyS>
+      {fallEnd >= 0 ? (
+        <View testID="buffer-fall-text">
+          <BodyS>
+            {fallStart >= 0
+              ? t('bf_fall', { a: when(fallStart), b: when(fallEnd) })
+              : t('bf_fall_start', { b: when(fallEnd) })}
+          </BodyS>
+        </View>
+      ) : null}
       {liquidity.required_amount === 0 ? (
         <NoteC>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -309,23 +390,32 @@ export function BufferScreen() {
       ) : null}
       <BodyS muted>{t('bf_bal')}</BodyS>
       <View style={{ paddingTop: 10, paddingRight: 34, paddingBottom: 26, paddingLeft: 2, marginRight: -20 }}>
-        <View style={{ flexDirection: 'row', gap: 8, height: 104 }}>
+        <View testID="buffer-plot" style={{ flexDirection: 'row', gap: 4, height: plotH }}>
+          {fallEnd >= 0 ? (
+            <View testID="buffer-fall" pointerEvents="none" style={{
+              position: 'absolute', top: 0, bottom: 0, borderRadius: 4, backgroundColor: 'rgba(241,89,42,0.12)',
+              left: `${fallFrom / rows.length * 100}%`, width: `${(fallEnd - fallFrom + 1) / rows.length * 100}%`,
+            }} />
+          ) : null}
           {rows.map((r, i) => {
-            const h = Math.max(3, Math.abs(r.bal) / maxAbs * 46);
             const neg = r.bal < 0;
+            /* Room on this bar's side of the zero line; a bar never runs past the plot. */
+            const h = Math.min(neg ? plotH - zeroTop : zeroTop, Math.max(3, Math.abs(r.bal) * unit));
             return (
-              <View key={i} style={{ flex: 1, minWidth: 14, height: 104 }}>
-                <View style={neg
-                  ? { position: 'absolute', left: '15%', width: '70%', top: mid, height: h, backgroundColor: C.short, borderRadius: 3, opacity: 0.95 }
-                  : { position: 'absolute', left: '15%', width: '70%', bottom: 104 - mid, height: h, backgroundColor: C.ink, borderRadius: 3 }} />
+              <View key={i} style={{ flex: 1, minWidth: 14, height: plotH }}
+                accessibilityLabel={t('bf_bar_alt', { m: monthName(r.m), y: r.y, a: rm(r.bal) })}>
+                <View testID={`buffer-bar-${r.y}-${String(r.m + 1).padStart(2, '0')}`} style={neg
+                  ? { position: 'absolute', left: '15%', width: '70%', top: zeroTop, height: h, backgroundColor: C.short, borderRadius: 3, opacity: 0.95 }
+                  : { position: 'absolute', left: '15%', width: '70%', top: zeroTop - h, height: h, backgroundColor: C.ink, borderRadius: 3 }} />
               </View>
             );
           })}
-          <View style={{ position: 'absolute', left: -2, right: -14, bottom: 104 - mid, borderTopWidth: 2.5, borderTopColor: C.ink }} />
+          <View testID="buffer-zero-line"
+            style={{ position: 'absolute', left: -2, right: -14, top: zeroTop - 2.5, borderTopWidth: 2.5, borderTopColor: C.ink }} />
         </View>
-        <View style={{ flexDirection: 'row', gap: 8, paddingTop: 6 }}>
+        <View style={{ flexDirection: 'row', gap: 4, paddingTop: 6 }}>
           {rows.map((r, i) => (
-            <Text key={i} style={{ flex: 1, minWidth: 14, textAlign: 'center', fontSize: 11, letterSpacing: 0.44, color: C.ink64 }}>
+            <Text key={i} style={{ flex: 1, minWidth: 14, textAlign: 'center', fontSize: 10, color: C.ink64 }}>
               {monthName(r.m).toUpperCase()}
             </Text>
           ))}
@@ -357,6 +447,14 @@ export function DocsScreen() {
           <CardI t="pr_docs" b={['dc_src', 'dc_plain']} p="official" />
         </View>
         {['dc_sj1', 'dc_sj2', 'dc_sj3'].map(k => <BodyS key={k}>· {t(k)}</BodyS>)}
+        {/* The 65% check stays "needs review": SJKP measures gross income and
+            RuMampu measures income after work costs, so no pass or fail is shown. */}
+        <NoteC>
+          <View style={{ gap: 4 }}>
+            <P style={{ fontFamily: SEMI_FONT, fontSize: 14.5, lineHeight: 20 }}>{t('dc_65')}</P>
+            <BodyS muted>{t('dc_65_note')}</BodyS>
+          </View>
+        </NoteC>
       </Card>
     </ScreenShell>
   );
