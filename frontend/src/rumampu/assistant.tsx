@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  ActivityIndicator, Animated, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable,
+  ActivityIndicator, Animated, AppState as NativeAppState, Keyboard, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -186,6 +186,9 @@ export function AssistantSheet() {
   const [pendingActions, setPendingActions] = React.useState<AssistantAction[]>([]);
   const [actionSaving, setActionSaving] = React.useState(false);
   const [confirmingOutlier, setConfirmingOutlier] = React.useState(false);
+  const [inputHeight, setInputHeight] = React.useState(48);
+  const [keyboardVisible, setKeyboardVisible] = React.useState(false);
+  const [webKeyboardInset, setWebKeyboardInset] = React.useState(0);
   const scrollRef = React.useRef<ScrollView>(null);
   const speechText = React.useMemo(() => speechUiText(S.lang), [S.lang]);
 
@@ -204,8 +207,63 @@ export function AssistantSheet() {
     toast(message, 'error');
   });
 
+  const stopSpeech = React.useCallback(() => {
+    // Abort unconditionally: the browser may have opened the microphone before
+    // the async `start` event has updated `listening` in React state.
+    ExpoSpeechRecognitionModule.abort();
+    setListening(false);
+  }, []);
+
+  React.useEffect(() => {
+    if (!S.assistantOpen) stopSpeech();
+  }, [S.assistantOpen, stopSpeech]);
+
+  React.useEffect(() => {
+    const nativeState = Platform.OS === 'web' ? null : NativeAppState.addEventListener('change', state => {
+      if (state !== 'active') stopSpeech();
+    });
+    const onVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') stopSpeech();
+    };
+    const onPageHide = () => stopSpeech();
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityChange);
+      window.addEventListener('pagehide', onPageHide);
+    }
+    return () => {
+      nativeState?.remove();
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+        window.removeEventListener('pagehide', onPageHide);
+      }
+      stopSpeech();
+    };
+  }, [stopSpeech]);
+
+  React.useEffect(() => {
+    if (Platform.OS === 'web') {
+      const viewport = window.visualViewport;
+      if (!viewport) return;
+      const updateInset = () => {
+        const inset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+        setWebKeyboardInset(inset > 80 ? inset : 0);
+      };
+      updateInset();
+      viewport.addEventListener('resize', updateInset);
+      viewport.addEventListener('scroll', updateInset);
+      return () => {
+        viewport.removeEventListener('resize', updateInset);
+        viewport.removeEventListener('scroll', updateInset);
+      };
+    }
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+
   const close = () => {
-    if (listening) ExpoSpeechRecognitionModule.abort();
+    stopSpeech();
+    Keyboard.dismiss();
     up(s => { s.assistantOpen = false; });
   };
 
@@ -359,18 +417,29 @@ export function AssistantSheet() {
 
   if (!ASSISTANT_UI_ENABLED || !S.assistantOpen) return null;
 
+  const restingBottomGap = 84 + FAB_PARK_GAP + insets.bottom;
+  const keyboardBottomGap = 12 + insets.bottom;
+  const popoverBottomGap = Platform.OS === 'web'
+    ? (webKeyboardInset > 0 ? webKeyboardInset + 12 : restingBottomGap)
+    : (keyboardVisible ? keyboardBottomGap : restingBottomGap);
+
   return (
     <Modal transparent animationType="fade" visible onRequestClose={close}>
       <View style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable style={StyleSheet.absoluteFill} onPress={close}>
           <View style={{ flex: 1, backgroundColor: 'rgba(15,32,33,0.28)' }} />
         </Pressable>
-        <KeyboardAvoidingView pointerEvents="box-none" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView
+          pointerEvents="box-none"
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+          behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+          keyboardVerticalOffset={insets.top}
+        >
           {/* Right-anchored like the prototype's .aipop, lifted one bubble height
               so the parked bubble (bottom-right, see AssistantFab) stays in view
               under the pop-up instead of behind it. */}
           <View pointerEvents="box-none" style={[
-            { width: '100%', alignItems: 'flex-end', paddingRight: 12, marginBottom: 84 + FAB_PARK_GAP + insets.bottom },
+            { width: '100%', alignItems: 'flex-end', paddingRight: 12, marginBottom: popoverBottomGap },
             Platform.OS === 'web' ? { alignSelf: 'center', maxWidth: 390 } : null,
           ]}>
           <View style={st.pop}>
@@ -454,10 +523,17 @@ export function AssistantSheet() {
             </View>
             <View style={st.inputRow}>
               <TextInput
-                style={st.input}
+                style={[st.input, { height: inputHeight }]}
                 value={draft}
                 onChangeText={setDraft}
                 editable={pendingActions.length === 0}
+                multiline
+                submitBehavior="submit"
+                scrollEnabled={inputHeight >= 112}
+                onContentSizeChange={event => {
+                  const nextHeight = Math.max(48, Math.min(112, event.nativeEvent.contentSize.height + 2));
+                  setInputHeight(nextHeight);
+                }}
                 placeholder={listening ? speechText.listening : t('ai_ph')}
                 placeholderTextColor={C.ink40}
                 onSubmitEditing={() => { void send(); }}
@@ -550,14 +626,15 @@ const st = StyleSheet.create({
     borderWidth: 1.5, borderColor: C.ink14, borderRadius: 16,
     paddingVertical: 6, paddingHorizontal: 11, minHeight: 32, justifyContent: 'center',
   },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 10 },
   input: {
     /* minWidth 0: a web text input will not shrink below ~20 characters on its
        own, so with a larger phone font it pushed the Send button out of the
        pop-up. Letting it shrink keeps the row inside the card. */
-    flex: 1, minWidth: 0, minHeight: 48,
+    flex: 1, minWidth: 0, minHeight: 48, maxHeight: 112,
     backgroundColor: C.paper, borderWidth: 1.5, borderColor: C.ink40, borderRadius: 12,
-    paddingHorizontal: 12, fontSize: 15, color: C.ink, fontFamily: BODY_FONT,
+    paddingHorizontal: 12, paddingVertical: 12, fontSize: 15, lineHeight: 20,
+    color: C.ink, fontFamily: BODY_FONT, textAlignVertical: 'top',
   },
   micBtn: {
     width: 48, height: 48, borderRadius: 12, flexShrink: 0,

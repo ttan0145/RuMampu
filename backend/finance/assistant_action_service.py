@@ -73,7 +73,7 @@ CLARIFICATIONS = {
 
 
 def _completion(prompt: str) -> dict[str, Any]:
-    api_key = os.getenv("GROQ_API_KEY", "").strip()
+    api_key = os.getenv("GROQ_API_KEY_CATEGORIZATION", "").strip()
     if not api_key:
         raise AssistantError(
             "assistant_action_unconfigured",
