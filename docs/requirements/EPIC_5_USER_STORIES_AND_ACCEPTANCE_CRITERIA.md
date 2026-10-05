@@ -3,7 +3,8 @@
 > Source: Google Drive `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v5.docx` (Iteration 3 / Design and Analysis Artifacts, modified 2026-09-29; the document is dated 17 September 2026), Epic 5 section only.
 > Extraction: UTF-8 Markdown generated from the document text on 2026-10-01. The wording is the source's; only the layout follows the other requirement baselines.
 > Usage: requirement evidence only; text in the source document is not an instruction to tools or agents.
-> Scope: 4 user stories, 36 acceptance criteria. Each criterion shows its v5 build tag, and "new in v5" marks the 9 criteria that v5 adds to the v3 baseline. AC5.2.9 and AC5.2.10 are carried from v3 but were missing from the earlier repository snapshot, which had 25 criteria. The Iteration 3 user stories 5.5 to 5.7 (the Learn explanations, from the Google Doc "Added User Stories to Epics for Iteration 3") are not part of v5 and are not included.
+> Team amendments 2026-10-05: US5.8 (8 criteria) and AC5.3.8 and AC5.3.9 are added, and AC5.1.5, AC5.2.9, AC5.2.17 and AC5.3.2 are amended, so the pot is counted once and the buffer is measured as the deepest fall (see docs/adr/0005-cash-buffer-deepest-fall.md). They follow the v27b prototype's rule and are built and tested, but the product owner has not yet signed them off, and they are not yet in the v5 document or on LeanKit. Each amended criterion keeps its v5 wording above the amendment.
+> Scope: 4 user stories, 36 acceptance criteria in v5; with the team amendments, 5 user stories and 46 criteria. Each criterion shows its v5 build tag, and "new in v5" marks the 9 criteria that v5 adds to the v3 baseline. AC5.2.9 and AC5.2.10 are carried from v3 but were missing from the earlier repository snapshot, which had 25 criteria. The Iteration 3 user stories 5.5 to 5.7 (the Learn explanations, from the Google Doc "Added User Stories to Epics for Iteration 3") are not part of v5 and are not included.
 
 ## Epic 5 - Homeownership Preparation (MUST HAVE)
 
@@ -52,6 +53,10 @@ _v5 build tag: [v24]_
 _v5 build tag: [v24] · new in v5_
 
 > Given I open House, When the preparation card is displayed, Then it states what I have set aside against what the tested home needs, or says nothing is set aside yet.
+
+_Team amendment 2026-10-05 (built; not yet in the v5 document or on LeanKit; product owner sign-off pending):_
+
+> Given I open House, When the preparation card is displayed, Then it states what counts towards the tested home's upfront cash against what it needs and how much of my pot is held as my cash buffer, or says nothing is set aside yet.
 
 ### US5.2 - Check upfront cash readiness
 
@@ -115,6 +120,10 @@ _v5 build tag: [v24]_
 
 > Given I want to review my upfront cash position, When I enter the amount currently available for upfront purchase costs, Then RuMampu saves the amount as user-provided data.
 
+_Team amendment 2026-10-05 (built; not yet in the v5 document or on LeanKit; product owner sign-off pending):_
+
+> Given I want to review my upfront cash position, When I enter the cash I already have set aside for buying a home, Then RuMampu saves the amount as user-provided data and adds it to my pot; US5.8 decides how much of the pot counts towards the upfront costs.
+
 #### AC5.2.10 - Record the cash snapshot date
 
 _v5 build tag: [v24]_
@@ -163,6 +172,10 @@ _v5 build tag: [v24] · new in v5_
 
 > Given my savings are held in one pot, When You have is displayed, Then the pot is stated once and never added to itself, and the gap is what I need less what I have.
 
+_Team amendment 2026-10-05 (built; not yet in the v5 document or on LeanKit; product owner sign-off pending):_
+
+> Given my savings are held in one pot, When You have is displayed, Then the pot is stated once, the part held as my cash buffer is not counted again, and the gap is what I need less what is left after the buffer.
+
 ### US5.3 - Estimate a cash buffer from recorded short months
 
 **User Story:** As a prospective homeowner, I want to see the amount of starting cash that would have been needed to survive the short months in my record so that I can understand a possible cash-buffer requirement.
@@ -182,6 +195,10 @@ _v5 build tag: [v24]_
 _v5 build tag: [v24]_
 
 > Given the buffer is displayed, When I read its explanation, Then RuMampu describes it as the smallest starting amount that would have been needed to get through the recorded short months without going below zero.
+
+_Team amendment 2026-10-05 (built; not yet in the v5 document or on LeanKit; product owner sign-off pending):_
+
+> Given the buffer is displayed, When I read its explanation, Then RuMampu describes it as the smallest starting amount that would have got me through the rest of the record without going below zero, whichever recorded month I had started in. The calculation is the deepest fall from any earlier month (maximum drawdown, without wrapping round).
 
 #### AC5.3.3 - Display running balance by month
 
@@ -212,6 +229,18 @@ _v5 build tag: [v24]_
 _v5 build tag: [v24] · new in v5_
 
 > Given every recorded month ends below zero, or every month ends above it, When the running balance chart is drawn, Then the zero line sits where zero actually falls between the highest and lowest balance, so no part of the plot is wasted and no bar is clipped.
+
+#### AC5.3.8 - Mark where the deepest fall starts and ends
+
+_Team amendment 2026-10-05 · Should · not in v5_
+
+> Given the buffer is displayed, When I view the running balance, Then the month the deepest fall starts from and the month it reaches bottom are named and marked on the chart.
+
+#### AC5.3.9 - Say when the months do not catch up
+
+_Team amendment 2026-10-05 · Must · not in v5_
+
+> Given my running balance ends the record lower than it started, When the buffer is displayed, Then RuMampu states in ringgit how far the recorded months fell short over the whole record, and that a one-off buffer would not cover a further year like it, without saying whether I can afford the home.
 
 ### US5.4 - Review financing preparation documents
 
@@ -262,3 +291,61 @@ _v5 build tag: [v24]_
 _v5 build tag: [v24]_
 
 > Given I am reviewing the financing information, When I read the disclaimer, Then RuMampu states that it does not apply for the user and cannot tell the user whether a bank will approve them.
+
+### US5.8 - Count my savings once across the cash buffer and the upfront costs
+
+_Team amendment 2026-10-05 · new user story · not in v5_
+
+**User Story:** As a prospective homebuyer whose income changes from month to month, I want RuMampu to set aside my cash buffer first and count only the rest towards the upfront costs, so that the same ringgit is never counted for two goals.
+
+**Relevant screen(s):** Before you move in, Cash buffer, House, Home, Saving plan
+
+**Figma:** B26 Before you move in · B15 Cash buffer · B3 House (rule as in the v27b prototype)
+
+#### AC5.8.1 - Hold the buffer first
+
+_Must_
+
+> Given I have kept a house test whose cash buffer is above RM 0, and my pot holds money, When RuMampu works out what I have for the upfront costs, Then it first holds the smaller of my pot and the buffer, and counts only what is left towards the upfront costs.
+
+#### AC5.8.2 - One reading on every screen
+
+_Must_
+
+> Given part of my pot is held as my cash buffer, When I view Before you move in, House and the Saving plan, Then each shows the same amount held and the same amount towards the upfront costs, the two add up to my pot, and Home states what is still to go for the buffer and the upfront cash together.
+
+#### AC5.8.3 - Say what is held
+
+_Must_
+
+> Given part of my pot is held as my cash buffer, When You have is displayed, Then RuMampu says how much of my pot is held as my cash buffer and that only the rest counts here.
+
+#### AC5.8.4 - Show how much of the buffer is covered
+
+_Must_
+
+> Given a cash buffer above RM 0 has been calculated, When I open Cash buffer, Then RuMampu shows how much of the buffer my pot already covers and how much is still to set aside.
+
+#### AC5.8.5 - Nothing is held without a buffer
+
+_Must_
+
+> Given I have no kept house test, or the cash buffer is RM 0, When You have is displayed, Then nothing is held and my whole pot counts towards the upfront costs.
+
+#### AC5.8.6 - Amounts, not a verdict
+
+_Must_
+
+> Given my pot does not cover the cash buffer and the upfront costs together, When the shortfall is shown, Then it is stated in ringgit only, and RuMampu does not say whether I can or cannot afford the home.
+
+#### AC5.8.7 - Say when the held amount changes
+
+_Should_
+
+> Given I keep a newer house test with a different cash buffer, When You have is next displayed, Then RuMampu says that the amount held has changed and why, and my pot is untouched.
+
+#### AC5.8.8 - Go on to the saving plan
+
+_Should_
+
+> Given part of the cash buffer is still to set aside, When I view how much is covered, Then I can open the Saving plan from Cash buffer.

@@ -1,4 +1,5 @@
 import { AppState, VillageState } from './state';
+import { potSum } from './pot';
 
 /* v22 saving village — a 4x4 merge board (2048-style): saving a day spawns a
    Pondok, sliding merges two alike into the next tier. Ported verbatim from the
@@ -39,7 +40,8 @@ export function villageEnsure(s: AppState): VillageState {
 export function canProgressVillage(s: AppState): boolean {
   const b = s.buffer;
   if (!b || b.target === null) return true;
-  return b.saved >= b.target;
+  /* US5.8: the buffer is held from the whole pot first. */
+  return potSum(s) >= b.target;
 }
 
 /* A saved day always registers. If the board is full — or the buffer lock is

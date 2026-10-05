@@ -90,7 +90,7 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
     });
 
     await ac('AC10.12.1', 'The goal comes from my own test', async () => {
-      await expect(page.getByText(/short of your upfront cash estimate/)).toHaveCount(0);
+      await expect(page.getByText(/more to go for your safety buffer and upfront cash/)).toHaveCount(0);
     });
 
     await keepAffordableTest(page);
@@ -108,9 +108,9 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
     });
 
     await ac('AC10.12.2', 'The goal is set from my kept test', async () => {
-      // Home's pot row states the gap to the kept test's upfront cash.
+      // Home's pot row states what is still to go for the buffer and the upfront cash.
       await page.getByRole('tab', { name: 'Home', exact: true }).click();
-      await expect(page.getByText(/short of your upfront cash estimate/)).toBeVisible();
+      await expect(page.getByText(/more to go for your safety buffer and upfront cash/)).toBeVisible();
       await openPlan(page);
     });
 
@@ -148,7 +148,7 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
       await expect(page.getByText(/^About RM [\d,]+ a month for 36 months/)).toBeVisible();
       // Home states the remaining gap in ringgit against the kept test's upfront cash.
       await page.getByRole('tab', { name: 'Home', exact: true }).click();
-      await expect(page.getByText(/RM [\d,]+ short of your upfront cash estimate/)).toBeVisible();
+      await expect(page.getByText(/RM [\d,]+ more to go for your safety buffer and upfront cash/)).toBeVisible();
     });
 
     await captureEvidence(page, 'epic-10', 'ac10.1_10.2_10.12__target-and-split.png');

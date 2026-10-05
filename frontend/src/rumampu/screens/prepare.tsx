@@ -5,7 +5,7 @@ import { AppState, todayIso, useApp } from '../state';
 import { nf, recSpan, rm } from '../calc';
 import { useHousingCalculation } from '../useHousingCalculation';
 import { upfrontFees, upfrontNeed } from '../fees';
-import { potForUpfront, potHeld } from '../pot';
+import { potNow } from '../plan';
 import {
   Badge, BodyS, Btn, BtnLine, BtnQuiet, Card, Display, Divider, EditList, NumInput,
   Fig, IcLab, KV, NoteC, P, Prov,
@@ -145,8 +145,9 @@ export function UpfrontScreen() {
      what finished months moved in), stated once; the gap is what I need less it.
      What the cash-buffer shield already holds is left out, so no ringgit counts
      for both the buffer and the upfront cash, and the screen says how much. */
-  const held = potHeld(S);
-  const have = potForUpfront(S);
+  const q = potNow(S);
+  const held = q.buf;
+  const have = q.up;
   const gap = Math.max(0, need - have);
   const loan = Math.max(0, src.price - src.dep);
   const earnest = S.data.upfront.find(x => x.id === 'earnest') ?? { a: 0, ex: 0 };
@@ -204,6 +205,12 @@ export function UpfrontScreen() {
       </KV>
       {held > 0 ? (
         <View testID="upfront-held"><BodyS muted>{t('uf_held', { a: rm(held) })}</BodyS></View>
+      ) : null}
+      {/* AC5.8.7: a newer house test moved the buffer, so the amount held changed. */}
+      {S.buffer?.msg === 'moved' && S.buffer.prevTarget != null && S.buffer.target != null ? (
+        <View testID="upfront-held-moved">
+          <NoteC><BodyS>{t('uf_moved', { a: rm(S.buffer.prevTarget), b: rm(S.buffer.target) })}</BodyS></NoteC>
+        </View>
       ) : null}
       <KV k={t('uf_need')}><Fig value={rm(need)} p="calc" cls="h-l" /></KV>
       <KV k={t('uf_gap')}><Fig value={rm(gap)} p="calc" cls="h-l" /></KV>
@@ -357,7 +364,7 @@ const pr = StyleSheet.create({
 });
 
 export function BufferScreen() {
-  const { t, monthName, goTab } = useApp();
+  const { S, t, monthName, goTab, go } = useApp();
   const result = getHousingTestResult();
   const liquidity = result?.starting_liquidity;
   if (!liquidity || liquidity.months.length === 0) {
@@ -395,6 +402,12 @@ export function BufferScreen() {
   const fallStart = fallEnd >= 0 ? at(liquidity.fall_start) : -1;
   const when = (i: number) => t('bf_when', { m: monthName(rows[i].m), y: rows[i].y });
   const fallFrom = fallStart + 1;
+  /* US5.8 (AC5.8.4): the buffer is held from the pot first; say how much of it the
+     pot already covers and what is still to set aside. */
+  const covered = Math.min(potNow(S).buf, liquidity.required_amount);
+  const still = Math.max(0, liquidity.required_amount - covered);
+  /* AC5.3.9: when the record ends lower than it started, the months did not catch up. */
+  const endShort = last.bal < 0 ? -last.bal : 0;
   return (
     <ScreenShell back title={t('pr_buffer')}>
       {/* v24 R8i: the definition stays on screen; the basis moves behind the (i). */}
@@ -419,6 +432,21 @@ export function BufferScreen() {
             <Prov p="calc" />
           </View>
         </NoteC>
+      ) : (
+        <Card gap={8}>
+          <View testID="buffer-covered">
+            <BodyS>{still > 0
+              ? t('bf_cover', { a: rm(covered), b: rm(still) })
+              : t('bf_cover_full')}</BodyS>
+          </View>
+          {/* AC5.8.8: what is still to set aside goes on to the saving plan. */}
+          {still > 0 ? <BtnLine label={t('bf_toplan')} onPress={() => go('plan')} /> : null}
+        </Card>
+      )}
+      {endShort > 0 ? (
+        <View testID="buffer-short">
+          <NoteC><BodyS>{t('bf_short', { n: rows.length, a: rm(endShort) })}</BodyS></NoteC>
+        </View>
       ) : null}
       <BodyS muted>{t('bf_bal')}</BodyS>
       <View style={{ paddingTop: 10, paddingRight: 34, paddingBottom: 26, paddingLeft: 2, marginRight: -20 }}>

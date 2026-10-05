@@ -473,7 +473,7 @@ ${lvl > 0 ? `<rect x="6.6" y="${fy}" width="10.8" height="${fh}" rx="1.4" fill="
       {inBuffer ? (
         /* Shield phase: a filled meter, no tiles — the game opens later. */
         <BodyS muted style={{ marginTop: 10 }}>
-          {t('p10_shield_t')} · {rm(b?.saved ?? 0)} / {rm(b?.target ?? 0)} · {t('p10_target_from')}
+          {t('p10_shield_t')} · {rm(potSplit(S, result).buf)} / {rm(potSplit(S, result).bt)} · {t('p10_target_from')}
         </BodyS>
       ) : (
         <>

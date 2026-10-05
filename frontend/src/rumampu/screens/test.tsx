@@ -19,7 +19,7 @@ import { useFreshHousingTest } from '../useFreshHousingTest';
 import { logIt } from '../log';
 import { commitTotal, monthsAgg, nf, rm } from '../calc';
 import { upfrontNeed } from '../fees';
-import { potForUpfront, potHeld } from '../pot';
+import { potNow } from '../plan';
 import { unrepresentedCoverageMonths } from '../money';
 import {
   BodyS, Btn, BtnLine, Card, CardI, Chip, Chips, Display, Divider, EditList,
@@ -372,8 +372,9 @@ export function HousehomeScreen() {
      cash-buffer shield already holds. */
   const prepStrip = (() => {
     const need = upfrontNeed(S);
-    const have = potForUpfront(S);
-    const held = potHeld(S);
+    const q = potNow(S);
+    const have = q.up;
+    const held = q.buf;
     if (!need) return { label: t('hc_needprice') };
     const pct = Math.min(100, Math.round(have / need * 100));
     const label = have > 0 || held > 0 ? t('hc_pot', { a: rm(have), b: rm(need) }) : t('hc_pot0');

@@ -6,6 +6,7 @@ import { getHousingTestResult } from '../../services/housingSession';
 import { upfrontNeed } from './fees';
 import { logIt } from './log';
 import { rm } from './calc';
+import { potHeld, potSum } from './pot';
 
 /* v22 saving plan — the month's target split into small, uneven daily amounts
    that add up exactly. Ported verbatim from the prototype: same seeded PRNG so
@@ -129,17 +130,23 @@ export function planReset(s: AppState): void {
   planEnsure(s);
 }
 
-/* v26/v27b: one pot, counted once. What the plan put aside plus months the
-   person moved in. While a house test is kept, the part of it that fills the
-   safety buffer is held there first, and only the rest counts toward upfront
-   cash, so the same ringgit is never shown against both goals. */
+/* v26/v27b and US5.8: one pot, counted once. The pot is what I already had, what
+   the plan put aside and the months I moved in (AC5.2.17). While a house test is
+   kept, the part of it that fills the cash buffer is held there first, and only the
+   rest counts toward upfront cash, so the same ringgit is never shown against both
+   goals (AC5.8.1). Every screen reads this split (AC5.8.2). */
 export interface PotSplit { pot: number; bt: number; buf: number; up: number; need: number }
 
 export function potSplit(s: AppState, result: HousingTestResult | null): PotSplit {
-  const pot = Math.max(0, (s.village?.savedRm ?? 0) + s.potMoved);
+  const pot = potSum(s);
   const bt = result ? bufferTargetOf(result) : 0;
-  const buf = Math.min(pot, bt);
+  const buf = potHeld(s, bt);
   return { pot, bt, buf, up: pot - buf, need: result ? upfrontNeed(s) : 0 };
+}
+
+/* The split every screen shows, read against the latest house test. */
+export function potNow(s: AppState): PotSplit {
+  return potSplit(s, getHousingTestResult());
 }
 
 /* How full the pot is, measured against both goals together. */
@@ -311,8 +318,9 @@ export function drawDownBuffer(s: AppState, amount: number): void {
 export function planPhase(s: AppState, result: HousingTestResult | null): PlanPhase {
   if (!result) return 'setup';
   if (feasibility(result) !== 'affordable') return 'explain';
-  const saved = s.buffer?.saved ?? 0;
-  return saved < bufferTargetOf(result) ? 'buffer' : 'village';
+  /* US5.8: the buffer is filled from the whole pot first, so money I already had
+     counts towards it; the phase ends once the pot covers the buffer. */
+  return potSum(s) < bufferTargetOf(result) ? 'buffer' : 'village';
 }
 
 /* What the record says one month can actually set aside: the median leftover
@@ -345,7 +353,7 @@ export function planHorizonEffective(s: AppState): number | null {
    across the horizon, or the record's median leftover, never more than what
    is still owed. */
 export function planMonthlyAsk(s: AppState): number {
-  const owed = Math.max(0, upfrontNeed(s) - s.data.cashOnHand);
+  const owed = Math.max(0, upfrontNeed(s) - potSplit(s, getHousingTestResult()).up);
   const horizon = planHorizonEffective(s);
   if (horizon) return Math.min(owed, Math.ceil(owed / horizon));
   const capacity = monthlySaveCapacity(s);
@@ -368,17 +376,20 @@ export function planResolveTarget(s: AppState, result: HousingTestResult | null)
   /* v27b: the split is redrawn only when what it was worked out from changes:
      the phase, the goal, the declared pot, the chosen horizon or what the
      record says a month leaves. Ticking days never redraws it. */
-  const goal = phase === 'buffer' ? (bufferEnsure(s).target ?? 0) : upfrontNeed(s);
-  const sig = [phase, goal, s.data.cashOnHand, s.planHorizon ?? 0, monthlySaveCapacity(s) ?? 0].join('|');
+  const q = potSplit(s, result);
+  const goal = phase === 'buffer' ? q.bt : upfrontNeed(s);
+  /* Ticked days are left out of the signature: they grow the pot and `done` together. */
+  const sig = [phase, goal, s.data.cashOnHand, s.potMoved, s.planHorizon ?? 0, monthlySaveCapacity(s) ?? 0].join('|');
   if (p.sig === sig) return;
   const today = Math.max(0, Math.min(new Date().getDate() - 1, p.n - 1));
   const done = planSaved(p);
   let desired: number;
   if (phase === 'buffer') {
-    desired = Math.max(0, (bufferEnsure(s).target ?? 0) - bufferEnsure(s).saved + done);
+    /* What the buffer still needs from the pot, plus what this month already put in. */
+    desired = Math.max(0, q.bt - q.buf + done);
   } else {
     /* A month set part way through asks only for the days left of it. */
-    const remaining = Math.max(0, upfrontNeed(s) - s.data.cashOnHand + done);
+    const remaining = Math.max(0, upfrontNeed(s) - q.up + done);
     const ask = Math.ceil(planMonthlyAsk(s) * Math.max(1, p.n - today) / p.n);
     desired = Math.max(done, Math.min(remaining, ask));
   }

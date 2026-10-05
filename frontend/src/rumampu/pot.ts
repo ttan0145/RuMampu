@@ -16,17 +16,15 @@ export function potSum(s: AppState): number {
   return potParts(s).total;
 }
 
-/* The part of the pot the cash-buffer shield already holds (Epic 10). A day ticked
-   while the shield fills is added to what the plan has added and to the shield, so
-   it is already promised to the buffer. Never more than the pot itself. */
-export function potHeld(s: AppState): number {
-  const shield = Math.max(0, +(s.buffer?.saved ?? 0) || 0);
-  return Math.min(potSum(s), shield);
+/* US5.8 (AC5.8.1, AC5.8.5): the cash buffer is held first. The part of the pot held
+   is the smaller of the pot and the buffer worked out from the kept house test;
+   with no test, or a buffer of RM 0, nothing is held. */
+export function potHeld(s: AppState, bufferTarget: number): number {
+  return Math.min(potSum(s), Math.max(0, +bufferTarget || 0));
 }
 
-/* What the pot holds towards the upfront cash: the pot less what the shield holds,
-   so the same ringgit is never counted for both goals. Upfront cash ("You have"),
-   the House card and the gap on Home all read this. */
-export function potForUpfront(s: AppState): number {
-  return potSum(s) - potHeld(s);
+/* What the pot counts towards the upfront cash: the pot less what the buffer holds,
+   so the same ringgit is never counted for both goals (AC5.8.2). */
+export function potForUpfront(s: AppState, bufferTarget: number): number {
+  return potSum(s) - potHeld(s, bufferTarget);
 }

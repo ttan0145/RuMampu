@@ -29,7 +29,7 @@ const completedEpics = [
   },
   {
     epic: 'Epic 5',
-    expected: 36,
+    expected: 46,
     requirements: 'docs/requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md',
     specification: 'frontend/e2e/epic5.spec.ts',
   },

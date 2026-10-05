@@ -227,8 +227,8 @@ export function PlanScreen() {
   const inBuffer = phase === 'buffer';
   const q = potSplit(S, result);
   /* the goal this phase is filling */
-  const tgt = inBuffer ? (b?.target ?? 0) : q.need;
-  const have = inBuffer ? (b?.saved ?? 0) : q.up;
+  const tgt = inBuffer ? q.bt : q.need;
+  const have = inBuffer ? q.buf : q.up;
   const gpct = tgt > 0 ? Math.min(100, Math.round(have / tgt * 100)) : 100;
   const shortN = result ? Number(result.short_month_count) || 0 : 0;
   const testedN = result ? (result.tested_months ?? result.months.length) : 0;

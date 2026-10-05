@@ -1,8 +1,7 @@
 import { expect, Page } from '@playwright/test';
 import { test } from './support/fixtures';
-import { captureEvidence } from './support/app';
+import { API, captureEvidence } from './support/app';
 
-const API = 'http://localhost:8000/api/v1';
 const TEST_PASSWORD = 'Passw0rd123';
 const useNeon = process.env.PLAYWRIGHT_USE_NEON === '1';
 const existingEmail = process.env.RUMAMPU_E2E_EMAIL?.trim();

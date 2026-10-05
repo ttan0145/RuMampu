@@ -7,8 +7,8 @@ import { SvgXml } from 'react-native-svg';
 import { TAB_OF, Tab, useApp } from './state';
 import { STRINGS, Lang } from './strings';
 import { actualMonths, commitFor, commitSwap, monthKeysOf, monthsAgg, pickMonth, rm } from './calc';
-import { PLAN_HORIZONS, monthlySaveCapacity, planHorizonEffective, planResolveTarget } from './plan';
-import { potHeld, potParts } from './pot';
+import { PLAN_HORIZONS, monthlySaveCapacity, planHorizonEffective, planResolveTarget, potNow } from './plan';
+import { potParts } from './pot';
 import { getHousingTestResult } from '../../services/housingSession';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from './theme';
 import { Btn, BtnLine, BodyS, EditList, NumInput, PROV_G } from './ui';
@@ -519,7 +519,7 @@ export function SheetHost() {
      moved in. The three sum to the pot (AC10.4.3, AC5.2.17). */
   if (sheet === 'pothow') {
     const { had, plan: planPart, moved, total: potTotal } = potParts(S);
-    const held = potHeld(S);
+    const held = potNow(S).buf;
     const kvRow = (lbl: string, v: number, bold?: boolean) => (
       <View key={lbl} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 32 }}>
         <Text style={{ fontFamily: bold ? DISP_FONT : BODY_FONT, fontSize: 13.5, color: C.ink }}>{lbl}</Text>

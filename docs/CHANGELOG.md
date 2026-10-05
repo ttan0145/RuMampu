@@ -2,9 +2,22 @@
 
 Language: **English** | [Chinese (CN)](CHANGELOG.cn.md)
 
+## 2026-10-05 — Merge v27b3; savings counted once, buffer first (US5.8)
+
+Status: built and checked locally; not yet pushed
+
+- **Merged origin/main** (v27b3 design, Learn, the price page and model, STT categorisation) with the Epic 5 and acceptance-suite commits. Home, the Saving plan and Ask Ruma take the v27b3 versions; Upfront cash keeps the dated cash entry, steady inputs and the held note. `docs/openapi.yaml` is regenerated for the new endpoints, and the price-model tests no longer write to `/dev/null`, so they also pass on Windows.
+- **One pot, buffer first (team amendment US5.8, not yet signed off).** The pot is the cash I already had, what the plan put aside and the months moved in. The cash buffer from the kept house test is held from it first, and only the rest counts towards the upfront cash (`potHeld`, `potForUpfront`, `potSplit`, `potNow`). Upfront cash, the House card, the pot's working, the Saving plan and Home all read this split. Home's line now reads "… more to go for your safety buffer and upfront cash", since it measures both goals.
+- **Epic 10 follows the same rule.** The buffer phase lasts while the pot is below the buffer, the village lock reads the pot, and the plan's monthly target subtracts what counts towards the upfront cash instead of only the cash entered. This is the AC10.1.3 and AC10.12.3 change proposed on 2026-10-01; the Epic 10 owner should confirm.
+- **Cash buffer** says how much of the buffer the pot already covers and what is still to set aside, links to the Saving plan, and, when the record ends lower than it started, states the shortfall over the whole record (AC5.3.9).
+- **Upfront cash** says when a newer kept test moved the buffer, so the amount held changed (AC5.8.7).
+- **Requirements:** US5.8, AC5.3.8 and AC5.3.9 are added to the Epic 5 baseline, and AC5.1.5, AC5.2.9, AC5.2.17 and AC5.3.2 are amended, each marked as a team amendment awaiting the product owner. The traceability gate now expects 46 Epic 5 criteria.
+- **Account sync fixed for v27b plans.** v27b3 saves two more fields with the month's plan (`from`, the day the split started, and `sig`, what the target was worked out from). The account endpoint refused any plan carrying them, so once a plan existed every account sync was rejected and nothing (cash, moved-in months, plan) reached the server. The validator now accepts both, with bounds, and a backend regression covers it.
+- **Tests:** the Epic 5 spec follows the v27b3 screens and covers the ten new criteria; Epic 8 answers v27b's "Add your commitments first" prompt; Epic 10 reads Home's new line; Epic 8 and login specs use the shared API address, so the suite runs on any backend port.
+
 ## 2026-10-05 — Fix input focus, saving reversals and acceptance timing
 
-Status: implemented and verified locally (not committed)
+Status: committed and pushed to main on 2026-10-05 (e0f62e9)
 
 - Hoist Upfront cash's row, input and stage components so typing does not remount the inputs. AC5.2.9 types each character and still checks account cash, date, gap and reload.
 - Persist each saving day's original destination in optional `saving_plan.buffered` (boolean/null array). Undo follows that destination across phase changes and reloads. Older plans remain accepted; their destinations cannot be recovered exactly, so legacy undo caps the reservation at declared savings remaining. Four regressions failed on the earlier implementation and pass after the fix. Backend tests cover round trips and atomic rejection of malformed allocations.
@@ -22,7 +35,7 @@ Status: implemented and verified locally (not committed)
 
 ## 2026-10-03 — Acceptance suite back in step with the app; savings counted once; steadier cash buffer; moved-in money kept
 
-Status: built and checked locally; awaiting owner acceptance (not committed)
+Status: committed and pushed to main on 2026-10-05 (e0f62e9)
 
 - **Browser acceptance suite.** The CI step "Run browser acceptance" had failed on every push to main since 2026-09-04. The suite now matches the current main (`aa90231`, merged locally) and the v24/v25 screens:
   - The shared `openApp()` helper walks the guest entry through the "Continue as a guest?" dialog and keeps the client id the test seeded, so specs that seed their record through the API still see it after onboarding.

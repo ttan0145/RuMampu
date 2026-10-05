@@ -161,24 +161,27 @@ test.describe('Epic 5 — Upfront cash fee scales', { tag: ['@epic5', '@hardenin
     expect(potSum(state(-50, 10, 0))).toBe(10);
   });
 
-  test('TECH-5.2 — What the safety buffer holds is not counted again towards the upfront cash', async () => {
-    const state = (cash: number, planSaved: number, moved: number, shield: number | null) => ({
+  test('TECH-5.8 — The buffer is held from the whole pot first and only the rest counts towards upfront cash', async () => {
+    const state = (cash: number, planSaved: number, moved: number) => ({
       potMoved: moved,
       village: { savedRm: planSaved },
-      buffer: shield === null ? null : { saved: shield },
       data: { cashOnHand: cash },
     }) as unknown as AppState;
 
-    // RM 1,000 cash, RM 300 saved while the shield filled (so the shield holds it), RM 200 moved in.
-    expect(potSum(state(1000, 300, 200, 300))).toBe(1500);
-    expect(potHeld(state(1000, 300, 200, 300))).toBe(300);
-    expect(potForUpfront(state(1000, 300, 200, 300))).toBe(1200);
-    // No shield yet: nothing is held and the whole pot counts.
-    expect(potHeld(state(8000, 0, 0, null))).toBe(0);
-    expect(potForUpfront(state(8000, 0, 0, null))).toBe(8000);
-    // The shield never holds more than the pot, so the upfront part never goes below zero.
-    expect(potHeld(state(0, 50, 0, 80))).toBe(50);
-    expect(potForUpfront(state(0, 50, 0, 80))).toBe(0);
+    // RM 1,000 cash + RM 300 saved + RM 200 moved in = RM 1,500; a RM 905 buffer is held first.
+    expect(potHeld(state(1000, 300, 200), 905)).toBe(905);
+    expect(potForUpfront(state(1000, 300, 200), 905)).toBe(595);
+    // Cash I already had counts towards the buffer too (it is part of the pot).
+    expect(potHeld(state(800, 0, 0), 905)).toBe(800);
+    expect(potForUpfront(state(800, 0, 0), 905)).toBe(0);
+    // No buffer (no test, or RM 0): nothing is held and the whole pot counts.
+    expect(potHeld(state(8000, 0, 0), 0)).toBe(0);
+    expect(potForUpfront(state(8000, 0, 0), 0)).toBe(8000);
+    // Held plus what counts towards upfront cash is always the pot.
+    for (const target of [0, 500, 1500, 99999]) {
+      const s = state(1000, 300, 200);
+      expect(potHeld(s, target) + potForUpfront(s, target)).toBe(potSum(s));
+    }
   });
 
   test('TECH-5.2 — A chosen saved test supplies the price and deposit instead of the house screen', async () => {
@@ -234,7 +237,9 @@ test.describe('Safety buffer saving reversals', { tag: ['@epic5', '@epic10', '@h
     expect(planEnsure(state).buffered?.slice(0, 2)).toEqual([true, false]);
     planToggle(state, 0);
     expect(state.buffer?.saved).toBe(0);
-    expect(potForUpfront(state)).toBe(40);
+    // US5.8: the RM 40 still saved is held for the RM 100 buffer first.
+    expect(potHeld(state, 100)).toBe(40);
+    expect(potForUpfront(state, 100)).toBe(0);
     expect(planPhase(state, result)).toBe('buffer');
     planToggle(state, 1);
     expect(potSum(state)).toBe(0);
@@ -250,7 +255,7 @@ test.describe('Safety buffer saving reversals', { tag: ['@epic5', '@epic10', '@h
     planToggle(state, 0);
     expect(state.buffer).toMatchObject({ saved: 80, overflow: 0 });
     expect(potSum(state)).toBe(80);
-    expect(potForUpfront(state)).toBe(0);
+    expect(potForUpfront(state, 100)).toBe(0);
   });
 
   test('TECH-BUFFER-04 — Legacy plans cannot retain more reserved money than remains saved', () => {
@@ -259,6 +264,17 @@ test.describe('Safety buffer saving reversals', { tag: ['@epic5', '@epic10', '@h
     if (state.plan) delete state.plan.buffered;
     planToggle(state, 0);
     expect(state.buffer).toMatchObject({ saved: 0, overflow: 0 });
+    expect(planPhase(state, result)).toBe('buffer');
+  });
+
+  test('TECH-BUFFER-05 — Cash I already had fills the buffer first, so the plan goes straight to upfront cash', () => {
+    const state = savingState([10]);
+    expect(planPhase(state, result)).toBe('buffer');
+    state.data.cashOnHand = 100;
+    expect(planPhase(state, result)).toBe('village');
+    expect(potHeld(state, 100)).toBe(100);
+    expect(potForUpfront(state, 100)).toBe(0);
+    state.data.cashOnHand = 60;
     expect(planPhase(state, result)).toBe('buffer');
   });
 });

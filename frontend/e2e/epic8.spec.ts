@@ -2,9 +2,8 @@ import { expect, Page } from '@playwright/test';
 import { e2eGet, e2ePatch, e2ePost, test } from './support/fixtures';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { captureEvidence } from './support/app';
+import { API, captureEvidence } from './support/app';
 
-const API = 'http://localhost:8000/api/v1';
 
 // EN: This spec uses top-level test() calls rather than a test.describe() group.
 // test.describe() would group related tests; here each US8.x scenario is already
@@ -433,6 +432,7 @@ async function saveGuestHousingTestThroughUi(page: Page, name: string): Promise<
   await page.getByText('Test a house', { exact: true }).click();
   await page.getByPlaceholder('e.g. 250,000').fill('250000');
   await page.getByRole('button', { name: 'Run the test', exact: true }).click();
+  await answerNoCommitments(page);
   await expect(page.getByRole('button', { name: 'Save test', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Save test', exact: true }).click();
   await page.locator('input:visible').last().fill(name);
@@ -454,6 +454,15 @@ async function loginExistingAccountFromGuest(page: Page, email: string, password
   await page.getByText('Log in', { exact: true }).last().click();
   await expect(page.getByText('Keep your guest record?', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible({ timeout: 15000 });
+}
+
+/* v27b asks once before a house test when no commitments are entered; these
+   flows have none, so they answer "I have no commitments". */
+async function answerNoCommitments(page: Page): Promise<void> {
+  const none = page.getByText('I have no commitments', { exact: true });
+  const saved = page.getByRole('button', { name: 'Save test', exact: true });
+  await expect(none.or(saved).first()).toBeVisible();
+  if (await none.isVisible()) await none.click();
 }
 
 test('US8.16 first-launch onboarding explains RuMampu and reaches get-to-know', async ({ page }) => {
@@ -1128,6 +1137,7 @@ test('US8.2 keeps a completed housing test only once in the current frontend ses
   await page.getByText('Test a house', { exact: true }).click();
   await page.getByPlaceholder('e.g. 250,000').fill('250000');
   await page.getByRole('button', { name: 'Run the test', exact: true }).click();
+  await answerNoCommitments(page);
 
   await expect(page.getByRole('button', { name: 'Save test', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Save test', exact: true }).click();
