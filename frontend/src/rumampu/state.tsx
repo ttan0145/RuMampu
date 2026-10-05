@@ -49,7 +49,7 @@ import {
 import { fetchHouseCosts as fetchHouseCostsRequest, fetchSavedHousingTests as fetchSavedHousingTestsRequest } from '../../services/housingService';
 import { clearHousingSession, getHousingScenario, getHousingTestResult, hydrateHousingSession, setHousingScenario, setHousingTestResult, subscribeHousingSession } from '../../services/housingSession';
 import type { HousingScenarioResponse, HousingTestResult } from '../../types/housing';
-import { HouseCostType, HouseCostsResponse, SavedHousingTestRecord } from '../../types/housing';
+import { HouseCostType, HouseCostsResponse, PxSize, PxType, SavedHousingTestRecord } from '../../types/housing';
 import { logIt } from './log';
 import { rm, rmx } from './calc';
 import { accountSnapshot, hydrate, hydrateAccountState, snapshot } from './persist';
@@ -66,7 +66,9 @@ export type Route =
   // 中文：Epic 7 预览路由为未来 Iteration 3 工作保留；这不代表它们是 Iteration 1 实现。
   | 'prepare' | 'prepare_soon' | 'upfront' | 'buffer' | 'docs' | 'pv_switch' | 'pv_month' | 'pv_compare'
   /* v26/v27b: What buying involves, short lessons with pictures and badges. */
-  | 'learn' | 'learnsec' | 'learnread';
+  | 'learn' | 'learnsec' | 'learnread'
+  /* Price Explorer: one guided page from the price model */
+  | 'priceexplorer';
 
 /* v22 tab model: home / money / test (house) / profile, FAB in the middle. */
 export type Tab = 'home' | 'money' | 'test' | 'profile';
@@ -81,7 +83,7 @@ export const TAB_OF: Record<Route, Tab> = {
   compare: 'test', shock: 'test',
   plan: 'money', profile: 'profile', prepare: 'test', prepare_soon: 'test', upfront: 'test', buffer: 'money', docs: 'test',
   pv_switch: 'test', pv_month: 'test', pv_compare: 'test',
-  learn: 'test', learnsec: 'test', learnread: 'test',
+  learn: 'test', learnsec: 'test', learnread: 'test', priceexplorer: 'test',
 };
 
 // EN: US8.2 stores the compact kept-test summary used by Your Record during the
@@ -315,6 +317,13 @@ export interface AppState {
   lnArtWas: boolean;
   lnCele: string | null;
   lnPop: string | null;
+  /* Price Explorer: the price being explored (null = start from the stress test),
+     home type, picked district, size, tenure, year shown and the yearly growth
+     of the user's price. Fetched figures stay inside the screen. */
+  px: {
+    budget: number | null; type: PxType; district: string | null; size: PxSize; tenure: 'F' | 'L';
+    year: 0 | 1 | 2 | 3; grow: number; view: 'map' | 'list'; typeSet: boolean;
+  };
   /* v27b screen tips: the running tour (screen and step), the first-visit
      invitation (Home) or hint (other screens), the off switch, and the
      screens whose tips were already offered. Off by default under Playwright. */
@@ -430,6 +439,7 @@ function initialState(): AppState {
     coverageSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
     voice: null, sayOpen: false, qSay: false, aiY: null, aiAnchor: null, noBills: false, runPending: false, demo: false,
     lnTab: 'nosalary', lnArt: null, lnPg: 1, lnProg: {}, lnWas: null, lnArtWas: false, lnCele: null, lnPop: null,
+    px: { budget: null, type: 'terrace', district: null, size: 'typical', tenure: 'F', year: 3, grow: 3, view: 'list', typeSet: false },
     tour: null, tourAsk: null, tourHint: null, tipsOff: process.env.EXPO_PUBLIC_E2E === '1', seenG: [],
     sheet: null,
     assistantOpen: false,
@@ -1779,17 +1789,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
      The in-flight guard lives in a ref because setState updaters are not
      applied synchronously. */
   const houseCostsInflight = useRef(false);
+  const houseCostsData = useRef<HouseCostsResponse | null>(null);
   /* Loads once per session. The guard is deliberately not reset on success: the
      payload is small and the underlying data changes quarterly at most, so a
      second fetch would be wasted. It IS reset on error so a retry works.
      Consequence: the `quarters` parameter cannot be varied after a successful
      load without a state reset. */
   const loadHouseCosts = useCallback(async (): Promise<void> => {
+    /* the figures are published and the same for everyone: a sign-in or sign-out
+       that resets the app state gets them back from memory, not a spinner */
+    if (houseCostsData.current) {
+      const data = houseCostsData.current;
+      setS(prev => (prev.houseCosts ? prev : { ...prev, houseCosts: data, houseCostsSync: 'ready' }));
+      return;
+    }
     if (houseCostsInflight.current) return;
     houseCostsInflight.current = true;
     setS(prev => (prev.houseCostsSync === 'ready' ? prev : { ...prev, houseCostsSync: 'loading' }));
     try {
       const data = await fetchHouseCostsRequest();
+      houseCostsData.current = data;
       setS(prev => ({
         ...prev,
         houseCosts: data,

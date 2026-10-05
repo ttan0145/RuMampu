@@ -154,3 +154,85 @@ class PropertyTransaction(models.Model):
         indexes = [
             models.Index(fields=["district", "property_type", "quarter"]),
         ]
+
+
+# ---- Price Explorer: the offline price model's precomputed results ----------
+# The models (Bayesian trend + LightGBM ranges) run offline in ml/; only their
+# outputs are loaded here by `manage.py load_price_model`, and the API serves
+# them with plain queries. One version is active at a time.
+class PriceModelVersion(models.Model):
+    """One loaded run of the offline price model. Only one is active at a time."""
+    version = models.CharField(max_length=40, unique=True)          # e.g. "pm-2026Q2-v3"
+    is_active = models.BooleanField(default=False)
+    meta = models.JSONField(default=dict, blank=True)               # window, accuracy, drivers, notes
+    loaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.version
+
+
+class PriceRangeCell(models.Model):
+    """Price range per district x type x tenure x size band, today and 1-3 years on."""
+    version = models.ForeignKey(PriceModelVersion, on_delete=models.CASCADE, related_name='cells')
+    state_code = models.CharField(max_length=3)                     # 'SGR', 'KUL' …
+    state = models.CharField(max_length=40)                         # 'Selangor', 'W.P. Kuala Lumpur'
+    district = models.CharField(max_length=60)                      # NAPIC district name
+    property_type = models.CharField(max_length=20)                 # terrace, condo, semi_detached …
+    tenure = models.CharField(max_length=1)                         # F / L
+    storeys = models.PositiveSmallIntegerField(default=0)
+    size_band = models.CharField(max_length=8)                      # small / typical / large
+    n_sales_2y = models.PositiveIntegerField()
+    size_m2 = models.PositiveIntegerField()
+    p10 = models.PositiveIntegerField()
+    p50 = models.PositiveIntegerField()
+    p90 = models.PositiveIntegerField()
+    y1_p10 = models.PositiveIntegerField()
+    y1_p50 = models.PositiveIntegerField()
+    y1_p90 = models.PositiveIntegerField()
+    y2_p10 = models.PositiveIntegerField()
+    y2_p50 = models.PositiveIntegerField()
+    y2_p90 = models.PositiveIntegerField()
+    y3_p10 = models.PositiveIntegerField()
+    y3_p50 = models.PositiveIntegerField()
+    y3_p90 = models.PositiveIntegerField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=['version', 'district', 'property_type', 'tenure', 'size_band'], name='unique_price_cell')]
+        indexes = [models.Index(fields=['version', 'state_code', 'property_type'])]
+
+
+class PriceScenario(models.Model):
+    """State x type x years: what-if growth, chance of a fall, recent trend."""
+    version = models.ForeignKey(PriceModelVersion, on_delete=models.CASCADE, related_name='scenarios')
+    state_code = models.CharField(max_length=3)
+    property_type = models.CharField(max_length=20)
+    years = models.PositiveSmallIntegerField()                       # 1, 2, 3
+    growth_low = models.FloatField()
+    growth_mid = models.FloatField()
+    growth_high = models.FloatField()
+    prob_price_fall = models.FloatField()
+    annual_trend = models.FloatField()
+    annual_trend_p10 = models.FloatField()
+    annual_trend_p90 = models.FloatField()
+    sales_last4q = models.PositiveIntegerField()
+    data_quality = models.CharField(max_length=5)                    # good / fair / thin
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=['version', 'state_code', 'property_type', 'years'], name='unique_price_scenario')]
+
+
+class PriceIndexPoint(models.Model):
+    """Price index per state (or 'ALL' = Malaysia) x type x quarter, 2021Q1 = 100."""
+    version = models.ForeignKey(PriceModelVersion, on_delete=models.CASCADE, related_name='index_points')
+    state_code = models.CharField(max_length=3)                     # 'ALL' = Malaysia
+    property_type = models.CharField(max_length=20)                 # incl. 'all_types'
+    quarter = models.CharField(max_length=6)                        # '2021Q1'
+    index_value = models.FloatField()
+    sales = models.PositiveIntegerField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=['version', 'state_code', 'property_type', 'quarter'], name='unique_price_index_point')]
+        ordering = ['quarter']

@@ -49,7 +49,7 @@ export default defineConfig({
     {
       command: useNeon
         ? `${python} manage.py runserver localhost:${backendPort} --noreload`
-        : `${python} manage.py migrate --noinput && ${python} manage.py runserver localhost:${backendPort} --noreload`,
+        : `${python} manage.py migrate --noinput && ${python} manage.py load_price_model ../ml/app_export --activate && ${python} manage.py runserver localhost:${backendPort} --noreload`,
       cwd: '../backend',
       env: {
         ...process.env,

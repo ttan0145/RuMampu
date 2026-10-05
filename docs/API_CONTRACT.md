@@ -95,6 +95,9 @@ After confirmation, the client retries the same data with `confirm_outlier: true
 | GET/POST | `/api/v1/housing/scenarios/` | List or create current-owner housing scenarios |
 | GET/PUT/PATCH/DELETE | `/api/v1/housing/scenarios/{id}/` | Read, update, or delete a housing scenario |
 | POST | `/api/v1/housing/test-result/` | Test a current-owner scenario against the authoritative finance record |
+| GET | `/api/v1/housing/price-explorer/areas/` | Price Explorer: per district, share of last-4-quarter sales at or under a budget, and the model's typical price |
+| GET | `/api/v1/housing/price-explorer/home/` | Price Explorer: P10/P50/P90 range today and 1-3 years on for a district, type, tenure and size band |
+| GET | `/api/v1/housing/price-explorer/trend/` | Price Explorer: state and national price index per quarter (2021Q1 = 100) |
 
 The OpenAPI schema is authoritative for complete request and response field definitions.
 
@@ -382,6 +385,18 @@ The formal housing-test flow is:
 The test-result request may include `tested_monthly_home_cost` for a non-persisted payment comparison and `income_shock_percent` from 0 through 90 for a hypothetical income-drop case. Both reuse the saved scenario's rate, tenure, deposit, additional costs, and the backend finance record. They do not mutate the scenario. The response includes the tested monthly result, shortfalls, carrying range, indicative price conversion, and `starting_liquidity` path.
 
 `POST /api/v1/housing/test/` remains a compatibility endpoint for older stateless clients. The formal frontend does not call it and does not submit a client-derived copy of financial months.
+
+### 10.1 Price Explorer (price model results)
+
+The price model runs offline in `ml/`; `manage.py load_price_model ml/app_export --activate` loads its results into four Django-managed tables (`PriceModelVersion`, `PriceRangeCell`, `PriceScenario`, `PriceIndexPoint`). The API never runs a model. All three endpoints are `GET`, need no login, and return `503 {"detail": "price model not loaded"}` until a version is active.
+
+| Endpoint | Query | Notes |
+|---|---|---|
+| `areas/` | `state` (e.g. `SGR`), `property_type`, `budget` (50,000 to 10,000,000) | Budget is rounded to RM 10,000. `share_under` is `null` below 8 recent sales. `window` is `null` where the raw `property_transaction` table is absent (SQLite). |
+| `home/` | `district`, `property_type`, `tenure` (`F`/`L`, default `F`), `size` (`small`/`typical`/`large`, default `typical`) | Falls back to the tenure and size the model has. `404` when the district has no cell for that type. Includes `future` (1-3 years, each with `prob_lower`), `trend`, `accuracy`, `drivers` and `meta`. |
+| `trend/` | `state`, `property_type` | `state` is aligned to the national quarters, with `null` where the state has no point. |
+
+Ranges are what-ifs, not valuations: clients show a range, never one price, and label the future as a what-if.
 
 ## 11. Compatibility and change policy
 

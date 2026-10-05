@@ -40,12 +40,17 @@ export const GUIDES: Partial<Record<Route, { id: string; k: string }[]>> = {
   plan: [{ id: 'pl.setup', k: 'g_pl0' }, { id: 'pl.grid', k: 'g_pl3' }, { id: 'pl.phase', k: 'g_pl1' }, { id: 'pl.chips', k: 'g_pl2' }],
   learn: [{ id: 'ln.hero', k: 'g_ln0' }, { id: 'ln.badges', k: 'g_ln3' }, { id: 'ln.secs', k: 'g_ln1' }],
   pv_compare: [{ id: 'pv.cards', k: 'g_pv1' }, { id: 'pv.chart', k: 'g_pv2' }],
+  priceexplorer: [{ id: 'px.price', k: 'g_px1' }, { id: 'px.map', k: 'g_px2' }, { id: 'px.home', k: 'g_px3' }],
 };
+
+/* Screens that explain themselves at the top: no first-visit banner, the ? still runs the tour. */
+const QUIET: Route[] = ['priceexplorer'];
 
 /* The screen's name in the hint and invitation. */
 const GNAME: Partial<Record<Route, string>> = {
   money: 'tab_money', househome: 'tab_test', result: 'rs_title', homecosts: 'fh_title', upfront: 'pr_upfront',
   income: 'money_income', expenses: 'money_expenses', plan: 'pl_title', learn: 'hh_learn', pv_compare: 'pv_then',
+  priceexplorer: 'px_title',
 };
 
 /* ---------- marking the parts tips point at ---------- */
@@ -394,7 +399,7 @@ export function TourHost({ tabBarHeight }: { tabBarHeight: number }) {
     if (E2E || S.tipsOff || !S.onboarded || !S.knew || S.authEntryOpen) return undefined;
     if (S.tour || S.tourAsk || S.sheet || S.assistantOpen || S.lnCele) return undefined;
     const route = S.route;
-    if (!GUIDES[route] || S.seenG.includes(route)) return undefined;
+    if (!GUIDES[route] || S.seenG.includes(route) || QUIET.includes(route)) return undefined;
     /* wait for the screen's parts to mount and settle before counting them */
     const timer = setTimeout(() => up(s => {
       if (s.tour || s.tourAsk || s.sheet || s.lnCele || s.route !== route || s.seenG.includes(route)) return;

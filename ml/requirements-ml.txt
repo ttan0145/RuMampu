@@ -1,0 +1,12 @@
+pandas
+numpy
+scipy
+scikit-learn
+statsmodels
+lightgbm
+pymc
+arviz
+shapely
+matplotlib
+pyarrow
+osmium

@@ -884,6 +884,12 @@ export function ResultScreen() {
           <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 15, color: C.ink64 }}>{t('cp_tile_d')}</Text>
         </Pressable>
       </View>
+      <Pressable onPress={() => { up(x2 => { x2.px.budget = null; }); go('priceexplorer'); }} style={[tx.hubtile, { flex: 0 }]}
+        accessibilityRole="button" testID="rx-px">
+        <View style={tx.hubIc}><Ico name="search" size={22} color="#fff" /></View>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 15, lineHeight: 20, color: C.ink }}>{t('px_tile')}</Text>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 15, color: C.ink64 }}>{t('px_tile_d')}</Text>
+      </Pressable>
       <BtnLine label={t('rx_how')} onPress={() => up(x2 => { x2.howOpen = !x2.howOpen; })} />
       {S.howOpen ? <Card><BodyS>{t('rs_how_body', { c: nf(cost) })}</BodyS></Card> : null}
     </ScreenShell>

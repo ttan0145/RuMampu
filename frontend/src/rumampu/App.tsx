@@ -25,6 +25,7 @@ import {
 } from './screens/prepare';
 import { ImportIncomeScreen } from './screens/imports';
 import { HomeCostsScreen } from './screens/homecosts';
+import { PriceExplorerScreen } from './screens/priceexplorer';
 import { AcctDetailsScreen } from './screens/acctdetails';
 import { LearnCele, LearnReadScreen, LearnScreen, LearnSecScreen } from './screens/learn';
 
@@ -38,7 +39,7 @@ const SCREENS: Record<Route, React.ComponentType> = {
   house: HouseScreen, homecost: HomecostScreen, precheck: PrecheckScreen, result: ResultScreen,
   range: RangeScreen, compare: CompareScreen, shock: ShockScreen,
   househome: HousehomeScreen, savedtests: SavedtestsScreen, profile: ProfileScreen,
-  homecosts: HomeCostsScreen, acctdetails: AcctDetailsScreen,
+  homecosts: HomeCostsScreen, acctdetails: AcctDetailsScreen, priceexplorer: PriceExplorerScreen,
   prepare: PrepareScreen, prepare_soon: PrepareComingSoonScreen, upfront: UpfrontScreen, buffer: BufferScreen, docs: DocsScreen,
   pv_switch: PvSwitchScreen, pv_month: PvMonthScreen, pv_compare: PvCompareScreen,
   learn: LearnScreen, learnsec: LearnSecScreen, learnread: LearnReadScreen,

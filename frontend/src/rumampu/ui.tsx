@@ -10,7 +10,7 @@ import { GuideBtn } from './tour';
 
 /* UI primitives — each maps 1:1 to a CSS class in the prototype. */
 
-export const PROV_G: Record<string, string> = { user: '●', official: '○', calc: '▸', assume: '▩' };
+export const PROV_G: Record<string, string> = { user: '●', official: '○', calc: '▸', assume: '▩', model: '◇' };
 
 /* v24 monthBtn (.fhsel): the month-filter field above a recent list. */
 export function MonthBtn({ act, monthKey }: { act: 'incmonth' | 'exmonth'; monthKey: number | null }) {

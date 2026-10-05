@@ -19,6 +19,9 @@ export const C = {
   /* The warm "out" variant used by the expense entry card (.incard.out). */
   out: '#D9663D',
   outDeep: '#B54F2B',
+  /* Price Explorer: the user's own price is always gold */
+  gold: '#FFC53D',
+  goldD: '#B97F00',
 } as const;
 
 /* v22 switches the design font to Inter (400/600/700/800). */
