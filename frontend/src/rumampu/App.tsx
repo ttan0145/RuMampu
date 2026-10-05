@@ -6,6 +6,7 @@ import { C } from './theme';
 import { SheetHost, Splash, TabBar, ToastView } from './overlays';
 import { EntryFlow, GetToKnow } from './entry';
 import { AssistantFab, AssistantSheet } from './assistant';
+import { TourHost, registerRoot } from './tour';
 import { HomeScreen } from './screens/home';
 import { PlanScreen } from './screens/plan';
 import { ProfileScreen } from './screens/profile';
@@ -25,6 +26,7 @@ import {
 import { ImportIncomeScreen } from './screens/imports';
 import { HomeCostsScreen } from './screens/homecosts';
 import { AcctDetailsScreen } from './screens/acctdetails';
+import { LearnCele, LearnReadScreen, LearnScreen, LearnSecScreen } from './screens/learn';
 
 const SCREENS: Record<Route, React.ComponentType> = {
   home: HomeScreen, plan: PlanScreen,
@@ -39,6 +41,7 @@ const SCREENS: Record<Route, React.ComponentType> = {
   homecosts: HomeCostsScreen, acctdetails: AcctDetailsScreen,
   prepare: PrepareScreen, prepare_soon: PrepareComingSoonScreen, upfront: UpfrontScreen, buffer: BufferScreen, docs: DocsScreen,
   pv_switch: PvSwitchScreen, pv_month: PvMonthScreen, pv_compare: PvCompareScreen,
+  learn: LearnScreen, learnsec: LearnSecScreen, learnread: LearnReadScreen,
 };
 
 function Root() {
@@ -57,7 +60,7 @@ function Root() {
   const Screen = SCREENS[S.route] || HomeScreen;
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.paper, paddingTop: insets.top }}>
+    <View ref={registerRoot} collapsable={false} style={{ flex: 1, backgroundColor: C.paper, paddingTop: insets.top }}>
       <View style={{ flex: 1 }}>
         <Screen key={S.route} />
       </View>
@@ -71,6 +74,10 @@ function Root() {
       {/* US6.2: available on every page after onboarding, never before (AC6.2.10). */}
       {S.onboarded && S.knew ? <AssistantFab /> : null}
       {S.onboarded ? <AssistantSheet /> : null}
+      {/* v27b: a finished topic's badge first, then Ruma's invitation, then the tour. */}
+      <LearnCele />
+      {/* v27b screen tips: the invitation, the hint and the tour sit above everything. */}
+      <TourHost tabBarHeight={76 + insets.bottom} />
     </View>
   );
 }

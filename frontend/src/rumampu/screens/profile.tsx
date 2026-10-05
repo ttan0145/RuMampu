@@ -3,7 +3,7 @@ import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, View }
 import { useApp } from '../state';
 import { STRINGS } from '../strings';
 import { BODY_FONT, C, DISP_FONT } from '../theme';
-import { Btn, BodyS, IcLab, P } from '../ui';
+import { Btn, BodyS, BtnQuiet, IcLab, P, SwRow } from '../ui';
 import { Ruma } from '../ruma-view';
 import { ScreenShell } from './shell';
 import { exportRecord } from '../api';
@@ -13,7 +13,7 @@ import { exportRecord } from '../api';
 const FLAGS: Record<string, string> = { en: '🇬🇧', ms: '🇲🇾', zh: '🇨🇳' };
 
 export function ProfileScreen() {
-  const { S, t, up, go, toast, signOut, deleteCurrentRecord } = useApp();
+  const { S, t, up, go, toast, signOut, deleteCurrentRecord, enterSampleMonths, leaveSampleMonths } = useApp();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false);
   const [signupChoiceOpen, setSignupChoiceOpen] = React.useState(false);
   const [exportConfirmOpen, setExportConfirmOpen] = React.useState(false);
@@ -101,6 +101,19 @@ export function ProfileScreen() {
         </View>
         <Text style={{ color: C.ink40 }}>▾</Text>
       </Pressable>
+      {/* v27b: the invitation, the tour and the tips switch. Back on, every screen offers its tips again. */}
+      <View style={[st.mocard, { paddingHorizontal: 16, paddingVertical: 4 }]}>
+        <SwRow on={!S.tipsOff} label={t('pf_tips')} hint={t('pf_tips_h')}
+          onPress={() => up(s => { s.tipsOff = !s.tipsOff; if (!s.tipsOff) s.seenG = []; })} />
+      </View>
+      {/* v27b: look around with sample months, or put your own record back */}
+      <BtnQuiet onPress={() => {
+        if (S.demo) { leaveSampleMonths(); return; }
+        enterSampleMonths();
+        toast(t('demo_loaded'));
+      }} style={{ minHeight: 48 }}>
+        <IcLab name="book"><P style={{ fontSize: 15 }}>{t(S.demo ? 'demo_clear' : 'demo_load')}</P></IcLab>
+      </BtnQuiet>
       {S.guest ? (
         <View style={st.mocard}>
           <Pressable onPress={() => setDeleteConfirmOpen(true)} style={st.morow}>

@@ -1,18 +1,22 @@
 import React from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getHousingTestResult } from '../../../services/housingSession';
-import { useApp } from '../state';
-import { nf, rm } from '../calc';
+import { AppState, useApp } from '../state';
+import { nf, recSpan, rm } from '../calc';
 import { useHousingCalculation } from '../useHousingCalculation';
 import { upfrontFees, upfrontNeed } from '../fees';
 import {
   Badge, BodyS, Btn, BtnLine, BtnQuiet, Card, Display, Divider, EditList, NumInput,
-  Fig, FigRow, IcLab, KV, NoteC, P, Prov,
+  Fig, IcLab, KV, NoteC, P, Prov,
   CardI,
 } from '../ui';
-import { BODY_FONT, C, DISP_FONT } from '../theme';
+import { BODY_FONT, C, DISP_FONT, XBOLD_FONT } from '../theme';
+import { Ico } from '../svgs';
+import { Ruma } from '../ruma-view';
 import { Waterline } from '../charts';
 import { ScreenShell } from './shell';
+import { LnEnter } from './learn';
+import { GuideTarget } from '../tour';
 import { SheetFrame } from '../overlays';
 
 /* v22: prepare rows live inside the House tab's "Get ready" segment. */
@@ -109,7 +113,7 @@ export function UpfrontScreen() {
     const it = S.data.upfront.find(x => x.id === id) ?? { a: 0, ex: 0 };
     return (
       <View style={{ width: 110 }}>
-        <NumInput value={+it.a || ''} placeholder={String(it.ex ?? 0)} decimal={false} alignRight
+        <NumInput value={+it.a || ''} placeholder={t('eg_ph', { v: it.ex ?? 0 })} decimal={false} alignRight
           onNum={n => setItem(id, n)} accessibilityLabel={t((it as { k?: string }).k || '')} />
       </View>
     );
@@ -159,6 +163,7 @@ export function UpfrontScreen() {
       ) : (
         <NoteC><BodyS>{t('uf_notest')}</BodyS></NoteC>
       )}
+      <GuideTarget id="uf.chart">
       <KV k={t('uf_have')}><Fig value={rm(have)} p="user" cls="h-l" /></KV>
       <KV k={t('uf_need')}><Fig value={rm(need)} p="calc" cls="h-l" /></KV>
       <KV k={t('uf_gap')}><Fig value={rm(gap)} p="calc" cls="h-l" /></KV>
@@ -188,12 +193,15 @@ export function UpfrontScreen() {
         </View>
         <View style={{ marginTop: 6, alignItems: 'flex-start' }}><Prov p="calc" /></View>
       </View>
+      </GuideTarget>
       {dep === 0 ? null : <KV k={t('uf_dep')}><Fig value={rm(dep)} p="user" /></KV>}
       {/* v24: the first-home stamp exemption, with the rule it applies. */}
+      <GuideTarget id="uf.first">
       <Card gap={4}>
         <Switch on={S.firstHome} onPress={() => up(s => { s.firstHome = !s.firstHome; })}
           label={t('uf_first')} info={<CardI t="uf_first" b={['uf_first_h', 'uf_first_src']} p="official" />} />
       </Card>
+      </GuideTarget>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <Text style={{ fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.99, textTransform: 'uppercase', color: C.ink64 }}>
           {t('uf_steps')}
@@ -202,9 +210,11 @@ export function UpfrontScreen() {
           b={['uf_steps_h', 'uf_baldp_h', 'uf_spa_h_g', 'uf_val_h_g', 'uf_dep0', 'uf_stamp_src', 'uf_legal_src', 'uf_val_src', 'uf_scope']}
           p="calc" />
       </View>
+      <GuideTarget id="uf.stage">
       <Stage n={1} k="uf_s1">
-        <Row label={t('uf_earn')} kind="user" info={<CardI t="uf_earn" b={['uf_earn_h']} p="user" />}><Input id="earnest" /></Row>
+        <Row label={t('uf_earn')} kind="user" note={t('uf_earn_in')} info={<CardI t="uf_earn" b={['uf_earn_h']} p="user" />}><Input id="earnest" /></Row>
       </Stage>
+      </GuideTarget>
       <Stage n={2} k="uf_s2">
         {src.price ? (
           <>
@@ -221,12 +231,16 @@ export function UpfrontScreen() {
         )}
       </Stage>
       <Stage n={3} k="uf_s3" info={<CardI t="uf_s3" b={['uf_s3_h']} p="user" />}>
+        {/* v27b: say up front that only typed amounts count here */}
+        <BodyS muted style={{ paddingTop: 8, paddingBottom: 4 }}>{t('uf_s3_in')}</BodyS>
         <Row label={t('uf_util')} kind="user" info={<CardI t="uf_util" b={['uf_util_h']} p="user" />}><Input id="util" /></Row>
         <Row label={t('uf_strata')} kind="user" info={<CardI t="uf_strata" b={['uf_strata_h']} p="user" />}><Input id="strata" /></Row>
         <Row label={t('uf_furn')} kind="user" info={<CardI t="uf_furn" b={['uf_furn_h']} p="user" />}><Input id="furn" /></Row>
         <Switch on={S.ufReno} onPress={() => up(s => { s.ufReno = !s.ufReno; })} label={t('uf_reno_sw')} />
         {S.ufReno ? <Row label={t('uf_reno')} kind="user" info={<CardI t="uf_reno" b={['uf_reno_h']} p="user" />}><Input id="reno" /></Row> : null}
       </Stage>
+      {/* v26: what these costs are, as short lessons */}
+      <LnEnter tab="upfront" k="ln_link_upfront" />
       {pick ? (
         <SheetFrame pose="curious" onClose={() => setPick(false)}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -250,6 +264,24 @@ export function UpfrontScreen() {
 }
 
 const pr = StyleSheet.create({
+  pvintro: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 18, padding: 12 },
+  pvhub: {
+    flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E3EAE8',
+    borderRadius: 18, paddingVertical: 14, paddingHorizontal: 14,
+    shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.06, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 2,
+  },
+  pvhubIc: { width: 46, height: 46, borderRadius: 14, backgroundColor: '#E4EFEC', alignItems: 'center', justifyContent: 'center' },
+  pvchart: {
+    backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E3EAE8', borderRadius: 18, paddingVertical: 14, paddingHorizontal: 14,
+  },
+  pvc: { flex: 1, backgroundColor: C.card, borderRadius: 16, padding: 12, gap: 2, borderWidth: 1, borderColor: C.ink14 },
+  pvcK: { fontFamily: XBOLD_FONT, fontSize: 11, letterSpacing: 0.66, textTransform: 'uppercase', color: C.ink64 },
+  pvcB: { fontFamily: DISP_FONT, fontSize: 26, lineHeight: 32, color: C.ink },
+  pvcS: { fontFamily: BODY_FONT, fontSize: 13, color: C.ink },
+  pvcE: { fontFamily: BODY_FONT, fontSize: 11.5, color: C.ink64, minHeight: 15, marginBottom: 4 },
+  seg: { flexDirection: 'row', backgroundColor: C.card, borderRadius: 12, padding: 3, gap: 3, borderWidth: 1, borderColor: C.ink14 },
+  segBtn: { flex: 1, minHeight: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  segOn: { backgroundColor: '#FFFFFF', shadowColor: 'rgba(0,0,0,1)', shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
   comingSoon: {
     minHeight: 420,
     justifyContent: 'center',
@@ -358,6 +390,8 @@ export function DocsScreen() {
         </View>
         {['dc_sj1', 'dc_sj2', 'dc_sj3'].map(k => <BodyS key={k}>· {t(k)}</BodyS>)}
       </Card>
+      {/* v26: the lesson on what to bring instead of a payslip */}
+      <LnEnter tab="nosalary" k="ln_link_docs" />
     </ScreenShell>
   );
 }
@@ -367,77 +401,159 @@ export function DocsScreen() {
 // account data, backend records, or persistence.
 // 中文：Epic 7“购房后监测”在这里仅作为 Iteration 3 预览。这个前端原型只切换本地状态，
 // 不创建真实的购房后账号数据、后端记录或持久化存储。
-export function PvSwitchScreen() {
-  const { S, t, up, go, toast } = useApp();
+/* v27b "I've bought a home" (Epic 7): the earlier test sits beside what
+   happened. Until real post-purchase months are recorded, the screens show
+   sample months: the five months before this one, sized to the home the
+   person tested, labelled as sample figures and never as their own data. */
+function pvData(S: AppState): { m: number; inc: number; home: number }[] {
+  const src = S.data.after.months, n = src.length, now = new Date().getMonth();
+  const result = S.testRan ? getHousingTestResult() : null;
+  const cost = result ? Number(result.tested_home_cost) || 0 : 0;
+  const sc = cost > 0 ? Math.max(0.2, cost / (src[n - 1].home || 1)) : 1;
+  return src.map((r, i) => ({ m: (now - n + i + 12) % 12, inc: Math.round(r.inc * sc), home: Math.round(r.home * sc) }));
+}
+
+function PvHubCard({ to, ic, k, d }: { to: Parameters<ReturnType<typeof useApp>['go']>[0]; ic: string; k: string; d: string }) {
+  const { t, go } = useApp();
   return (
-    <ScreenShell back title={t('pv_switch')}>
+    <Pressable onPress={() => go(to)} accessibilityRole="button" style={pr.pvhub}>
+      <View style={pr.pvhubIc}><Ico name={ic} size={24} color={C.brand} /></View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 17, lineHeight: 22, color: C.ink }}>{t(k)}</Text>
+        <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: C.ink64, marginTop: 3 }}>{t(d)}</Text>
+      </View>
+      <Text style={{ fontSize: 20, color: C.ink40 }}>{'\u203A'}</Text>
+    </Pressable>
+  );
+}
+
+export function PvSwitchScreen() {
+  const { S, t, up, toast } = useApp();
+  return (
+    <ScreenShell back title={t('pv_home_t')}>
       <Badge label={t('pv_banner')} />
-      <BodyS muted>{t('pv_switch_note')}</BodyS>
-      <Btn label={t('pv_switch_btn')} onPress={() => { up(s => { s.bought = true; }); toast(t('saved')); }} />
+      <View style={pr.pvintro}>
+        <Ruma w={84} pose="happy" float={false} />
+        <BodyS style={{ flex: 1, minWidth: 0 }}>{t('pv_home_b')}</BodyS>
+      </View>
       {S.bought ? (
         <>
-          <BtnQuiet onPress={() => go('pv_month')}><IcLab name="calday"><P>{t('pv_month')}</P></IcLab></BtnQuiet>
-          <BtnQuiet onPress={() => go('pv_compare')}><IcLab name="swap"><P>{t('pv_then')}</P></IcLab></BtnQuiet>
+          <PvHubCard to="pv_compare" ic="swap" k="pv_then" d="pv_then_d" />
+          <PvHubCard to="pv_month" ic="calday" k="pv_month" d="pv_month_d" />
         </>
-      ) : null}
+      ) : (
+        <>
+          <Btn label={t('pv_switch_btn')} onPress={() => { up(s => { s.bought = true; }); toast(t('saved')); }} />
+          <BodyS muted>{t('pv_switch_note')}</BodyS>
+        </>
+      )}
     </ScreenShell>
   );
 }
 
-// EN: Epic 7 preview for monitoring one post-purchase month. Values come from
-// static mock data, so this is not a real database-backed monitoring feature yet.
-// 中文：Epic 7 的单月购房后监测预览。这里的数值来自静态 mock 数据，目前还不是数据库驱动的真实监测功能。
-export function PvMonthScreen() {
+function PvMonthBody() {
   const { S, t, monthName } = useApp();
-  const cur = S.data.after.months[S.data.after.months.length - 1];
-  const left = cur.inc - cur.home;
-  const rows = S.data.after.months.map(r => ({
-    m: r.m, surplus: r.inc, short: r.inc < r.home, gap: Math.max(0, r.home - r.inc),
-  }));
+  const am = pvData(S), cur = am[am.length - 1], left = cur.inc - cur.home;
+  const rows = am.map(r => ({ m: r.m, surplus: r.inc, short: r.inc < r.home, gap: Math.max(0, r.home - r.inc) }));
   return (
-    <ScreenShell back title={t('pv_month')}>
-      <Badge label={t('pv_banner')} />
+    <>
       <View>
-        <Fig value={(left < 0 ? '−' : '') + rm(Math.abs(left))} p="user" cls="h-xl" />
+        <Display cls="h-xl">{(left < 0 ? '\u2212' : '') + rm(Math.abs(left))}</Display>
         <BodyS muted>{left < 0 ? t('pv_shortby') : t('pv_left')}</BodyS>
       </View>
-      <KV k={t('pv_in')}><Fig value={rm(cur.inc)} p="user" /></KV>
-      <KV k={t('pv_out')}><Fig value={rm(cur.home)} p="user" /></KV>
-      <Waterline rows={rows} cost={cur.home} lineLabel prov="user" monthName={monthName} />
+      <KV k={t('pv_in')}><Display cls="h-m">{rm(cur.inc)}</Display></KV>
+      <KV k={t('pv_out')}><Display cls="h-m">{rm(cur.home)}</Display></KV>
+      <View style={pr.pvchart}>
+        <Waterline rows={rows} cost={cur.home} lineLabel monthName={monthName} />
+      </View>
+    </>
+  );
+}
+
+function PvFoot() {
+  const { S, t } = useApp();
+  return <BodyS muted style={{ fontSize: 12, lineHeight: 17 }}>{t(S.testRan ? 'pv_scaled' : 'pv_sample_h')}</BodyS>;
+}
+
+// EN: Epic 7 preview for monitoring one post-purchase month. Values are sample
+// months sized to the tested home, so this is not database-backed monitoring yet.
+// 中文：Epic 7 的单月购房后监测预览。数值是按测试房屋调整的示例月份，目前还不是数据库驱动的真实监测功能。
+export function PvMonthScreen() {
+  const { t } = useApp();
+  return (
+    <ScreenShell back title={t('pv_month')}>
+      <Badge label={t('pv_sample')} />
+      <PvMonthBody />
+      <PvFoot />
     </ScreenShell>
   );
 }
 
-// EN: Epic 7 preview comparing the earlier housing test with mock post-purchase
-// results. It reuses the latest housing test result but does not store actual
-// homeowner history.
-// 中文：Epic 7 预览：把先前住房测试与 mock 购房后结果对比。它复用最近一次住房测试结果，
-// 但不保存真实业主历史。
+// EN: Epic 7 preview comparing the earlier housing test with sample
+// post-purchase months (never called a prediction, D19).
+// 中文：Epic 7 预览：把先前住房测试与示例购房后月份对比（不称为预测，D19）。
 export function PvCompareScreen() {
-  const { S, t, goTab } = useApp();
-  const result = getHousingTestResult();
-  if (!result) {
-    return (
-      <ScreenShell back title={t('pv_then')}>
-        <BodyS muted>{t('housing_result_required')}</BodyS>
-        <Btn label={t('home_test')} onPress={() => goTab('test')} />
-      </ScreenShell>
-    );
-  }
-  const n = result.tested_months;
-  const s = result.short_month_count;
-  const am = S.data.after.months;
+  const { S, t, monthName } = useApp();
+  const [tab, setTab] = React.useState<'vs' | 'month'>('vs');
+  const result = S.testRan ? getHousingTestResult() : null;
+  const n = result ? (result.tested_months ?? result.months.length) : 0;
+  const s = result ? Number(result.short_month_count) || 0 : 0;
+  const am = pvData(S), cur = am[am.length - 1];
+  const rows = am.map(r => ({ m: r.m, surplus: r.inc, short: r.inc < r.home, gap: Math.max(0, r.home - r.inc) }));
   const s2 = am.filter(r => r.inc < r.home).length;
+  const sp = recSpan(S.data);
+  const when = sp ? `${monthName(sp.to.m)} ${sp.to.y}` : '';
+  const shortNames = am.filter(r => r.inc < r.home).map(r => monthName(r.m)).join(', ');
   return (
     <ScreenShell back title={t('pv_then')}>
-      <Badge label={t('pv_banner')} />
-      <Display cls="h-m">{t('pv_then_a', { s, n })}</Display>
-      <FigRow p="calc" />
-      <Display cls="h-m">{t('pv_then_b', { s2, n2: am.length })}</Display>
-      <FigRow p="user" />
-      <Divider />
-      <BodyS muted>{t('pv_then_why')}</BodyS>
-      <BodyS muted>{t('pv_keep')}</BodyS>
+      <Badge label={t('pv_sample')} />
+      <View style={pr.seg} accessibilityRole="tablist">
+        {(['vs', 'month'] as const).map(v => (
+          <Pressable key={v} onPress={() => setTab(v)} accessibilityRole="tab" accessibilityState={{ selected: tab === v }}
+            style={[pr.segBtn, tab === v && pr.segOn]}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 14, color: tab === v ? C.ink : C.ink64 }}>{t(v === 'vs' ? 'pv_seg_vs' : 'pv_seg_month')}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {tab === 'month' ? <PvMonthBody /> : (
+        <>
+          <GuideTarget id="pv.cards" style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={pr.pvc}>
+              <Text style={pr.pvcK}>{t('pv_earlier')}</Text>
+              {n ? (
+                <>
+                  <Text style={pr.pvcB}>{t('pv_short_of', { s, n })}</Text>
+                  <Text style={pr.pvcS}>{t('pv_months_short')}</Text>
+                  <Text style={pr.pvcE}>{t('pv_calc_on', { m: when })}</Text>
+                  <Prov p="calc" />
+                </>
+              ) : <Text style={pr.pvcS}>{t('pv_notest')}</Text>}
+            </View>
+            <View style={pr.pvc}>
+              <Text style={pr.pvcK}>{t('pv_after')}</Text>
+              <Text style={pr.pvcB}>{t('pv_short_of', { s: s2, n: am.length })}</Text>
+              <Text style={pr.pvcS}>{t('pv_months_short')}</Text>
+              <Text style={pr.pvcE}>{t('pv_since')}</Text>
+            </View>
+          </GuideTarget>
+          <GuideTarget id="pv.chart">
+          <View style={pr.pvchart}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: C.ink, marginBottom: 6 }}>{t('pv_left_t')}</Text>
+            <Waterline rows={rows} cost={cur.home} values monthName={monthName} />
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 6, marginTop: 8 }}>
+              {([[t('pv_cov'), C.ink, 12], [t('pv_shortm', { m: shortNames || '-' }), C.short, 12], [t('pv_cost', { c: rm(cur.home) }), C.brand, 3]] as [string, string, number][]).map(([lbl, col, hh]) => (
+                <View key={lbl} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: hh === 3 ? 16 : 12, height: hh, borderRadius: hh === 3 ? 2 : 3, backgroundColor: col }} />
+                  <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, color: C.ink64 }}>{lbl}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+          </GuideTarget>
+          <NoteC><BodyS>{t('pv_season')}</BodyS></NoteC>
+        </>
+      )}
+      <PvFoot />
     </ScreenShell>
   );
 }

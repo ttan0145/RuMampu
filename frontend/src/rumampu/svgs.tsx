@@ -257,7 +257,7 @@ export function Hero({ index, width }: { index: number; width: number }) {
 }
 
 /* Row icons — stroke line art, 24x24 viewBox, matching .rowico styling. */
-const ICONS: Record<string, string> = {
+export const ICONS: Record<string, string> = {
   banknote: '<rect x="2.5" y="6.5" width="19" height="11.5" rx="2"/><circle cx="12" cy="12.2" r="2.7"/><path d="M6 10v4.4M18 10v4.4"/>',
   wrench: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
   calendar: '<rect x="3" y="4.5" width="18" height="17" rx="2"/><path d="M16 2.5v4M8 2.5v4M3 10.5h18M8 15h3"/>',
@@ -279,6 +279,9 @@ const ICONS: Record<string, string> = {
   calday: '<rect x="3" y="4.5" width="18" height="17" rx="2"/><path d="M16 2.5v4M8 2.5v4M3 10.5h18"/><circle cx="12" cy="15.5" r="1.6"/>',
   swap: '<path d="M17 3.5l4 4-4 4"/><path d="M21 7.5H8"/><path d="M7 12.5l-4 4 4 4"/><path d="M3 16.5h13"/>',
   chat: '<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-3.4-.7L3.5 20.5l1.2-4.2A8.5 8.5 0 1 1 21 11.5z"/><path d="M8.5 10.5h7M8.5 13.5h4.5"/>',
+  person: '<circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6"/>',
+  trash: '<path d="M5 7h14M10 7V5.5A1.5 1.5 0 0 1 11.5 4h1A1.5 1.5 0 0 1 14 5.5V7"/><path d="M7 7l1 12.5A1.5 1.5 0 0 0 9.5 21h5a1.5 1.5 0 0 0 1.5-1.5L17 7"/><path d="M10.5 11v6M13.5 11v6"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21M8.5 21h7"/>',
 };
 
 export type IconName = keyof typeof ICONS & string;

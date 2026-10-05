@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { AppData, MOCK } from './mock';
+import { sampleData } from './demo';
 import { Lang, STRINGS } from './strings';
 import {
   ApiCoverageAnswer,
@@ -63,7 +64,9 @@ export type Route =
   // EN: Epic 7 preview routes are registered for future Iteration 3 work; this
   // does not make them an Iteration 1 implementation.
   // 中文：Epic 7 预览路由为未来 Iteration 3 工作保留；这不代表它们是 Iteration 1 实现。
-  | 'prepare' | 'prepare_soon' | 'upfront' | 'buffer' | 'docs' | 'pv_switch' | 'pv_month' | 'pv_compare';
+  | 'prepare' | 'prepare_soon' | 'upfront' | 'buffer' | 'docs' | 'pv_switch' | 'pv_month' | 'pv_compare'
+  /* v26/v27b: What buying involves, short lessons with pictures and badges. */
+  | 'learn' | 'learnsec' | 'learnread';
 
 /* v22 tab model: home / money / test (house) / profile, FAB in the middle. */
 export type Tab = 'home' | 'money' | 'test' | 'profile';
@@ -78,6 +81,7 @@ export const TAB_OF: Record<Route, Tab> = {
   compare: 'test', shock: 'test',
   plan: 'money', profile: 'profile', prepare: 'test', prepare_soon: 'test', upfront: 'test', buffer: 'money', docs: 'test',
   pv_switch: 'test', pv_month: 'test', pv_compare: 'test',
+  learn: 'test', learnsec: 'test', learnread: 'test',
 };
 
 // EN: US8.2 stores the compact kept-test summary used by Your Record during the
@@ -104,6 +108,11 @@ export interface KeptTest {
 export interface PlanState {
   key: string; target: number; n: number; amounts: number[]; done: boolean[]; seed: number;
   skipped?: boolean[]; paused?: boolean;
+  /* v27b: the day (0-based) this month's split started from. A plan set part
+     way through the month asks only for the days left (pl_partial). */
+  from?: number;
+  /* What the target was worked out from; the split is redrawn only when this changes. */
+  sig?: string;
 }
 
 /* v22 saving village: a 4x4 merge board (2048-style) that grows with the plan. */
@@ -131,6 +140,30 @@ export interface BufferState {
   /* Set when a house change moved the target, so the user can be told. */
   prevTarget: number | null;
   msg: 'used' | 'moved' | null;
+}
+
+/* v27b3 Say an entry: one voice draft shared by the Home card and the + menu,
+   so only one microphone is ever open. Nothing in it is saved until Save. */
+export interface VoiceItem {
+  kind: 'in' | 'out';
+  a: number | string;
+  /* ISO date of the entry. */
+  d: string;
+  s?: string;
+  c?: string;
+  /* The words did not say whether this was income or spending. */
+  flag?: boolean;
+}
+export interface VoiceState {
+  stage: 'idle' | 'listen' | 'parsing' | 'done';
+  text: string;
+  items: VoiceItem[];
+  /* No microphone here, so an example is playing. */
+  demo?: boolean;
+  /* A question back from the reader, shown above the drafts. */
+  note?: string;
+  /* An unusually large income was flagged once; the next Save confirms it. */
+  outlier?: boolean;
 }
 
 export type EntryPer = 'day' | 'week' | 'month';
@@ -267,9 +300,77 @@ export interface AppState {
   incomePatternSync: 'disabled' | 'idle' | 'loading' | 'ready' | 'error';
   coverageSync: 'disabled' | 'idle' | 'loading' | 'ready' | 'saving' | 'error';
   sheet: string | null;
+  /* v27b3 Say an entry: the shared draft, and which card is open (Home or the + menu). */
+  voice: VoiceState | null;
+  sayOpen: boolean;
+  qSay: boolean;
+  /* v26/v27b What buying involves: the open topic, lesson and page; pages read
+     per lesson (kept on this device); whether the topic was already finished
+     and the lesson already read when it opened; the badge being celebrated. */
+  lnTab: string;
+  lnArt: string | null;
+  lnPg: number;
+  lnProg: Record<string, number>;
+  lnWas: boolean | null;
+  lnArtWas: boolean;
+  lnCele: string | null;
+  lnPop: string | null;
+  /* v27b screen tips: the running tour (screen and step), the first-visit
+     invitation (Home) or hint (other screens), the off switch, and the
+     screens whose tips were already offered. Off by default under Playwright. */
+  tour: { k: Route; i: number } | null;
+  tourAsk: Route | null;
+  tourHint: Route | null;
+  tipsOff: boolean;
+  seenG: Route[];
+  /* v27b Sample months: an example record shown in place of the person's own
+     (which is kept aside, see demoStash). Never saved or synced. */
+  demo: boolean;
+  /* v27b: the person said they have no commitments, so the test runs without
+     asking again; runPending asks the open test screen to run once more. */
+  noBills: boolean;
+  runPending: boolean;
+  /* v27b Ask Ruma edge tab: where the person dragged it (null = the app picks),
+     and where it sat when the chat opened, so the chat opens beside it. */
+  aiY: number | null;
+  aiAnchor: number | null;
   /* US6.2 assistant: sheet visibility + per-session conversation history. */
   assistantOpen: boolean;
   assistantMsgs: { role: 'user' | 'assistant'; content: string }[];
+}
+
+/* v27b Sample months: the person's own record, kept aside while sample months
+   are shown, and the house test session that belonged to it. */
+let demoStash: {
+  data: AppData; testRan: boolean; plan: PlanState | null; village: VillageState | null;
+  buffer: BufferState | null; potMoved: number; potMovedMonths: string[];
+  scenario: ReturnType<typeof getHousingScenario>; result: ReturnType<typeof getHousingTestResult>;
+} | null = null;
+
+/* Entry screens: opening one ends sample months (see go()). */
+const DEMO_EXIT_ROUTES: Route[] = ['income', 'incomeimport', 'workcosts', 'commit', 'expenses', 'expadd', 'expscan', 'exlimits'];
+
+/* Data arriving from the server always belongs to the person's own record.
+   While sample months show, it is filed into the kept-aside record, so a late
+   load neither ends sample months nor mixes with them. */
+function ownData(next: AppState): AppData {
+  return next.demo && demoStash ? demoStash.data : next.data;
+}
+
+/* Put the person's own record back in place of sample months. */
+function leaveDemoDraft(next: AppState): void {
+  if (!next.demo || !demoStash) { next.demo = false; return; }
+  next.data = demoStash.data;
+  next.testRan = demoStash.testRan;
+  next.plan = demoStash.plan;
+  next.village = demoStash.village;
+  next.buffer = demoStash.buffer;
+  next.potMoved = demoStash.potMoved;
+  next.potMovedMonths = demoStash.potMovedMonths;
+  setHousingScenario(demoStash.scenario);
+  setHousingTestResult(demoStash.result);
+  demoStash = null;
+  next.demo = false;
 }
 
 function initialState(): AppState {
@@ -327,6 +428,9 @@ function initialState(): AppState {
     incomeCoverage: null,
     incomePatternSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
     coverageSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
+    voice: null, sayOpen: false, qSay: false, aiY: null, aiAnchor: null, noBills: false, runPending: false, demo: false,
+    lnTab: 'nosalary', lnArt: null, lnPg: 1, lnProg: {}, lnWas: null, lnArtWas: false, lnCele: null, lnPop: null,
+    tour: null, tourAsk: null, tourHint: null, tipsOff: process.env.EXPO_PUBLIC_E2E === '1', seenG: [],
     sheet: null,
     assistantOpen: false,
     assistantMsgs: [],
@@ -444,6 +548,9 @@ export interface Ctx {
   signOut: () => Promise<void>;
   deleteCurrentRecord: () => Promise<void>;
   enterGuestMode: () => Promise<void>;
+  /* v27b Sample months: show the example record, or put the person's own back. */
+  enterSampleMonths: () => void;
+  leaveSampleMonths: () => void;
   refreshIncomePattern: () => Promise<void>;
   refreshIncomeCoverage: () => Promise<void>;
   saveIncomeCoverage: (input: {
@@ -710,6 +817,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
      local-only because UserAppState is keyed to an authenticated account. */
   React.useEffect(() => {
     if (!localStateHydrated.current) return;
+    /* Sample months are never saved or synced. */
+    if (S.demo) return;
     if (skipNextLocalStateWrite.current) {
       skipNextLocalStateWrite.current = false;
       return;
@@ -752,13 +861,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!active) return;
         setS(prev => {
           const next: AppState = JSON.parse(JSON.stringify(prev));
-          next.data.sources = record.sources.map(source => ({
+          ownData(next).sources = record.sources.map(source => ({
             id: String(source.id),
             k: source.slug ? `src_${source.slug}` : undefined,
             custom: source.is_custom,
             name: source.name,
           }));
-          next.data.income = record.entries.map(entry => ({
+          ownData(next).income = record.entries.map(entry => ({
             id: String(entry.id),
             a: Number(entry.amount),
             d: entry.date,
@@ -803,14 +912,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               dv: item.is_daily_variable,
             });
           }
-          s.data.commitments = commitments;
-          s.data.expenseCats = expenseCategories.map(category => ({
+          ownData(s).commitments = commitments;
+          ownData(s).expenseCats = expenseCategories.map(category => ({
             id: String(category.id),
             k: category.slug ? `xc_${category.slug}` : undefined,
             custom: category.is_custom,
             name: category.name,
           }));
-          s.data.expenses = expenses.map(entry => ({
+          ownData(s).expenses = expenses.map(entry => ({
             id: String(entry.id),
             a: Number(entry.amount),
             d: entry.date,
@@ -848,7 +957,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const monthName = useCallback((m: number) => STRINGS[S.lang].months[m], [S.lang]);
 
   const go = useCallback((r: Route) => {
-    up(s => { s.stack.push(s.route); s.route = r; s.howOpen = false; s.rgHowOpen = false; });
+    up(s => {
+      /* v27b: starting an entry of their own puts the person's record back
+         in place of sample months, so nothing typed lands among examples. */
+      if (s.demo && DEMO_EXIT_ROUTES.includes(r)) leaveDemoDraft(s);
+      s.stack.push(s.route); s.route = r; s.howOpen = false; s.rgHowOpen = false;
+    });
   }, [up]);
 
   // EN: Epic 8 uses goTab() for AC8.4 bottom-tab navigation, but the navigation
@@ -885,13 +999,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const record = await fetchIncomeRecord();
       setS(prev => {
         const next: AppState = JSON.parse(JSON.stringify(prev));
-        next.data.sources = record.sources.map(source => ({
+        ownData(next).sources = record.sources.map(source => ({
           id: String(source.id),
           k: source.slug ? `src_${source.slug}` : undefined,
           custom: source.is_custom,
           name: source.name,
         }));
-        next.data.income = record.entries.map(entry => ({
+        ownData(next).income = record.entries.map(entry => ({
           id: String(entry.id),
           a: Number(entry.amount),
           d: entry.date,
@@ -965,7 +1079,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const categoriesRequest = fetchWorkCostCategories().then(categories => {
         up(s => {
           if (version !== workCostRequestVersion.current) return;
-          s.data.workCostCategories = categories.map(item => ({
+          ownData(s).workCostCategories = categories.map(item => ({
             id: String(item.id),
             k: item.slug ? `wc_${item.slug}` : undefined,
             custom: item.is_custom,
@@ -977,7 +1091,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const entriesRequest = fetchWorkCostEntries().then(entries => {
         up(s => {
           if (version !== workCostRequestVersion.current) return;
-          s.data.workCostEntries = entries.map(entry => ({
+          ownData(s).workCostEntries = entries.map(entry => ({
             id: String(entry.id),
             categoryId: String(entry.category_id),
             categoryName: entry.category_name,
@@ -1486,14 +1600,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           dv: item.is_daily_variable,
         });
       }
-      s.data.commitments = commitments;
-      s.data.expenseCats = expenseCategories.map(category => ({
+      ownData(s).commitments = commitments;
+      ownData(s).expenseCats = expenseCategories.map(category => ({
         id: String(category.id),
         k: category.slug ? `xc_${category.slug}` : undefined,
         custom: category.is_custom,
         name: category.name,
       }));
-      s.data.expenses = expenses.map(entry => ({
+      ownData(s).expenses = expenses.map(entry => ({
         id: String(entry.id),
         a: Number(entry.amount),
         d: entry.date,
@@ -1594,6 +1708,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await refreshAccountData(undefined, { includeSavedTests: false });
   }, [refreshAccountData]);
 
+  const enterSampleMonths = useCallback(() => {
+    setS(prev => {
+      if (prev.demo) return prev;
+      demoStash = {
+        data: JSON.parse(JSON.stringify(prev.data)), testRan: prev.testRan, plan: prev.plan, village: prev.village, buffer: prev.buffer,
+        potMoved: prev.potMoved, potMovedMonths: prev.potMovedMonths,
+        scenario: getHousingScenario(), result: getHousingTestResult(),
+      };
+      const next: AppState = JSON.parse(JSON.stringify(prev));
+      next.data = sampleData(prev.data);
+      next.testRan = false;
+      next.plan = null;
+      next.village = null;
+      next.buffer = null;
+      next.potMoved = 0;
+      next.potMovedMonths = [];
+      next.demo = true;
+      return next;
+    });
+    /* A house test on sample months uses its own throwaway scenario. */
+    setHousingScenario(null);
+    setHousingTestResult(null);
+  }, []);
+
+  const leaveSampleMonths = useCallback(() => {
+    setS(prev => {
+      if (!prev.demo) return prev;
+      const next: AppState = JSON.parse(JSON.stringify(prev));
+      leaveDemoDraft(next);
+      return next;
+    });
+  }, []);
+
   const enterGuestMode = useCallback(async (): Promise<void> => {
     accountAuthenticated.current = false;
     skipNextAccountSync.current = true;
@@ -1661,15 +1808,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     toastTimer.current = setTimeout(() => setToastMsg(null), 1800);
   }, []);
 
+  /* v27b: say so whenever sample months end and the person's own record is back. */
+  const wasDemo = useRef(S.demo);
+  React.useEffect(() => {
+    if (wasDemo.current && !S.demo) toast(t('demo_cleared'));
+    wasDemo.current = S.demo;
+  }, [S.demo, t, toast]);
+
   const value = useMemo<Ctx>(() => ({
     S, authReady, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, savePreferredIncomeSource, refreshIncomeRecord, refreshAccountData, applyAccountState, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
+    saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, savePreferredIncomeSource, refreshIncomeRecord, refreshAccountData, applyAccountState, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, enterSampleMonths, leaveSampleMonths, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry, setExpenseMonthlyTotal,
   }), [
     S, authReady, up, t, monthName, go, goTab, backNav,
-    saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, savePreferredIncomeSource, refreshIncomeRecord, refreshAccountData, applyAccountState, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, refreshIncomePattern,
+    saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, savePreferredIncomeSource, refreshIncomeRecord, refreshAccountData, applyAccountState, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, enterSampleMonths, leaveSampleMonths, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry, setExpenseMonthlyTotal,

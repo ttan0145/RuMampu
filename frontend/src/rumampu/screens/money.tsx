@@ -8,7 +8,7 @@ import {
   actualMonths, commitSwap, commitTotal, expByMonth, monthsAgg, nf, pickMonth, recordSummary, rm,
 } from '../calc';
 import {
-  Badge, BodyS, Btn, BtnLine, BtnQuiet, Card, Chip, Chips, Display, Divider, EditList,
+  Badge, BodyS, Btn, BtnLine, DemoChip, WholeMonthBtn, BtnQuiet, Card, Chip, Chips, Display, Divider, EditList,
   Fig, IcLab, KV, NoteC, P, Prov, StackS, TextField,
   CardI, FigRow, MonthBtn,
 } from '../ui';
@@ -28,6 +28,7 @@ import {
 } from '../incard';
 import { IncomePatternChart } from '../charts';
 import { ScreenShell } from './shell';
+import { GuideTarget } from '../tour';
 import { IncomeCsvBody } from './imports';
 import { isValidIsoDate, isValidMoneyText } from '../validation';
 import { DatePickerField } from '../date-picker';
@@ -189,7 +190,8 @@ export function MoneyScreen() {
   );
 
   return (
-    <ScreenShell greet title={t('tab_money')}>
+    <ScreenShell greet title={t('tab_money')} right={<DemoChip />}>
+      <GuideTarget id="money.hero">
       <View style={mo.hero}>
         <SvgXml
           xml={'<svg width="100%" height="100%" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mh" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2F5D61"/><stop offset="1" stop-color="#1F3F42"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#mh)"/></svg>'}
@@ -197,7 +199,10 @@ export function MoneyScreen() {
           style={{ position: 'absolute', left: 0, top: 0 }}
         />
         <View style={mo.rowBetween}>
-          <Text style={[mo.ttl3, { color: '#fff' }]}>{t('mo_sofar', { m: monthName(mk % 12) })}</Text>
+          {/* v27b: a finished month is named as a whole month, the running one as "so far". */}
+          <Text style={[mo.ttl3, { color: '#fff' }]}>
+            {t(mk === new Date().getFullYear() * 12 + new Date().getMonth() ? 'mo_sofar' : 'mo_whole', { m: monthName(mk % 12) })}
+          </Text>
           <CardI t="mo_sofar_t" b={['mo_fixed']} p="user" light />
         </View>
         <View style={{ flexDirection: 'row', marginTop: 10 }}>
@@ -209,7 +214,8 @@ export function MoneyScreen() {
           ))}
         </View>
       </View>
-      {quiet}
+      </GuideTarget>
+      {quiet ? <GuideTarget id="money.quiet">{quiet}</GuideTarget> : null}
       {trend}
       {tiles}
       {pace}
@@ -223,7 +229,9 @@ export function MoneyScreen() {
           ))}
         </View>
       </View>
-      {group('mo_rec', [['income', 'money_income', 'banknote'], ['expenses', 'money_expenses', 'receipt'], ['commit', 'bl_title', 'calendar']])}
+      <GuideTarget id="money.links">
+        {group('mo_rec', [['income', 'money_income', 'banknote'], ['expenses', 'money_expenses', 'receipt'], ['commit', 'bl_title', 'calendar']])}
+      </GuideTarget>
       {group('mo_savings', [['plan', 'pl_title', 'calday'], ['prepare_soon', 'pr_buffer', 'ring']])}
       {group('mo_insights', [['pattern', 'money_pattern', 'bars'], ['coverage', 'money_coverage', 'search'], ['record', 'money_record', 'book']])}
     </ScreenShell>
@@ -740,7 +748,10 @@ export function IncomeScreen() {
       up(s => {
         s.incomeDraft = { a: '', d: d.d, s: d.s, flag: null, per: d.per || 'day' };
       });
-      toast(t('entry_saved_n', { n: entryCount }));
+      /* v27b: an entry in the month still running joins the test once that month ends. */
+      const nowD = new Date();
+      const inThisMonth = +d.d.slice(0, 4) === nowD.getFullYear() && +d.d.slice(5, 7) === nowD.getMonth() + 1;
+      toast(inThisMonth ? t('entry_saved_cur') : t('entry_saved_n', { n: entryCount }));
     } catch {
       toast(t('inc_save_failed'));
     } finally {
@@ -757,9 +768,11 @@ export function IncomeScreen() {
   const typeBody = (
     <>
       {/* v24 R7 item 3: one amount and one date — the per day/week/month switch is gone. */}
+      <GuideTarget id="in.hero">
       <InHero tint="in" pillLabel={t('io_in')} question={t('r7_inc_q')} decimal
         value={d.a}
         onChangeText={v => up(s => { s.incomeDraft.a = v; s.incomeDraft.flag = null; })} />
+      </GuideTarget>
       <InSec>
         <InLbl>{t('inc_q_when')}</InLbl>
         <DatePickerField
@@ -802,11 +815,8 @@ export function IncomeScreen() {
             {t('inc_sofar', { m: monthName(now.getMonth()), v: rm(sofar) })}
           </BodyS>
         ) : null}
-        {/* v24 R7 item 3: bulk entry for a whole past month stays, as a quiet link. */}
-        <View style={{ alignItems: 'center', marginTop: 8 }}>
-          <BtnLine label={t('inc_past')} style={{ fontSize: 13.5 }}
-            onPress={() => up(s => { s.pastT = 'inc'; s.sheet = 'pastmonth'; })} />
-        </View>
+        {/* v27 (I2-F04): a whole past month is a button that says what it adds. */}
+        <GuideTarget id="in.wm"><WholeMonthBtn title={t('inc_past')} sub={t('wm_btn_in')} onPress={() => up(s => { s.pastT = 'inc'; s.sheet = 'pastmonth'; })} /></GuideTarget>
       </InSec>
     </>
   );
@@ -825,11 +835,13 @@ export function IncomeScreen() {
       {S.incomeSync === 'error' ? <NoteC><BodyS>{t('inc_sync_error')}</BodyS></NoteC> : null}
       {S.data.income.length || S.incMode === 'csv' ? null : <Display cls="h-m">{t('inc_empty')}</Display>}
       <InCard>
+        <GuideTarget id="in.seg">
         <InSeg mode={S.incMode} tint="in"
           labels={[['type', t('im_type')], ['scan', t('im_scan')], ['csv', t('im_csv')]]}
           onMode={m => {
             up(s => { s.incMode = m as typeof s.incMode; });
           }} />
+        </GuideTarget>
         {S.incMode === 'csv' ? <IncomeCsvBody embedded /> : S.incMode === 'scan' ? <IncomeScanBody /> : typeBody}
       </InCard>
       {/* EN: Saved income is user-provided data, so provenance is shown once for the section instead of on every row. */}
