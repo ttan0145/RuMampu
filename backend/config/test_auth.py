@@ -66,6 +66,27 @@ class AuthApiRegressionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(client.get("/api/v1/auth/me/").json()["saving_plan"], plan)
 
+    def test_v27b_saving_plan_start_day_and_signature_sync_to_the_account(self):
+        # v27b keeps the day the split started from and what the target was worked out
+        # from; an account sync that carries them must not be refused.
+        user = User.objects.create_user(username="plan-v27b@example.com", password="Passw0rd123")
+        token = Token.objects.create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+        plan = {"key": "2026-10", "target": 300, "n": 31,
+                "amounts": [0] * 4 + [10] * 27, "done": [False] * 31, "seed": 1,
+                "from": 4, "sig": "village|3600|0|0|0|1905"}
+        response = client.patch("/api/v1/auth/me/", {"saving_plan": plan, "pot_moved": 2810},
+                                content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        state = client.get("/api/v1/auth/me/").json()
+        self.assertEqual(state["saving_plan"], plan)
+        self.assertEqual(state["pot_moved"], 2810)
+        for bad in ({"from": 31}, {"from": -1}, {"from": 1.5}, {"sig": 7}, {"sig": "x" * 501}):
+            with self.subTest(bad=bad):
+                response = client.patch("/api/v1/auth/me/", {"saving_plan": {**plan, **bad}},
+                                        content_type="application/json")
+                self.assertEqual(response.status_code, 400)
+
     def test_invalid_saving_allocation_is_rejected_atomically(self):
         user = User.objects.create_user(username="invalid-allocation@example.com", password="Passw0rd123")
         token = Token.objects.create(user=user)

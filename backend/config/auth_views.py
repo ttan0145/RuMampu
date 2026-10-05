@@ -105,7 +105,7 @@ def _valid_plan(value):
     if not isinstance(value, dict):
         return False
     required = {"key", "target", "n", "amounts", "done", "seed"}
-    if set(value) - required - {"skipped", "paused", "buffered"} or not required <= set(value):
+    if set(value) - required - {"skipped", "paused", "buffered", "from", "sig"} or not required <= set(value):
         return False
     key = value["key"]
     match = re.fullmatch(r"(\d{4})-(\d{2})", key) if isinstance(key, str) else None
@@ -134,6 +134,11 @@ def _valid_plan(value):
     if "buffered" in value and (not isinstance(value["buffered"], list)
                                 or len(value["buffered"]) != n
                                 or not all(item is None or isinstance(item, bool) for item in value["buffered"])):
+        return False
+    # v27b: the day the month's split started from, and what the target was worked out from.
+    if "from" in value and (not _valid_number(value["from"], integer=True, minimum=0) or value["from"] >= n):
+        return False
+    if "sig" in value and (not isinstance(value["sig"], str) or len(value["sig"]) > 500):
         return False
     return "paused" not in value or isinstance(value["paused"], bool)
 
