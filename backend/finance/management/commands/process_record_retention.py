@@ -61,7 +61,7 @@ class Command(BaseCommand):
             send_mail(
                 "Keep your RuMampu record",
                 (
-                    f"Your RuMampu record is scheduled to be removed on {removal_date:%-d %B %Y} "
+                    f"Your RuMampu record is scheduled to be removed on {removal_date.day} {removal_date:%B %Y} "
                     "after six months without use. Sign in before then to keep it."
                 ),
                 settings.DEFAULT_FROM_EMAIL,

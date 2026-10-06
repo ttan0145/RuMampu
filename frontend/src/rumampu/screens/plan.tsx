@@ -291,7 +291,6 @@ export function PlanScreen() {
           <Bar pct={gpct} style={{ marginTop: 4 }} />
           <BodyS muted>{t('p10_target_from')}</BodyS>
           {inBuffer && shortN ? <Note>{t('p10_short_note', { s: shortN, n: testedN })}</Note> : null}
-          {(b?.overflow ?? 0) > 0 && inBuffer ? <BodyS muted>{t('p10_overflow', { a: rm(b?.overflow ?? 0) })}</BodyS> : null}
           {(v?.queued ?? 0) > 0 ? <BodyS muted>{t('vl_queue', { n: v?.queued ?? 0 })}</BodyS> : null}
         </Card>
         </GuideTarget>

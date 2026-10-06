@@ -51,8 +51,11 @@ function validPlan(value: unknown): value is PlanState {
 }
 
 function validBuffer(value: unknown): value is BufferState {
-  if (!record(value) || !finite(value.saved) || value.saved < 0
-    || !finite(value.overflow) || value.overflow < 0
+  /* saved and overflow are the retired shield balance: still accepted from older
+     snapshots so the rest of the buffer is kept, but dropped on hydrate. */
+  const optionalAmount = (v: unknown) => v === undefined || (finite(v) && v >= 0);
+  if (!record(value) || !optionalAmount(value.saved) || !optionalAmount(value.overflow)
+    || !optionalAmount(value.used)
     || !(value.target === null || (finite(value.target) && value.target >= 0))
     || !(value.houseCost === null || (finite(value.houseCost) && value.houseCost >= 0))
     || !(value.prevTarget === null || (finite(value.prevTarget) && value.prevTarget >= 0))
@@ -118,7 +121,12 @@ export function hydrate(s: AppState, raw: string | null): void {
     hydrateHousingSession(payload.housingTestResult, payload.housingScenario);
 
     s.plan = validPlan(payload.plan) ? payload.plan : null;
-    s.buffer = validBuffer(payload.buffer) ? payload.buffer : null;
+    if (validBuffer(payload.buffer)) {
+      const { saved: _saved, overflow: _overflow, ...buffer } = payload.buffer as BufferState & { saved?: number; overflow?: number };
+      s.buffer = buffer;
+    } else {
+      s.buffer = null;
+    }
     s.village = validVillage(payload.village) ? payload.village : null;
     if (payload.planHorizon === null || (finite(payload.planHorizon) && payload.planHorizon > 0)) {
       s.planHorizon = payload.planHorizon as number | null;

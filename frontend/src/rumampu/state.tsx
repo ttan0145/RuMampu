@@ -148,9 +148,11 @@ export interface VillageState {
    trough. Fills before the village game opens; spending it is the shield
    working, so the tone of every transition is recorded here, not in a view. */
 export interface BufferState {
-  saved: number;
-  /* Savings beyond the target — still the user's money, spills into Phase 2. */
-  overflow: number;
+  /* Under one pot (US5.8) the pot is the buffer's balance: the buffer holds the
+     smaller of the pot and its target. The old shield balance (saved, overflow)
+     is retired; older snapshots may still carry it and nothing reads it.
+     `used` is what the user has drawn from the buffer: spent, so it leaves the pot. */
+  used?: number;
   /* null until a house test exists; 0 is a valid target (bf_zero). */
   target: number | null;
   /* tested_home_cost the target came from, to notice when the house changed. */

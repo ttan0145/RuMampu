@@ -5,7 +5,7 @@ import {
 } from '../src/rumampu/fees';
 import { potForUpfront, potHeld, potParts, potSum } from '../src/rumampu/pot';
 import type { AppState } from '../src/rumampu/state';
-import { planEnsure, planPhase, planToggle, syncBufferTarget } from '../src/rumampu/plan';
+import { drawDownBuffer, planEnsure, planPhase, planToggle, potSplit, syncBufferTarget } from '../src/rumampu/plan';
 import { setHousingTestResult } from '../services/housingSession';
 import type { HousingTestResult } from '../types/housing';
 import { accountSnapshot, hydrateAccountState } from '../src/rumampu/persist';
@@ -152,10 +152,10 @@ test.describe('Epic 5 — Upfront cash fee scales', { tag: ['@epic5', '@hardenin
       data: { cashOnHand: cash },
     }) as unknown as AppState;
 
-    expect(potParts(state(1000, 83, 200))).toEqual({ had: 1000, plan: 83, moved: 200, total: 1283 });
+    expect(potParts(state(1000, 83, 200))).toEqual({ had: 1000, plan: 83, moved: 200, used: 0, total: 1283 });
     expect(potSum(state(1000, 83, 200))).toBe(1283);
     // No plan started yet, nothing moved in: the pot is just the cash entered.
-    expect(potParts(state(8000, null, 0))).toEqual({ had: 8000, plan: 0, moved: 0, total: 8000 });
+    expect(potParts(state(8000, null, 0))).toEqual({ had: 8000, plan: 0, moved: 0, used: 0, total: 8000 });
     // Nothing anywhere is an empty pot, and a bad value never makes it negative.
     expect(potSum(state(0, null, 0))).toBe(0);
     expect(potSum(state(-50, 10, 0))).toBe(10);
@@ -215,18 +215,18 @@ test.describe('Safety buffer saving reversals', { tag: ['@epic5', '@epic10', '@h
 
   test.afterEach(() => setHousingTestResult(null));
 
-  test('TECH-BUFFER-01 — Undoing the day that filled the shield reopens the buffer phase', () => {
+  test('TECH-BUFFER-01 — Undoing the day that filled the buffer reopens the buffer phase', () => {
     const state = savingState([100]);
     planToggle(state, 0);
-    expect(state.buffer?.saved).toBe(100);
+    expect(potHeld(state, 100)).toBe(100);
     expect(planPhase(state, result)).toBe('village');
     planToggle(state, 0);
-    expect(state.buffer?.saved).toBe(0);
     expect(potSum(state)).toBe(0);
+    expect(potHeld(state, 100)).toBe(0);
     expect(planPhase(state, result)).toBe('buffer');
   });
 
-  test('TECH-BUFFER-02 — Undo uses each day\'s allocation even after the phase changes', () => {
+  test('TECH-BUFFER-02 — Undo takes back a house only for a day that built one, even after the phase changes', () => {
     const state = savingState([100, 40]);
     planToggle(state, 0);
     planToggle(state, 1);
@@ -236,34 +236,74 @@ test.describe('Safety buffer saving reversals', { tag: ['@epic5', '@epic10', '@h
     hydrateAccountState(state, remote);
     expect(planEnsure(state).buffered?.slice(0, 2)).toEqual([true, false]);
     planToggle(state, 0);
-    expect(state.buffer?.saved).toBe(0);
     // US5.8: the RM 40 still saved is held for the RM 100 buffer first.
     expect(potHeld(state, 100)).toBe(40);
     expect(potForUpfront(state, 100)).toBe(0);
     expect(planPhase(state, result)).toBe('buffer');
+    expect(state.village?.built).toBe(1);
     planToggle(state, 1);
     expect(potSum(state)).toBe(0);
     expect(state.village?.built).toBe(0);
     expect(state.village?.cells.every(cell => cell === 0)).toBe(true);
   });
 
-  test('TECH-BUFFER-03 — Undoing a buffered day reverses overflow before the shield', () => {
+  test('TECH-BUFFER-03 — Using the safety buffer spends from the pot, and every reading follows', () => {
     const state = savingState([60, 80]);
     planToggle(state, 0);
     planToggle(state, 1);
-    expect(state.buffer).toMatchObject({ saved: 100, overflow: 40 });
-    planToggle(state, 0);
-    expect(state.buffer).toMatchObject({ saved: 80, overflow: 0 });
-    expect(potSum(state)).toBe(80);
-    expect(potForUpfront(state, 100)).toBe(0);
+    expect(potSplit(state, result)).toMatchObject({ pot: 140, buf: 100, up: 40 });
+    expect(planPhase(state, result)).toBe('village');
+    // Spend RM 70 from the buffer: the pot drops to RM 70, all of it now held, and the
+    // plan goes back to refilling the buffer.
+    drawDownBuffer(state, 70);
+    expect(state.buffer).toMatchObject({ used: 70, msg: 'used' });
+    expect(potSplit(state, result)).toMatchObject({ pot: 70, buf: 70, up: 0 });
+    expect(planPhase(state, result)).toBe('buffer');
+    // Only what the buffer holds can be used.
+    drawDownBuffer(state, 500);
+    expect(state.buffer?.used).toBe(140);
+    expect(potSum(state)).toBe(0);
+    // The amount used survives the account round trip.
+    const remote = JSON.parse(JSON.stringify(accountSnapshot(state)));
+    state.buffer = null;
+    hydrateAccountState(state, remote);
+    expect(potParts(state).used).toBe(140);
   });
 
-  test('TECH-BUFFER-04 — Legacy plans cannot retain more reserved money than remains saved', () => {
+  test('TECH-BUFFER-06 — Using RM 1,000 of a RM 3,000 buffer leaves it full and takes it off upfront cash', () => {
+    // The team's worked example: a RM 10,000 pot with a RM 3,000 buffer holds RM 3,000 and
+    // counts RM 7,000 towards upfront costs. Using RM 1,000 leaves RM 9,000 in the pot; the
+    // buffer refills from the rest and stays full, and upfront progress drops to RM 6,000.
+    const big = {
+      tested_home_cost: 100,
+      months: [{ post_housing_residual: 100 }],
+      starting_liquidity: { required_amount: 3000, months: [] },
+    } as unknown as HousingTestResult;
+    const state = savingState([]);
+    setHousingTestResult(big);
+    syncBufferTarget(state, big);
+    state.data.cashOnHand = 10000;
+    expect(potSplit(state, big)).toMatchObject({ pot: 10000, buf: 3000, up: 7000 });
+    drawDownBuffer(state, 1000);
+    expect(potSplit(state, big)).toMatchObject({ pot: 9000, buf: 3000, up: 6000 });
+    expect(planPhase(state, big)).toBe('village');
+  });
+
+  test('TECH-BUFFER-04 — An older snapshot with the retired shield balance still loads, without it', () => {
     const state = savingState([100]);
+    const remote = JSON.parse(JSON.stringify(accountSnapshot(state)));
+    remote.buffer_state = { ...remote.buffer_state, saved: 100, overflow: 20 };
+    state.buffer = null;
+    hydrateAccountState(state, remote);
+    expect(state.buffer).not.toBeNull();
+    expect(state.buffer).not.toHaveProperty('saved');
+    expect(state.buffer).not.toHaveProperty('overflow');
+    expect(state.buffer).toMatchObject({ target: 100 });
+    // An older day with no recorded destination is undone without touching the pot twice.
     planToggle(state, 0);
-    if (state.plan) delete state.plan.buffered;
+    if (state.plan) state.plan.buffered = state.plan.buffered?.map(() => null);
     planToggle(state, 0);
-    expect(state.buffer).toMatchObject({ saved: 0, overflow: 0 });
+    expect(potSum(state)).toBe(0);
     expect(planPhase(state, result)).toBe('buffer');
   });
 

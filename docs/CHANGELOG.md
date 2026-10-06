@@ -2,9 +2,21 @@
 
 Language: **English** | [Chinese (CN)](CHANGELOG.cn.md)
 
-## 2026-10-05 — Merge v27b3; savings counted once, buffer first (US5.8)
+## 2026-10-06 — Retire the separate buffer balance; using the buffer spends from the pot
 
 Status: built and checked locally; not yet pushed
+
+Raised by the team on 2026-10-06: after the move to one pot, the old shield balance (`buffer.saved`, `buffer.overflow`) was still updated, and "use your safety money" only touched it. So using the buffer would have left the pot, the phase and every screen unchanged.
+
+- `buffer.saved` and `buffer.overflow` are retired. A saved day is in the pot through the plan, and the buffer holds the smaller of the pot and its target. Older snapshots that still carry the two fields load without them, and the account endpoint still accepts them from older devices.
+- Using the buffer records the amount as `buffer.used`, which comes off the pot (agreed in the team chat). The buffer refills from the rest of the pot first: with RM 10,000 and a RM 3,000 buffer, using RM 1,000 leaves RM 9,000, the buffer still full at RM 3,000, and RM 6,000 towards upfront costs. Only what the buffer holds can be used. The pot's working lists the amount used.
+- The Saving plan's old "overflow" line is removed.
+- Each saved day still remembers whether it built a village house, so undoing it takes back a house only if it built one.
+- From the upstream Epic 7/8 commit: `docs/openapi.yaml` regenerated for the new post-purchase endpoints, and the retention email no longer uses the Linux-only `%-d` date format, so its test also passes on Windows.
+
+## 2026-10-05 — Merge v27b3; savings counted once, buffer first (US5.8)
+
+Status: committed and pushed to main on 2026-10-05 (0b69b98)
 
 - **Merged origin/main** (v27b3 design, Learn, the price page and model, STT categorisation) with the Epic 5 and acceptance-suite commits. Home, the Saving plan and Ask Ruma take the v27b3 versions; Upfront cash keeps the dated cash entry, steady inputs and the held note. `docs/openapi.yaml` is regenerated for the new endpoints, and the price-model tests no longer write to `/dev/null`, so they also pass on Windows.
 - **One pot, buffer first (team amendment US5.8, not yet signed off).** The pot is the cash I already had, what the plan put aside and the months moved in. The cash buffer from the kept house test is held from it first, and only the rest counts towards the upfront cash (`potHeld`, `potForUpfront`, `potSplit`, `potNow`). Upfront cash, the House card, the pot's working, the Saving plan and Home all read this split. Home's line now reads "… more to go for your safety buffer and upfront cash", since it measures both goals.

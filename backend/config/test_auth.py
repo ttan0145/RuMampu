@@ -111,6 +111,25 @@ class AuthApiRegressionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(client.get("/api/v1/auth/me/").json()["saving_plan"], plan)
 
+    def test_buffer_state_keeps_the_amount_used_and_accepts_the_retired_balance(self):
+        # One pot: the buffer keeps its target and what was used from it. Older devices
+        # still send the retired saved/overflow balance, which must not block the sync.
+        user = User.objects.create_user(username="buffer-used@example.com", password="Passw0rd123")
+        token = Token.objects.create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+        current = {"target": 3000, "houseCost": 1382, "prevTarget": None, "msg": "used", "used": 1000}
+        legacy = {"saved": 100, "overflow": 20, "target": 905, "houseCost": 1382, "prevTarget": None, "msg": None}
+        for state in (current, legacy):
+            with self.subTest(state=state):
+                response = client.patch("/api/v1/auth/me/", {"buffer_state": state}, content_type="application/json")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(client.get("/api/v1/auth/me/").json()["buffer_state"], state)
+        for bad in ({"used": -1}, {"used": "lots"}, {"used": True}):
+            with self.subTest(bad=bad):
+                response = client.patch("/api/v1/auth/me/", {"buffer_state": {**current, **bad}},
+                                        content_type="application/json")
+                self.assertEqual(response.status_code, 400)
+
     def test_v27b_saving_plan_start_day_and_signature_sync_to_the_account(self):
         # v27b keeps the day the split started from and what the target was worked out
         # from; an account sync that carries them must not be refused.

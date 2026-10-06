@@ -483,6 +483,49 @@ paths:
               schema:
                 $ref: '#/components/schemas/Health'
           description: ''
+  /api/v1/homeownership/months/:
+    get:
+      operationId: homeownership_months_list
+      description: Real post-purchase months, owned by the same guest/account boundary.
+      tags:
+      - Homeownership monitoring
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeownershipMonthList'
+          description: ''
+    put:
+      operationId: homeownership_month_upsert
+      description: Real post-purchase months, owned by the same guest/account boundary.
+      tags:
+      - Homeownership monitoring
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HomeownershipMonthWriteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/HomeownershipMonthWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/HomeownershipMonthWriteRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeownershipMonth'
+          description: ''
   /api/v1/housing/calculate/:
     post:
       operationId: housing_calculate_create
@@ -1567,6 +1610,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/retention/:
+    get:
+      operationId: record_retention_status
+      description: Return any due guest warning before this visit refreshes activity.
+      tags:
+      - Privacy and retention
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionStatus'
+          description: ''
   /api/v1/work-costs/:
     get:
       operationId: work_cost_items_list
@@ -2106,6 +2165,82 @@ components:
         * `one_month` - one_month
         * `two_months` - two_months
         * `three_or_more` - three_or_more
+    HomeownershipMonth:
+      type: object
+      properties:
+        month:
+          type: string
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
+        recorded_income:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        work_costs:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        income_after_work_costs:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        actual_income:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        actual_home_costs:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        cash_position:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        short:
+          type: boolean
+        is_complete:
+          type: boolean
+        provenance:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - actual_home_costs
+      - actual_income
+      - cash_position
+      - income_after_work_costs
+      - is_complete
+      - month
+      - provenance
+      - recorded_income
+      - short
+      - updated_at
+      - work_costs
+    HomeownershipMonthList:
+      type: object
+      properties:
+        months:
+          type: array
+          items:
+            $ref: '#/components/schemas/HomeownershipMonth'
+      required:
+      - months
+    HomeownershipMonthWriteRequest:
+      type: object
+      properties:
+        month:
+          type: string
+          minLength: 1
+          pattern: ^\d{4}-(0[1-9]|1[0-2])$
+        actual_home_costs:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+      required:
+      - actual_home_costs
+      - month
     HousingCalculationCostRequest:
       type: object
       properties:
@@ -2480,7 +2615,7 @@ components:
       type: object
       properties:
         kind:
-          $ref: '#/components/schemas/KindEnum'
+          $ref: '#/components/schemas/IncomeCoverageObservationKindEnum'
         recorded_month_count:
           type: integer
           minimum: 1
@@ -2499,6 +2634,11 @@ components:
       - lowest
       - range
       - recorded_month_count
+    IncomeCoverageObservationKindEnum:
+      enum:
+      - recorded_range
+      type: string
+      description: '* `recorded_range` - recorded_range'
     IncomeCoverageResponse:
       type: object
       properties:
@@ -2893,11 +3033,6 @@ components:
           maxLength: 120
       required:
       - name
-    KindEnum:
-      enum:
-      - recorded_range
-      type: string
-      description: '* `recorded_range` - recorded_range'
     LanguageEnum:
       enum:
       - en
@@ -3154,6 +3289,36 @@ components:
       - is_receipt
       - merchant
       - total
+    RetentionStatus:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/RetentionStatusKindEnum'
+        last_use:
+          type: string
+          format: date
+        warning_due:
+          type: boolean
+        removal_date:
+          type: string
+          format: date
+          nullable: true
+        email_warning_sent:
+          type: boolean
+      required:
+      - email_warning_sent
+      - kind
+      - last_use
+      - removal_date
+      - warning_due
+    RetentionStatusKindEnum:
+      enum:
+      - guest
+      - account
+      type: string
+      description: |-
+        * `guest` - guest
+        * `account` - account
     RoleEnum:
       enum:
       - user

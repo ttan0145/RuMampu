@@ -518,7 +518,7 @@ export function SheetHost() {
      reported on Upfront cash), what the plan has added, and what finished months
      moved in. The three sum to the pot (AC10.4.3, AC5.2.17). */
   if (sheet === 'pothow') {
-    const { had, plan: planPart, moved, total: potTotal } = potParts(S);
+    const { had, plan: planPart, moved, used, total: potTotal } = potParts(S);
     const held = potNow(S).buf;
     const kvRow = (lbl: string, v: number, bold?: boolean) => (
       <View key={lbl} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 32 }}>
@@ -532,6 +532,8 @@ export function SheetHost() {
             {kvRow(t('ph_had'), had)}
             {kvRow(t('ph_plan'), planPart)}
             {kvRow(t('ph_moved'), moved)}
+            {/* Drawn from the safety buffer: spent, so it is off the pot. */}
+            {used > 0 ? kvRow(t('ph_used'), -used) : null}
             <View style={{ height: 1, backgroundColor: C.ink14, marginVertical: 6 }} />
             {kvRow(t('ph_total'), potTotal, true)}
             {/* Part of the pot already promised to the cash buffer, so not counted

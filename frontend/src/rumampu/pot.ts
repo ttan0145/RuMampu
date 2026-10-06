@@ -5,11 +5,13 @@ import type { AppState } from './state';
    saved) and what finished months moved in. Each part is counted once, and every
    screen that says "what I have" reads this total. Kept free of app imports so the
    arithmetic can be tested on its own. */
-export function potParts(s: AppState): { had: number; plan: number; moved: number; total: number } {
+export function potParts(s: AppState): { had: number; plan: number; moved: number; used: number; total: number } {
   const had = Math.max(0, +s.data.cashOnHand || 0);
   const plan = Math.max(0, s.village?.savedRm ?? 0);
   const moved = Math.max(0, s.potMoved || 0);
-  return { had, plan, moved, total: had + plan + moved };
+  /* What was drawn from the safety buffer has been spent, so it leaves the pot. */
+  const used = Math.max(0, +(s.buffer?.used ?? 0) || 0);
+  return { had, plan, moved, used, total: Math.max(0, had + plan + moved - used) };
 }
 
 export function potSum(s: AppState): number {

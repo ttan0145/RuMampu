@@ -85,25 +85,18 @@ export function planToggle(s: AppState, i: number): void {
   const vv = villageEnsure(s);
   vv.savedRm = Math.max(0, vv.savedRm + (p.done[i] ? amount : -amount));
   logIt(s, p.done[i] ? 'lg_saved_day' : 'lg_unsaved_day', { a: rm(amount) });
-  /* Epic 10: while the shield is filling, saved days feed the buffer, not the
-     game. Setup/explain/village (and pre-Epic-10 sessions) keep the village
-     mechanic exactly as before. */
+  /* Epic 10 with one pot (US5.8): the saved amount is already in the pot through
+     savedRm, and the pot fills the buffer first, so nothing else is booked here.
+     A day saved while the buffer is filling builds no house; each day remembers
+     which it was, so undoing it later takes back a house only if it built one. */
   if (p.done[i]) {
     p.buffered[i] = allocation;
-    if (allocation) addToBuffer(s, amount);
-    else villageSpawn(s);
+    if (!allocation) villageSpawn(s);
   } else {
     p.buffered[i] = false;
-    if (allocation === true) removeFromBuffer(s, amount);
-    else if (allocation === false) villageRemove(s);
-    else {
-      /* Old snapshots did not record destinations. Do not guess from today's
-         phase: cap the reservation at the declared savings still remaining. */
-      const b = bufferEnsure(s);
-      const excess = Math.max(0, b.saved + b.overflow - vv.savedRm);
-      if (excess > 0) removeFromBuffer(s, excess);
-      else if (planPhase(s, getHousingTestResult()) !== 'buffer') villageRemove(s);
-    }
+    if (allocation === false) villageRemove(s);
+    /* Older snapshots did not record it: assume a house only outside the buffer phase. */
+    else if (allocation == null && planPhase(s, getHousingTestResult()) !== 'buffer') villageRemove(s);
   }
 }
 
@@ -257,7 +250,7 @@ export { upfrontNeed } from './fees';
 
 export function bufferEnsure(s: AppState): BufferState {
   if (!s.buffer) {
-    s.buffer = { saved: 0, overflow: 0, target: null, houseCost: null, prevTarget: null, msg: null };
+    s.buffer = { target: null, houseCost: null, prevTarget: null, msg: null };
   }
   return s.buffer;
 }
@@ -279,37 +272,17 @@ export function syncBufferTarget(s: AppState, result: HousingTestResult | null):
   return b;
 }
 
-/* Caps at the target; the excess is still the user's money, so it spills
-   into the village phase (overflow) instead of being discarded. Call in up(). */
-export function addToBuffer(s: AppState, amount: number): void {
-  const b = bufferEnsure(s);
-  const a = Math.max(0, Math.round(Number(amount) || 0));
-  if (!a) return;
-  const room = b.target === null ? a : Math.max(0, b.target - b.saved);
-  const into = Math.min(a, room);
-  b.saved += into;
-  b.overflow += a - into;
-}
-
-/* Undo of a ticked day — not shield use, so no 'used' event. Reverses the
-   add the same way it landed: overflow first, then the shield itself. */
-export function removeFromBuffer(s: AppState, amount: number): void {
-  const b = bufferEnsure(s);
-  let a = Math.max(0, Math.round(Number(amount) || 0));
-  const fromOverflow = Math.min(a, b.overflow);
-  b.overflow -= fromOverflow;
-  a -= fromOverflow;
-  b.saved = Math.max(0, b.saved - a);
-}
-
-/* Using the shield IS the shield working. The calm 'used' event is recorded
-   here in the transition — no red, no loss animation, no broken streak — so
-   a view refactor can't accidentally turn buffer use into a failure. */
+/* Using the shield IS the shield working. The money is spent, so it leaves the
+   pot (`used`), which is what every screen reads: the held amount, the phase and
+   the gaps all follow, and the plan goes back to refilling the buffer. Only what
+   the buffer holds can be used. The calm 'used' event is recorded here in the
+   transition — no red, no loss animation, no broken streak — so a view refactor
+   can't accidentally turn buffer use into a failure. */
 export function drawDownBuffer(s: AppState, amount: number): void {
   const b = bufferEnsure(s);
-  const a = Math.max(0, Math.round(Number(amount) || 0));
+  const a = Math.min(Math.max(0, Math.round(Number(amount) || 0)), potHeld(s, b.target ?? 0));
   if (!a) return;
-  b.saved = Math.max(0, b.saved - a);
+  b.used = (b.used ?? 0) + a;
   b.msg = 'used';
 }
 
