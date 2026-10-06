@@ -11,7 +11,7 @@ test('open from house costs, set a price, pick Petaling, send its typical price 
   await openGuestApp(page);
   await page.getByRole('tab', { name: 'House', exact: true }).click();
   await page.getByText('House costs', { exact: true }).first().click();
-  await page.getByText('See where my price fits', { exact: true }).click();
+  await page.getByTestId('fh-px').click();
 
   // a new user is told what the page does, and a default price is not called theirs
   await expect(page.getByText('Find areas with homes at your price, then test one.', { exact: true })).toBeVisible();
@@ -33,6 +33,13 @@ test('open from house costs, set a price, pick Petaling, send its typical price 
   await page.getByTestId('px-budget').press('Enter');
   await expect(page.getByTestId('px-budget')).toHaveValue('520,000');
 
+  // any state: Johor's districts, then back to Selangor
+  await page.getByTestId('px-state').click();
+  await page.getByText('Johor', { exact: true }).last().click();
+  await expect(page.getByText('Johor Bahru', { exact: true })).toBeVisible();
+  await page.getByTestId('px-state').click();
+  await page.getByText('Selangor', { exact: true }).last().click();
+
   // the list opens first; the map is one tab away
   await expect(page.getByText('typical RM 634k', { exact: true })).toBeVisible();
   await expect(page.getByLabel('District map of Selangor, Kuala Lumpur and Putrajaya')).toHaveCount(0);
@@ -49,48 +56,80 @@ test('open from house costs, set a price, pick Petaling, send its typical price 
   await expect(page.getByPlaceholder('e.g. 250,000')).toHaveValue('634000');
 });
 
-/* House costs as search results: the raw NAPIC sales table is Neon-only, so
-   these figures come from a stubbed response with the real response shape. */
-test('house costs: filter chips, search across states, sort', async ({ page }) => {
-  await page.route('**/api/v1/housing/house-costs/**', route => route.fulfill({
-    contentType: 'application/json',
-    body: JSON.stringify({
-      window: { from: '2025Q3', to: '2026Q2', quarters: 4 }, income_year: 2024, affordable_threshold: 300000,
-      states: {
-        sgr: { name: 'Selangor', income: 10726, types: { all: { Klang: [852, 480000, 120], 'Kuala Langat': [293, 440000, 56], Petaling: [1034, 700000, 40] }, terr: {}, condo: {}, flat: {}, lch: {}, lcf: {} } },
-        kul: { name: 'W.P. Kuala Lumpur', income: 13325, types: { all: { 'Kuala Lumpur': [2000, 620000, 300] }, terr: {}, condo: {}, flat: {}, lch: {}, lcf: {} } },
-      },
-    }),
-  }));
+/* House costs on a street map. "All homes" needs the raw NAPIC sales table, which
+   only exists on Neon, so the area and district figures are stubbed with the real
+   response shapes; map tiles are not fetched in tests. */
+test('house costs map: list, district detail, budget, search', async ({ page }) => {
+  await page.route('**/tile.openstreetmap.org/**', route => route.abort());
+  const area = (district: string, typical: number | null, sales: number) => ({
+    district, sales, share_under: typical ? 0.4 : null, typical, low: typical ? typical * 0.6 : null, high: typical ? typical * 1.8 : null,
+  });
+  await page.route('**/api/v1/housing/price-explorer/areas/**', route => {
+    const state = new URL(route.request().url()).searchParams.get('state');
+    const areas = state === 'SGR' ? [area('Klang', 480000, 852), area('Petaling', 670000, 1034), area('Sabak Bernam', null, 3)]
+      : state === 'KUL' ? [area('Kuala Lumpur', 710000, 2000)] : [];
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+      model_version: 'pm-test', budget: 450000, window: { from: '2025Q3', to: '2026Q2' }, income: 10726, areas,
+    }) });
+  });
+  await page.route('**/api/v1/housing/price-explorer/home/**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+    model_version: 'pm-test', district: 'Klang', state_code: 'SGR', property_type: 'all', tenure: 'F', tenures_available: [],
+    size_band: 'typical', sizes: {}, size_m2: 0, storeys: 0, n_sales_2y: 852,
+    today: { p10: 260000, p50: 480000, p90: 950000 },
+    future: [1, 2, 3].map(y => ({ years: y, p10: null, p50: 480000 + y * 13000, p90: null, prob_lower: 0.1 })),
+    trend_band: [1, 2, 3].map(y => ({ low: 470000 + y * 4000, high: 500000 + y * 20000 })),
+    history: ['2025Q1', '2025Q2', '2025Q3', '2025Q4', '2026Q1', '2026Q2'].map((q, i) => ({ quarter: q, value: 465000 + i * 3000 })),
+    last_year: 471000, income: 10726, trend: null, accuracy: { median_APE: 0.11, within_10pct: 0.5, within_20pct: 0.74, coverage80: 0.77 },
+    drivers: [{ feature: 'dist_rail_km', description: 'Rail station', band: '<1 km', reference: '5 km+', effect_pct: 6.2 }],
+    meta: { price_level_quarter: '2026Q2', test_window: ['2025Q3', '2026Q2'], test_sales: 100, overall: null, notes: '' },
+  }) }));
+
   await openGuestApp(page);
   await page.getByRole('tab', { name: 'House', exact: true }).click();
   await page.getByText('House costs', { exact: true }).first().click();
 
-  await expect(page.getByText('3 districts in Selangor', { exact: true })).toBeVisible();
-  await expect(page.getByText('Homes sold Jul 2025 to Jun 2026', { exact: true })).toBeVisible();
-  // most affordable first
-  const names = page.locator('[data-testid^="fh-card-"]');
-  await expect(names.first()).toHaveAttribute('data-testid', 'fh-card-Kuala Langat');
+  // the list: cheapest first, thin districts named below
+  await expect(page.getByText('Selangor & KL', { exact: true })).toBeVisible();
+  await expect(page.getByText('3 areas · cheapest first', { exact: true })).toBeVisible();
+  const rows = page.locator('[data-testid^="hp-row-"]');
+  await expect(rows.first()).toHaveAttribute('data-testid', 'hp-row-Klang');
+  await expect(page.getByText('Not enough sales to show: Sabak Bernam.', { exact: true })).toBeVisible();
+  // the busiest area gets a price pin; one that would overlap it becomes a dot
+  await expect(page.getByTestId('pin-Kuala Lumpur')).toContainText('RM 710k');
+  await expect(page.getByTestId('dot-Petaling')).toBeVisible();
 
-  await page.getByTestId('fh-sort').click();
-  await page.getByText('Highest price', { exact: true }).click();
-  await expect(names.first()).toHaveAttribute('data-testid', 'fh-card-Petaling');
+  // a district: last year, now, in 3 years, and more details
+  await page.getByTestId('hp-row-Klang').click();
+  await expect(page.getByTestId('hp-now')).toHaveText('RM 480k');
+  await expect(page.getByText('RM 471k', { exact: true })).toBeVisible();
+  await expect(page.getByText('RM 519k', { exact: true })).toBeVisible();
+  // hovering the chart shows that point's numbers
+  const chart = page.getByTestId('hp-chart');
+  await chart.scrollIntoViewIfNeeded();
+  const box = (await chart.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.9, box.y + box.height / 2);   // clear of the Ask Ruma button at the edge
+  await expect(page.getByTestId('hp-tip')).toContainText('in 3 years');
+  await expect(page.getByTestId('hp-tip')).toContainText('RM 519k');
+  await page.mouse.move(box.x + 2, box.y + box.height / 2);
+  await expect(page.getByTestId('hp-tip')).toContainText('2025 Q1');
+  await page.getByTestId('hp-more').click();
+  await expect(page.getByText('Years of family income', { exact: true })).toBeVisible();
+  await expect(page.getByText('3.7 years', { exact: true })).toBeVisible();
+  await page.getByTestId('hp-back').click();
 
-  // the map uses the real district outlines; tapping one shows its numbers
-  await page.getByRole('tab', { name: 'Map', exact: true }).click();
-  await expect(page.getByLabel('Map of districts in Selangor')).toBeVisible();
-  await page.getByLabel('Klang', { exact: true }).click();
-  await expect(page.getByText('Middle sale price', { exact: true })).toBeVisible();
-  await page.getByRole('tab', { name: 'List', exact: true }).click();
+  // a budget tags each area
+  await page.getByTestId('hp-budget').click();
+  await page.getByTestId('hp-bud-in').fill('500000');
+  await page.getByTestId('hp-bud-go').click();
+  await expect(page.getByText('Within your budget', { exact: true })).toBeVisible();
+  await expect(page.getByText('A stretch', { exact: true })).toHaveCount(2);
 
-  // a name search looks in every state, and says which state each result is in
-  await page.getByTestId('fh-search').fill('kuala');
-  await expect(page.getByText('2 results for “kuala”', { exact: true })).toBeVisible();
-  await expect(page.getByText('W.P. Kuala Lumpur', { exact: true })).toBeVisible();
-  await page.getByTestId('fh-search').fill('zzz');
-  await expect(page.getByText('No district matches “zzz”.', { exact: true })).toBeVisible();
+  // search opens a district from the list of every state
+  await page.getByTestId('fh-search').fill('petal');
+  await page.getByTestId('hp-hit-Petaling').click();
+  await expect(page.getByText('Selangor · All homes', { exact: true })).toBeVisible();
+  await page.getByTestId('hp-back').click();
 
-  await page.getByTestId('fh-search').fill('');
   await page.getByTestId('fh-px').click();
   await expect(page.getByText('Find areas with homes at your price, then test one.', { exact: true })).toBeVisible();
 });

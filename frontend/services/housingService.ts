@@ -10,6 +10,7 @@ import {
   PxHomeResponse,
   PxSize,
   PxTrendResponse,
+  PxKind,
   PxType,
   SavedHousingTestRecord,
   SaveHousingTestPayload,
@@ -131,9 +132,9 @@ export async function deleteSavedHousingTest(id: number): Promise<void> {
 const qs = (o: Record<string, string | number>) =>
   '?' + Object.entries(o).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');
 
-export const fetchPxAreas = (state: string, type: PxType, budget: number) =>
+export const fetchPxAreas = (state: string, type: PxKind, budget: number) =>
   apiRequest<PxAreasResponse>(`/housing/price-explorer/areas/${qs({ state, property_type: type, budget })}`);
-export const fetchPxHome = (district: string, type: PxType, tenure: 'F' | 'L', size: PxSize) =>
+export const fetchPxHome = (district: string, type: PxKind, tenure: 'F' | 'L', size: PxSize) =>
   apiRequest<PxHomeResponse>(`/housing/price-explorer/home/${qs({ district, property_type: type, tenure, size })}`);
 export const fetchPxTrend = (state: string, type: PxType) =>
   apiRequest<PxTrendResponse>(`/housing/price-explorer/trend/${qs({ state, property_type: type })}`);

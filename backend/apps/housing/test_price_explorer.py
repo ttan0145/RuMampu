@@ -120,7 +120,8 @@ class PriceExplorerApiTests(TestCase):
         self.assertEqual(r.json()['state'], [100.0, 101.0])
 
     @mock.patch('apps.housing.price_explorer.recent_quarters', return_value=['2025Q3', '2025Q4', '2026Q1', '2026Q2'])
-    @mock.patch('apps.housing.price_explorer.share_under', return_value={'Petaling': (40, 10), 'Klang': (5, 5)})
+    @mock.patch('apps.housing.price_explorer.raw_stats',
+                return_value={'Petaling': (40, 500000, 700000, 900000, 10), 'Klang': (5, 400000, 450000, 500000, 5)})
     def test_areas_share_hidden_below_eight_sales(self, _share, _quarters):
         r = self.client.get('/api/v1/housing/price-explorer/areas/',
                             {'state': 'SGR', 'property_type': 'terrace', 'budget': 453000})
@@ -137,4 +138,52 @@ class PriceExplorerApiTests(TestCase):
         r = self.client.get('/api/v1/housing/price-explorer/areas/',
                             {'state': 'SGR', 'property_type': 'terrace', 'budget': 450000})
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.json()['areas'], [{'district': 'Petaling', 'sales': 0, 'share_under': None, 'typical': 634000}])
+        self.assertEqual(r.json()['areas'], [{'district': 'Petaling', 'sales': 0, 'share_under': None, 'typical': 634000,
+                                              'low': 507200, 'high': 887600}])
+        self.assertIsNone(r.json()['income'])
+
+
+class PriceExplorerAllTypesTests(TestCase):
+    """'all' home types come from the raw sales, which only exist on Neon: stub them."""
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        with tempfile.TemporaryDirectory() as tmp:
+            build_export(tmp)
+            call_command('load_price_model', tmp, '--activate', stdout=io.StringIO())
+
+    @mock.patch('apps.housing.price_explorer.recent_quarters', return_value=['2025Q3', '2025Q4', '2026Q1', '2026Q2'])
+    @mock.patch('apps.housing.price_explorer.raw_stats',
+                return_value={'Petaling': (40, 300000, 600000, 1000000, 12), 'Klang': (6, 1, 2, 3, 1)})
+    def test_areas_all_types_use_raw_ranges_and_hide_thin_districts(self, _raw, _q):
+        r = self.client.get('/api/v1/housing/price-explorer/areas/', {'state': 'SGR', 'property_type': 'all', 'budget': 450000})
+        self.assertEqual(r.status_code, 200)
+        by = {a['district']: a for a in r.json()['areas']}
+        self.assertEqual(by['Petaling'], {'district': 'Petaling', 'sales': 40, 'share_under': 0.3,
+                                          'typical': 600000, 'low': 300000, 'high': 1000000})
+        self.assertIsNone(by['Klang']['typical'])
+
+    @mock.patch('apps.housing.price_explorer._raw_types', return_value=(['2026Q2'], {'terrace': 30, 'condo': 10}))
+    @mock.patch('apps.housing.price_explorer._raw', return_value=(['2026Q2'], {'Petaling': (40, 300000, 600000, 1000000, 0)}))
+    def test_home_all_types_grows_the_raw_typical_price(self, _raw, _types):
+        r = self.client.get('/api/v1/housing/price-explorer/home/', {'district': 'Petaling', 'property_type': 'all'})
+        self.assertEqual(r.status_code, 200)
+        b = r.json()
+        self.assertEqual(b['today'], {'p10': 300000, 'p50': 600000, 'p90': 1000000})
+        # terrace grows by its cell (y1 = 1.03 x today); condo has no cell or scenario here, so is left out
+        self.assertEqual(b['future'][0]['p50'], 618000)
+        self.assertLessEqual(b['trend_band'][0]['low'], b['future'][0]['p50'])
+        self.assertGreaterEqual(b['trend_band'][0]['high'], b['future'][0]['p50'])
+        self.assertEqual([h['quarter'] for h in b['history']], [])   # the test index has too few quarters to roll
+
+    def test_home_all_types_without_raw_sales_is_404(self):
+        r = self.client.get('/api/v1/housing/price-explorer/home/', {'district': 'Petaling', 'property_type': 'all'})
+        self.assertEqual(r.status_code, 404)
+
+    def test_home_type_has_history_fields(self):
+        r = self.client.get('/api/v1/housing/price-explorer/home/', {'district': 'Petaling', 'property_type': 'terrace'})
+        b = r.json()
+        self.assertIn('history', b)
+        self.assertIn('last_year', b)
+        self.assertEqual(len(b['trend_band']), 3)

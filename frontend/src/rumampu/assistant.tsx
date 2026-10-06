@@ -13,8 +13,7 @@ import { AppState, useApp } from './state';
 import { ApiError, AssistantAction, assistantChat, previewAssistantAction } from './api';
 import { rm } from './calc';
 import { BODY_FONT, C, DISP_FONT } from './theme';
-import { RumaHelpAvatar } from './ruma-view';
-import { RUMA_IMG } from './ruma';
+import { RumaHeadset, RumaHelpAvatar } from './ruma-view';
 import { getSpeechOwner, setSpeechOwner } from './speech';
 import { GuideTarget, onScrollSettle } from './tour';
 
@@ -246,18 +245,16 @@ export function AssistantFab() {
           accessibilityLabel={t('ai_title')}
           style={{ width: EDGE_W, height: EDGE_H, overflow: 'visible' }}
         >
-          {/* the peeking Ruma: past the right edge, leaning in at -12 degrees */}
+          {/* the peeking Ruma in its help-desk headset: past the right edge, leaning in at -12 degrees */}
           <Animated.View pointerEvents="none" style={[st.rpk, {
             transform: [
               { translateX: enter.interpolate({ inputRange: [0, 1], outputRange: [45, 0] }) },
               { rotate: '-12deg' },
             ],
           }]}>
-            <Animated.Image
-              source={{ uri: RUMA_IMG.wave }}
-              resizeMode="contain"
-              style={[{ width: 64, height: 62, transform: [{ scaleX: -1 }, { rotate: rot }] }, st.rpkImg]}
-            />
+            <Animated.View style={[{ transform: [{ scaleX: -1 }, { rotate: rot }] }, st.rpkImg]}>
+              <RumaHeadset w={64} />
+            </Animated.View>
           </Animated.View>
         </Pressable>
         </GuideTarget>
@@ -763,7 +760,7 @@ export function AssistantSheet() {
 const st = StyleSheet.create({
   /* .aipop: min(332px, 100% - 24px) wide, beside Ruma */
   rpk: {
-    position: 'absolute', right: -24, bottom: 0, width: 64, height: 62,
+    position: 'absolute', right: -24, bottom: 0, width: 64, height: 64,
     transformOrigin: 'right bottom',
   },
   rpkImg: Platform.OS === 'web'

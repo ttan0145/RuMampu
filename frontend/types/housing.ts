@@ -156,15 +156,24 @@ export interface SaveHousingTestPayload {
 export type PxType = 'terrace' | 'condo' | 'semi_detached' | 'low_cost_house' | 'flat'
   | 'townhouse' | 'detached' | 'cluster' | 'low_cost_flat';
 export type PxSize = 'small' | 'typical' | 'large';
+/* a home type, or every type together ('all', from the raw sales) */
+export type PxKind = PxType | 'all';
 export interface PxBand { p10: number; p50: number; p90: number }
 
 export interface PxAreasResponse {
   model_version: string; budget: number;
   window: { from: string; to: string } | null;
-  areas: Array<{ district: string; sales: number; share_under: number | null; typical: number | null }>;
+  /* the state's median household income a month (DOSM), when loaded */
+  income: number | null;
+  areas: Array<{ district: string; sales: number; share_under: number | null; typical: number | null; low: number | null; high: number | null }>;
 }
 export interface PxHomeResponse {
-  model_version: string; district: string; state_code: string; property_type: PxType;
+  model_version: string; district: string; state_code: string; property_type: PxKind;
+  /* the typical price over time (state index, rolling 4 quarters), and a year ago */
+  history: Array<{ quarter: string; value: number }>; last_year: number | null;
+  /* the trend's likely range around each future typical price (1-3 years) */
+  trend_band: Array<{ low: number; high: number } | null>;
+  income: number | null;
   tenure: 'F' | 'L'; tenures_available: Array<'F' | 'L'>; size_band: PxSize;
   sizes: Partial<Record<PxSize, number>>; size_m2: number; storeys: number; n_sales_2y: number;
   today: PxBand;

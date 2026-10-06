@@ -79,6 +79,28 @@ export function RumaHelpAvatar({ size = 56, ring = false }: { size?: number; rin
   );
 }
 
+/* Ruma wearing the help-desk headset, with no disc behind: the Ask Ruma figure that
+   peeks in from the screen edge. Same headset drawing and fit as RumaHelpAvatar. */
+export function RumaHeadset({ w, pose = 'happy' }: { w: number; pose?: string }) {
+  const ink = '#2B3D3E';
+  const headset = `<svg viewBox="0 0 100 100" width="${w}" height="${w}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M14 46C14 2 86 2 86 46" stroke="${ink}" stroke-width="6" stroke-linecap="round"/>
+    <rect x="7" y="42" width="14" height="22" rx="6.5" fill="${ink}"/>
+    <rect x="79" y="42" width="14" height="22" rx="6.5" fill="${ink}"/>
+    <path d="M87 64C88 76 74 82 62 79" stroke="${ink}" stroke-width="4.2" stroke-linecap="round"/>
+    <circle cx="60" cy="79" r="5" fill="${ink}"/>
+    <circle cx="60" cy="79" r="2.4" fill="#FEC844"/>
+  </svg>`;
+  return (
+    <View style={{ width: w, height: w, alignItems: 'center', justifyContent: 'flex-end' }}>
+      <Image source={{ uri: RUMA_IMG[pose] ?? RUMA_IMG.happy }} style={{ width: w * 0.86, height: w * 0.84, marginBottom: -2 }} resizeMode="contain" />
+      <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0 }}>
+        <SvgXml xml={headset} width={w} height={w} />
+      </View>
+    </View>
+  );
+}
+
 /* Ruma holding up a wooden sign, the "coming soon" crayon design with the
    word swapped: the mascot and the stick come from that picture (board cut
    off), and the board with its grain and the word are drawn here so the text
