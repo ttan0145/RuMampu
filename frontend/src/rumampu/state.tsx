@@ -171,11 +171,17 @@ export interface VoiceItem {
   d: string;
   s?: string;
   c?: string;
-  /* The words did not say whether this was income or spending. */
-  flag?: boolean;
+  /* Per-field confidence is kept with the draft. Low-confidence fields must
+     be corrected or explicitly confirmed before Save is enabled (AC9.4.1/2). */
+  confidence?: {
+    kind: 'high' | 'low';
+    amount: 'high' | 'low';
+    date: 'high' | 'low';
+    target: 'high' | 'low';
+  };
 }
 export interface VoiceState {
-  stage: 'idle' | 'listen' | 'parsing' | 'done';
+  stage: 'idle' | 'permission' | 'listen' | 'parsing' | 'done';
   text: string;
   items: VoiceItem[];
   /* No microphone here, so an example is playing. */
@@ -329,6 +335,7 @@ export interface AppState {
   sheet: string | null;
   /* v27b3 Say an entry: the shared draft, and which card is open (Home or the + menu). */
   voice: VoiceState | null;
+  voiceDisclosureAccepted: boolean;
   sayOpen: boolean;
   qSay: boolean;
   /* v26/v27b What buying involves: the open topic, lesson and page; pages read
@@ -476,7 +483,7 @@ function initialState(): AppState {
     incomeCoverage: null,
     incomePatternSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
     coverageSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
-    voice: null, sayOpen: false, qSay: false, aiY: null, aiAnchor: null, noBills: false, runPending: false, demo: false,
+    voice: null, voiceDisclosureAccepted: false, sayOpen: false, qSay: false, aiY: null, aiAnchor: null, noBills: false, runPending: false, demo: false,
     lnTab: 'nosalary', lnArt: null, lnPg: 1, lnProg: {}, lnWas: null, lnArtWas: false, lnCele: null, lnPop: null,
     px: { budget: null, type: 'terrace', district: null, size: 'typical', tenure: 'F', year: 3, grow: 3, view: 'list', typeSet: false },
     tour: null, tourAsk: null, tourHint: null, tipsOff: process.env.EXPO_PUBLIC_E2E === '1', seenG: [],
@@ -1342,6 +1349,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     options?: { deferRefresh?: boolean },
   ): Promise<'saved' | 'outlier'> => {
     if (!INCOME_API_ENABLED) {
+      const comparable = S.data.income
+        .filter(entry => (entry.method || 'manual') === 'manual' && Number.isFinite(entry.a) && entry.a > 0)
+        .map(entry => entry.a)
+        .sort((a, b) => a - b);
+      if (!input.confirmOutlier && (input.entryMethod || 'manual') === 'manual' && comparable.length >= 3) {
+        const middle = Math.floor(comparable.length / 2);
+        const median = comparable.length % 2 === 0
+          ? (comparable[middle - 1] + comparable[middle]) / 2
+          : comparable[middle];
+        if (input.amount > median * 3) return 'outlier';
+      }
       up(s => {
         s.data.income.push({
           id: `local-${Date.now()}`,
@@ -1385,7 +1403,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       up(s => { s.incomeSync = 'error'; });
       throw error;
     }
-  }, [S.preferredIncomeSourceId, refreshAfterMoneyWrite, savePreferredIncomeSource, up]);
+  }, [S.data.income, S.preferredIncomeSourceId, refreshAfterMoneyWrite, savePreferredIncomeSource, up]);
 
   const updateIncomeEntry = useCallback(async (
     id: string,

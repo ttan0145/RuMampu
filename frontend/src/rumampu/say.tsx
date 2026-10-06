@@ -32,6 +32,32 @@ function isoOffset(days: number): string {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
+function lastWeekdayIso(weekday: number): string {
+  const d = new Date();
+  let back = (d.getDay() - weekday + 7) % 7;
+  if (back === 0) back = 7;
+  d.setDate(d.getDate() - back);
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
+function spokenDate(text: string): string {
+  if (/kelmarin|前天/.test(text)) return isoOffset(-2);
+  if (/semalam|yesterday|昨天/.test(text)) return isoOffset(-1);
+  const weekdays: Array<[RegExp, number]> = [
+    [/last sunday|ahad lepas|上周日|上星期日/, 0],
+    [/last monday|isnin lepas|上周一|上星期一/, 1],
+    [/last tuesday|selasa lepas|上周二|上星期二/, 2],
+    [/last wednesday|rabu lepas|上周三|上星期三/, 3],
+    [/last thursday|khamis lepas|上周四|上星期四/, 4],
+    [/last friday|jumaat lepas|上周五|上星期五/, 5],
+    [/last saturday|sabtu lepas|上周六|上星期六/, 6],
+  ];
+  const match = weekdays.find(([pattern]) => pattern.test(text));
+  return match ? lastWeekdayIso(match[1]) : isoOffset(0);
+}
+
 /* ---------- the fallback parser (ported from the prototype) ---------- */
 
 const UNITS: Record<string, number> = {
@@ -78,41 +104,58 @@ function chineseNumber(str: string): number {
 export function parseSpokenEntries(text: string, S: AppState): VoiceItem[] {
   let s = ` ${String(text || '').toLowerCase()} `;
   s = s.replace(/rm\s*/g, ' ').replace(/(\d),(\d{3})/g, '$1$2');
+  /* In Malaysian conversational English, "twelve fifty" commonly means
+     RM12.50. Handle the specified form before general number-word folding,
+     where it would otherwise become 12 + 50. */
+  s = s.replace(/\btwelve\s+fifty\b/g, '12.50');
   s = s.replace(/[零一二两三四五六七八九十百千万]+/g, m => ` ${chineseNumber(m)} `);
   s = s.replace(/[，。;!?、]/g, ' | ').replace(/,\s/g, ' | ').replace(/\.(\s|$)/g, ' | ');
   s = numberWords(s);
-  const dOff = /semalam|yesterday|昨天/.test(s) ? -1 : (/kelmarin|前天/.test(s) ? -2 : 0);
+  /* Colloquial money such as "twelve fifty" is normally RM12.50, not two
+     separate entries. numberWords() has already made it "12 50" here. */
+  s = s.replace(/\b(\d+)\s+(\d{2})(?=\D|$)/g, '$1.$2');
+  const entryDate = spokenDate(s);
   const parts = s.split(/\||\blepas tu\b|\blepastu\b|\bpastu\b|\band then\b|\bthen\b|然后|接着/);
   const sourceBy = (slugs: string[]) => S.data.sources.find(x => slugs.some(sl => x.k === `src_${sl}`))?.id;
   const catBy = (slug: string) => S.data.expenseCats.find(x => x.k === `xc_${slug}`)?.id;
-  const defaultSource = S.preferredIncomeSourceId || S.incomeDraft.s || S.data.sources[0]?.id;
   const items: VoiceItem[] = [];
   for (const p of parts) {
-    const m = p.match(/(\d+(?:\.\d+)?)/);
+    const m = p.match(/(-?\d+(?:\.\d+)?)/);
     if (!m) continue;
     const a = Math.round(parseFloat(m[1]) * 100) / 100;
-    if (!(a > 0)) continue;
+    if (!Number.isFinite(a)) continue;
     const incW = /dapat|dpt|earn|earned|\bgot\b|\bmade\b|income|gaji|terima|received|paid me|bayar saya|klien|client|赚|收入|拿到|付了我|客户/;
     const expW = /makan|beli|belanja|spent|spend|bayar|paid|\bpay\b|minyak|petrol|parking|\btol\b|toll|花|吃|买|加油/;
     const iI = p.search(incW), iE = p.search(expW);
     let kind: 'in' | 'out';
-    let flag = false;
+    let kindCertain = true;
     if (iI >= 0 && (iE < 0 || /paid me|bayar saya|klien|client|付了我|客户/.test(p))) kind = 'in';
     else if (iE >= 0) kind = 'out';
-    else { kind = /grab|foodpanda|lalamove|shopee|freelance/.test(p) ? 'in' : 'out'; flag = true; }
-    const it: VoiceItem = { kind, a, d: isoOffset(dOff), flag };
+    else { kind = /grab|foodpanda|lalamove|shopee|freelance/.test(p) ? 'in' : 'out'; kindCertain = false; }
+    const it: VoiceItem = {
+      kind, a, d: entryDate,
+      confidence: {
+        kind: kindCertain ? 'high' : 'low',
+        amount: (kind === 'in' ? a >= 0 : a > 0) ? 'high' : 'low',
+        date: 'high',
+        target: 'low',
+      },
+    };
     if (kind === 'in') {
       const sid = /foodpanda|panda|lalamove|shopee|deliver/.test(p) ? sourceBy(['deliv', 'delivery', 'food'])
         : /grab|e-hailing|ehailing/.test(p) ? sourceBy(['ehail'])
           : /freelance|klien|client|projek|project|自由职业/.test(p) ? sourceBy(['freelance'])
             : /part.?time|gaji/.test(p) ? sourceBy(['parttime']) : undefined;
-      it.s = sid || defaultSource;
+      it.s = sid;
+      it.confidence!.target = sid ? 'high' : 'low';
     } else {
       const slug = /makan|lunch|dinner|breakfast|food|nasi|kopi|吃|饭|餐/.test(p) ? 'meals'
         : /barang|grocer|pasar|mart|kedai|超市|菜/.test(p) ? 'groc'
           : /minyak|petrol|parking|\btol\b|toll|lrt|\bbas\b|bus|加油|停车/.test(p) ? 'transp'
-            : /\bmak\b|ayah|family|keluarga|anak|家/.test(p) ? 'family' : 'other';
-      it.c = catBy(slug) || S.data.expenseCats[0]?.id;
+            : /\bmak\b|ayah|family|keluarga|anak|家/.test(p) ? 'family'
+              : /other|lain|其他/.test(p) ? 'other' : '';
+      it.c = slug ? catBy(slug) : undefined;
+      it.confidence!.target = it.c ? 'high' : 'low';
     }
     items.push(it);
   }
@@ -143,6 +186,18 @@ function useSayDraft() {
   const shownLabel = (item: { custom?: boolean; name?: string; k?: string }) =>
     item.custom ? item.name || '' : t(item.k || '');
 
+  const routeToAsk = React.useCallback((said: string) => {
+    up(s => {
+      s.voice = null;
+      s.sayOpen = false;
+      s.qSay = false;
+      s.sheet = null;
+      s.assistantDraft = said;
+      s.assistantOpen = true;
+    });
+    toast(t('vo_question_routed'));
+  }, [t, toast, up]);
+
   /* Read the words: the shared reader first, the app's own parser if the
      reader is unreachable or finds nothing to enter. */
   const finish = React.useCallback(async (text: string) => {
@@ -165,7 +220,9 @@ function useSayDraft() {
           { id: 'total', label: t('lm_total') },
           ...S0.data.expenseCats.map(item => ({ id: item.id, label: shownLabel(item) })),
         ],
-        defaultIncomeSourceId: S0.preferredIncomeSourceId || S0.incomeDraft.s || null,
+        /* An absent source must remain a field for the user to complete; do
+           not silently turn the preferred source into something they said. */
+        defaultIncomeSourceId: null,
       });
       if (preview.status === 'ready') {
         items = preview.actions
@@ -175,20 +232,21 @@ function useSayDraft() {
             a: Number(a.amount),
             d: a.date || isoOffset(0),
             ...(a.kind === 'income' ? { s: a.target_id } : { c: a.target_id }),
+            confidence: { kind: 'high', amount: 'high', date: 'high', target: 'high' },
           }) as VoiceItem);
+        /* Voice entry is deliberately limited to record entries. A bill,
+           limit, housing action or other non-entry command belongs in Ask
+           Ruma and must never fall through as a guessed expense. */
+        if (!items.length && preview.actions.length) {
+          routeToAsk(said);
+          return;
+        }
       } else if (preview.status === 'needs_clarification') {
         note = preview.message;
       } else if (preview.status === 'not_action') {
-        /* Amendment 2: questions declined by entry parsing belong to the one
-           Ask Ruma boundary. Carry the exact words across for review/send. */
-        up(s => {
-          s.voice = null;
-          s.sayOpen = false;
-          s.qSay = false;
-          s.sheet = null;
-          s.assistantDraft = said;
-          s.assistantOpen = true;
-        });
+        /* Carry the exact words across for review; Ask Ruma never sends the
+           question automatically. */
+        routeToAsk(said);
         return;
       }
       if (!items.length) items = local();
@@ -198,18 +256,10 @@ function useSayDraft() {
     if (!SRef.current.voice) return; /* closed while reading */
     setVoice({ stage: 'done', text: said, items, note: items.length ? undefined : note });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ensureAiDisclosure, setVoice, t, up]);
+  }, [ensureAiDisclosure, routeToAsk, setVoice, t]);
 
-  const start = React.useCallback(async () => {
-    if (!await ensureAiDisclosure()) return;
+  const beginListening = React.useCallback(async () => {
     textRef.current = '';
-    let available = false;
-    try { available = ExpoSpeechRecognitionModule.isRecognitionAvailable(); } catch { available = false; }
-    if (!available) {
-      setVoice(null);
-      toast(t('vo_mic_unavailable'), 'error');
-      return;
-    }
     setVoice({ stage: 'listen', text: '', items: [] });
     try {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
@@ -227,7 +277,24 @@ function useSayDraft() {
       toast(t('vo_mic_failed'), 'error');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ensureAiDisclosure, setVoice, t, toast]);
+  }, [setVoice, t, toast]);
+
+  const start = React.useCallback(async () => {
+    if (!await ensureAiDisclosure()) return;
+    let available = false;
+    try { available = ExpoSpeechRecognitionModule.isRecognitionAvailable(); } catch { available = false; }
+    if (!available) {
+      setVoice(null);
+      toast(t('vo_mic_unavailable'), 'error');
+      return;
+    }
+    if (!SRef.current.voiceDisclosureAccepted) {
+      setVoice({ stage: 'permission', text: '', items: [] });
+      return;
+    }
+    await beginListening();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [beginListening, ensureAiDisclosure, setVoice, t, toast]);
 
   const mine = () => getSpeechOwner() === 'say';
   useSpeechRecognitionEvent('result', event => {
@@ -254,17 +321,22 @@ function useSayDraft() {
     }
   });
 
-  /* Stop listening; a finished draft is kept, so closing the card by mistake loses nothing. */
+  /* Cancelling discards the transient transcript and draft (AC9.7.2). */
   const halt = React.useCallback(() => {
     if (getSpeechOwner() === 'say') {
       try { ExpoSpeechRecognitionModule.abort(); } catch { /* not listening */ }
       setSpeechOwner(null);
     }
-    up(s => { if (s.voice && (s.voice.stage === 'listen' || s.voice.stage === 'parsing')) s.voice = null; });
+    up(s => { s.voice = null; });
   }, [up]);
 
   const micTap = () => {
     const V = SRef.current.voice;
+    if (V?.stage === 'permission') {
+      up(s => { s.voiceDisclosureAccepted = true; });
+      void beginListening();
+      return;
+    }
     if (V && V.stage === 'listen') {
       if (getSpeechOwner() === 'say') {
         try { ExpoSpeechRecognitionModule.stop(); } catch { /* already stopped */ }
@@ -282,9 +354,19 @@ function useSayDraft() {
     void start();
   };
 
-  const edit = (i: number, fn: (it: VoiceItem) => void) => up(s => {
+  const edit = (i: number, field: keyof NonNullable<VoiceItem['confidence']>, fn: (it: VoiceItem) => void) => up(s => {
     const it = s.voice?.items[i];
-    if (it) { fn(it); s.voice!.outlier = false; }
+    if (it) {
+      fn(it);
+      if (it.confidence) it.confidence[field] = 'high';
+      s.voice!.outlier = false;
+    }
+  });
+
+  const confirm = (i: number) => up(s => {
+    const it = s.voice?.items[i];
+    if (!it) return;
+    it.confidence = { kind: 'high', amount: 'high', date: 'high', target: 'high' };
   });
 
   const close = React.useCallback(() => {
@@ -295,6 +377,16 @@ function useSayDraft() {
   const save = async (onSaved: (msg: string) => void) => {
     const V = SRef.current.voice;
     if (!V || !V.items.length || saving) return;
+    const needsReview = V.items.some(it => Object.values(it.confidence || {}).includes('low'));
+    const invalid = V.items.some(it => {
+      const amount = Number(it.a);
+      return !Number.isFinite(amount) || (it.kind === 'in' ? amount < 0 : amount <= 0)
+        || (it.kind === 'in' ? !it.s : !it.c);
+    });
+    if (needsReview || invalid) {
+      toast(t(needsReview ? 'vo_review_required' : 'vo_invalid_amount'), 'error');
+      return;
+    }
     setSaving(true);
     const said: string[] = [];
     try {
@@ -302,7 +394,7 @@ function useSayDraft() {
       const order = V.items.map((it, i) => ({ it, i })).sort((a, b) => Number(b.it.kind === 'in') - Number(a.it.kind === 'in'));
       for (const { it } of order) {
         const a = Math.round((Number(it.a) || 0) * 100) / 100;
-        if (!(a > 0)) continue;
+        if (!Number.isFinite(a) || (it.kind === 'in' ? a < 0 : a <= 0)) continue;
         if (it.kind === 'in') {
           const result = await saveIncomeEntry({ amount: a, date: it.d, sourceId: it.s, confirmOutlier: !!V.outlier });
           if (result === 'outlier') {
@@ -326,7 +418,7 @@ function useSayDraft() {
     }
   };
 
-  return { start, micTap, reset, edit, close, halt, save, saving, finish };
+  return { start, micTap, reset, edit, confirm, close, halt, save, saving, finish };
 }
 
 /* ---------- pieces ---------- */
@@ -388,8 +480,12 @@ function InlineSelect({ value, options, onChange, label }: {
   );
 }
 
-function DraftCard({ it, i, edit, remove }: {
-  it: VoiceItem; i: number; edit: (i: number, fn: (it: VoiceItem) => void) => void; remove: (i: number) => void;
+function DraftCard({ it, i, edit, remove, confirm }: {
+  it: VoiceItem;
+  i: number;
+  edit: (i: number, field: keyof NonNullable<VoiceItem['confidence']>, fn: (it: VoiceItem) => void) => void;
+  remove: (i: number) => void;
+  confirm?: (i: number) => void;
 }) {
   const { S, t, monthName } = useApp();
   const inc = it.kind === 'in';
@@ -402,15 +498,18 @@ function DraftCard({ it, i, edit, remove }: {
   const opts = list.map(x => ({ v: x.id, l: x.custom ? x.name || '' : t(x.k || '') }));
   const [amt, setAmt] = React.useState(String(it.a));
   React.useEffect(() => { setAmt(String(it.a)); }, [it.a]);
+  const low = (field: keyof NonNullable<VoiceItem['confidence']>) => it.confidence?.[field] === 'low';
+  const anyLow = Object.values(it.confidence || {}).includes('low');
+  const check = (field: keyof NonNullable<VoiceItem['confidence']>) => low(field)
+    ? <Text style={sy.vflag}>{t('vo_flag')}</Text> : null;
   return (
     <View style={sy.vent}>
       <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 30 }}>
         <Text style={[sy.ventK, { color: inc ? '#1E7A33' : '#B8421A' }]}>{t(inc ? 'vo_in' : 'vo_out')}</Text>
-        {it.flag ? <Text style={sy.vflag}>{t('vo_flag')}</Text> : null}
+        {check('kind')}
         <View style={{ flex: 1 }} />
-        <Pressable hitSlop={6} onPress={() => edit(i, x => {
+        <Pressable hitSlop={6} onPress={() => edit(i, 'kind', x => {
           x.kind = x.kind === 'in' ? 'out' : 'in';
-          x.flag = false;
           if (x.kind === 'in' && !x.s) x.s = S.preferredIncomeSourceId || S.incomeDraft.s || S.data.sources[0]?.id;
           if (x.kind === 'out' && !x.c) x.c = S.data.expenseCats[0]?.id;
         })}>
@@ -421,12 +520,12 @@ function DraftCard({ it, i, edit, remove }: {
         </Pressable>
       </View>
       <View style={sy.vrow}>
-        <Text style={sy.vrowK}>{t('vo_amt')}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Text style={sy.vrowK}>{t('vo_amt')}</Text>{check('amount')}</View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Text style={{ fontFamily: DISP_FONT, fontSize: 13, color: C.ink64 }}>RM</Text>
           <TextInput
             value={amt}
-            onChangeText={v => { setAmt(v); edit(i, x => { x.a = v; }); }}
+            onChangeText={v => { setAmt(v); edit(i, 'amount', x => { x.a = v; }); }}
             keyboardType="decimal-pad"
             inputMode="decimal"
             accessibilityLabel={t('vo_amt')}
@@ -435,14 +534,19 @@ function DraftCard({ it, i, edit, remove }: {
         </View>
       </View>
       <View style={sy.vrow}>
-        <Text style={sy.vrowK}>{t('vo_date')}</Text>
-        <InlineSelect label={t('vo_date')} value={it.d} options={days} onChange={v => edit(i, x => { x.d = v; })} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Text style={sy.vrowK}>{t('vo_date')}</Text>{check('date')}</View>
+        <InlineSelect label={t('vo_date')} value={it.d} options={days} onChange={v => edit(i, 'date', x => { x.d = v; })} />
       </View>
       <View style={sy.vrow}>
-        <Text style={sy.vrowK}>{t(inc ? 'vo_src' : 'vo_cat')}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Text style={sy.vrowK}>{t(inc ? 'vo_src' : 'vo_cat')}</Text>{check('target')}</View>
         <InlineSelect label={t(inc ? 'vo_src' : 'vo_cat')} value={(inc ? it.s : it.c) || ''} options={opts}
-          onChange={v => edit(i, x => { if (inc) x.s = v; else x.c = v; })} />
+          onChange={v => edit(i, 'target', x => { if (inc) x.s = v; else x.c = v; })} />
       </View>
+      {anyLow && confirm ? (
+        <Pressable onPress={() => confirm(i)} accessibilityRole="button" style={{ minHeight: 40, justifyContent: 'center', alignSelf: 'flex-start' }}>
+          <Text style={sy.btnLine}>{t('vo_confirm_draft')}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -452,10 +556,18 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
   const { S, t, up } = useApp();
   const d = useSayDraft();
   const [typed, setTyped] = React.useState('');
+  const [listeningSeconds, setListeningSeconds] = React.useState(0);
   const reduce = useReducedMotion();
   const fade = React.useRef(new Animated.Value(0)).current;
   const V = S.voice || { stage: 'idle', text: '', items: [] } as VoiceState;
   const stage = V.stage;
+
+  React.useEffect(() => {
+    if (stage !== 'listen') { setListeningSeconds(0); return undefined; }
+    const started = Date.now();
+    const timer = setInterval(() => setListeningSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [stage]);
 
   /* Opening starts listening straight away, only where the device can hear,
      and never over a draft still waiting to be saved. */
@@ -468,11 +580,15 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const status = stage === 'listen' ? t('vo_listening')
+  const status = stage === 'listen' ? t('vo_listening_time', { n: listeningSeconds })
       : stage === 'parsing' ? t('as_thinking')
+        : stage === 'permission' ? t('vo_permission_title')
         : stage === 'done' ? t('vo_done') : t('vo_hint');
   const n = V.items.length;
   const listening = stage === 'listen';
+  const cannotSave = V.items.some(it => Object.values(it.confidence || {}).includes('low')
+    || !Number.isFinite(Number(it.a))
+    || (it.kind === 'in' ? Number(it.a) < 0 || !it.s : Number(it.a) <= 0 || !it.c));
 
   return (
     <Animated.View style={{ opacity: fade, gap: 14 }}>
@@ -505,7 +621,16 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
         </View>
       ) : null}
 
-      {stage === 'idle' ? (
+      {stage === 'permission' ? (
+        <View style={sy.noteC} accessibilityRole="alert">
+          <Text style={sy.noteTxt}>{t('vo_permission_body')}</Text>
+          <Pressable onPress={d.micTap} accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}>
+            <Text style={sy.btnLine}>{t('vo_permission_continue')}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {stage === 'idle' || stage === 'permission' ? (
         <View style={{ gap: 6 }}>
             <Text style={{ fontFamily: BODY_FONT, fontSize: 13, color: C.ink64 }}>{t('vo_type')}</Text>
             <TextInput
@@ -535,20 +660,22 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
                 <Eyebrow>{t('vo_check')}</Eyebrow>
                 {V.items.map((it, i) => (
                   <DraftCard key={i} it={it} i={i} edit={d.edit}
+                    confirm={d.confirm}
                     remove={k => up(s => { s.voice?.items.splice(k, 1); })} />
                 ))}
               </View>
               {V.outlier ? (
                 <View style={sy.noteC}><Text style={sy.noteTxt}>{t('as_action_outlier')}</Text></View>
               ) : null}
-              <Pressable onPress={() => { void d.save(onSaved); }} disabled={d.saving}
-                accessibilityRole="button" style={[sy.btn, d.saving && { opacity: 0.6 }]}>
+              <Pressable onPress={() => { void d.save(onSaved); }} disabled={d.saving || cannotSave}
+                accessibilityRole="button" style={[sy.btn, (d.saving || cannotSave) && { opacity: 0.6 }]}>
                 {d.saving ? <ActivityIndicator color="#fff" /> : (
                   <Text style={sy.btnTxt}>
                     {V.outlier ? t('as_action_confirm_again') : n === 2 ? t('vo_save_2') : n > 1 ? t('vo_save_n', { n }) : t('vo_save')}
                   </Text>
                 )}
               </Pressable>
+              {cannotSave ? <Text style={sy.noteTxt}>{t('vo_review_required')}</Text> : null}
             </>
           ) : (!V.note ? (
             <View style={sy.noteC}><Text style={sy.noteTxt}>{t('vo_none')}</Text></View>
