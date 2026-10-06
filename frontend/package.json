@@ -12,8 +12,11 @@
     "expo-image-manipulator": "~14.0.8",
     "expo-image-picker": "~17.0.11",
     "expo-linking": "~8.0.12",
+    "expo-localization": "~17.0.9",
+    "expo-notifications": "~0.32.17",
     "expo-router": "~6.0.24",
     "expo-secure-store": "~15.0.8",
+    "expo-speech-recognition": "sdk-54",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
     "expo-system-ui": "~6.0.9",
@@ -23,9 +26,7 @@
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
     "react-native-svg": "15.12.1",
-    "react-native-web": "~0.21.0",
-    "expo-localization": "~17.0.9",
-    "expo-speech-recognition": "sdk-54"
+    "react-native-web": "~0.21.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
@@ -50,6 +51,7 @@
     "test:e2e:epic8": "playwright test e2e/epic8.spec.ts",
     "test:e2e:epic6": "playwright test e2e/epic6.spec.ts",
     "test:e2e:epic10": "playwright test e2e/epic10.spec.ts",
+    "test:e2e:iteration3": "playwright test e2e/iteration3-epic7-8.spec.ts",
     "test:e2e:housing": "playwright test e2e/housing-integration.spec.ts",
     "test:live": "node scripts/run-live-tests.mjs",
     "test:live:report": "playwright show-report ../output/playwright/live/report"

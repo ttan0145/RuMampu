@@ -54,7 +54,14 @@
           ]
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-notifications",
+        {
+          "color": "#5F9EA0",
+          "defaultChannel": "bill-reminders"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

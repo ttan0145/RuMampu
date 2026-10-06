@@ -1,6 +1,6 @@
 import React from 'react';
-import { DimensionValue, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Route, useApp } from '../state';
+import { DimensionValue, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Route, todayIso, useApp } from '../state';
 import { MOCK } from '../mock';
 import { ApiCoverageAnswer, INCOME_API_ENABLED } from '../api';
 import { formatApiMoney } from '../money';
@@ -9,7 +9,7 @@ import {
 } from '../calc';
 import {
   Badge, BodyS, Btn, BtnLine, DemoChip, WholeMonthBtn, BtnQuiet, Card, Chip, Chips, Display, Divider, EditList,
-  Fig, IcLab, KV, NoteC, P, Prov, StackS, TextField,
+  Fig, IcLab, KV, NoteC, NumInput, P, Prov, StackS, TextField,
   CardI, FigRow, MonthBtn,
 } from '../ui';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
@@ -316,6 +316,8 @@ const mo = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     minHeight: 44, paddingHorizontal: 4,
   },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(25,35,36,0.45)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  reminderModal: { width: '100%', maxWidth: 380, backgroundColor: '#fff', borderRadius: 20, padding: 18, gap: 12 },
 });
 
 /* v24 R18: what changed, newest first, over the last 72 hours — on a screen
@@ -1122,10 +1124,48 @@ export function WorkcostsScreen() {
  * 中文：US1.4 在视觉上分开生活、债务和储蓄，同时显示一个计算总额。
  */
 export function CommitScreen() {
-  const { S, t, monthName, up, toast, saveCommitmentAmount } = useApp();
+  const { S, t, monthName, up, toast, saveCommitmentAmount, setBillReminder, saveExpenseEntry } = useApp();
   /* v24: bills (commitments) and spending limits share one segmented screen. */
   const [seg, setSeg] = React.useState<'bills' | 'limits'>('bills');
   const c = S.data.commitments;
+  const billItems = [...c.living, ...c.debts];
+  const [reminderItemId, setReminderItemId] = React.useState<string | null>(null);
+  const [reminderDay, setReminderDay] = React.useState(1);
+  const [reminderTime, setReminderTime] = React.useState('09:00');
+  const [reminderEnabled, setReminderEnabled] = React.useState(true);
+  const [savingReminder, setSavingReminder] = React.useState(false);
+  const [recordingReminder, setRecordingReminder] = React.useState(false);
+  const openReminder = (id: string) => {
+    const pref = S.notificationPreferences.reminders[id];
+    setReminderItemId(id);
+    setReminderDay(pref?.day ?? 1);
+    setReminderTime(pref?.time ?? '09:00');
+    setReminderEnabled(pref?.enabled ?? true);
+  };
+  const reminderItem = billItems.find(item => item.id === reminderItemId);
+  const triggeredItem = billItems.find(item => item.id === S.pendingBillReminderId);
+  const itemName = (item: (typeof billItems)[number]) => item.k ? t(item.k) : (item.name || t('cm_total'));
+  const confirmReminderExpense = async () => {
+    if (!triggeredItem || recordingReminder) return;
+    const category = S.data.expenseCats.find(item => item.k === 'xc_other') || S.data.expenseCats[0];
+    if (!category || !(triggeredItem.a > 0)) { toast(t('br_record_unavailable'), 'error'); return; }
+    setRecordingReminder(true);
+    try {
+      await saveExpenseEntry({
+        amount: triggeredItem.a,
+        date: todayIso(),
+        categoryId: category.id,
+        merchant: itemName(triggeredItem),
+      });
+      up(s => {
+        const reminder = s.notificationPreferences.reminders[triggeredItem.id];
+        if (reminder) reminder.last_recorded = new Date().toISOString();
+        s.pendingBillReminderId = null;
+      });
+      toast(t('br_recorded'));
+    } catch { toast(t('br_record_failed'), 'error'); }
+    finally { setRecordingReminder(false); }
+  };
   const added = new Set([...c.living, ...c.debts, ...c.savings].map(x => x.id));
   const presets = INCOME_API_ENABLED
     ? []
@@ -1161,6 +1201,7 @@ export function CommitScreen() {
   return (
     <ScreenShell back title={t('bl_title')}>
       {segBar}
+      <BodyS muted>{t('bl_bills_help')}</BodyS>
       {S.commitmentSync === 'loading' ? <NoteC><BodyS>{t('cm_sync_loading')}</BodyS></NoteC> : null}
       {S.commitmentSync === 'error' ? <NoteC><BodyS>{t('cm_sync_error')}</BodyS></NoteC> : null}
       {presets.length ? (
@@ -1196,6 +1237,26 @@ export function CommitScreen() {
               if (!id) return;
               void saveCommitmentAmount(id, n).catch(() => toast(t('cm_save_failed')));
             }}
+            renderAccessory={item => Number(item.a) > 0 ? (() => {
+              const enabled = Boolean(S.notificationPreferences.reminders[item.id]?.enabled);
+              return (
+                <Pressable
+                  onPress={() => openReminder(item.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('br_edit_for', { n: itemName(item) })}
+                  accessibilityState={{ selected: enabled }}
+                  style={{
+                    minWidth: 50, height: 32, borderRadius: 16, paddingHorizontal: 11,
+                    alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: enabled ? C.brand : C.card,
+                    borderWidth: enabled ? 0 : 1.5, borderColor: C.ink14,
+                  }}>
+                  <Text style={{ fontFamily: SEMI_FONT, fontSize: 12, color: enabled ? '#fff' : C.ink64 }}>
+                    {t(enabled ? 'br_on' : 'br_off_label')}
+                  </Text>
+                </Pressable>
+              );
+            })() : null}
           />
           <FigRow p="user" />
         </Card>
@@ -1219,6 +1280,45 @@ export function CommitScreen() {
           <Fig value={rm(commitTotal(S.data))} p="calc" />
         </View>
       </Card>
+      <Modal visible={Boolean(reminderItem)} transparent animationType="fade" onRequestClose={() => setReminderItemId(null)}>
+        <View style={mo.modalBackdrop}>
+          <View style={mo.reminderModal}>
+            <Display cls="h-m">{reminderItem ? itemName(reminderItem) : ''}</Display>
+            <BodyS muted>{t('br_config_help')}</BodyS>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <P>{t('br_enabled')}</P>
+              <Pressable accessibilityRole="switch" accessibilityLabel={t('br_enabled')} accessibilityState={{ checked: reminderEnabled }} onPress={() => setReminderEnabled(value => !value)}
+                style={{ width: 46, height: 28, borderRadius: 14, padding: 3, backgroundColor: reminderEnabled ? C.brand : C.ink14, alignItems: reminderEnabled ? 'flex-end' : 'flex-start' }}>
+                <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' }} />
+              </Pressable>
+            </View>
+            <BodyS muted>{t('br_choose')}</BodyS>
+            <NumInput value={reminderDay} onNum={value => setReminderDay(Math.min(28, Math.max(1, Math.round(value || 1))))} accessibilityLabel={t('br_choose')} />
+            <BodyS muted>{t('br_time')}</BodyS>
+            <TextField value={reminderTime} onChangeText={setReminderTime} placeholder="09:00" accessibilityLabel={t('br_time')} />
+            <Btn disabled={savingReminder} label={savingReminder ? t('saving') : t('save')} onPress={() => {
+              if (!reminderItem || !/^([01]\d|2[0-3]):[0-5]\d$/.test(reminderTime)) { toast(t('br_time_invalid'), 'error'); return; }
+              setSavingReminder(true);
+              void setBillReminder(reminderItem.id, reminderDay, reminderTime, reminderEnabled).then(result => {
+                if (result === 'saved') { toast(t('saved')); setReminderItemId(null); }
+                else toast(t('nt_denied'), 'error');
+              }).catch(() => toast(t('br_failed'), 'error')).finally(() => setSavingReminder(false));
+            }} />
+            <BtnLine label={t('cancel')} onPress={() => setReminderItemId(null)} />
+          </View>
+        </View>
+      </Modal>
+      <Modal visible={Boolean(triggeredItem)} transparent animationType="fade" onRequestClose={() => up(s => { s.pendingBillReminderId = null; })}>
+        <View style={mo.modalBackdrop}>
+          <View style={mo.reminderModal}>
+            <Display cls="h-m">{t('br_confirm_t')}</Display>
+            <BodyS muted>{t('br_confirm_b')}</BodyS>
+            <KV k={triggeredItem ? itemName(triggeredItem) : ''}><P>{triggeredItem ? rm(triggeredItem.a) : '—'}</P></KV>
+            <Btn disabled={recordingReminder} label={recordingReminder ? t('saving') : t('br_confirm')} onPress={() => { void confirmReminderExpense(); }} />
+            <BtnLine label={t('cancel')} onPress={() => up(s => { s.pendingBillReminderId = null; })} />
+          </View>
+        </View>
+      </Modal>
     </ScreenShell>
   );
 }

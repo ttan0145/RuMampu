@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
-const configuredAppMode = process.env.EXPO_PUBLIC_API_URL;
+const configuredAppMode = process.env.EXPO_PUBLIC_APP_MODE;
 
 export const APP_MODE: 'api' | 'prototype' = configuredAppMode === 'prototype'
   ? 'prototype'
@@ -218,6 +218,7 @@ export interface ApiUser {
   id: number;
   username: string;
   email: string;
+  date_joined: string;
 }
 
 export interface ApiAuthState {
@@ -228,6 +229,7 @@ export interface ApiAuthState {
   upfront_costs: unknown[];
   docs_checked: string[];
   bought_home: boolean;
+  homeownership_purchase_month: string | null;
   expense_limits: Record<string, unknown>;
   compare_payments: unknown[];
   saving_plan: Record<string, unknown>;
@@ -244,6 +246,22 @@ export interface ApiAuthState {
   last_record_exported_at: string | null;
 }
 
+export interface ApiReminderPreference {
+  day: number;
+  time: string;
+  enabled: boolean;
+  notification_id: string | null;
+  last_recorded?: string | null;
+}
+
+export interface ApiNotificationPreferences {
+  bill_reminders: boolean;
+  record_warnings: boolean;
+  permission_asked: boolean;
+  permission_granted: boolean;
+  reminders: Record<string, ApiReminderPreference>;
+}
+
 export interface ApiAuthResponse extends ApiAuthState {
   token: string;
 }
@@ -251,6 +269,8 @@ export interface ApiAuthResponse extends ApiAuthState {
 export interface AccountStatePatch {
   cash_on_hand: number;
   cash_on_hand_date: string | null;
+  bought_home: boolean;
+  homeownership_purchase_month: string | null;
   saving_plan: Record<string, unknown>;
   buffer_state: Record<string, unknown>;
   village_state: Record<string, unknown>;
@@ -259,6 +279,28 @@ export interface AccountStatePatch {
   pot_moved: number;
   docs_checked: string[];
   kept_tests: unknown[];
+}
+
+export interface ApiHomeownershipMonth {
+  month: string;
+  recorded_income: string;
+  work_costs: string;
+  income_after_work_costs: string | null;
+  actual_income: string;
+  actual_home_costs: string;
+  cash_position: string | null;
+  short: boolean;
+  is_complete: boolean;
+  provenance: 'user_record';
+  updated_at: string;
+}
+
+export interface ApiRetentionStatus {
+  kind: 'guest' | 'account';
+  last_use: string;
+  warning_due: boolean;
+  removal_date: string | null;
+  email_warning_sent: boolean;
 }
 
 export interface ApiGuestTransferStatus {
@@ -576,6 +618,13 @@ export function patchAccountState(value: AccountStatePatch): Promise<ApiAuthStat
   });
 }
 
+export function updateAccountEmail(email: string): Promise<ApiAuthState> {
+  return request<ApiAuthState>('/auth/me/', {
+    method: 'PATCH',
+    body: JSON.stringify({ account_email: email }),
+  });
+}
+
 export function fetchGuestTransferStatus(): Promise<ApiGuestTransferStatus> {
   return request<ApiGuestTransferStatus>('/auth/guest-transfer/');
 }
@@ -639,6 +688,27 @@ export async function hasStoredLogin(): Promise<boolean> {
 
 export async function clearStoredLogin(): Promise<void> {
   await storeAuthToken(null);
+}
+
+export function fetchHomeownershipMonths(): Promise<{ months: ApiHomeownershipMonth[] }> {
+  return request<{ months: ApiHomeownershipMonth[] }>('/homeownership/months/');
+}
+
+export function saveHomeownershipMonth(input: {
+  month: string;
+  actualHomeCosts: number;
+}): Promise<ApiHomeownershipMonth> {
+  return request<ApiHomeownershipMonth>('/homeownership/months/', {
+    method: 'PUT',
+    body: JSON.stringify({
+      month: input.month,
+      actual_home_costs: input.actualHomeCosts.toFixed(2),
+    }),
+  });
+}
+
+export function fetchRetentionStatus(): Promise<ApiRetentionStatus> {
+  return request<ApiRetentionStatus>('/retention/');
 }
 
 

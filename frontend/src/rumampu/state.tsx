@@ -8,6 +8,9 @@ import {
   ApiIncomeCoverage,
   ApiIncomePattern,
   ApiIncomeSource,
+  ApiHomeownershipMonth,
+  ApiNotificationPreferences,
+  ApiRetentionStatus,
   ApiWorkCostMonthSummary,
   ApiWorkCostEntry,
   createExpense as createExpenseRequest,
@@ -29,6 +32,8 @@ import {
   fetchWorkCostEntries,
   fetchWorkCostMonthSummary,
   fetchCurrentUser,
+  fetchHomeownershipMonths,
+  fetchRetentionStatus,
   hasStoredLogin,
   initializeAuthStorage,
   readLocalState,
@@ -38,6 +43,7 @@ import {
   savePreferredIncomeSource as savePreferredIncomeSourceRequest,
   logout as logoutRequest,
   rotateGuestClientId,
+  saveHomeownershipMonth as saveHomeownershipMonthRequest,
   ApiError,
   INCOME_API_ENABLED,
   isOutlierConfirmation,
@@ -46,6 +52,13 @@ import {
   updateCommitment as updateCommitmentRequest,
   updateWorkCostEntry as updateWorkCostEntryRequest,
 } from './api';
+import {
+  askForNotificationPermission,
+  cancelEveryReminder,
+  cancelReminder,
+  notificationSchedulingSupported,
+  schedulePrivateBillReminder,
+} from './notifications';
 import { fetchHouseCosts as fetchHouseCostsRequest, fetchSavedHousingTests as fetchSavedHousingTestsRequest } from '../../services/housingService';
 import { clearHousingSession, getHousingScenario, getHousingTestResult, hydrateHousingSession, setHousingScenario, setHousingTestResult, subscribeHousingSession } from '../../services/housingSession';
 import type { HousingScenarioResponse, HousingTestResult } from '../../types/housing';
@@ -293,6 +306,13 @@ export interface AppState {
   exMonth: number | null;
   shock: number;
   bought: boolean;
+  purchaseMonth: string | null;
+  homeownershipMonths: ApiHomeownershipMonth[];
+  homeownershipSync: 'idle' | 'loading' | 'ready' | 'saving' | 'error';
+  homeownershipMonth: string;
+  pendingBillReminderId: string | null;
+  retentionNotice: ApiRetentionStatus | null;
+  notificationPreferences: ApiNotificationPreferences;
   incomeDraft: { a: string; d: string; s: string; flag: 'invalid' | 'neg' | 'outlier' | null; per: EntryPer };
   incomeSync: 'disabled' | 'loading' | 'ready' | 'error';
   workCostSync: 'disabled' | 'loading' | 'ready' | 'error';
@@ -429,7 +449,16 @@ function initialState(): AppState {
     scan: { stage: 'pick' },
     exCatOpen: false, exMonthOpen: null, incMonth: null, exMonth: null,
     shock: 0,
-    bought: false,
+    bought: false, purchaseMonth: null,
+    homeownershipMonths: [], homeownershipSync: 'idle', homeownershipMonth: currentMonth, pendingBillReminderId: null,
+    retentionNotice: null,
+    notificationPreferences: {
+      bill_reminders: true,
+      record_warnings: true,
+      permission_asked: false,
+      permission_granted: false,
+      reminders: {},
+    },
     incomeDraft: { a: '', d: today, s: 'ehail', flag: null, per: 'day' },
     incomeSync: INCOME_API_ENABLED ? 'loading' : 'disabled',
     workCostSync: INCOME_API_ENABLED ? 'loading' : 'disabled',
@@ -586,6 +615,10 @@ export interface Ctx {
     confirmReceipt?: boolean;
   }) => Promise<void>;
   setExpenseMonthlyTotal: (entryId: string, monthlyTotal: boolean) => Promise<void>;
+  refreshHomeownership: () => Promise<void>;
+  saveHomeownershipMonth: (month: string, actualHomeCosts: number) => Promise<void>;
+  setBillReminder: (commitmentId: string, day: number, time: string, enabled: boolean) => Promise<'saved' | 'denied'>;
+  setNotificationKind: (kind: 'bill_reminders' | 'record_warnings', enabled: boolean) => Promise<void>;
   loadHouseCosts: () => Promise<void>;
   toast: (msg: string, tone?: 'success' | 'error') => void;
   toastMsg: { msg: string; key: number; tone: 'success' | 'error' } | null;
@@ -870,6 +903,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!INCOME_API_ENABLED || !authReady) return;
     let active = true;
     void (async () => {
+      // Retention must be checked before the first ordinary record request,
+      // because that next request counts as a fresh visit (AC8.25.1).
+      try {
+        const retention = await fetchRetentionStatus();
+        if (active && retention.warning_due) {
+          up(s => { s.retentionNotice = retention; });
+        }
+      } catch { /* retention status must never block the record */ }
       try {
         const record = await ensureGuest();
         if (!active) return;
@@ -1567,6 +1608,106 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, [up]);
 
+  const refreshHomeownership = useCallback(async (): Promise<void> => {
+    up(s => { s.homeownershipSync = 'loading'; });
+    try {
+      const payload = await fetchHomeownershipMonths();
+      up(s => {
+        s.homeownershipMonths = payload.months;
+        s.homeownershipSync = 'ready';
+      });
+    } catch (error) {
+      up(s => { s.homeownershipSync = 'error'; });
+      throw error;
+    }
+  }, [up]);
+
+  const saveHomeownershipMonth = useCallback(async (
+    month: string,
+    actualHomeCosts: number,
+  ): Promise<void> => {
+    up(s => { s.homeownershipSync = 'saving'; });
+    try {
+      const saved = await saveHomeownershipMonthRequest({ month, actualHomeCosts });
+      up(s => {
+        s.homeownershipMonths = [
+          ...s.homeownershipMonths.filter(item => item.month !== saved.month),
+          saved,
+        ].sort((a, b) => a.month.localeCompare(b.month));
+        s.homeownershipMonth = saved.month;
+        s.homeownershipSync = 'ready';
+      });
+    } catch (error) {
+      up(s => { s.homeownershipSync = 'error'; });
+      throw error;
+    }
+  }, [up]);
+
+  const setBillReminder = useCallback(async (
+    commitmentId: string,
+    day: number,
+    time: string,
+    enabled: boolean,
+  ): Promise<'saved' | 'denied'> => {
+    const current = S.notificationPreferences.reminders[commitmentId];
+    if (!enabled) {
+      await cancelReminder(current?.notification_id);
+      up(s => {
+        s.notificationPreferences.reminders[commitmentId] = {
+          day: Math.min(28, Math.max(1, Math.round(day))),
+          time,
+          enabled: false,
+          notification_id: null,
+          last_recorded: current?.last_recorded ?? null,
+        };
+      });
+      return 'saved';
+    }
+
+    let granted = S.notificationPreferences.permission_granted;
+    if (notificationSchedulingSupported() && !S.notificationPreferences.permission_asked) {
+      // Record the one allowed request before invoking the OS dialog so a
+      // rejected/aborted promise cannot cause a second prompt later.
+      up(s => { s.notificationPreferences.permission_asked = true; });
+      try { granted = await askForNotificationPermission(); } catch { granted = false; }
+      up(s => { s.notificationPreferences.permission_granted = granted; });
+    }
+    if (notificationSchedulingSupported() && !granted) return 'denied';
+
+    await cancelReminder(current?.notification_id);
+    const identifier = await schedulePrivateBillReminder(commitmentId, day, time);
+    up(s => {
+      s.notificationPreferences.bill_reminders = true;
+      s.notificationPreferences.reminders[commitmentId] = {
+        day: Math.min(28, Math.max(1, Math.round(day))),
+        time,
+        enabled: true,
+        notification_id: identifier,
+        last_recorded: current?.last_recorded ?? null,
+      };
+    });
+    return 'saved';
+  }, [S.notificationPreferences, up]);
+
+  const setNotificationKind = useCallback(async (
+    kind: 'bill_reminders' | 'record_warnings',
+    enabled: boolean,
+  ): Promise<void> => {
+    if (kind === 'bill_reminders' && !enabled) {
+      await Promise.all(Object.values(S.notificationPreferences.reminders)
+        .map(reminder => cancelReminder(reminder.notification_id)));
+    }
+    up(s => {
+      s.notificationPreferences[kind] = enabled;
+      if (kind === 'bill_reminders' && !enabled) {
+        for (const reminder of Object.values(s.notificationPreferences.reminders)) {
+          reminder.enabled = false;
+          reminder.notification_id = null;
+        }
+      }
+    });
+  }, [S.notificationPreferences.reminders, up]);
+
   const refreshAccountData = useCallback(async (
     onProgress?: (progress: number, stage: string) => void,
     options?: { includeSavedTests?: boolean },
@@ -1673,6 +1814,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(localStateWriteTimer.current);
       localStateWriteTimer.current = null;
     }
+    // Scheduled notifications belong to the signed-in record on this device.
+    // Remove them before the identity boundary changes (AC8.22.5).
+    try { await cancelEveryReminder(); } catch { /* best effort */ }
     try {
       await logoutRequest();
     } catch {
@@ -1704,6 +1848,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(localStateWriteTimer.current);
       localStateWriteTimer.current = null;
     }
+    try { await cancelEveryReminder(); } catch { /* best effort */ }
     await deleteRecordRequest();
     await rotateGuestClientId();
     lastPersistedSnapshot.current = null;
@@ -1763,6 +1908,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(localStateWriteTimer.current);
       localStateWriteTimer.current = null;
     }
+    try { await cancelEveryReminder(); } catch { /* best effort */ }
     try {
       await logoutRequest();
     } catch {
@@ -1844,12 +1990,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry, setExpenseMonthlyTotal,
+    refreshHomeownership, saveHomeownershipMonth, setBillReminder, setNotificationKind,
   }), [
     S, authReady, up, t, monthName, go, goTab, backNav,
     saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, savePreferredIncomeSource, refreshIncomeRecord, refreshAccountData, applyAccountState, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, enterSampleMonths, leaveSampleMonths, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry, setExpenseMonthlyTotal,
+    refreshHomeownership, saveHomeownershipMonth, setBillReminder, setNotificationKind,
   ]);
 
   if (!localStateReady) return null;

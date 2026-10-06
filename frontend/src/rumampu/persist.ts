@@ -4,7 +4,8 @@ import { isValidIsoDate } from './validation';
 
 const VERSION = 1;
 const PERSISTED = ['plan', 'buffer', 'village', 'planHorizon',
-  'potMovedMonths', 'potMoved', 'docsChecked', 'keptTests', 'tipsOff', 'seenG', 'lnProg'] as const;
+  'potMovedMonths', 'potMoved', 'docsChecked', 'keptTests', 'tipsOff', 'seenG', 'lnProg',
+  'bought', 'purchaseMonth', 'notificationPreferences'] as const;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -80,6 +81,19 @@ function validKeptTests(value: unknown): value is KeptTest[] {
   });
 }
 
+function validNotificationPreferences(value: unknown): value is AppState['notificationPreferences'] {
+  if (!record(value) || !record(value.reminders)) return false;
+  for (const key of ['bill_reminders', 'record_warnings', 'permission_asked', 'permission_granted']) {
+    if (typeof value[key] !== 'boolean') return false;
+  }
+  return Object.values(value.reminders).every(reminder => {
+    if (!record(reminder) || typeof reminder.enabled !== 'boolean') return false;
+    if (!Number.isInteger(reminder.day) || (reminder.day as number) < 1 || (reminder.day as number) > 28) return false;
+    if (reminder.time !== undefined && (typeof reminder.time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(reminder.time))) return false;
+    return reminder.notification_id === null || typeof reminder.notification_id === 'string';
+  });
+}
+
 /** Serialize only declared, local progress; transient UI state is excluded. */
 export function snapshot(s: AppState): string {
   const payload: JsonRecord = { version: VERSION };
@@ -125,6 +139,13 @@ export function hydrate(s: AppState, raw: string | null): void {
     if (record(payload.lnProg) && Object.values(payload.lnProg).every(v => finite(v) && v >= 0)) {
       s.lnProg = payload.lnProg as Record<string, number>;
     }
+    if (typeof payload.bought === 'boolean') s.bought = payload.bought;
+    if (payload.purchaseMonth === null || (typeof payload.purchaseMonth === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(payload.purchaseMonth))) {
+      s.purchaseMonth = payload.purchaseMonth as string | null;
+    }
+    if (validNotificationPreferences(payload.notificationPreferences)) {
+      s.notificationPreferences = payload.notificationPreferences;
+    }
     if (record(payload.data)) {
       if (finite(payload.data.cashOnHand) && payload.data.cashOnHand >= 0) {
         s.data.cashOnHand = payload.data.cashOnHand;
@@ -158,6 +179,8 @@ export function accountSnapshot(s: AppState): {
   pot_moved: number;
   docs_checked: string[];
   kept_tests: unknown[];
+  bought_home: boolean;
+  homeownership_purchase_month: string | null;
 } {
   const local = JSON.parse(snapshot(s)) as JsonRecord;
   return {
@@ -172,6 +195,8 @@ export function accountSnapshot(s: AppState): {
     pot_moved: (local.potMoved as number) ?? 0,
     docs_checked: (local.docsChecked as string[]) ?? [],
     kept_tests: (local.keptTests as unknown[]) ?? [],
+    bought_home: s.bought,
+    homeownership_purchase_month: s.purchaseMonth,
   };
 }
 
@@ -190,6 +215,8 @@ export function hydrateAccountState(s: AppState, remote: Record<string, unknown>
     potMoved: typeof remote.pot_moved === 'number' ? remote.pot_moved : Number(remote.pot_moved),
     docsChecked: remote.docs_checked,
     keptTests: remote.kept_tests,
+    bought: remote.bought_home,
+    purchaseMonth: remote.homeownership_purchase_month ?? null,
     data: { cashOnHand: cash, cashOnHandDate: remote.cash_on_hand_date ?? null },
   };
   hydrate(s, JSON.stringify(payload));

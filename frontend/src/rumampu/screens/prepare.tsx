@@ -1,20 +1,19 @@
 import React from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getHousingTestResult } from '../../../services/housingSession';
-import { AppState, todayIso, useApp } from '../state';
-import { nf, recSpan, rm } from '../calc';
+import { todayIso, useApp } from '../state';
+import { nf, rm } from '../calc';
 import { useHousingCalculation } from '../useHousingCalculation';
 import { upfrontFees, upfrontNeed } from '../fees';
 import { potNow } from '../plan';
 import {
   Badge, BodyS, Btn, BtnLine, BtnQuiet, Card, Display, Divider, EditList, NumInput,
-  Fig, IcLab, KV, NoteC, P, Prov,
+  Field, Fig, IcLab, KV, NoteC, P, Prov, TextField,
   CardI,
 } from '../ui';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT, XBOLD_FONT } from '../theme';
 import { Ico } from '../svgs';
 import { Ruma } from '../ruma-view';
-import { Waterline } from '../charts';
 import { ScreenShell } from './shell';
 import { LnEnter } from './learn';
 import { GuideTarget } from '../tour';
@@ -32,7 +31,7 @@ export function PrepareBody() {
       <BtnQuiet style={{ paddingVertical: 12 }} onPress={() => go('pv_switch')}>
         <IcLab name="eye">
           <View style={{ gap: 3, alignItems: 'flex-start' }}>
-            <Badge label={t('pr_pv')} />
+            <P style={{ fontFamily: DISP_FONT }}>{t('pr_pv')}</P>
             <BodyS muted>{t('pr_pv_note')}</BodyS>
           </View>
         </IcLab>
@@ -332,6 +331,8 @@ const pr = StyleSheet.create({
     shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.06, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 2,
   },
   pvhubIc: { width: 46, height: 46, borderRadius: 14, backgroundColor: '#E4EFEC', alignItems: 'center', justifyContent: 'center' },
+  monthChip: { borderWidth: 1, borderColor: C.ink14, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: '#fff' },
+  monthChipOn: { borderColor: C.brand, backgroundColor: '#E4EFEC' },
   pvchart: {
     backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E3EAE8', borderRadius: 18, paddingVertical: 14, paddingHorizontal: 14,
   },
@@ -522,21 +523,24 @@ export function DocsScreen() {
   );
 }
 
-// EN: Epic 7 Homeownership Monitoring starts here as an Iteration 3 preview only.
-// This frontend prototype toggles local state and does not create real post-purchase
-// account data, backend records, or persistence.
-// 中文：Epic 7“购房后监测”在这里仅作为 Iteration 3 预览。这个前端原型只切换本地状态，
-// 不创建真实的购房后账号数据、后端记录或持久化存储。
-/* v27b "I've bought a home" (Epic 7): the earlier test sits beside what
-   happened. Until real post-purchase months are recorded, the screens show
-   sample months: the five months before this one, sized to the home the
-   person tested, labelled as sample figures and never as their own data. */
-function pvData(S: AppState): { m: number; inc: number; home: number }[] {
-  const src = S.data.after.months, n = src.length, now = new Date().getMonth();
-  const result = S.testRan ? getHousingTestResult() : null;
-  const cost = result ? Number(result.tested_home_cost) || 0 : 0;
-  const sc = cost > 0 ? Math.max(0.2, cost / (src[n - 1].home || 1)) : 1;
-  return src.map((r, i) => ({ m: (now - n + i + 12) % 12, inc: Math.round(r.inc * sc), home: Math.round(r.home * sc) }));
+function monthKey(value = new Date()): string {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function validMonth(value: string): boolean {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+}
+
+function monthLabel(value: string, monthName: (m: number) => string): string {
+  if (!validMonth(value)) return value;
+  return `${monthName(Number(value.slice(5, 7)) - 1)} ${value.slice(0, 4)}`;
+}
+
+function latestCompletedRecordedMonth(income: { d: string }[]): string | null {
+  const current = monthKey();
+  const months = [...new Set(income.map(entry => entry.d.slice(0, 7)).filter(value => validMonth(value) && value < current))]
+    .sort();
+  return months.length ? months[months.length - 1] : null;
 }
 
 function PvHubCard({ to, ic, k, d }: { to: Parameters<ReturnType<typeof useApp>['go']>[0]; ic: string; k: string; d: string }) {
@@ -554,22 +558,52 @@ function PvHubCard({ to, ic, k, d }: { to: Parameters<ReturnType<typeof useApp>[
 }
 
 export function PvSwitchScreen() {
-  const { S, t, up, toast } = useApp();
+  const { S, t, up, toast, monthName } = useApp();
+  const latestRecorded = latestCompletedRecordedMonth(S.data.income);
+  const suggested = latestRecorded || monthKey();
+  const [purchase, setPurchase] = React.useState(S.purchaseMonth || suggested);
+  const [editing, setEditing] = React.useState(!S.bought || !S.purchaseMonth);
+  const saveMode = () => {
+    if (!validMonth(purchase) || purchase > monthKey()) {
+      toast(t('pv_purchase_invalid'), 'error');
+      return;
+    }
+    up(s => {
+      s.bought = true;
+      s.purchaseMonth = purchase;
+      // Start with the latest completed recorded month when one is available;
+      // otherwise the confirmed purchase month is the safest first actual.
+      s.homeownershipMonth = latestRecorded && latestRecorded >= purchase
+        ? latestRecorded
+        : purchase;
+    });
+    setEditing(false);
+    toast(t('saved'));
+  };
   return (
-    <ScreenShell back title={t('pv_home_t')}>
-      <Badge label={t('pv_banner')} />
+    <ScreenShell back title={t(S.bought ? 'pv_monitor_t' : 'pv_switch_t')}>
       <View style={pr.pvintro}>
         <Ruma w={84} pose="happy" float={false} />
         <BodyS style={{ flex: 1, minWidth: 0 }}>{t('pv_home_b')}</BodyS>
       </View>
-      {S.bought ? (
+      {S.bought && S.purchaseMonth && !editing ? (
         <>
+          <Card gap={5}>
+            <BodyS muted>{t('pv_purchase')}</BodyS>
+            <P style={{ fontFamily: DISP_FONT }}>{monthLabel(S.purchaseMonth, monthName)}</P>
+            <BtnLine label={t('pv_purchase_edit')} onPress={() => setEditing(true)} />
+          </Card>
           <PvHubCard to="pv_compare" ic="swap" k="pv_then" d="pv_then_d" />
           <PvHubCard to="pv_month" ic="calday" k="pv_month" d="pv_month_d" />
         </>
       ) : (
         <>
-          <Btn label={t('pv_switch_btn')} onPress={() => { up(s => { s.bought = true; }); toast(t('saved')); }} />
+          <Field label={t('pv_purchase')}>
+            <TextField value={purchase} onChangeText={setPurchase} placeholder="YYYY-MM" accessibilityLabel={t('pv_purchase')} />
+          </Field>
+          <BodyS muted>{t('pv_purchase_help')}</BodyS>
+          <Btn label={t('pv_switch_btn')} onPress={saveMode} />
+          {S.bought ? <BtnLine label={t('cancel')} onPress={() => { setPurchase(S.purchaseMonth || suggested); setEditing(false); }} /> : null}
           <BodyS muted>{t('pv_switch_note')}</BodyS>
         </>
       )}
@@ -577,109 +611,170 @@ export function PvSwitchScreen() {
   );
 }
 
-function PvMonthBody() {
-  const { S, t, monthName } = useApp();
-  const am = pvData(S), cur = am[am.length - 1], left = cur.inc - cur.home;
-  const rows = am.map(r => ({ m: r.m, surplus: r.inc, short: r.inc < r.home, gap: Math.max(0, r.home - r.inc) }));
-  return (
-    <>
-      <View>
-        <Display cls="h-xl">{(left < 0 ? '\u2212' : '') + rm(Math.abs(left))}</Display>
-        <BodyS muted>{left < 0 ? t('pv_shortby') : t('pv_left')}</BodyS>
-      </View>
-      <KV k={t('pv_in')}><Display cls="h-m">{rm(cur.inc)}</Display></KV>
-      <KV k={t('pv_out')}><Display cls="h-m">{rm(cur.home)}</Display></KV>
-      <View style={pr.pvchart}>
-        <Waterline rows={rows} cost={cur.home} lineLabel monthName={monthName} />
-      </View>
-    </>
-  );
-}
-
-function PvFoot() {
-  const { S, t } = useApp();
-  return <BodyS muted style={{ fontSize: 12, lineHeight: 17 }}>{t(S.testRan ? 'pv_scaled' : 'pv_sample_h')}</BodyS>;
-}
-
-// EN: Epic 7 preview for monitoring one post-purchase month. Values are sample
-// months sized to the tested home, so this is not database-backed monitoring yet.
-// 中文：Epic 7 的单月购房后监测预览。数值是按测试房屋调整的示例月份，目前还不是数据库驱动的真实监测功能。
 export function PvMonthScreen() {
-  const { t } = useApp();
+  const { S, t, monthName, up, refreshWorkCosts, refreshHomeownership, saveHomeownershipMonth, toast } = useApp();
+  const selected = S.homeownershipMonth;
+  const current = monthKey();
+  const saved = S.homeownershipMonths.find(row => row.month === selected);
+  const savedCost = saved?.actual_home_costs;
+  const [cost, setCost] = React.useState<number | string>(savedCost == null ? '' : Number(savedCost));
+  const costRef = React.useRef<number | string>(savedCost == null ? '' : Number(savedCost));
+  const months = [...new Set([
+    current,
+    ...S.data.income.map(entry => entry.d.slice(0, 7)),
+    ...S.homeownershipMonths.map(row => row.month),
+  ].filter(value => validMonth(value) && (!S.purchaseMonth || value >= S.purchaseMonth)))].sort().reverse();
+
+  React.useEffect(() => {
+    void refreshHomeownership().catch(() => undefined);
+  }, [refreshHomeownership]);
+  React.useEffect(() => {
+    void refreshWorkCosts(selected).catch(() => undefined);
+  }, [selected, refreshWorkCosts]);
+  React.useEffect(() => {
+    const value = savedCost == null ? '' : Number(savedCost);
+    costRef.current = value;
+    setCost(value);
+  }, [savedCost, selected]);
+
+  const summary = S.workCostSummary?.month === selected ? S.workCostSummary : null;
+  const incomeAfter = summary?.income_after_work_costs == null ? null : Number(summary.income_after_work_costs);
+  const actualCosts = cost === '' ? null : Number(cost);
+  const position = incomeAfter == null || actualCosts == null ? null : incomeAfter - actualCosts;
+  const save = async () => {
+    const amount = costRef.current === '' ? null : Number(costRef.current);
+    if (amount == null || !Number.isFinite(amount) || amount < 0) {
+      toast(t('pv_cost_invalid'), 'error'); return;
+    }
+    try { await saveHomeownershipMonth(selected, amount); toast(t('saved')); }
+    catch { toast(t('as_error'), 'error'); }
+  };
   return (
-    <ScreenShell back title={t('pv_month')}>
-      <Badge label={t('pv_sample')} />
-      <PvMonthBody />
-      <PvFoot />
+    <ScreenShell back title={t('pv_month_title')}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
+        {months.map(value => (
+          <Pressable key={value} onPress={() => up(s => { s.homeownershipMonth = value; })}
+            style={[pr.monthChip, selected === value && pr.monthChipOn]}>
+            <Text style={{ color: C.ink, fontFamily: selected === value ? DISP_FONT : BODY_FONT }}>{monthLabel(value, monthName)}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {selected === current ? <NoteC><BodyS>{t('pv_current_note')}</BodyS></NoteC> : null}
+      {!summary?.income_recorded ? (
+        <Card gap={8}>
+          <Display cls="h-m">{t('pv_no_income_t')}</Display>
+          <BodyS muted>{t('pv_no_income_b')}</BodyS>
+          <BtnLine label={t('pv_add_income')} onPress={() => up(s => { s.stack.push(s.route); s.route = 'income'; })} />
+        </Card>
+      ) : (
+        <Card gap={10}>
+          <KV k={t('pv_recorded_income')}><View style={{ alignItems: 'flex-end' }}><P>{rm(Number(summary.gross_income))}</P><Prov p="user" /></View></KV>
+          <KV k={t('pv_work_costs')}><View style={{ alignItems: 'flex-end' }}><P>− {rm(Number(summary.work_cost_total))}</P><Prov p="user" /></View></KV>
+          <Divider />
+          <KV k={t('pv_income_after')}><View style={{ alignItems: 'flex-end' }}><Display cls="h-m">{rm(incomeAfter || 0)}</Display><Prov p="calc" /></View></KV>
+        </Card>
+      )}
+      <View testID="pv-actual-cost-card">
+        <Card gap={10}>
+          <Field label={t('pv_actual_cost')}>
+            <NumInput value={cost} onNum={value => { costRef.current = value; setCost(value); }} decimal accessibilityLabel={t('pv_actual_cost')} />
+          </Field>
+          {savedCost != null ? <Prov p="user" /> : null}
+          <Btn label={S.homeownershipSync === 'saving' ? t('saving') : t('pv_save_month')} onPress={() => { void save(); }} />
+        </Card>
+      </View>
+      {position != null ? (
+        <Card gap={4}>
+          <Display cls="h-xl">{position < 0 ? `−${rm(Math.abs(position))}` : rm(position)}</Display>
+          <BodyS muted>{position < 0 ? t('pv_shortby') : t('pv_left')}</BodyS>
+          <Prov p="calc" />
+        </Card>
+      ) : null}
     </ScreenShell>
   );
 }
 
-// EN: Epic 7 preview comparing the earlier housing test with sample
-// post-purchase months (never called a prediction, D19).
-// 中文：Epic 7 预览：把先前住房测试与示例购房后月份对比（不称为预测，D19）。
 export function PvCompareScreen() {
-  const { S, t, monthName } = useApp();
-  const [tab, setTab] = React.useState<'vs' | 'month'>('vs');
+  const { S, t, monthName, go, refreshHomeownership } = useApp();
   const result = S.testRan ? getHousingTestResult() : null;
   const n = result ? (result.tested_months ?? result.months.length) : 0;
   const s = result ? Number(result.short_month_count) || 0 : 0;
-  const am = pvData(S), cur = am[am.length - 1];
-  const rows = am.map(r => ({ m: r.m, surplus: r.inc, short: r.inc < r.home, gap: Math.max(0, r.home - r.inc) }));
-  const s2 = am.filter(r => r.inc < r.home).length;
-  const sp = recSpan(S.data);
-  const when = sp ? `${monthName(sp.to.m)} ${sp.to.y}` : '';
-  const shortNames = am.filter(r => r.inc < r.home).map(r => monthName(r.m)).join(', ');
+  const rows = S.homeownershipMonths.filter(row => (
+    row.is_complete && (!S.purchaseMonth || row.month >= S.purchaseMonth)
+  ));
+  const shortCount = rows.filter(row => row.short).length;
+  const current = monthKey();
+  const currentIsPostPurchase = !S.purchaseMonth || current >= S.purchaseMonth;
+  const testedMonths = new Set((result?.months || []).map(row => (
+    `${row.year}-${String(row.month).padStart(2, '0')}`
+  )));
+  const outsideEarlierHistory = result
+    ? rows.filter(row => !testedMonths.has(row.month)).length
+    : 0;
+  React.useEffect(() => { void refreshHomeownership().catch(() => undefined); }, [refreshHomeownership]);
   return (
     <ScreenShell back title={t('pv_then')}>
-      <Badge label={t('pv_sample')} />
-      <View style={pr.seg} accessibilityRole="tablist">
-        {(['vs', 'month'] as const).map(v => (
-          <Pressable key={v} onPress={() => setTab(v)} accessibilityRole="tab" accessibilityState={{ selected: tab === v }}
-            style={[pr.segBtn, tab === v && pr.segOn]}>
-            <Text style={{ fontFamily: DISP_FONT, fontSize: 14, color: tab === v ? C.ink : C.ink64 }}>{t(v === 'vs' ? 'pv_seg_vs' : 'pv_seg_month')}</Text>
-          </Pressable>
-        ))}
-      </View>
-      {tab === 'month' ? <PvMonthBody /> : (
+      <BodyS muted>{t('pv_compare_intro')}</BodyS>
+      <GuideTarget id="pv.cards" style={{ flexDirection: 'row', gap: 10 }}>
+        <View style={pr.pvc}>
+          <Text style={pr.pvcK}>{t('pv_earlier_full')}</Text>
+          {n > 0 ? (
+            <>
+              <Text style={pr.pvcB}>{t('pv_short_of', { s, n })}</Text>
+              <Text style={pr.pvcS}>{t('pv_earlier_result')}</Text>
+              <Text style={pr.pvcE}>{t('pv_earlier_note')}</Text>
+              <Prov p="calc" />
+            </>
+          ) : (
+            <>
+              <Text style={pr.pvcS}>{t('pv_no_earlier_t')}</Text>
+              <Text style={pr.pvcE}>{t('pv_no_earlier_b')}</Text>
+            </>
+          )}
+        </View>
+        <View style={pr.pvc}>
+          <Text style={pr.pvcK}>{t('pv_actual_full')}</Text>
+          {rows.length > 0 ? (
+            <>
+              <Text style={pr.pvcB}>{t('pv_short_of', { s: shortCount, n: rows.length })}</Text>
+              <Text style={pr.pvcS}>{t('pv_actual_result')}</Text>
+              <Text style={pr.pvcE}>{t('pv_since_purchase')}</Text>
+              <Prov p="user" />
+            </>
+          ) : (
+            <>
+              <Text style={pr.pvcS}>{t('pv_compare_empty_t')}</Text>
+              {currentIsPostPurchase ? (
+                <Text style={pr.pvcE}>{t('pv_current_progress', { m: monthLabel(current, monthName) })}</Text>
+              ) : <Text style={pr.pvcE}>{t('pv_compare_empty_b')}</Text>}
+            </>
+          )}
+        </View>
+      </GuideTarget>
+      {!result ? <BtnLine label={t('hh_test')} onPress={() => go('house')} /> : null}
+      {rows.length === 0 ? (
+        <Btn label={t('pv_record_month')} onPress={() => go('pv_month')} />
+      ) : (
         <>
-          <GuideTarget id="pv.cards" style={{ flexDirection: 'row', gap: 10 }}>
-            <View style={pr.pvc}>
-              <Text style={pr.pvcK}>{t('pv_earlier')}</Text>
-              {n ? (
-                <>
-                  <Text style={pr.pvcB}>{t('pv_short_of', { s, n })}</Text>
-                  <Text style={pr.pvcS}>{t('pv_months_short')}</Text>
-                  <Text style={pr.pvcE}>{t('pv_calc_on', { m: when })}</Text>
-                  <Prov p="calc" />
-                </>
-              ) : <Text style={pr.pvcS}>{t('pv_notest')}</Text>}
-            </View>
-            <View style={pr.pvc}>
-              <Text style={pr.pvcK}>{t('pv_after')}</Text>
-              <Text style={pr.pvcB}>{t('pv_short_of', { s: s2, n: am.length })}</Text>
-              <Text style={pr.pvcS}>{t('pv_months_short')}</Text>
-              <Text style={pr.pvcE}>{t('pv_since')}</Text>
-            </View>
-          </GuideTarget>
-          <GuideTarget id="pv.chart">
-          <View style={pr.pvchart}>
-            <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: C.ink, marginBottom: 6 }}>{t('pv_left_t')}</Text>
-            <Waterline rows={rows} cost={cur.home} values monthName={monthName} />
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 6, marginTop: 8 }}>
-              {([[t('pv_cov'), C.ink, 12], [t('pv_shortm', { m: shortNames || '-' }), C.short, 12], [t('pv_cost', { c: rm(cur.home) }), C.brand, 3]] as [string, string, number][]).map(([lbl, col, hh]) => (
-                <View key={lbl} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={{ width: hh === 3 ? 16 : 12, height: hh, borderRadius: hh === 3 ? 2 : 3, backgroundColor: col }} />
-                  <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, color: C.ink64 }}>{lbl}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-          </GuideTarget>
-          <NoteC><BodyS>{t('pv_season')}</BodyS></NoteC>
+          <Card gap={12}>
+            <Display cls="h-m">{t('pv_month_details')}</Display>
+            {rows.map(row => (
+              <View key={row.month} style={{ borderTopWidth: 1, borderTopColor: C.ink14, paddingTop: 10, gap: 4 }}>
+                <P style={{ fontFamily: DISP_FONT }}>{monthLabel(row.month, monthName)}</P>
+                <KV k={t('pv_income_after')}><P>{row.income_after_work_costs == null ? '—' : rm(Number(row.income_after_work_costs))}</P></KV>
+                <KV k={t('pv_actual_cost')}><P>{rm(Number(row.actual_home_costs))}</P></KV>
+                <KV k={row.short ? t('pv_shortby') : t('pv_left')}><P>{row.cash_position == null ? '—' : rm(Math.abs(Number(row.cash_position)))}</P></KV>
+              </View>
+            ))}
+            <Prov p="user" />
+          </Card>
+          <NoteC><BodyS>{t('pv_complete_only')}</BodyS></NoteC>
+          {outsideEarlierHistory > 0 ? (
+            <NoteC><BodyS>{t('pv_then_why_n', { n: outsideEarlierHistory })}</BodyS></NoteC>
+          ) : null}
+          <BtnLine label={t('pv_record_another')} onPress={() => go('pv_month')} />
         </>
       )}
-      <PvFoot />
     </ScreenShell>
   );
 }

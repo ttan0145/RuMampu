@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 import hashlib
 from decimal import Decimal
 from statistics import median
 
 from django.db import transaction
+from django.utils import timezone
 
 from .models import (
     CommitmentItem,
@@ -53,7 +54,30 @@ DEFAULT_EXPENSE_CATEGORIES = (
 )
 
 
-def profile_for_request(request) -> GuestProfile:
+def touch_profile(profile: GuestProfile, *, force: bool = False) -> None:
+    """Count app activity for AC8.25.1 without turning every read into a write.
+
+    A short write throttle keeps concurrent bootstrap requests from contending on
+    SQLite while still moving the six-month retention boundary with normal use.
+    A retention check is forced because it first needs to report the old date.
+    """
+
+    now = timezone.now()
+    if (
+        not force
+        and profile.retention_warning_sent_at is None
+        and profile.last_active_at >= now - timedelta(minutes=5)
+    ):
+        return
+    GuestProfile.objects.filter(pk=profile.pk).update(
+        last_active_at=now,
+        retention_warning_sent_at=None,
+    )
+    profile.last_active_at = now
+    profile.retention_warning_sent_at = None
+
+
+def profile_for_request(request, *, touch: bool = True) -> GuestProfile:
     """EN: Resolve the account profile first, otherwise the current guest boundary.
     中文：已登录时优先使用账号 profile，否则使用当前访客边界。
     """
@@ -62,6 +86,8 @@ def profile_for_request(request) -> GuestProfile:
     if user is not None and user.is_authenticated:
         existing = GuestProfile.objects.filter(user=user).first()
         if existing is not None:
+            if touch:
+                touch_profile(existing)
             return existing
         fallback_key = hashlib.sha256(f"user:{user.pk}".encode("utf-8")).hexdigest()[:40]
         profile, created = GuestProfile.objects.get_or_create(
@@ -76,6 +102,8 @@ def profile_for_request(request) -> GuestProfile:
             ensure_default_work_costs(profile)
             ensure_default_commitments(profile)
             ensure_default_expense_categories(profile)
+        elif touch:
+            touch_profile(profile)
         return profile
 
     client_id = request.headers.get("X-RuMampu-Client-ID", "").strip()
@@ -103,6 +131,8 @@ def profile_for_request(request) -> GuestProfile:
         ensure_default_work_costs(profile)
         ensure_default_commitments(profile)
         ensure_default_expense_categories(profile)
+    elif touch:
+        touch_profile(profile)
     return profile
 
 
@@ -130,6 +160,8 @@ def profile_has_user_record(profile: GuestProfile) -> bool:
         return True
     if IncomeCoverage.objects.filter(profile=profile).exists():
         return True
+    if profile.homeownership_months.exists():
+        return True
     from apps.housing.models import HousingScenario
 
     return HousingScenario.objects.filter(profile=profile).exists()
@@ -144,6 +176,7 @@ def guest_transfer_status(request) -> dict:
             "income_entries": profile.income_entries.count() if profile else 0,
             "work_cost_entries": profile.work_cost_entries.count() if profile else 0,
             "expense_entries": profile.expense_entries.count() if profile else 0,
+            "homeownership_months": profile.homeownership_months.count() if profile else 0,
             "housing_scenarios": profile.housing_scenarios.count() if profile else 0,
         },
     }
@@ -264,6 +297,15 @@ def transfer_guest_record_to_user(request, user) -> dict:
     if coverage is not None and not IncomeCoverage.objects.filter(profile=target).exists():
         coverage.profile = target
         coverage.save(update_fields=["profile"])
+
+    for month in guest.homeownership_months.all():
+        existing = target.homeownership_months.filter(month=month.month).first()
+        if existing is None:
+            month.profile = target
+            month.save(update_fields=["profile"])
+        else:
+            existing.actual_home_costs = month.actual_home_costs
+            existing.save(update_fields=["actual_home_costs", "updated_at"])
 
     from apps.housing.models import HousingScenario
 

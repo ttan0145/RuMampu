@@ -84,7 +84,10 @@ async function completeVisibleOnboarding(page: Page): Promise<void> {
 async function dismissSplashIfVisible(page: Page): Promise<void> {
   const splash = page.getByLabel('RuMampu');
   if (await splash.isVisible().catch(() => false)) {
-    await splash.click({ force: true });
+    // The native-style splash can finish its own exit between isVisible() and
+    // click(). Treat that disappearance as success instead of waiting for the
+    // suite-wide timeout on an element that no longer exists.
+    await splash.click({ force: true, timeout: 1000 }).catch(() => undefined);
     await expect(splash).toHaveCount(0, { timeout: 5000 }).catch(() => undefined);
   }
 }
@@ -1189,10 +1192,10 @@ test('US8.3 lets the user select an available interface language', async ({ page
 });
 
 // EN: US8.4 / AC8.4.1-AC8.4.6. This checks bottom navigation and Back behaviour.
-// The Prepare assertion uses the accepted v22 House-internal segment without
-// testing detailed Epic 5 preparation behaviour.
+// The Prepare assertion uses the House-internal segment without testing the
+// detailed preparation or post-purchase calculations.
 // 中文：US8.4 / AC8.4.1-AC8.4.6。这里检查底部导航和返回行为。
-// Prepare 断言使用已接受的 v22 房屋内部切换，不检查 Epic 5 的具体准备功能。
+// Prepare 断言使用房屋内部切换，不检查具体准备或购房后计算。
 test('US8.4 exposes the four main areas and returns with Back', async ({ page }) => {
   await openApp(page);
 
@@ -1223,6 +1226,7 @@ test('US8.4 exposes the four main areas and returns with Back', async ({ page })
   // EN: Epic 8 owns navigation into the Prepare area, not the detailed contents
   // of upfront-cash or document tools.
   // 中文：Epic 8 负责进入 Prepare 区域，不负责购房现金或文件工具的具体功能。
+  await expect(page.getByText('Upfront cash', { exact: true })).toBeVisible();
   await expect(page.getByText('Documents & financing', { exact: true })).toBeVisible();
   await expect(page.getByText('Coming soon', { exact: true })).toHaveCount(0);
   await page.getByLabel('Back').click();

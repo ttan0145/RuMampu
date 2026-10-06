@@ -28,6 +28,7 @@ import { HomeCostsScreen } from './screens/homecosts';
 import { PriceExplorerScreen } from './screens/priceexplorer';
 import { AcctDetailsScreen } from './screens/acctdetails';
 import { LearnCele, LearnReadScreen, LearnScreen, LearnSecScreen } from './screens/learn';
+import { listenForNotificationOpen } from './notifications';
 
 const SCREENS: Record<Route, React.ComponentType> = {
   home: HomeScreen, plan: PlanScreen,
@@ -46,7 +47,7 @@ const SCREENS: Record<Route, React.ComponentType> = {
 };
 
 function Root() {
-  const { S, authReady, backNav } = useApp();
+  const { S, authReady, backNav, go, up } = useApp();
   const insets = useSafeAreaInsets();
 
   React.useEffect(() => {
@@ -57,6 +58,13 @@ function Root() {
     });
     return () => sub.remove();
   }, [S.onboarded, S.knew, S.sheet, backNav]);
+
+  React.useEffect(() => listenForNotificationOpen(data => {
+    if (data.route === 'commit') {
+      if (data.billId) up(s => { s.pendingBillReminderId = data.billId || null; });
+      go('commit');
+    }
+  }), [go, up]);
 
   const Screen = SCREENS[S.route] || HomeScreen;
 

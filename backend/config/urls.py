@@ -34,6 +34,7 @@ urlpatterns = [
     path("api/v1/expense-categories/", include("finance.expense_category_urls")),
     path("api/v1/expenses/", include("finance.expense_urls")),
     path("api/v1/assistant/", include("finance.assistant_urls")),
+    path("api/v1/", include("finance.iteration3_urls")),
 
     path("api/v1/housing/", include("apps.housing.urls")),
 

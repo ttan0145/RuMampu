@@ -392,7 +392,7 @@ export function TextField({
 export interface EditItem { id: string; k?: string; custom?: boolean; name?: string; a: number; p?: string; description?: string }
 
 export function EditRow({
-  label, p, description, value, onNum, onCommit, decimal = false, zeroPlaceholder = false,
+  label, p, description, value, onNum, onCommit, decimal = false, zeroPlaceholder = false, accessory,
 }: {
   label: string;
   p?: string;
@@ -402,6 +402,7 @@ export function EditRow({
   onCommit?: (n: number) => void;
   decimal?: boolean;
   zeroPlaceholder?: boolean;
+  accessory?: React.ReactNode;
 }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -414,12 +415,13 @@ export function EditRow({
         ) : null}
       </View>
       <NumInput value={value} onNum={onNum} onCommit={onCommit} alignRight decimal={decimal} zeroPlaceholder={zeroPlaceholder} />
+      {accessory}
     </View>
   );
 }
 
 export function EditList({
-  list, onNum, onCommit, decimal = false, showProvenance = true, zeroPlaceholder = false,
+  list, onNum, onCommit, decimal = false, showProvenance = true, zeroPlaceholder = false, renderAccessory,
 }: {
   list: EditItem[];
   onNum: (i: number, n: number) => void;
@@ -427,6 +429,7 @@ export function EditList({
   decimal?: boolean;
   showProvenance?: boolean;
   zeroPlaceholder?: boolean;
+  renderAccessory?: (item: EditItem, index: number) => React.ReactNode;
 }) {
   const { t } = useApp();
   return (
@@ -442,6 +445,7 @@ export function EditList({
           onCommit={onCommit ? n => onCommit(i, n) : undefined}
           decimal={decimal}
           zeroPlaceholder={zeroPlaceholder}
+          accessory={renderAccessory?.(c, i)}
         />
       ))}
     </>

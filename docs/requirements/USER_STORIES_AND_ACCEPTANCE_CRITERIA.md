@@ -922,11 +922,11 @@ Scope note: The current prototype supports spending review and adjustment featur
 
 **User Story:** As a user who has bought the tested home, I want to switch RuMampu into a post-purchase mode so that I can move from estimated affordability to reviewing actual homeownership results.
 
-**Relevant screen(s):** Switch mode - Iteration 3 preview
+**Relevant screen(s):** Switch to homeownership monitoring; Homeownership monitoring
 
-#### AC7.1.1 - Identify feature as preview
+#### AC7.1.1 - Identify the post-purchase feature
 
-> Given I access the post-purchase feature from Prepare, When the Switch mode screen is displayed, Then it is labelled as an Iteration 3 preview.
+> Given I access the post-purchase feature from Prepare, When the mode screen is displayed, Then it is named Homeownership monitoring without prototype or preview wording.
 
 #### AC7.1.2 - Explain the mode change
 
@@ -944,15 +944,23 @@ Scope note: The current prototype supports spending review and adjustment featur
 
 > Given I have selected that I bought the home, When the post-purchase mode is displayed, Then I can access This month and Earlier test vs what happened.
 
+#### AC7.1.6 - Record and persist the purchase month
+
+> Given I have bought the home, When I switch to homeownership monitoring, Then I must enter the purchase month and RuMampu persists it for the guest record or signed-in account.
+
+#### AC7.1.7 - Separate planning and post-purchase months
+
+> Given a purchase month is saved, When RuMampu offers or compares post-purchase records, Then months before the purchase month are excluded.
+
 ### US7.2 - Monitor actual income against actual home costs
 
 **User Story:** As a homeowner, I want to compare actual income with actual home costs for the month so that I can see whether the month left me with cash or resulted in a shortfall.
 
-**Relevant screen(s):** This month - Iteration 3 preview
+**Relevant screen(s):** This month
 
 #### AC7.2.1 - Display actual income
 
-> Given I am using the post-purchase preview, When I open This month, Then the actual income for the displayed month is shown.
+> Given I am using homeownership monitoring, When I open This month, Then the recorded income for the selected month is shown.
 
 #### AC7.2.2 - Identify actual income as user data
 
@@ -974,11 +982,23 @@ Scope note: The current prototype supports spending review and adjustment featur
 
 > Given actual home costs exceed actual income, When RuMampu displays the monthly result, Then the interface shows Short by.
 
+#### AC7.2.6 - Reuse recorded income and work costs
+
+> Given income and work costs already exist for the selected month, When the monthly homeownership result is shown, Then RuMampu uses the existing recorded income and canonical work-cost calculation rather than asking the user to enter income again.
+
+#### AC7.2.7 - Allow independent monthly home-cost records
+
+> Given I select a post-purchase month, When I save its actual home costs, Then those costs are stored for that month without overwriting another month.
+
+#### AC7.2.8 - Mark the current month as incomplete
+
+> Given I select the current calendar month, When I review or save it, Then RuMampu identifies it as still in progress and excludes it from completed-month comparisons.
+
 ### US7.3 - Compare the earlier test with actual homeownership results
 
 **User Story:** As a homeowner, I want to compare my earlier RuMampu stress test with what actually happened after buying so that I can understand how the test compared with my real experience.
 
-**Relevant screen(s):** Earlier test vs what happened - Iteration 3 preview
+**Relevant screen(s):** Earlier test vs what happened
 
 #### AC7.3.1 - Display earlier-test short-month count
 
@@ -1000,9 +1020,13 @@ Scope note: The current prototype supports spending review and adjustment featur
 
 > Given the user has entered post-purchase information, When the comparison screen is displayed, Then the interface communicates that continued recording allows the same record to keep being used.
 
+#### AC7.3.6 - Avoid zero-of-zero comparisons
+
+> Given no completed post-purchase month is available, When I open the comparison, Then RuMampu shows an empty state and a Record a month action instead of displaying a misleading 0 of 0 result.
+
 ## Epic 8 - Privacy, Accounts & Saved History
 
-Scope note: The current prototype only supports the record and kept-test portion of this epic. It does not visibly contain account creation, login, privacy controls, cloud sync, or permanent cross-session storage.
+Scope note: Iterations 1 and 2 delivered US8.1-US8.17. Iteration 3 retains those behaviours and adds the account, notification, privacy-language and retention requirements in US8.18-US8.25.
 
 ### US8.1 - Review my current RuMampu record
 

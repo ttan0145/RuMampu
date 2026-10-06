@@ -23,6 +23,10 @@ class GuestProfile(models.Model):
     session_key = models.CharField(max_length=40, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     last_active_at = models.DateTimeField(auto_now=True)
+    # Epic 8 retention safety: an account may only be removed after the
+    # five-month warning has actually been sent.  A later visit clears this
+    # marker because the record is active again.
+    retention_warning_sent_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self) -> str:
         return str(self.public_id)
@@ -457,6 +461,10 @@ class UserAppState(models.Model):
     upfront_costs = models.JSONField(default=list, blank=True)
     docs_checked = models.JSONField(default=list, blank=True)
     bought_home = models.BooleanField(default=False)
+    # First calendar month that belongs to the post-purchase record.  Keeping
+    # this separately from the Boolean lets Epic 7 exclude pre-purchase and
+    # still-in-progress months without guessing from the data.
+    homeownership_purchase_month = models.DateField(null=True, blank=True)
     expense_limits = models.JSONField(default=dict, blank=True)
     compare_payments = models.JSONField(default=list, blank=True)
     saving_plan = models.JSONField(default=dict, blank=True)
@@ -478,7 +486,45 @@ class UserAppState(models.Model):
         related_name="+",
     )
     last_record_exported_at = models.DateTimeField(null=True, blank=True)
+    # Notification scheduling identifiers stay in encrypted/local device
+    # storage. This reserved account field is intentionally not exposed by the
+    # API, so a device cannot accidentally inherit another device's schedule.
+    notification_preferences = models.JSONField(default=dict, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"RuMampu state for {self.user_id}"
+
+
+class HomeownershipMonth(models.Model):
+    """One month of actual post-purchase home costs for Epic 7.
+
+    Actual income stays sourced from the user's dated income/work-cost record;
+    this model stores only the homeowner fact that is not represented elsewhere.
+    """
+
+    profile = models.ForeignKey(
+        GuestProfile,
+        on_delete=models.CASCADE,
+        related_name="homeownership_months",
+    )
+    month = models.DateField()
+    actual_home_costs = models.DecimalField(max_digits=12, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["month"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["profile", "month"],
+                name="unique_profile_homeownership_month",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(actual_home_costs__gte=0),
+                name="homeownership_actual_costs_nonnegative",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.profile_id} · {self.month:%Y-%m}"

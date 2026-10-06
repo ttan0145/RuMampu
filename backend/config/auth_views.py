@@ -12,7 +12,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ValidationError
 from django.core.mail import EmailMultiAlternatives
 from django.core.validators import validate_email
-from django.db import transaction
+from django.db import models, transaction
 from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
@@ -46,6 +46,7 @@ def _user_payload(user):
         "id": user.pk,
         "username": user.get_username(),
         "email": user.email,
+        "date_joined": user.date_joined.isoformat(),
     }
 
 
@@ -62,6 +63,10 @@ def _auth_payload(user, token=None):
         "upfront_costs": state.upfront_costs,
         "docs_checked": state.docs_checked,
         "bought_home": state.bought_home,
+        "homeownership_purchase_month": (
+            state.homeownership_purchase_month.strftime("%Y-%m")
+            if state.homeownership_purchase_month else None
+        ),
         "expense_limits": state.expense_limits,
         "compare_payments": state.compare_payments,
         "saving_plan": state.saving_plan,
@@ -83,12 +88,13 @@ def _auth_payload(user, token=None):
 
 _APP_STATE_FIELDS = {
     "cash_on_hand", "cash_on_hand_date", "upfront_costs", "docs_checked", "bought_home",
+    "homeownership_purchase_month",
     "expense_limits", "compare_payments", "saving_plan", "buffer_state",
     "village_state", "plan_horizon", "pot_moved_months", "pot_moved", "kept_tests",
     "onboarding_completed", "preferred_language", "preferred_income_source_id",}
 
 # Fields whose explicit null is a valid value (it clears them).
-_NULLABLE_APP_STATE_FIELDS = {"plan_horizon", "cash_on_hand_date"}
+_NULLABLE_APP_STATE_FIELDS = {"plan_horizon", "cash_on_hand_date", "homeownership_purchase_month"}
 
 
 def _valid_number(value, *, integer=False, minimum=None):
@@ -209,6 +215,15 @@ def _validate_app_state_field(field, value):
         if reported > timezone.localdate() + timedelta(days=1):
             return None
         return reported
+    if field == "homeownership_purchase_month":
+        if value is None:
+            return None
+        if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}", value):
+            return None
+        try:
+            return date.fromisoformat(f"{value}-01")
+        except ValueError:
+            return None
     if field in {"upfront_costs", "docs_checked", "compare_payments", "pot_moved_months", "kept_tests"}:
         if not isinstance(value, list):
             return None
@@ -569,6 +584,7 @@ class MeView(APIView):
     def patch(self, request):
         state = _app_state(request.user)
         update_fields = []
+        user_changed = False
 
         try:
             encoded_request = json.dumps(request.data, separators=(",", ":"), allow_nan=False)
@@ -582,6 +598,28 @@ class MeView(APIView):
                 {"error": {"code": "app_state_too_large", "message": "Account state is too large."}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        if "account_email" in request.data:
+            email = str(request.data.get("account_email", "")).strip().lower()
+            try:
+                validate_email(email)
+            except ValidationError:
+                return Response(
+                    {"error": {"code": "invalid_email", "message": "Enter a valid email address."}},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            duplicate = User.objects.exclude(pk=request.user.pk).filter(
+                models.Q(email__iexact=email) | models.Q(username__iexact=email)
+            ).exists()
+            if duplicate:
+                return Response(
+                    {"error": {"code": "email_in_use", "message": "An account already uses this email."}},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if request.user.email != email or request.user.get_username() != email:
+                request.user.email = email
+                request.user.username = email
+                user_changed = True
 
         for field in _APP_STATE_FIELDS - {"preferred_language", "onboarding_completed", "preferred_income_source_id"}:
             if field not in request.data:
@@ -644,13 +682,21 @@ class MeView(APIView):
                 update_fields.append("onboarding_completed")
 
         if not update_fields:
-            if not any(key in request.data for key in _APP_STATE_FIELDS):
+            if (
+                not user_changed
+                and "account_email" not in request.data
+                and not any(key in request.data for key in _APP_STATE_FIELDS)
+            ):
                 return Response(
                     {"error": {"code": "empty_app_state_update", "message": "No supported account settings were provided."}},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+            if user_changed:
+                request.user.save(update_fields=["email", "username"])
             return Response(_auth_payload(request.user))
 
+        if user_changed:
+            request.user.save(update_fields=["email", "username"])
         update_fields.append("updated_at")
         state.save(update_fields=update_fields)
         return Response(_auth_payload(request.user))

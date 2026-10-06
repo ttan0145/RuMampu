@@ -683,12 +683,23 @@ function HomePurposeControl() {
 export function HomeScreen() {
   const { S, t, go, up } = useApp();
   const sp = recSpan(S.data);
+  const retention = S.retentionNotice?.warning_due ? (
+    <View style={st.retentionNotice}>
+      <Text style={st.retentionTitle}>{t('rt_title')}</Text>
+      <BodyS>{t('rt_guest_body', { d: S.retentionNotice.removal_date || '' })}</BodyS>
+      <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+        <Pressable onPress={() => go('profile')}><Text style={st.retentionAction}>{t('rt_keep')}</Text></Pressable>
+        <Pressable onPress={() => up(s => { s.retentionNotice = null; })}><Text style={st.retentionDismiss}>{t('done')}</Text></Pressable>
+      </View>
+    </View>
+  ) : null;
 
   if (!sp) {
     /* Empty record: Ruma welcomes, one button to start, and three friendly
        cards explain how the app works. The meadow stays behind it all. */
     return (
       <ScreenShell brand right={<DemoChip />} bg={<HomeMeadow />}>
+        {retention}
         <View style={{ alignItems: 'center', gap: 12, paddingTop: 6 }}>
           <RumaHero />
           <Display cls="h-l" style={{ textAlign: 'center', maxWidth: 280 }}>{t('inc_empty')}</Display>
@@ -709,6 +720,7 @@ export function HomeScreen() {
 
   return (
     <ScreenShell brand right={<DemoChip />}>
+      {retention}
       <GuideTarget id="home.hero"><HomeCards /></GuideTarget>
       {/* v27b2: Say an entry sits above the house test. */}
       <GuideTarget id="home.say"><SayCard /></GuideTarget>
@@ -740,6 +752,13 @@ const st = StyleSheet.create({
     width: 40, height: 40, borderRadius: 12, backgroundColor: '#E4EFEC',
     alignItems: 'center', justifyContent: 'center',
   },
+  retentionNotice: {
+    backgroundColor: '#FFF4D2', borderWidth: 1.5, borderColor: '#E5C86B', borderRadius: 16,
+    padding: 14, gap: 8,
+  },
+  retentionTitle: { fontFamily: DISP_FONT, fontSize: 16, color: C.ink },
+  retentionAction: { fontFamily: DISP_FONT, fontSize: 13.5, color: C.brand },
+  retentionDismiss: { fontFamily: BODY_FONT, fontSize: 13, color: C.ink64 },
   plcard: {
     backgroundColor: '#F3F7F6', borderWidth: 1.5, borderColor: '#E3EAE8',
     borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16,

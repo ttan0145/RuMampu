@@ -13,7 +13,7 @@ import { exportRecord } from '../api';
 const FLAGS: Record<string, string> = { en: '🇬🇧', ms: '🇲🇾', zh: '🇨🇳' };
 
 export function ProfileScreen() {
-  const { S, t, up, go, toast, signOut, deleteCurrentRecord, enterSampleMonths, leaveSampleMonths } = useApp();
+  const { S, t, up, go, toast, signOut, deleteCurrentRecord, enterSampleMonths, leaveSampleMonths, setNotificationKind } = useApp();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false);
   const [signupChoiceOpen, setSignupChoiceOpen] = React.useState(false);
   const [exportConfirmOpen, setExportConfirmOpen] = React.useState(false);
@@ -22,6 +22,25 @@ export function ProfileScreen() {
   const [deleting, setDeleting] = React.useState(false);
   const [loggingOut, setLoggingOut] = React.useState(false);
   const shouldOfferDeleteExport = !S.guest && !S.accountLastExportedAt;
+  const notificationSwitch = (kind: 'bill_reminders' | 'record_warnings', label: string) => {
+    const on = S.notificationPreferences[kind];
+    return (
+      <Pressable
+        key={kind}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: on }}
+        aria-checked={on}
+        accessibilityLabel={label}
+        onPress={() => { void setNotificationKind(kind, !on); }}
+        style={[st.morow, kind === 'record_warnings' && st.morowLine]}
+      >
+        <P style={{ fontSize: 15 }}>{label}</P>
+        <View style={[st.switchTrack, on && st.switchTrackOn]}>
+          <View style={[st.switchThumb, on && st.switchThumbOn]} />
+        </View>
+      </Pressable>
+    );
+  };
 
   const startSignup = (mergeGuestData: boolean) => {
     setSignupChoiceOpen(false);
@@ -65,7 +84,9 @@ export function ProfileScreen() {
     try {
       await deleteCurrentRecord();
       setDeleteConfirmOpen(false);
-      toast(t(wasGuest ? 'pf_delete_done_guest' : 'pf_delete_done_account'));
+      toast(t(wasGuest
+        ? (Platform.OS === 'web' ? 'pf_delete_done_guest' : 'pf_delete_done_guest_native')
+        : 'pf_delete_done_account'));
     } catch {
       toast(t('pf_delete_failed'), 'error');
       setDeleting(false);
@@ -88,7 +109,7 @@ export function ProfileScreen() {
             </Text>
           </View>
           <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, lineHeight: 16, color: C.ink64, marginTop: 6 }}>
-            {S.guest ? t('pf_guest') : t('pf_signed')}
+            {S.guest ? t(Platform.OS === 'web' ? 'pf_guest' : 'pf_guest_native') : t('pf_signed')}
           </Text>
         </View>
       </View>
@@ -114,6 +135,17 @@ export function ProfileScreen() {
       }} style={{ minHeight: 48 }}>
         <IcLab name="book"><P style={{ fontSize: 15 }}>{t(S.demo ? 'demo_clear' : 'demo_load')}</P></IcLab>
       </BtnQuiet>
+      <View style={{ gap: 7 }}>
+        <BodyS muted>{t('nt_title')}</BodyS>
+        <View style={st.mocard}>
+          {notificationSwitch('bill_reminders', t('nt_bill'))}
+          {notificationSwitch('record_warnings', t('nt_record'))}
+        </View>
+        <BodyS muted>{t('nt_optional')}</BodyS>
+        {S.notificationPreferences.permission_asked && !S.notificationPreferences.permission_granted ? (
+          <BodyS muted>{t(Platform.OS === 'android' ? 'nt_denied_android' : Platform.OS === 'ios' ? 'nt_denied_ios' : 'nt_denied')}</BodyS>
+        ) : null}
+      </View>
       {S.guest ? (
         <View style={st.mocard}>
           <Pressable onPress={() => setDeleteConfirmOpen(true)} style={st.morow}>
@@ -193,7 +225,9 @@ export function ProfileScreen() {
         <View style={st.modalBackdrop}>
           <View style={st.modalCard}>
             <Text style={st.modalTitle}>{t(S.guest ? 'pf_delete_guest_title' : 'pf_delete_title')}</Text>
-            <Text style={st.modalBody}>{t(S.guest ? 'pf_delete_guest_body' : 'pf_delete_body')}</Text>
+            <Text style={st.modalBody}>{t(S.guest
+              ? (Platform.OS === 'web' ? 'pf_delete_guest_body' : 'pf_delete_guest_body_native')
+              : 'pf_delete_body')}</Text>
             <Text style={st.modalBody}>{t('pf_delete_backup')}</Text>
             {shouldOfferDeleteExport ? (
               <Pressable
@@ -225,7 +259,7 @@ export function ProfileScreen() {
         <View style={st.modalBackdrop}>
           <View style={st.modalCard}>
             <Text style={st.modalTitle}>{t('pf_logout_title')}</Text>
-            <Text style={st.modalBody}>{t('pf_logout_body')}</Text>
+            <Text style={st.modalBody}>{t(Platform.OS === 'web' ? 'pf_logout_body' : 'pf_logout_body_native')}</Text>
             <Pressable
               style={[st.modalPrimary, loggingOut && { opacity: 0.72 }]}
               disabled={loggingOut}
@@ -321,4 +355,11 @@ const st = StyleSheet.create({
   modalDangerText: { fontFamily: DISP_FONT, fontSize: 14.5, color: '#fff', textAlign: 'center' },
   modalCancel: { minHeight: 38, alignItems: 'center', justifyContent: 'center' },
   modalCancelText: { fontFamily: BODY_FONT, fontSize: 13, color: C.ink40 },
+  switchTrack: {
+    width: 46, height: 28, borderRadius: 14, padding: 3, justifyContent: 'center',
+    backgroundColor: C.ink14, alignItems: 'flex-start',
+  },
+  switchTrackOn: { backgroundColor: C.brand, alignItems: 'flex-end' },
+  switchThumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' },
+  switchThumbOn: { backgroundColor: '#fff' },
 });

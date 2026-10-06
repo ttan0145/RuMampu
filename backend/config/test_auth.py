@@ -50,6 +50,51 @@ def workbook_values(workbook):
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class AuthApiRegressionTests(TestCase):
+    def test_iteration3_purchase_month_and_account_details_round_trip(self):
+        user = User.objects.create_user(
+            username="old-address@example.com",
+            email="old-address@example.com",
+            password="Passw0rd123",
+        )
+        token = Token.objects.create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+        saved = client.patch(
+            "/api/v1/auth/me/",
+            {
+                "bought_home": True,
+                "homeownership_purchase_month": "2026-08",
+                "account_email": "new-address@example.com",
+            },
+            content_type="application/json",
+        )
+
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json()["homeownership_purchase_month"], "2026-08")
+        self.assertEqual(saved.json()["user"]["email"], "new-address@example.com")
+        self.assertEqual(saved.json()["user"]["username"], "new-address@example.com")
+        self.assertTrue(saved.json()["user"]["date_joined"])
+        self.assertEqual(
+            UserAppState.objects.get(user=user).homeownership_purchase_month,
+            date(2026, 8, 1),
+        )
+
+    def test_account_email_must_be_unique(self):
+        User.objects.create_user(username="taken@example.com", email="taken@example.com")
+        user = User.objects.create_user(username="mine@example.com", email="mine@example.com")
+        token = Token.objects.create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+
+        response = client.patch(
+            "/api/v1/auth/me/",
+            {"account_email": "TAKEN@example.com"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        user.refresh_from_db()
+        self.assertEqual(user.email, "mine@example.com")
+
     def test_saving_plan_allocation_survives_account_round_trip(self):
         user = User.objects.create_user(username="saving-allocation@example.com", password="Passw0rd123")
         token = Token.objects.create(user=user)
