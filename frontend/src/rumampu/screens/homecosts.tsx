@@ -342,7 +342,13 @@ export function HomeCostsScreen() {
 
   /* ---- the open district ---- */
   const home = usePxHome(open, kind, 'F', size);
-  const h = home.data;
+  /* changing size or type keeps this district's figures on screen until the new ones
+     arrive, so the sheet does not collapse to a spinner and jump back to the top */
+  const keptHome = React.useRef<PxHomeResponse | null>(null);
+  if (home.data) keptHome.current = home.data;
+  else if (keptHome.current && keptHome.current.district !== open) keptHome.current = null;
+  const h = home.data ?? (home.loading ? keptHome.current : null);
+  const refreshing = home.loading && !!h;
   const row = open ? byD[open] : undefined;
   const fit = open && h ? (budget == null ? null : budget >= h.today.p50 ? 'ok' : h.today.p10 != null && budget >= h.today.p10 ? 'warn' : 'bad') as Fit | null : null;
   const coverPct = row?.share != null ? Math.round(row.share * 100) : null;
@@ -433,12 +439,12 @@ export function HomeCostsScreen() {
           <TypeIcon k={kind} size={20} color={kind !== 'all' ? '#fff' : C.ink} />
         </Pressable>
       </View>
-      {home.loading ? (
+      {home.loading && !h ? (
         <View style={{ alignItems: 'center', paddingVertical: 20 }}><ActivityIndicator color={C.brand} /></View>
       ) : !h ? (
         <Text style={st.none}>{t('hp_nodata')}</Text>
       ) : (
-        <>
+        <View style={refreshing ? { opacity: 0.55 } : null}>
           <View style={st.trio}>
             <View style={st.tri}>
               <Text style={st.k}>{t('hp_last')}</Text>
@@ -528,7 +534,7 @@ export function HomeCostsScreen() {
               </Text>
             </View>
           ) : null}
-        </>
+        </View>
       )}
     </>
   ) : null;
