@@ -2,9 +2,16 @@
 
 语言：**中文（CN）** | [English](CHANGELOG.md)
 
+## 2026-10-06 — Epic 5 基线新增 AC5.8.9
+
+状态：已提交并推送到 main
+
+- 团队审阅后，US5.8、AC5.3.8、AC5.3.9 和四条修订已写进云盘文档 “Added User Stories to Epics for Iteration 3”，并新增 AC5.8.9 “Using the buffer takes it off the pot”。
+- 仓库基线加上了 AC5.8.9，Epic 5 共 47 条。现在还没有使用缓冲的页面，所以它在 Epic 5 测试里记为延期，追溯闸门允许；规则本身由 TECH-BUFFER-03 和 TECH-BUFFER-06 锁定。
+
 ## 2026-10-06 — 去掉单独的缓冲余额；使用缓冲从罐子里扣
 
-状态：已在本地实现并检查，尚未推送
+状态：已于 2026-10-06 提交并推送到 main（8eb220b）
 
 团队在 2026-10-06 指出：改成一个罐子之后，旧的缓冲余额（`buffer.saved`、`buffer.overflow`）还在更新，“使用安全缓冲”也只改它。所以用了缓冲，罐子、阶段和各页面都不会变。
 

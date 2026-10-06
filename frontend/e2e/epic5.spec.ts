@@ -1,6 +1,6 @@
 import { expect, Page } from '@playwright/test';
 import { e2eGet, e2ePost, test } from './support/fixtures';
-import { ac } from './support/acceptance';
+import { ac, deferredAc } from './support/acceptance';
 import { API, captureEvidence, openGuestApp, pinGuestClientId, reloadApp } from './support/app';
 
 /* Epic 5 — Homeownership Preparation (US5.1 to US5.4, 36 acceptance criteria, v5).
@@ -919,6 +919,12 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
       await expect(page.getByText('In the pot', { exact: true }).locator('xpath=..')).toContainText('RM 500');
       await page.getByText('Done', { exact: true }).click();
     });
+
+    deferredAc(
+      'AC5.8.9',
+      'Using the buffer takes it off the pot',
+      'No screen uses the safety buffer yet. The rule (drawDownBuffer records the amount as used and takes it off the pot, and the buffer refills from the rest) is pinned by TECH-BUFFER-03 and TECH-BUFFER-06 in epic5-upfront-fees.spec.ts; the browser check follows when the screen is built.',
+    );
   });
 
   test('TECH-5.5 — Money moved in from a finished month is still in the pot after a reload', { tag: '@hardening' }, async ({ page }) => {

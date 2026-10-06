@@ -3,7 +3,7 @@
 语言：**中文（CN）** | [English](README.md)
 
 - 状态：已实现并有可执行检查覆盖，等待负责人验收
-- 范围：5 个 User Story，46 条验收标准：v5 的 36 条，加上 2026-10-05 的团队修订（US5.8、AC5.3.8、AC5.3.9）（[基线](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)，云盘 `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v5.docx`）
+- 范围：5 个 User Story，47 条验收标准：v5 的 36 条，加上 2026-10-05 和 2026-10-06 的团队修订（US5.8、AC5.3.8、AC5.3.9）（[基线](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)，云盘 `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v5.docx`）
 - 入口：House → **Prepare for a house**，以及 Money → **Cash buffer**
 - 不在本索引内：User Story 5.5 到 5.7（Learn 解释页，来自云盘文档 "Added User Stories to Epics for Iteration 3"，为迭代 3 新增）。它们随 v27b3 合并进来，还没有验收检查（见待决事项 6）。
 - 决策：[ADR 0004](../adr/0004-backend-authoritative-housing-calculations.cn.md)，见待决事项 3；现金缓冲的计算方法见 [ADR 0005](../adr/0005-cash-buffer-deepest-fall.cn.md)
@@ -14,7 +14,7 @@
 | US5.2 — 检查前期现金是否充足 | 17/17 | You have / You need / Gap、水位线图表、按到期时间分组的分项清单、带日期的现金录入、按公布标准算出并写明来源的费用、首套房开关 |
 | US5.3 — 按记录中的短缺月份估算现金缓冲 | 9/9 | 服务端计算的缓冲金额（最大跌幅，ADR 0005）、在 12 个月滚动余额图上标出的跌幅月份、零线落在零实际位置、记录区间和 RM 0 的解释 |
 | US5.4 — 查看融资准备材料 | 7/7 | 五项清单、带来源和日期的 SJKP 条件、显示“需要复核”而非结论、免责声明 |
-| US5.8 — 现金缓冲和首付共用的储蓄只算一次（团队修订） | 8/8 | 罐子先填缓冲；Upfront cash、House、储蓄计划和首页读同一套拆分；Cash buffer 写明已覆盖多少，并能打开储蓄计划 |
+| US5.8 — 现金缓冲和首付共用的储蓄只算一次（团队修订） | 8/9 + 1 条延期 | 罐子先填缓冲；Upfront cash、House、储蓄计划和首页读同一套拆分；Cash buffer 写明已覆盖多少，并能打开储蓄计划 |
 
 ## 验收记录
 
@@ -66,6 +66,7 @@
 | AC5.8.6 Amounts, not a verdict | 通过 | RM 500 时首页和 Upfront cash 只用金额说明差额，没有 "afford"、"qualify" 一类字样 |
 | AC5.8.7 Say when the held amount changes | 通过 | 在 RM 250,000 之后再保存 RM 300,000 的测试，显示缓冲从 RM 905 改成了新金额；罐子仍是 RM 500 |
 | AC5.8.8 Go on to the saving plan | 通过 | Cash buffer 上的 "Open the saving plan" 打开储蓄计划，拆分同样是 RM 500 |
+| AC5.8.9 Using the buffer takes it off the pot | 延期 | 还没有使用缓冲的页面。规则已有单元测试：罐子 RM 10,000、缓冲 RM 3,000，用掉 RM 1,000 后罐子 RM 9,000，缓冲仍满，计入首付 RM 6,000 |
 
 ## 证据索引
 
@@ -78,7 +79,7 @@
 - 12 个月固定数据的后端回归（RM 1,940、RM 904.74、RM 0、RM 4,740 四种缓冲，每月余额及跌幅起止月），以及“整份记录的缓冲等于所有按原时间顺序保留的后缀所需起始现金的最大值”的直接检查（不循环换序）：[`tests.py`](../../backend/apps/housing/tests.py) 中的 `GigDriverStartingLiquidityTests` 和 `StartingLiquidityPathTests`
 - 真实浏览器验收：[`epic5.spec.ts`](../../frontend/e2e/epic5.spec.ts)（36 条验收标准各登记一次，另有五条工程回归：TECH-5.1 Money 入口、TECH-5.2 修改与需要已满足、TECH-5.3 余额从未跌破零也可能需要缓冲、TECH-5.4 安全缓冲占用的钱不重复计算、TECH-5.5 转入的钱刷新后还在）
 - 费用标准和 pot 算术在分档边界上的回归：[`epic5-upfront-fees.spec.ts`](../../frontend/e2e/epic5-upfront-fees.spec.ts)
-- 追溯闸门：`npm run test:e2e:traceability` 对照[基线](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)检查 Epic 5 为 46/46 条验收标准
+- 追溯闸门：`npm run test:e2e:traceability` 对照[基线](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)检查 Epic 5 为 46 条可执行 + 1 条延期 / 47 条验收标准
 - 截图：[`output/playwright/epic-5/evidence/`](../../output/playwright/epic-5/evidence/)，用 `UPDATE_EVIDENCE=1` 刷新
 - 运行 Epic 5 检查：在 `frontend/` 下执行 `npm run test:e2e:epic5`
 
