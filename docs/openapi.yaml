@@ -594,6 +594,7 @@ paths:
         name: property_type
         schema:
           enum:
+          - all
           - cluster
           - condo
           - detached
@@ -606,6 +607,7 @@ paths:
           type: string
           minLength: 1
         description: |-
+          * `all` - all
           * `cluster` - cluster
           * `condo` - condo
           * `detached` - detached
@@ -691,6 +693,7 @@ paths:
         name: property_type
         schema:
           enum:
+          - all
           - cluster
           - condo
           - detached
@@ -703,6 +706,7 @@ paths:
           type: string
           minLength: 1
         description: |-
+          * `all` - all
           * `cluster` - cluster
           * `condo` - condo
           * `detached` - detached
