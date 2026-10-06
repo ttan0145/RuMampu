@@ -5,7 +5,7 @@ import { isValidIsoDate } from './validation';
 const VERSION = 1;
 const PERSISTED = ['plan', 'buffer', 'village', 'planHorizon',
   'potMovedMonths', 'potMoved', 'docsChecked', 'keptTests', 'tipsOff', 'seenG', 'lnProg',
-  'bought', 'purchaseMonth', 'notificationPreferences'] as const;
+  'bought', 'purchaseMonth', 'notificationPreferences', 'aiDisclosureAccepted'] as const;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -153,6 +153,9 @@ export function hydrate(s: AppState, raw: string | null): void {
     }
     if (validNotificationPreferences(payload.notificationPreferences)) {
       s.notificationPreferences = payload.notificationPreferences;
+    }
+    if (typeof payload.aiDisclosureAccepted === 'boolean') {
+      s.aiDisclosureAccepted = payload.aiDisclosureAccepted;
     }
     if (record(payload.data)) {
       if (finite(payload.data.cashOnHand) && payload.data.cashOnHand >= 0) {

@@ -454,7 +454,7 @@ export function RecordScreen() {
 /* v22 income scan (preview): a simulated earnings-screen read that fills a
    reviewable checklist; every kept row is saved through the real API. */
 function IncomeScanBody() {
-  const { S, t, up, monthName, saveIncomeEntry, refreshAfterMoneyWrite, toast } = useApp();
+  const { S, t, up, monthName, saveIncomeEntry, refreshAfterMoneyWrite, toast, ensureAiDisclosure } = useApp();
   const sc = S.incScan;
   const [amts, setAmts] = React.useState<Record<number, string>>({});
   const [adding, setAdding] = React.useState(false);
@@ -502,6 +502,7 @@ function IncomeScanBody() {
 
   const realScan = async (source: 'camera' | 'library') => {
     try {
+      if (!await ensureAiDisclosure()) return;
       if (source === 'camera' && Platform.OS !== 'web') {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
         if (!permission.granted) { toast(t('ex_image_failed'), 'error'); return; }

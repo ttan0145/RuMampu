@@ -24,7 +24,7 @@ import { HBar } from '../charts';
 import { ScreenShell } from './shell';
 import { isValidIsoDate } from '../validation';
 import { DatePickerField } from '../date-picker';
-import { INCOME_API_ENABLED, scanReceipt } from '../api';
+import { fetchExpenseCategories, INCOME_API_ENABLED, scanReceipt } from '../api';
 import { getPickedReceipt, setPickedReceipt } from '../../../services/receiptSession';
 import { getHousingTestResult } from '../../../services/housingSession';
 
@@ -673,7 +673,7 @@ export function ExpScanScreen() {
  * 中文：US1.7 让收据识别值可编辑，并在显式确认前保持非权威状态。
  */
 function ExpenseScanBody() {
-  const { S, t, up, toast, monthName, saveExpenseEntry } = useApp();
+  const { S, t, up, toast, monthName, saveExpenseEntry, ensureAiDisclosure } = useApp();
   const st = S.scan.stage;
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<'amount' | 'date' | 'save' | 'image' | 'scan' | 'notreceipt' | null>(null);
@@ -715,6 +715,24 @@ function ExpenseScanBody() {
     let active = true;
     void (async () => {
       try {
+        // Keep recovery and scanning in one ordered operation. Separate effects
+        // can both run from the same stale "error" render and let a fast model
+        // response win before categories have entered state.
+        let categoryOptions = S.data.expenseCats;
+        if (!categoryOptions.length) {
+          const categories = await fetchExpenseCategories();
+          if (!active) return;
+          categoryOptions = categories.map(category => ({
+            id: String(category.id), k: category.slug ? `xc_${category.slug}` : undefined,
+            custom: category.is_custom, name: category.name,
+          }));
+          up(s => {
+            s.data.expenseCats = categoryOptions;
+            const selected = categories.find(category => category.slug === s.expDraft.c) || categories[0];
+            if (selected) s.expDraft.c = String(selected.id);
+            s.expenseSync = 'ready';
+          });
+        }
         const result = await scanReceipt(picked.base64, picked.mediaType);
         if (!active) return;
         setPickedReceipt(null);
@@ -726,7 +744,7 @@ function ExpenseScanBody() {
         up(s => {
           if (s.exMode !== 'scan' || s.scan.stage !== 'read') return;
           const bySlug = result.category_slug
-            ? s.data.expenseCats.find(category => category.k === `xc_${result.category_slug}`)
+            ? categoryOptions.find(category => category.k === `xc_${result.category_slug}`)
             : undefined;
           const suggested = bySlug?.id || s.expDraft.c;
           /* Unread fields stay empty and unmarked (AC6.1.9/AC6.1.10) — the
@@ -772,6 +790,7 @@ function ExpenseScanBody() {
   const pickPhoto = async (source: 'camera' | 'library') => {
     setError(null);
     try {
+      if (!await ensureAiDisclosure()) return;
       if (source === 'camera' && Platform.OS !== 'web') {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
         if (!permission.granted) {

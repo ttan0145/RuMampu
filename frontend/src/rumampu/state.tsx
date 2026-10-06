@@ -370,7 +370,11 @@ export interface AppState {
   aiAnchor: number | null;
   /* US6.2 assistant: sheet visibility + per-session conversation history. */
   assistantOpen: boolean;
+  assistantDraft: string;
   assistantMsgs: { role: 'user' | 'assistant'; content: string }[];
+  /* One product-wide disclosure gates the first hosted-AI use. */
+  aiDisclosureAccepted: boolean;
+  aiDisclosureOpen: boolean;
 }
 
 /* v27b Sample months: the person's own record, kept aside while sample months
@@ -478,7 +482,10 @@ function initialState(): AppState {
     tour: null, tourAsk: null, tourHint: null, tipsOff: process.env.EXPO_PUBLIC_E2E === '1', seenG: [],
     sheet: null,
     assistantOpen: false,
+    assistantDraft: '',
     assistantMsgs: [],
+    aiDisclosureAccepted: false,
+    aiDisclosureOpen: false,
   };
 }
 
@@ -621,6 +628,8 @@ export interface Ctx {
   saveHomeownershipMonth: (month: string, actualHomeCosts: number) => Promise<void>;
   setBillReminder: (commitmentId: string, day: number, time: string, enabled: boolean) => Promise<'saved' | 'denied'>;
   setNotificationKind: (kind: 'bill_reminders' | 'record_warnings', enabled: boolean) => Promise<void>;
+  ensureAiDisclosure: () => Promise<boolean>;
+  answerAiDisclosure: (accepted: boolean) => void;
   loadHouseCosts: () => Promise<void>;
   toast: (msg: string, tone?: 'success' | 'error') => void;
   toastMsg: { msg: string; key: number; tone: 'success' | 'error' } | null;
@@ -743,6 +752,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
      a PATCH, and on the dev server those bursts queued long enough to push
      ordinary reads past their timeout. */
   const lastPersistedSnapshot = useRef<string | null>(null);
+  const aiDisclosureWaiters = useRef<Array<(accepted: boolean) => void>>([]);
 
   const ensureGuest = useCallback(() => {
     if (!guestBootstrap.current) {
@@ -762,6 +772,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }, []);
+
+  const ensureAiDisclosure = useCallback((): Promise<boolean> => {
+    if (S.aiDisclosureAccepted) return Promise.resolve(true);
+    up(s => { s.aiDisclosureOpen = true; });
+    return new Promise(resolve => { aiDisclosureWaiters.current.push(resolve); });
+  }, [S.aiDisclosureAccepted, up]);
+
+  const answerAiDisclosure = useCallback((accepted: boolean) => {
+    up(s => {
+      s.aiDisclosureOpen = false;
+      if (accepted) s.aiDisclosureAccepted = true;
+    });
+    const waiters = aiDisclosureWaiters.current.splice(0);
+    for (const resolve of waiters) resolve(accepted);
+  }, [up]);
 
   const applyAccountState = useCallback((auth: ApiAuthState) => {
     accountAuthenticated.current = true;
@@ -1993,6 +2018,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry, setExpenseMonthlyTotal,
     refreshHomeownership, saveHomeownershipMonth, setBillReminder, setNotificationKind,
+    ensureAiDisclosure, answerAiDisclosure,
   }), [
     S, authReady, up, t, monthName, go, goTab, backNav,
     saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, savePreferredIncomeSource, refreshIncomeRecord, refreshAccountData, applyAccountState, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, enterSampleMonths, leaveSampleMonths, refreshIncomePattern,
@@ -2000,6 +2026,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry, setExpenseMonthlyTotal,
     refreshHomeownership, saveHomeownershipMonth, setBillReminder, setNotificationKind,
+    ensureAiDisclosure, answerAiDisclosure,
   ]);
 
   if (!localStateReady) return null;

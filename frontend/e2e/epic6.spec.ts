@@ -31,6 +31,11 @@ async function answerScan(page: Page, reply: ScanReply | { status: number }): Pr
 async function choosePhoto(page: Page): Promise<void> {
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: /Scan a receipt/ }).click();
+  const disclosure = page.getByText('Before you use RuMampu AI', { exact: true });
+  if (await disclosure.isVisible().catch(() => false)) {
+    await expect(page.getByText(/hosted by Groq/)).toBeVisible();
+    await page.getByRole('button', { name: 'Continue with AI', exact: true }).click();
+  }
   await (await chooser).setFiles(PHOTO);
 }
 
@@ -54,12 +59,30 @@ test.describe('Epic 6 — AI Insights & Alerts', { tag: '@epic6' }, () => {
       data: { onboarding_completed: true, preferred_language: 'en' },
     });
     expect(updated.status()).toBe(200);
+    const categorySeed = await page.request.get(`${API}/expense-categories/`, {
+      headers: { Authorization: `Token ${token}` },
+    });
+    expect(categorySeed.status()).toBe(200);
+    const categoryBody = await categorySeed.text();
     await page.addInitScript(value => localStorage.setItem('rumampu_auth_token', value), token);
+    // This hardening case isolates category bootstrapping; disclosure behaviour
+    // is asserted in the normal receipt and assistant flows below.
+    await page.addInitScript(() => localStorage.setItem('rumampu_local_state', JSON.stringify({
+      version: 1, aiDisclosureAccepted: true,
+    })));
     let release!: () => void;
     const categories = new Promise<void>(resolve => { release = resolve; });
+    let categoryCalls = 0;
     await page.route('**/api/v1/expense-categories/', async route => {
+      categoryCalls += 1;
+      if (categoryCalls === 1) {
+        // Make bootstrap fail once so the receipt path has to recover this
+        // dependency itself. The retry gets the real per-user category IDs.
+        await route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"temporary"}' });
+        return;
+      }
       await categories;
-      await route.continue();
+      await route.fulfill({ status: 200, contentType: 'application/json', body: categoryBody });
     });
     await answerScan(page, { is_receipt: true, merchant: 'Fast receipt', date: '2026-09-10', total: '12.50', category_slug: 'meals' });
     try {
@@ -71,7 +94,10 @@ test.describe('Epic 6 — AI Insights & Alerts', { tag: '@epic6' }, () => {
       // With categories held back, there must be no incomplete review draft.
       await expect(page.getByText('Read from your receipt. Check it before saving.', { exact: true })).toHaveCount(0);
       release();
-      await expect(page.locator('input:visible').nth(0)).toHaveValue('Fast receipt');
+      // Observe the recovered user-facing result, not an implementation-level
+      // network timing event.
+      await expect(page.locator('input:visible').nth(0)).toHaveValue('Fast receipt', { timeout: 15000 });
+      expect(categoryCalls).toBe(2);
       await expect(page.getByText('AI SUGGESTION', { exact: true })).toBeVisible();
       await expect(page.getByText('Meals', { exact: true })).toBeVisible();
       await page.getByText('Add expense', { exact: true }).click();
@@ -220,6 +246,10 @@ test.describe('Epic 6 — AI Insights & Alerts', { tag: '@epic6' }, () => {
 
     await ac('AC6.2.11', 'Open the assistant from any logged-in page', async () => {
       await page.getByLabel('Ask Ruma').click();
+      await expect(page.getByText('Before you use RuMampu AI', { exact: true })).toBeVisible();
+      await expect(page.getByText(/hosted by Groq/)).toBeVisible();
+      await expect(page.getByText(/receipt image, your typed or spoken words, relevant figures/)).toBeVisible();
+      await page.getByRole('button', { name: 'Continue with AI', exact: true }).click();
       await expect(page.getByText('Ask Ruma', { exact: true }).last()).toBeVisible();
       await expect(page.getByPlaceholder('Type a question')).toBeVisible();
     });
@@ -296,16 +326,4 @@ test.describe('Epic 6 — AI Insights & Alerts', { tag: '@epic6' }, () => {
     deferredAc('AC6.2.7', 'Answer questions about housing-test results', 'Model output; covered by backend unit tests.');
   });
 
-  test('US6.3 — Be reminded of a bill I chose, on the day I chose', { tag: '@us6.3' }, async () => {
-    for (const [id, title] of [
-      ['AC6.3.1', 'I choose the day and the time'],
-      ['AC6.3.2', 'The reminder opens a pre-filled entry'],
-      ['AC6.3.3', 'Nothing is written until I confirm'],
-      ['AC6.3.4', 'A confirmed entry is my data'],
-      ['AC6.3.5', 'Permission asked once, with the reason'],
-      ['AC6.3.6', 'Reminders are only about what I set'],
-    ] as const) {
-      deferredAc(id, title, 'NEW in US/AC v5; not built (needs notification permission handling).');
-    }
-  });
 });

@@ -22,6 +22,32 @@ import { GuideTarget, onScrollSettle } from './tour';
    button, popover), e.g. while the AI backend is unavailable. */
 export const ASSISTANT_UI_ENABLED = true;
 
+/** One disclosure is shared by every hosted-AI feature. Declining only cancels
+ * the attempted AI operation; the rest of RuMampu remains available. */
+export function AiDisclosure() {
+  const { S, t, answerAiDisclosure } = useApp();
+  return (
+    <Modal transparent animationType="none" visible={S.aiDisclosureOpen}
+      onRequestClose={() => answerAiDisclosure(false)}>
+      <View style={{ flex: 1, zIndex: 1000, backgroundColor: 'rgba(15,32,33,0.42)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <View accessibilityRole="alert" style={{ width: '100%', maxWidth: 360, borderRadius: 18, backgroundColor: '#fff', padding: 20, gap: 12 }}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 20, color: C.ink }}>{t('ai_disclosure_title')}</Text>
+          <Text style={{ fontFamily: BODY_FONT, fontSize: 14, lineHeight: 20, color: C.ink64 }}>{t('ai_disclosure_body')}</Text>
+          <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, lineHeight: 18, color: C.ink64 }}>{t('ai_disclosure_optional')}</Text>
+          <Pressable accessibilityRole="button" onPress={() => answerAiDisclosure(true)}
+            style={{ minHeight: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: C.brand }}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: '#fff' }}>{t('ai_disclosure_continue')}</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={() => answerAiDisclosure(false)}
+            style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 14, color: C.ink64 }}>{t('cancel')}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 /* Keep speech recognition in sync with the language selected inside RuMampu,
    regardless of the device or browser language. */
 export function speechLocaleFromApp(lang: AppState['lang']): string {
@@ -71,7 +97,7 @@ const EDGE_H = 64;
 const TABBAR_H = 76;
 
 export function AssistantFab() {
-  const { S, t, up } = useApp();
+  const { S, t, up, ensureAiDisclosure } = useApp();
   const insets = useSafeAreaInsets();
   const [frameH, setFrameH] = React.useState(700);
   const minY = 60;
@@ -210,7 +236,11 @@ export function AssistantFab() {
           onPressIn={() => { moved.current = false; }}
           onPress={() => {
             if (moved.current) return;
-            top.stopAnimation(v => up(s => { s.aiAnchor = v + 8; s.assistantOpen = true; }));
+            top.stopAnimation(v => {
+              void ensureAiDisclosure().then(accepted => {
+                if (accepted) up(s => { s.aiAnchor = v + 8; s.assistantOpen = true; });
+              });
+            });
           }}
           accessibilityRole="button"
           accessibilityLabel={t('ai_title')}
@@ -280,7 +310,7 @@ export function AssistantSheet() {
   const pop = React.useRef(new Animated.Value(0)).current;
   React.useEffect(() => {
     if (!S.assistantOpen) { pop.setValue(0); return; }
-    Animated.spring(pop, { toValue: 1, friction: 7, tension: 120, useNativeDriver: true }).start();
+    Animated.timing(pop, { toValue: 1, duration: 160, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
   }, [S.assistantOpen, pop]);
   const [draft, setDraft] = React.useState('');
   const [sending, setSending] = React.useState(false);
@@ -293,6 +323,12 @@ export function AssistantSheet() {
   const [webKeyboardInset, setWebKeyboardInset] = React.useState(0);
   const scrollRef = React.useRef<ScrollView>(null);
   const speechText = React.useMemo(() => speechUiText(S.lang), [S.lang]);
+
+  React.useEffect(() => {
+    if (!S.assistantOpen || !S.assistantDraft) return;
+    setDraft(S.assistantDraft);
+    up(s => { s.assistantDraft = ''; });
+  }, [S.assistantOpen, S.assistantDraft, up]);
 
   /* The Say an entry card shares the microphone; only react to speech this
      chat started. */
@@ -557,10 +593,7 @@ export function AssistantSheet() {
         <Pressable style={StyleSheet.absoluteFill} onPress={close} accessible={false}>
           <View style={{ flex: 1, backgroundColor: 'rgba(15,32,33,0.28)' }} />
         </Pressable>
-        <Animated.View style={[st.pop, place, { position: 'absolute', right: offX + 12 }, {
-          opacity: pop,
-          transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }],
-        }]}>
+        <Animated.View style={[st.pop, place, { position: 'absolute', right: offX + 12, opacity: pop }]}>
             <View style={st.header}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
                 <RumaHelpAvatar size={44} />
@@ -741,7 +774,8 @@ const st = StyleSheet.create({
        pop-up. Letting it shrink keeps the row inside the card. */
     flex: 1, minWidth: 0, minHeight: 48, maxHeight: 112,
     backgroundColor: C.paper, borderWidth: 1.5, borderColor: C.ink40, borderRadius: 12,
-    paddingHorizontal: 12, paddingVertical: 12, fontSize: 15, lineHeight: 20,
+    /* iPhone Safari zooms the page when a focused input is below 16px. */
+    paddingHorizontal: 12, paddingVertical: 12, fontSize: 16, lineHeight: 21,
     color: C.ink, fontFamily: BODY_FONT, textAlignVertical: 'top',
   },
   micBtn: {

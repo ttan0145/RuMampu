@@ -5,7 +5,7 @@ import { AppProvider, Route, useApp } from './state';
 import { C } from './theme';
 import { SheetHost, Splash, TabBar, ToastView } from './overlays';
 import { EntryFlow, GetToKnow } from './entry';
-import { AssistantFab, AssistantSheet } from './assistant';
+import { AiDisclosure, AssistantFab, AssistantSheet } from './assistant';
 import { TourHost, registerRoot } from './tour';
 import { HomeScreen } from './screens/home';
 import { PlanScreen } from './screens/plan';
@@ -87,6 +87,8 @@ function Root() {
       <LearnCele />
       {/* v27b screen tips: the invitation, the hint and the tour sit above everything. */}
       <TourHost tabBarHeight={76 + insets.bottom} />
+      {/* Product-wide AI disclosure must sit above tours, sheets and the edge bubble. */}
+      <AiDisclosure />
     </View>
   );
 }

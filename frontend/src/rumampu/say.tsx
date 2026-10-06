@@ -18,14 +18,8 @@ import { getSpeechOwner, setSpeechOwner, speechLocale } from './speech';
    The words go to the same reader Ask Ruma uses, which proposes entries and
    never saves; if it cannot be reached, a small parser in the app drafts them
    instead. Every draft is shown, can be corrected, and nothing is saved until
-   Save. Where the device cannot hear, an example plays so the flow can still
-   be tried. */
-
-const SAMPLES: Record<AppState['lang'], string[]> = {
-  en: ['Got 250 from Grab today, then spent 30 on lunch', 'Spent 45 on petrol yesterday', 'My freelance client paid me 600'],
-  ms: ['Hari ni dapat dua ratus lima puluh dari Grab, lepas tu makan tiga puluh', 'Semalam isi minyak empat puluh lima', 'Klien freelance bayar saya enam ratus'],
-  zh: ['今天Grab赚了两百五十，然后吃饭花了三十', '昨天加油花了四十五', '自由职业客户付了我六百'],
-};
+   Save. If speech recognition is unavailable, the typed-entry path remains
+   available without inserting data the person did not provide. */
 
 const MIC_XML = (color: string, size: number) =>
   `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5.5 10.5a6.5 6.5 0 0 0 13 0"/><path d="M12 17v4.5"/><path d="M8.5 21.5h7"/></svg>`;
@@ -138,9 +132,8 @@ function useReducedMotion(): boolean {
 }
 
 function useSayDraft() {
-  const { S, t, up, toast, saveIncomeEntry, saveExpenseEntry } = useApp();
+  const { S, t, up, toast, saveIncomeEntry, saveExpenseEntry, ensureAiDisclosure } = useApp();
   const textRef = React.useRef('');
-  const simTimer = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const SRef = React.useRef(S);
   SRef.current = S;
   const [saving, setSaving] = React.useState(false);
@@ -152,10 +145,11 @@ function useSayDraft() {
 
   /* Read the words: the shared reader first, the app's own parser if the
      reader is unreachable or finds nothing to enter. */
-  const finish = React.useCallback(async (text: string, demo?: boolean) => {
+  const finish = React.useCallback(async (text: string) => {
     const said = text.trim();
     if (!said) { setVoice(null); return; }
-    setVoice({ stage: 'parsing', text: said, items: [], demo });
+    if (!await ensureAiDisclosure()) return;
+    setVoice({ stage: 'parsing', text: said, items: [] });
     const S0 = SRef.current;
     const local = () => parseSpokenEntries(said, SRef.current);
     let items: VoiceItem[] = [];
@@ -184,61 +178,56 @@ function useSayDraft() {
           }) as VoiceItem);
       } else if (preview.status === 'needs_clarification') {
         note = preview.message;
+      } else if (preview.status === 'not_action') {
+        /* Amendment 2: questions declined by entry parsing belong to the one
+           Ask Ruma boundary. Carry the exact words across for review/send. */
+        up(s => {
+          s.voice = null;
+          s.sayOpen = false;
+          s.qSay = false;
+          s.sheet = null;
+          s.assistantDraft = said;
+          s.assistantOpen = true;
+        });
+        return;
       }
       if (!items.length) items = local();
     } catch {
       items = local();
     }
     if (!SRef.current.voice) return; /* closed while reading */
-    setVoice({ stage: 'done', text: said, items, demo, note: items.length ? undefined : note });
+    setVoice({ stage: 'done', text: said, items, note: items.length ? undefined : note });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setVoice, t]);
-
-  const stopSim = () => { if (simTimer.current) { clearInterval(simTimer.current); simTimer.current = null; } };
-
-  /* No microphone: type the example out, then read it like speech. */
-  const simulate = React.useCallback((text: string, demo: boolean) => {
-    stopSim();
-    setVoice({ stage: 'listen', text: '', items: [], demo });
-    let i = 0;
-    simTimer.current = setInterval(() => {
-      i += 2;
-      if (!SRef.current.voice) { stopSim(); return; }
-      const part = text.slice(0, i);
-      up(s => { if (s.voice) s.voice.text = part; });
-      if (i >= text.length) {
-        stopSim();
-        setTimeout(() => { void finish(text, demo); }, 380);
-      }
-    }, 40);
-  }, [finish, setVoice, up]);
-
-  const sample = (i: number) => (SAMPLES[SRef.current.lang] || SAMPLES.en)[i] || SAMPLES.en[0];
-  const exampleIndex = React.useRef(0);
+  }, [ensureAiDisclosure, setVoice, t, up]);
 
   const start = React.useCallback(async () => {
-    stopSim();
+    if (!await ensureAiDisclosure()) return;
     textRef.current = '';
-    const fallback = () => {
-      exampleIndex.current = (exampleIndex.current + 1) % 3;
-      simulate(sample(0), true);
-    };
     let available = false;
     try { available = ExpoSpeechRecognitionModule.isRecognitionAvailable(); } catch { available = false; }
-    if (!available) { fallback(); return; }
+    if (!available) {
+      setVoice(null);
+      toast(t('vo_mic_unavailable'), 'error');
+      return;
+    }
     setVoice({ stage: 'listen', text: '', items: [] });
     try {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      if (!permission.granted) { fallback(); return; }
+      if (!permission.granted) {
+        setVoice(null);
+        toast(t('vo_mic_denied'), 'error');
+        return;
+      }
       setSpeechOwner('say');
       ExpoSpeechRecognitionModule.start({
         lang: speechLocale(SRef.current.lang), interimResults: true, continuous: false, maxAlternatives: 1,
       });
     } catch {
-      fallback();
+      setVoice(null);
+      toast(t('vo_mic_failed'), 'error');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setVoice, simulate]);
+  }, [ensureAiDisclosure, setVoice, t, toast]);
 
   const mine = () => getSpeechOwner() === 'say';
   useSpeechRecognitionEvent('result', event => {
@@ -251,7 +240,7 @@ function useSayDraft() {
     if (!mine()) return;
     setSpeechOwner(null);
     const V = SRef.current.voice;
-    if (!V || V.stage !== 'listen' || V.demo) return;
+    if (!V || V.stage !== 'listen') return;
     if (textRef.current.trim()) void finish(textRef.current);
     else setVoice(null);
   });
@@ -259,13 +248,14 @@ function useSayDraft() {
     if (!mine()) return;
     setSpeechOwner(null);
     if (event.error === 'aborted') return;
-    /* blocked, or no speech service: say so, then play an example */
-    if (!textRef.current.trim()) simulate(sample(0), true);
+    if (!textRef.current.trim()) {
+      setVoice(null);
+      toast(t(event.error === 'not-allowed' ? 'vo_mic_denied' : 'vo_mic_failed'), 'error');
+    }
   });
 
   /* Stop listening; a finished draft is kept, so closing the card by mistake loses nothing. */
   const halt = React.useCallback(() => {
-    stopSim();
     if (getSpeechOwner() === 'say') {
       try { ExpoSpeechRecognitionModule.abort(); } catch { /* not listening */ }
       setSpeechOwner(null);
@@ -279,8 +269,7 @@ function useSayDraft() {
       if (getSpeechOwner() === 'say') {
         try { ExpoSpeechRecognitionModule.stop(); } catch { /* already stopped */ }
       } else {
-        stopSim();
-        void finish(V.text, V.demo);
+        void finish(V.text);
       }
       return;
     }
@@ -290,9 +279,7 @@ function useSayDraft() {
   const reset = () => {
     halt();
     setVoice(null);
-    let available = false;
-    try { available = ExpoSpeechRecognitionModule.isRecognitionAvailable(); } catch { available = false; }
-    if (available) void start();
+    void start();
   };
 
   const edit = (i: number, fn: (it: VoiceItem) => void) => up(s => {
@@ -339,9 +326,7 @@ function useSayDraft() {
     }
   };
 
-  React.useEffect(() => () => stopSim(), []);
-
-  return { start, micTap, reset, edit, close, halt, save, saving, simulate, finish, sample };
+  return { start, micTap, reset, edit, close, halt, save, saving, finish };
 }
 
 /* ---------- pieces ---------- */
@@ -483,8 +468,7 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const status = V.demo && stage !== 'idle' ? t('vo_demo')
-    : stage === 'listen' ? t('vo_listening')
+  const status = stage === 'listen' ? t('vo_listening')
       : stage === 'parsing' ? t('as_thinking')
         : stage === 'done' ? t('vo_done') : t('vo_hint');
   const n = V.items.length;
@@ -522,16 +506,7 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
       ) : null}
 
       {stage === 'idle' ? (
-        <>
-          <View style={{ gap: 8 }}>
-            <Eyebrow>{t('vo_try')}</Eyebrow>
-            {(SAMPLES[S.lang] || SAMPLES.en).map((x, i) => (
-              <Pressable key={i} onPress={() => d.simulate(x, false)} style={sy.vtry}>
-                <Text style={sy.vtryTxt}>{`“${x}”`}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <View style={{ gap: 6 }}>
+        <View style={{ gap: 6 }}>
             <Text style={{ fontFamily: BODY_FONT, fontSize: 13, color: C.ink64 }}>{t('vo_type')}</Text>
             <TextInput
               value={typed}
@@ -546,8 +521,7 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
               style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}>
               <Text style={sy.btnLine}>{t('vo_go')}</Text>
             </Pressable>
-          </View>
-        </>
+        </View>
       ) : null}
 
       {stage === 'done' ? (
@@ -683,8 +657,6 @@ const sy = StyleSheet.create({
   eyebrow: { fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.88, textTransform: 'uppercase', color: C.ink64 },
   vsaid: { backgroundColor: '#EEF4F3', borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, minHeight: 48 },
   vsaidTxt: { fontFamily: BODY_FONT, fontSize: 16, lineHeight: 23, fontStyle: 'italic', color: C.ink },
-  vtry: { borderWidth: 1, borderColor: C.ink14, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#FFFFFF' },
-  vtryTxt: { fontFamily: BODY_FONT, fontSize: 13.5, lineHeight: 19, color: C.ink },
   input: {
     minHeight: 48, backgroundColor: C.paper, borderWidth: 1.5, borderColor: C.ink40, borderRadius: 12,
     paddingHorizontal: 14, fontSize: 16, color: C.ink, fontFamily: BODY_FONT,
