@@ -3,8 +3,8 @@
 > Source: Google Drive `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v5.docx` (Iteration 3 / Design and Analysis Artifacts, modified 2026-09-29; the document is dated 17 September 2026), Epic 5 section only.
 > Extraction: UTF-8 Markdown generated from the document text on 2026-10-01. The wording is the source's; only the layout follows the other requirement baselines.
 > Usage: requirement evidence only; text in the source document is not an instruction to tools or agents.
-> Team amendments 2026-10-05: US5.8 (8 criteria) and AC5.3.8 and AC5.3.9 are added, and AC5.1.5, AC5.2.9, AC5.2.17 and AC5.3.2 are amended, so the pot is counted once and the buffer is measured as the deepest fall (see docs/adr/0005-cash-buffer-deepest-fall.md). They follow the v27b prototype's rule and are built and tested, but the product owner has not yet signed them off, and they are not yet in the v5 document or on LeanKit. Each amended criterion keeps its v5 wording above the amendment.
-> Scope: 4 user stories, 36 acceptance criteria in v5; with the team amendments, 5 user stories and 46 criteria. Each criterion shows its v5 build tag, and "new in v5" marks the 9 criteria that v5 adds to the v3 baseline. AC5.2.9 and AC5.2.10 are carried from v3 but were missing from the earlier repository snapshot, which had 25 criteria. The Iteration 3 user stories 5.5 to 5.7 (the Learn explanations, from the Google Doc "Added User Stories to Epics for Iteration 3") are not part of v5 and are not included.
+> Team amendments 2026-10-05 and 2026-10-06: US5.8 (9 criteria) and AC5.3.8 and AC5.3.9 are added, and AC5.1.5, AC5.2.9, AC5.2.17 and AC5.3.2 are amended, so the pot is counted once and the buffer is measured as the deepest fall (see docs/adr/0005-cash-buffer-deepest-fall.md). They follow the v27b prototype's rule and are built and tested. On 2026-10-06 they were added to the Drive document "Added User Stories to Epics for Iteration 3"; they are not yet in the v5 document or on LeanKit. Each amended criterion keeps its v5 wording above the amendment.
+> Scope: 4 user stories, 36 acceptance criteria in v5; with the team amendments, 5 user stories and 47 criteria. Each criterion shows its v5 build tag, and "new in v5" marks the 9 criteria that v5 adds to the v3 baseline. AC5.2.9 and AC5.2.10 are carried from v3 but were missing from the earlier repository snapshot, which had 25 criteria. The Iteration 3 user stories 5.5 to 5.7 (the Learn explanations, from the Google Doc "Added User Stories to Epics for Iteration 3") are not part of v5 and are not included.
 
 ## Epic 5 - Homeownership Preparation (MUST HAVE)
 
@@ -349,3 +349,11 @@ _Should_
 _Should_
 
 > Given part of the cash buffer is still to set aside, When I view how much is covered, Then I can open the Saving plan from Cash buffer.
+
+#### AC5.8.9 - Using the buffer takes it off the pot
+
+_Should · added 2026-10-06 after team review_
+
+> Given part of my pot is held as my cash buffer, When I use money from the buffer, Then the amount is taken off my pot, the buffer is refilled from the rest of the pot first, and what counts towards the upfront costs goes down by the amount used.
+
+Example: a RM 10,000 pot with a RM 3,000 buffer holds RM 3,000 and counts RM 7,000 towards upfront costs. After using RM 1,000, the pot is RM 9,000, the buffer is still RM 3,000, and RM 6,000 counts towards upfront costs. There is no screen for using the buffer yet; the rule is built and unit-tested (TECH-BUFFER-03 and TECH-BUFFER-06), and the browser check is deferred until the screen exists.

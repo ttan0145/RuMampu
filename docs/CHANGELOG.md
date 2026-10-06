@@ -2,9 +2,16 @@
 
 Language: **English** | [Chinese (CN)](CHANGELOG.cn.md)
 
+## 2026-10-06 — AC5.8.9 added to the Epic 5 baseline
+
+Status: committed and pushed to main
+
+- After the team review, US5.8 and AC5.3.8, AC5.3.9 and the four amendments were added to the Drive document "Added User Stories to Epics for Iteration 3", together with a new AC5.8.9 "Using the buffer takes it off the pot".
+- The repository baseline now has AC5.8.9 (47 Epic 5 criteria). No screen uses the buffer yet, so it is recorded as deferred in the Epic 5 spec and allowed by the traceability gate; the rule itself is pinned by TECH-BUFFER-03 and TECH-BUFFER-06.
+
 ## 2026-10-06 — Retire the separate buffer balance; using the buffer spends from the pot
 
-Status: built and checked locally; not yet pushed
+Status: committed and pushed to main on 2026-10-06 (8eb220b)
 
 Raised by the team on 2026-10-06: after the move to one pot, the old shield balance (`buffer.saved`, `buffer.overflow`) was still updated, and "use your safety money" only touched it. So using the buffer would have left the pot, the phase and every screen unchanged.
 
