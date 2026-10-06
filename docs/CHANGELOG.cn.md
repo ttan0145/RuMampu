@@ -2,6 +2,23 @@
 
 语言：**中文（CN）** | [English](CHANGELOG.md)
 
+## 2026-10-06 — 安全钱统一叫法，并允许用户改名（AC5.8.10）
+
+状态：已在本地实现并检查
+
+- 界面上这笔钱原来有四种叫法：cash buffer、safety buffer、safety money、shield。现在所有提到它的文字统一用一个名字 “safety money”（马来文 “duit keselamatan”，中文 “安全钱”）。Cash buffer 页标题保持 “Cash buffer”，和验收标准一致。
+- 团队提出的需求：用户可以给这笔钱起名。Cash buffer 页标题下显示当前名字，旁边是和收入记录行相同的铅笔图标；弹窗最多 30 字，多余空格自动清掉，“Use the default name” 可改回默认名。名字随计划保存到账号（`buffer_state.name`，后端校验），app 提到这笔钱的地方都用这个名字。
+- 手机宽度的网页不再能横向滑动：Ask Ruma 的边缘小房子按设计伸出右边 24px，现在由 app 最外层裁掉，不再把页面撑宽 31px。Epic 5 测试会检查页面宽度。
+- 新增 AC5.8.10 “Name my safety money”；追溯闸门 48/48。
+
+## 2026-10-06 — 在 Cash buffer 页动用安全缓冲（AC5.8.9）
+
+状态：已在本地实现并检查
+
+- 罐子覆盖了部分缓冲时，Cash buffer 页会出现 “I used some of my safety money”。弹窗里填金额，超过缓冲里的钱会被拒绝；确认后调用 `drawDownBuffer`：这笔钱从罐子里扣掉，缓冲先用剩下的钱补满，并弹出 Epic 10 原有的温和提示（“You used your safety money. That's exactly what it's for.”）。罐子明细里显示 “Used from your safety buffer −RM x”。
+- v27b4 没有这个页面的设计，入口位置由开发者暂定，已发群里征求意见。
+- AC5.8.9 不再延期：Epic 5 测试在浏览器里验收它，追溯闸门 47/47。
+
 ## 2026-10-06 — Epic 5 基线新增 AC5.8.9
 
 状态：已提交并推送到 main

@@ -153,6 +153,9 @@ export interface BufferState {
      is retired; older snapshots may still carry it and nothing reads it.
      `used` is what the user has drawn from the buffer: spent, so it leaves the pot. */
   used?: number;
+  /* AC5.8.10: the user's own name for this money ("Rainy day fund"). Empty or
+     missing means the default name (bf_nm). Shown wherever a string says {buf}. */
+  name?: string;
   /* null until a house test exists; 0 is a valid target (bf_zero). */
   target: number | null;
   /* tested_home_cost the target came from, to notice when the house changed. */
@@ -1038,13 +1041,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => { active = false; };
   }, [authReady, ensureGuest, up]);
 
+  /* AC5.8.10: the safety money's own name, if the user gave it one. */
+  const bufOwnName = (S.buffer?.name || '').trim();
   const t = useCallback((k: string, vars?: Record<string, string | number>) => {
     const table = STRINGS[S.lang];
     let s = (table[k] !== undefined ? table[k] : STRINGS.en[k]) as string | undefined;
     if (s === undefined) s = '[' + k + ']';
     if (vars) for (const v in vars) s = s.split('{' + v + '}').join(String(vars[v]));
+    /* {buf} / {Buf}: the user's name for the buffer, or the default name
+       (capitalised where it starts a label). A name the user typed is kept as typed. */
+    if (s.includes('{buf}') || s.includes('{Buf}')) {
+      const fallback = String(table.bf_nm ?? STRINGS.en.bf_nm);
+      const mid = bufOwnName || fallback;
+      const start = bufOwnName || fallback.charAt(0).toUpperCase() + fallback.slice(1);
+      s = s.split('{buf}').join(mid).split('{Buf}').join(start);
+    }
     return s;
-  }, [S.lang]);
+  }, [S.lang, bufOwnName]);
 
   const monthName = useCallback((m: number) => STRINGS[S.lang].months[m], [S.lang]);
 

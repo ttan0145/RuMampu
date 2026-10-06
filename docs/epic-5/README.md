@@ -3,7 +3,7 @@
 Language: **English** | [Chinese (CN)](README.cn.md)
 
 - Status: Built and covered by executable checks; awaiting owner acceptance
-- Scope: 5 user stories, 47 acceptance criteria: the 36 of v5 plus the team amendments of 2026-10-05 and 2026-10-06 (US5.8, AC5.3.8, AC5.3.9) ([baseline](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md), Drive `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v5.docx`)
+- Scope: 5 user stories, 48 acceptance criteria: the 36 of v5 plus the team amendments of 2026-10-05 and 2026-10-06 (US5.8 with AC5.8.9 and AC5.8.10, AC5.3.8, AC5.3.9) ([baseline](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md), Drive `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v5.docx`)
 - Entry points: House → **Prepare for a house**, and Money → **Cash buffer**
 - Not in this index: user stories 5.5 to 5.7 (Learn explanations, added for Iteration 3 in the Drive document "Added User Stories to Epics for Iteration 3"). They came with the v27b3 merge and have no acceptance checks yet (open point 6).
 - Decisions: [ADR 0004](../adr/0004-backend-authoritative-housing-calculations.md), see open point 2; [ADR 0005](../adr/0005-cash-buffer-deepest-fall.md) for how the cash buffer is measured
@@ -14,7 +14,7 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 | US5.2 — Check upfront cash readiness | 17/17 | You have / You need / Gap, the water-line chart, the itemised list grouped by when costs fall due, a dated cash entry, published-scale fees with sources, and the first-home switch |
 | US5.3 — Estimate a cash buffer from recorded short months | 9/9 | Server-calculated buffer (the deepest fall, ADR 0005), the months it ran between shaded on the 12-month running-balance chart, the zero line where zero falls, the record basis and the RM 0 explanation |
 | US5.4 — Review financing preparation documents | 7/7 | Five-item checklist, SJKP criteria with source and date, "needs review" instead of a verdict, and the disclaimer |
-| US5.8 — Count my savings once across the cash buffer and the upfront costs (team amendment) | 8/9 + 1 deferred | The buffer is held from the pot first; Upfront cash, House, the Saving plan and Home read the same split; Cash buffer says how much is covered and links to the plan |
+| US5.8 — Count my savings once across the cash buffer and the upfront costs (team amendment) | 10/10 | The buffer is held from the pot first; Upfront cash, House, the Saving plan and Home read the same split; Cash buffer says how much is covered and links to the plan |
 
 ## Acceptance record
 
@@ -66,7 +66,8 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 | AC5.8.6 Amounts, not a verdict | Passed | With RM 500 the shortfall on Home and Upfront cash is in ringgit only; no "afford", "qualify" or similar wording appears |
 | AC5.8.7 Say when the held amount changes | Passed | Keeping a RM 300,000 test after the RM 250,000 one shows "moved the safety buffer from RM 905 to RM …"; the pot stays RM 500 |
 | AC5.8.8 Go on to the saving plan | Passed | "Open the saving plan" on Cash buffer opens the plan with the same RM 500 split |
-| AC5.8.9 Using the buffer takes it off the pot | Deferred | No screen uses the safety buffer yet. The rule is unit-tested: using RM 1,000 of a RM 3,000 buffer in a RM 10,000 pot leaves RM 9,000, the buffer still full, and RM 6,000 towards upfront costs |
+| AC5.8.9 Using the buffer takes it off the pot | Passed | On Cash buffer, "I used some of my safety money" records RM 500 (more than the RM 905 held is refused); the calm Epic 10 line confirms it, the buffer stays full, the pot drops from RM 10,000 to RM 9,500 and *You have* from RM 9,095 to RM 8,595. Placement chosen by the developer (no v27b4 design) and shared with the team |
+| AC5.8.10 Name my safety money | Passed | The pencil beside the name on Cash buffer opens a sheet; "Rainy day fund" (spaces tidied, 30 characters at most) then appears on Cash buffer, Upfront cash, the pot's working and Home; the name is kept with the plan; "Use the default name" goes back to "safety money" |
 
 ## Evidence map
 
@@ -79,7 +80,7 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 - Backend regression for the 12-month fixture (RM 1,940, RM 904.74, RM 0 and RM 4,740 buffers with every monthly balance and where each fall runs), and an independent check of all chronological suffixes, without rotating months: `GigDriverStartingLiquidityTests` and `StartingLiquidityPathTests` in [`tests.py`](../../backend/apps/housing/tests.py)
 - Real-browser acceptance: [`epic5.spec.ts`](../../frontend/e2e/epic5.spec.ts) (36 acceptance criteria registered once each, plus five engineering regressions: TECH-5.1 the Money shortcut, TECH-5.2 edits and a covered need, TECH-5.3 a record that never goes below zero can still need a buffer, TECH-5.4 what the safety buffer holds is not counted again, TECH-5.5 money moved in survives a reload)
 - Fee-scale and pot arithmetic at the band edges: [`epic5-upfront-fees.spec.ts`](../../frontend/e2e/epic5-upfront-fees.spec.ts)
-- Traceability gate: `npm run test:e2e:traceability` checks Epic 5 at 46 executable + 1 deferred / 47 acceptance criteria against the [baseline](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)
+- Traceability gate: `npm run test:e2e:traceability` checks Epic 5 at 48/48 acceptance criteria against the [baseline](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)
 - Screenshots: [`output/playwright/epic-5/evidence/`](../../output/playwright/epic-5/evidence/), refreshed with `UPDATE_EVIDENCE=1`
 - Run the Epic 5 checks: `npm run test:e2e:epic5` in `frontend/`
 

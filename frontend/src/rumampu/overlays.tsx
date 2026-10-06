@@ -7,11 +7,12 @@ import { SvgXml } from 'react-native-svg';
 import { TAB_OF, Tab, useApp } from './state';
 import { STRINGS, Lang } from './strings';
 import { actualMonths, commitFor, commitSwap, monthKeysOf, monthsAgg, pickMonth, rm } from './calc';
-import { PLAN_HORIZONS, monthlySaveCapacity, planHorizonEffective, planResolveTarget, potNow } from './plan';
+import { PLAN_HORIZONS, drawDownBuffer, monthlySaveCapacity, planHorizonEffective, planResolveTarget, potNow } from './plan';
 import { potParts } from './pot';
+import { BUFFER_NAME_MAX } from './persist';
 import { getHousingTestResult } from '../../services/housingSession';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from './theme';
-import { Btn, BtnLine, BodyS, EditList, NumInput, PROV_G } from './ui';
+import { Btn, BtnLine, BodyS, EditList, NumInput, PROV_G, TextField } from './ui';
 import { Ico } from './svgs';
 import { Ruma } from './ruma-view';
 import { PEEK_W, peekArt } from './ruma-peek';
@@ -520,10 +521,10 @@ export function SheetHost() {
   if (sheet === 'pothow') {
     const { had, plan: planPart, moved, used, total: potTotal } = potParts(S);
     const held = potNow(S).buf;
-    const kvRow = (lbl: string, v: number, bold?: boolean) => (
+    const kvRow = (lbl: string, v: number, bold?: boolean, minus?: boolean) => (
       <View key={lbl} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 32 }}>
         <Text style={{ fontFamily: bold ? DISP_FONT : BODY_FONT, fontSize: 13.5, color: C.ink }}>{lbl}</Text>
-        <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: C.ink, fontVariant: ['tabular-nums'] }}>{rm(v)}</Text>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: C.ink, fontVariant: ['tabular-nums'] }}>{minus ? '−' : ''}{rm(v)}</Text>
       </View>
     );
     return (
@@ -533,7 +534,7 @@ export function SheetHost() {
             {kvRow(t('ph_plan'), planPart)}
             {kvRow(t('ph_moved'), moved)}
             {/* Drawn from the safety buffer: spent, so it is off the pot. */}
-            {used > 0 ? kvRow(t('ph_used'), -used) : null}
+            {used > 0 ? kvRow(t('ph_used'), used, false, true) : null}
             <View style={{ height: 1, backgroundColor: C.ink14, marginVertical: 6 }} />
             {kvRow(t('ph_total'), potTotal, true)}
             {/* Part of the pot already promised to the cash buffer, so not counted
@@ -702,6 +703,11 @@ export function SheetHost() {
       </SheetFrame>
     );
   }
+
+  /* US5.8 (AC5.8.9): record money used from the safety buffer. */
+  if (sheet === 'bufuse') return <BufferUseSheet close={close} />;
+  /* US5.8 (AC5.8.10): give the safety money a name of my own. */
+  if (sheet === 'bufname') return <BufferNameSheet close={close} />;
 
   /* v22: loan assumptions behind the instalment row. */
   if (sheet === 'loan') {
@@ -1307,3 +1313,62 @@ export function TabBar() {
 /* ---------- header language / assistant buttons live in ui.Hdr ---------- */
 
 export const FONT_SEMI = SEMI_FONT;
+
+/* US5.8 (AC5.8.9): using the safety buffer is the buffer doing its job. The amount
+   comes off the pot (drawDownBuffer), the buffer refills from the rest of the pot
+   first, and the calm Epic 10 line confirms it: no red, nothing framed as a failure.
+   Only what the buffer holds can be recorded. */
+function BufferUseSheet({ close }: { close: () => void }) {
+  const { S, t, up, toast } = useApp();
+  const held = potNow(S).buf;
+  const [amount, setAmount] = React.useState(0);
+  const ok = amount > 0 && amount <= held;
+  return (
+    <SheetFrame pose="steady" onClose={close}>
+      <SheetH3>{t('bu_t')}</SheetH3>
+      <View style={{ gap: 8 }}>
+        <BodyS>{t('bu_b')}</BodyS>
+        <NumInput value={amount || ''} placeholder="0" decimal={false} accessibilityLabel={t('bu_field')}
+          onNum={n => setAmount(Math.max(0, Math.round(+n || 0)))} />
+        <BodyS muted>{t('bu_max', { a: rm(held) })}</BodyS>
+        <Btn label={t('bu_ok')} disabled={!ok}
+          onPress={() => { up(s => { drawDownBuffer(s, amount); s.sheet = null; }); toast(t('p10_used')); }} />
+        <View style={{ alignItems: 'center' }}>
+          <BtnLine label={t('cancel')} onPress={close} />
+        </View>
+      </View>
+    </SheetFrame>
+  );
+}
+
+/* US5.8 (AC5.8.10): the user's own name for their safety money. Every string that
+   mentions it reads {buf}, so the name shows wherever the app talks about this money.
+   Clearing the name, or choosing the default, goes back to the default name. */
+function BufferNameSheet({ close }: { close: () => void }) {
+  const { S, t, up } = useApp();
+  const [name, setName] = React.useState(S.buffer?.name ?? '');
+  const save = (value: string) => {
+    const clean = value.replace(/\s+/g, ' ').trim().slice(0, BUFFER_NAME_MAX);
+    up(s => {
+      if (!s.buffer) s.buffer = { target: null, houseCost: null, prevTarget: null, msg: null };
+      if (clean) s.buffer.name = clean;
+      else delete s.buffer.name;
+      s.sheet = null;
+    });
+  };
+  return (
+    <SheetFrame pose="steady" onClose={close}>
+      <SheetH3>{t('bf_name_t')}</SheetH3>
+      <View style={{ gap: 8 }}>
+        <BodyS>{t('bf_name_b')}</BodyS>
+        <TextField value={name} onChangeText={v => setName(v.slice(0, BUFFER_NAME_MAX))}
+          placeholder={t('bf_nm')} accessibilityLabel={t('bf_name_field')} />
+        <Btn label={t('done')} onPress={() => save(name)} />
+        <View style={{ alignItems: 'center' }}>
+          <BtnLine label={t('bf_name_reset')} onPress={() => save('')} />
+        </View>
+      </View>
+    </SheetFrame>
+  );
+}
+

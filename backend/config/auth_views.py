@@ -164,13 +164,16 @@ def _valid_buffer_state(value):
     # One pot (US5.8): the pot is the buffer's balance. "saved" and "overflow" are the
     # retired shield balance, still accepted from older devices; "used" is what was
     # drawn from the buffer and has left the pot.
-    if not _valid_state_object(value, {"saved", "overflow", "used", "target", "houseCost", "prevTarget", "msg"}):
+    if not _valid_state_object(value, {"saved", "overflow", "used", "name", "target", "houseCost", "prevTarget", "msg"}):
         return False
     if value == {}:
         return True
     for key in ("saved", "overflow", "used"):
         if key in value and not _valid_number(value[key], minimum=0):
             return False
+    # AC5.8.10: the user's own name for the buffer, at most 30 characters.
+    if "name" in value and (not isinstance(value["name"], str) or len(value["name"]) > 30):
+        return False
     for key in ("target", "houseCost", "prevTarget"):
         if value.get(key) is not None and not _valid_number(value.get(key), minimum=0):
             return False

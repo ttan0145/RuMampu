@@ -2,6 +2,23 @@
 
 Language: **English** | [Chinese (CN)](CHANGELOG.cn.md)
 
+## 2026-10-06 — One name for the safety money, and the user can change it (AC5.8.10)
+
+Status: built and checked locally
+
+- The buffer was called four things on screen: cash buffer, safety buffer, safety money and shield. Every string that refers to it now reads one name, "safety money" (MS "duit keselamatan", ZH "安全钱"). The Cash buffer page title stays "Cash buffer", as in the criteria.
+- Asked for by the team: the user can give that money a name of their own. Cash buffer shows the current name under the title with the same pencil the income rows use; the sheet takes up to 30 characters, tidies spaces, and "Use the default name" clears it. The name is kept with the plan on the account (`buffer_state.name`, validated by the backend) and is used wherever the app talks about the money.
+- Phone-width web no longer scrolls sideways: Ask Ruma's edge tab peeks past the right edge by design, and the app root now clips it instead of widening the page by 31px. The Epic 5 spec checks the page width.
+- New AC5.8.10 "Name my safety money"; the traceability gate is at 48/48.
+
+## 2026-10-06 — Use the safety buffer from Cash buffer (AC5.8.9)
+
+Status: built and checked locally
+
+- Cash buffer now has "I used some of my safety money" while the pot covers any of the buffer. A sheet takes the amount, refuses more than the buffer holds, and records it with `drawDownBuffer`: the amount comes off the pot, the buffer refills from the rest first, and the existing Epic 10 line confirms it ("You used your safety money. That's exactly what it's for."). The pot's working shows the amount as "Used from your safety buffer −RM x".
+- v27b4 has no design for this, so the placement is the developer's choice and has been shared with the team for review.
+- AC5.8.9 is no longer deferred: the Epic 5 spec checks it in the browser, and the traceability gate is at 47/47.
+
 ## 2026-10-06 — AC5.8.9 added to the Epic 5 baseline
 
 Status: committed and pushed to main

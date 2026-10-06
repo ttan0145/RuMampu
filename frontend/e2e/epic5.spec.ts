@@ -1,6 +1,6 @@
 import { expect, Page } from '@playwright/test';
 import { e2eGet, e2ePost, test } from './support/fixtures';
-import { ac, deferredAc } from './support/acceptance';
+import { ac } from './support/acceptance';
 import { API, captureEvidence, openGuestApp, pinGuestClientId, reloadApp } from './support/app';
 
 /* Epic 5 — Homeownership Preparation (US5.1 to US5.4, 36 acceptance criteria, v5).
@@ -563,7 +563,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
       // The gap is what I need less what I have, here and on Home (this test needs no buffer).
       await expect(figureRow(page, 'Gap')).toContainText(rmText(gap));
       await page.getByRole('tab', { name: 'Home', exact: true }).click();
-      await expect(page.getByText(`${rmText(gap)} more to go for your safety buffer and upfront cash`, { exact: true })).toBeVisible();
+      await expect(page.getByText(`${rmText(gap)} more to go for your safety money and upfront cash`, { exact: true })).toBeVisible();
     });
   });
 
@@ -807,6 +807,95 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
     });
   });
 
+  test('US5.8 — Using the safety buffer takes it off the pot', { tag: '@us5.8' }, async ({ page }) => {
+    // RM 10,000 in the pot and a kept RM 250,000 test with a RM 905 buffer: RM 905 is held
+    // and RM 9,095 counts towards upfront cash. Using RM 500 leaves RM 9,500 in the pot; the
+    // buffer refills from the rest and stays full, so RM 8,595 counts towards upfront cash.
+    await startWithTwelveMonths(page);
+    await openUpfrontCash(page);
+    await page.getByLabel('Cash I already have', { exact: true }).fill('10000');
+    await keepPriceTest(page, 250000);
+    await openUpfrontCash(page);
+    await expect(figureRow(page, 'You have')).toContainText('RM 9,095');
+
+    await ac('AC5.8.9', 'Using the buffer takes it off the pot', async () => {
+      await openCashBuffer(page);
+      // Ask Ruma's edge tab peeks past the right edge by design; it must not widen the page.
+      await expect(page.getByLabel('Ask Ruma', { exact: true })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+      await page.getByText('I used some of my safety money', { exact: true }).click();
+      const sheet = page.getByRole('dialog');
+      const field = sheet.getByLabel('Amount used', { exact: true });
+      const record = sheet.getByRole('button', { name: 'Record it', exact: true });
+      // Only what the buffer holds can be recorded.
+      await expect(sheet.getByText('Up to RM 905, what the buffer holds now.', { exact: true })).toBeVisible();
+      await field.fill('2000');
+      await expect(record).toBeDisabled();
+      await field.fill('500');
+      await expect(record).toBeEnabled();
+      await captureEvidence(page, 'epic-5', 'ac5.8.9__use-safety-money.png', { resetScroll: false });
+      await record.click();
+
+      // Calm confirmation, and the buffer is still full from the rest of the pot.
+      await expect(page.getByText('You used your safety money. That’s exactly what it’s for.', { exact: true })).toBeVisible();
+      await expect(page.getByTestId('buffer-covered')).toHaveText(
+        'Your pot already covers all of this. It is held here first, before anything counts towards your upfront cash.');
+      await captureEvidence(page, 'epic-5', 'ac5.8.9__used-confirmation.png', { resetScroll: false });
+
+      // The pot drops by RM 500 and so does what counts towards upfront cash.
+      await openUpfrontCash(page);
+      await expect(figureRow(page, 'You have')).toContainText('RM 8,595');
+      await figureRow(page, 'You have').getByLabel('How this adds up').click();
+      await expect(page.getByText('Used from your safety money', { exact: true }).locator('xpath=..')).toContainText('−RM 500');
+      await expect(page.getByText('In the pot', { exact: true }).locator('xpath=..')).toContainText('RM 9,500');
+      await expect(page.getByText('Held as your safety money', { exact: true }).locator('xpath=..')).toContainText('RM 905');
+      await captureEvidence(page, 'epic-5', 'ac5.8.9__pot-after-use.png', { resetScroll: false });
+      await page.getByText('Done', { exact: true }).click();
+    });
+
+    await ac('AC5.8.10', 'Name my safety money', async () => {
+      // Give the buffer a name of my own: every place that talks about it uses the name.
+      await openCashBuffer(page);
+      // The name is shown under the title, with a pencil to change it.
+      await expect(page.getByTestId('buffer-name')).toHaveText('Safety money');
+      await page.getByRole('button', { name: 'Name it', exact: true }).click();
+      const sheet = page.getByRole('dialog');
+      const nameField = sheet.getByLabel('Name', { exact: true });
+      await nameField.fill('Rainy day fund');
+      await captureEvidence(page, 'epic-5', 'ac5.8.10__name-it.png', { resetScroll: false });
+      // Extra spaces are tidied away.
+      await nameField.fill('  Rainy   day fund ');
+      await sheet.getByRole('button', { name: 'Done', exact: true }).click();
+      await expect(page.getByTestId('buffer-name')).toHaveText('Rainy day fund');
+      await expect(page.getByText('I used some of my Rainy day fund', { exact: true })).toBeVisible();
+      await expect(page.getByText(/^You used your /)).toHaveCount(0, { timeout: 15_000 });
+      await captureEvidence(page, 'epic-5', 'ac5.8.10__named-buffer.png', { resetScroll: false });
+
+      await openUpfrontCash(page);
+      await expect(page.getByTestId('upfront-held')).toHaveText(
+        'RM 905 of your pot is held as your Rainy day fund, so it is not counted here.');
+      await figureRow(page, 'You have').getByLabel('How this adds up').click();
+      await expect(page.getByText('Held as your Rainy day fund', { exact: true })).toBeVisible();
+      await expect(page.getByText('Used from your Rainy day fund', { exact: true })).toBeVisible();
+      await page.getByText('Done', { exact: true }).click();
+      await page.getByRole('tab', { name: 'Home', exact: true }).click();
+      await expect(page.getByText(/more to go for your Rainy day fund and upfront cash/)).toBeVisible();
+
+      // The name is kept with the rest of the plan.
+      await expect.poll(async () => {
+        const raw = await page.evaluate(() => window.localStorage.getItem('rumampu_local_state'));
+        return (JSON.parse(raw || '{}') as { buffer?: { name?: string } }).buffer?.name;
+      }).toBe('Rainy day fund');
+
+      // Going back to the default name.
+      await openCashBuffer(page);
+      await page.getByRole('button', { name: 'Name it', exact: true }).click();
+      await page.getByRole('dialog').getByText('Use the default name', { exact: true }).click();
+      await expect(page.getByTestId('buffer-name')).toHaveText('Safety money');
+      await expect(page.getByText('I used some of my safety money', { exact: true })).toBeVisible();
+    });
+  });
+
   test('TECH-5.1 — The Money tab shortcut opens Cash buffer', { tag: '@hardening' }, async ({ page }) => {
     await openGuestApp(page);
     await page.getByRole('tab', { name: 'Money', exact: true }).click();
@@ -855,10 +944,10 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
 
     await ac('AC5.8.3', 'Say what is held', async () => {
       await expect(page.getByTestId('upfront-held')).toHaveText(
-        'RM 905 of your pot is held as your safety buffer, so it is not counted here.');
+        'RM 905 of your pot is held as your safety money, so it is not counted here.');
       await figureRow(page, 'You have').getByLabel('How this adds up').click();
       await expect(page.getByText('In the pot', { exact: true }).locator('xpath=..')).toContainText('RM 1,000');
-      await expect(page.getByText('Held as your safety buffer', { exact: true }).locator('xpath=..')).toContainText('RM 905');
+      await expect(page.getByText('Held as your safety money', { exact: true }).locator('xpath=..')).toContainText('RM 905');
       await page.getByText('Done', { exact: true }).click();
       await captureEvidence(page, 'epic-5', 'ac5.8.1-3__buffer-held-first.png');
     });
@@ -867,15 +956,15 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
       // House reads the same RM 95 towards the upfront cash and the same RM 905 held.
       await page.getByRole('tab', { name: 'House', exact: true }).click();
       await expect(page.getByText(
-        `RM 95 of ${rmText(need)} set aside · RM 905 held as your safety buffer`, { exact: true },
+        `RM 95 of ${rmText(need)} set aside · RM 905 held as your safety money`, { exact: true },
       )).toBeVisible();
       // The saving plan splits the same pot the same way, and Home's line is the same gap
       // (the buffer is covered, so only the upfront cash is still short).
       await openSavingPlan(page);
       await expect(page.getByTestId('plan-pot-total')).toHaveText('RM 1,000');
-      await expect(page.getByText('Safety buffer RM 905 · Upfront cash RM 95', { exact: true })).toBeVisible();
+      await expect(page.getByText('Safety money RM 905 · Upfront cash RM 95', { exact: true })).toBeVisible();
       await page.getByRole('tab', { name: 'Home', exact: true }).click();
-      await expect(page.getByText(`${rmText(need - 95)} more to go for your safety buffer and upfront cash`, { exact: true })).toBeVisible();
+      await expect(page.getByText(`${rmText(need - 95)} more to go for your safety money and upfront cash`, { exact: true })).toBeVisible();
     });
 
     await ac('AC5.8.4', 'Show how much of the buffer is covered', async () => {
@@ -895,13 +984,13 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
     await ac('AC5.8.8', 'Go on to the saving plan', async () => {
       await page.getByText('Open the saving plan', { exact: true }).click();
       await expect(page.getByTestId('plan-pot-total')).toHaveText('RM 500');
-      await expect(page.getByText('Safety buffer RM 500 · Upfront cash RM 0', { exact: true })).toBeVisible();
+      await expect(page.getByText('Safety money RM 500 · Upfront cash RM 0', { exact: true })).toBeVisible();
     });
 
     await ac('AC5.8.6', 'Amounts, not a verdict', async () => {
       // The pot covers neither goal in full: the shortfall is ringgit only, with no verdict.
       await page.getByRole('tab', { name: 'Home', exact: true }).click();
-      await expect(page.getByText(`${rmText(905 + need - 500)} more to go for your safety buffer and upfront cash`, { exact: true })).toBeVisible();
+      await expect(page.getByText(`${rmText(905 + need - 500)} more to go for your safety money and upfront cash`, { exact: true })).toBeVisible();
       await expect(page.getByText(/can(not|'t)? afford|not affordable|you qualify/i)).toHaveCount(0);
       await openUpfrontCash(page);
       await expect(figureRow(page, 'Gap')).toContainText(rmText(need));
@@ -914,17 +1003,11 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
       await keepPriceTest(page, 300000);
       await openUpfrontCash(page);
       await expect(page.getByTestId('upfront-held-moved')).toHaveText(
-        /^Your newer house test moved the safety buffer from RM 905 to RM [\d,]+, so the amount held changed\. Your pot itself has not changed\.$/);
+        /^Your newer house test moved your safety money from RM 905 to RM [\d,]+, so the amount held changed\. Your pot itself has not changed\.$/);
       await figureRow(page, 'You have').getByLabel('How this adds up').click();
       await expect(page.getByText('In the pot', { exact: true }).locator('xpath=..')).toContainText('RM 500');
       await page.getByText('Done', { exact: true }).click();
     });
-
-    deferredAc(
-      'AC5.8.9',
-      'Using the buffer takes it off the pot',
-      'No screen uses the safety buffer yet. The rule (drawDownBuffer records the amount as used and takes it off the pot, and the buffer refills from the rest) is pinned by TECH-BUFFER-03 and TECH-BUFFER-06 in epic5-upfront-fees.spec.ts; the browser check follows when the screen is built.',
-    );
   });
 
   test('TECH-5.5 — Money moved in from a finished month is still in the pot after a reload', { tag: '@hardening' }, async ({ page }) => {

@@ -29,8 +29,7 @@ const completedEpics = [
   },
   {
     epic: 'Epic 5',
-    expected: 47,
-    allowedDeferred: ['AC5.8.9'],
+    expected: 48,
     requirements: 'docs/requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md',
     specification: 'frontend/e2e/epic5.spec.ts',
   },

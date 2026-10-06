@@ -3,6 +3,8 @@ import { getHousingScenario, getHousingTestResult, hydrateHousingSession } from 
 import { isValidIsoDate } from './validation';
 
 const VERSION = 1;
+/* AC5.8.10: the longest name a user can give their safety money. */
+export const BUFFER_NAME_MAX = 30;
 const PERSISTED = ['plan', 'buffer', 'village', 'planHorizon',
   'potMovedMonths', 'potMoved', 'docsChecked', 'keptTests', 'tipsOff', 'seenG', 'lnProg',
   'bought', 'purchaseMonth', 'notificationPreferences', 'aiDisclosureAccepted',
@@ -57,6 +59,7 @@ function validBuffer(value: unknown): value is BufferState {
   const optionalAmount = (v: unknown) => v === undefined || (finite(v) && v >= 0);
   if (!record(value) || !optionalAmount(value.saved) || !optionalAmount(value.overflow)
     || !optionalAmount(value.used)
+    || !(value.name === undefined || (typeof value.name === 'string' && value.name.length <= BUFFER_NAME_MAX))
     || !(value.target === null || (finite(value.target) && value.target >= 0))
     || !(value.houseCost === null || (finite(value.houseCost) && value.houseCost >= 0))
     || !(value.prevTarget === null || (finite(value.prevTarget) && value.prevTarget >= 0))
