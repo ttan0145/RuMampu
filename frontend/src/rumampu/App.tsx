@@ -108,7 +108,10 @@ function Framed({ children }: { children: React.ReactNode }) {
       <View style={
         framed
           ? { width: 390, height: Math.min(844, height), borderRadius: 28, overflow: 'hidden', backgroundColor: C.paper }
-          : { flex: 1, width: '100%' }
+          /* Clip like the framed branch: Ask Ruma's edge tab peeks 24px past the
+             right edge by design, and on a phone-width page it must not widen the
+             page into a sideways scroll. */
+          : { flex: 1, width: '100%', overflow: 'hidden' }
       }>
         {children}
       </View>
