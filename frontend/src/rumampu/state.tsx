@@ -62,7 +62,7 @@ import {
 import { fetchHouseCosts as fetchHouseCostsRequest, fetchSavedHousingTests as fetchSavedHousingTestsRequest } from '../../services/housingService';
 import { clearHousingSession, getHousingScenario, getHousingTestResult, hydrateHousingSession, setHousingScenario, setHousingTestResult, subscribeHousingSession } from '../../services/housingSession';
 import type { HousingScenarioResponse, HousingTestResult } from '../../types/housing';
-import { HouseCostType, HouseCostsResponse, PxSize, PxType, SavedHousingTestRecord } from '../../types/housing';
+import { HouseCostType, HouseCostsResponse, PxKind, PxSize, PxType, SavedHousingTestRecord } from '../../types/housing';
 import { logIt } from './log';
 import { rm, rmx } from './calc';
 import { accountSnapshot, hydrate, hydrateAccountState, snapshot } from './persist';
@@ -153,6 +153,9 @@ export interface BufferState {
      is retired; older snapshots may still carry it and nothing reads it.
      `used` is what the user has drawn from the buffer: spent, so it leaves the pot. */
   used?: number;
+  /* AC5.8.10: the user's own name for this money ("Rainy day fund"). Empty or
+     missing means the default name (bf_nm). Shown wherever a string says {buf}. */
+  name?: string;
   /* null until a house test exists; 0 is a valid target (bf_zero). */
   target: number | null;
   /* tested_home_cost the target came from, to notice when the house changed. */
@@ -262,6 +265,9 @@ export interface AppState {
   houseCostsSync: 'idle' | 'loading' | 'ready' | 'error';
   hcState: string;
   hcType: HouseCostType;
+  /* House costs map: the home type shown ('all' or a model type) and the person's budget */
+  hcKind: PxKind;
+  hcBudget: number | null;
   /* v24 upfront: the first-home stamp exemption flag, which saved test the
      figures work from, and the renovation switch. */
   firstHome: boolean;
@@ -354,7 +360,7 @@ export interface AppState {
      of the user's price. Fetched figures stay inside the screen. */
   px: {
     budget: number | null; type: PxType; district: string | null; size: PxSize; tenure: 'F' | 'L';
-    year: 0 | 1 | 2 | 3; grow: number; view: 'map' | 'list'; typeSet: boolean;
+    year: 0 | 1 | 2 | 3; grow: number; view: 'map' | 'list'; typeSet: boolean; state: string;
   };
   /* v27b screen tips: the running tour (screen and step), the first-visit
      invitation (Home) or hint (other screens), the off switch, and the
@@ -445,7 +451,7 @@ function initialState(): AppState {
     knew: false, kstep: 0, jobs: ['taxi'], ownJobs: [], lastMonth: '',
     plan: null, village: null, buffer: null, vHelp: false, planHorizon: null,
     moView: 'tiles', houseTab: 'test',
-    houseCosts: null, houseCostsSync: 'idle', hcState: 'sgr', hcType: 'all', firstHome: false,
+    houseCosts: null, houseCostsSync: 'idle', hcState: 'sgr', hcType: 'all', hcKind: 'all', hcBudget: null, firstHome: false,
     potMoved: 0, potMovedMonths: [], ufTest: null, ufReno: false, viewTestName: null, scanAuto: false, pastT: 'inc', cardInfo: null, log: [],
     tryPay: null, tryCust: false, depMode: null,
     incPick: false, incMode: 'type', incScan: { stage: 'pick', rows: [] }, incCsv: { stage: 'pick' }, incEdit: null,
@@ -485,7 +491,7 @@ function initialState(): AppState {
     coverageSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
     voice: null, voiceDisclosureAccepted: false, sayOpen: false, qSay: false, aiY: null, aiAnchor: null, noBills: false, runPending: false, demo: false,
     lnTab: 'nosalary', lnArt: null, lnPg: 1, lnProg: {}, lnWas: null, lnArtWas: false, lnCele: null, lnPop: null,
-    px: { budget: null, type: 'terrace', district: null, size: 'typical', tenure: 'F', year: 3, grow: 3, view: 'list', typeSet: false },
+    px: { budget: null, type: 'terrace', district: null, size: 'typical', tenure: 'F', year: 3, grow: 3, view: 'list', typeSet: false, state: 'SGR' },
     tour: null, tourAsk: null, tourHint: null, tipsOff: process.env.EXPO_PUBLIC_E2E === '1', seenG: [],
     sheet: null,
     assistantOpen: false,
@@ -1035,13 +1041,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => { active = false; };
   }, [authReady, ensureGuest, up]);
 
+  /* AC5.8.10: the safety money's own name, if the user gave it one. */
+  const bufOwnName = (S.buffer?.name || '').trim();
   const t = useCallback((k: string, vars?: Record<string, string | number>) => {
     const table = STRINGS[S.lang];
     let s = (table[k] !== undefined ? table[k] : STRINGS.en[k]) as string | undefined;
     if (s === undefined) s = '[' + k + ']';
     if (vars) for (const v in vars) s = s.split('{' + v + '}').join(String(vars[v]));
+    /* {buf} / {Buf}: the user's name for the buffer, or the default name
+       (capitalised where it starts a label). A name the user typed is kept as typed. */
+    if (s.includes('{buf}') || s.includes('{Buf}')) {
+      const fallback = String(table.bf_nm ?? STRINGS.en.bf_nm);
+      const mid = bufOwnName || fallback;
+      const start = bufOwnName || fallback.charAt(0).toUpperCase() + fallback.slice(1);
+      s = s.split('{buf}').join(mid).split('{Buf}').join(start);
+    }
     return s;
-  }, [S.lang]);
+  }, [S.lang, bufOwnName]);
 
   const monthName = useCallback((m: number) => STRINGS[S.lang].months[m], [S.lang]);
 

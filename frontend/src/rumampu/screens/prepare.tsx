@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SvgXml } from 'react-native-svg';
 import { getHousingTestResult } from '../../../services/housingSession';
 import { todayIso, useApp } from '../state';
 import { nf, rm } from '../calc';
@@ -364,8 +365,11 @@ const pr = StyleSheet.create({
   },
 });
 
+/* The pencil the income rows use to edit (incard.tsx), so editing looks the same everywhere. */
+const PEN_SVG = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="rgba(60,81,82,0.64)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 20h4l10-10-4-4L4 16z"/><path d="M12.5 7.5l4 4"/></svg>';
+
 export function BufferScreen() {
-  const { S, t, monthName, goTab, go } = useApp();
+  const { S, t, up, monthName, goTab, go } = useApp();
   const result = getHousingTestResult();
   const liquidity = result?.starting_liquidity;
   if (!liquidity || liquidity.months.length === 0) {
@@ -417,6 +421,15 @@ export function BufferScreen() {
         <CardI t="pr_buffer" b={[]} p="calc" x={[t('bf_basis', { a: monthName(first.m), b: monthName(last.m) })]} />
       </View>
       <BodyS muted>{t('bf_def')}</BodyS>
+      {/* AC5.8.10: what I call this money, with the same pencil the income rows use to edit. */}
+      <View testID="buffer-name" style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink }} numberOfLines={1}>{t('p10_shield_t')}</Text>
+        <Pressable onPress={() => up(s => { s.sheet = 'bufname'; })} accessibilityRole="button"
+          accessibilityLabel={t('bf_name_link')} hitSlop={6}
+          style={{ width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>
+          <SvgXml xml={PEN_SVG} width={17} height={17} />
+        </Pressable>
+      </View>
       {fallEnd >= 0 ? (
         <View testID="buffer-fall-text">
           <BodyS>
@@ -442,6 +455,8 @@ export function BufferScreen() {
           </View>
           {/* AC5.8.8: what is still to set aside goes on to the saving plan. */}
           {still > 0 ? <BtnLine label={t('bf_toplan')} onPress={() => go('plan')} /> : null}
+          {/* AC5.8.9: money used from the buffer comes off the pot. */}
+          {covered > 0 ? <BtnLine label={t('bu_link')} onPress={() => up(s => { s.sheet = 'bufuse'; })} /> : null}
         </Card>
       )}
       {endShort > 0 ? (

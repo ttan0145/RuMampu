@@ -343,12 +343,17 @@ class _PxBase(serializers.Serializer):
     property_type = serializers.ChoiceField(choices=sorted(px.TYPES))
 
 
-class PxAreasQuery(_PxBase):
+class _PxBaseAll(serializers.Serializer):
+    # 'all' = every home type together, from the raw sales
+    property_type = serializers.ChoiceField(choices=sorted(px.TYPES | {'all'}))
+
+
+class PxAreasQuery(_PxBaseAll):
     state = serializers.ChoiceField(choices=sorted(px.STATE_NAME))
     budget = serializers.IntegerField(min_value=50_000, max_value=10_000_000)
 
 
-class PxHomeQuery(_PxBase):
+class PxHomeQuery(_PxBaseAll):
     district = serializers.CharField(max_length=60)
     tenure = serializers.ChoiceField(choices=['F', 'L'], default='F')
     size = serializers.ChoiceField(choices=['small', 'typical', 'large'], default='typical')

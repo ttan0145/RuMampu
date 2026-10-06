@@ -1,7 +1,7 @@
 import React from 'react';
 import { getHousingTestResult } from '../../services/housingSession';
 import { fetchPxAreas, fetchPxHome, fetchPxTrend } from '../../services/housingService';
-import type { PxAreasResponse, PxBand, PxHomeResponse, PxSize, PxTrendResponse, PxType } from '../../types/housing';
+import type { PxAreasResponse, PxBand, PxHomeResponse, PxKind, PxSize, PxTrendResponse, PxType } from '../../types/housing';
 
 /* Price Explorer helpers. The price model runs offline (ml/); the API serves its
    precomputed ranges, and everything here is display maths on those ranges. */
@@ -9,6 +9,8 @@ import type { PxAreasResponse, PxBand, PxHomeResponse, PxSize, PxTrendResponse, 
 export const PX_TYPES: PxType[] = [
   'terrace', 'condo', 'semi_detached', 'low_cost_house', 'flat', 'townhouse', 'detached', 'cluster', 'low_cost_flat',
 ];
+/* every state the model covers (API state codes) */
+export const PX_STATES = ['JHR', 'KDH', 'KTN', 'MLK', 'NSN', 'PHG', 'PRK', 'PLS', 'PNG', 'SBH', 'SWK', 'SGR', 'TRG', 'KUL', 'LBN', 'PJY'];
 export const PX_MIN = 150000;
 export const PX_MAX = 1500000;
 
@@ -89,11 +91,11 @@ function useCached<T>(key: string | null, load: () => Promise<T>): Load<T> {
   };
 }
 
-export function usePxAreas(state: string, type: PxType, budget: number): Load<PxAreasResponse> {
+export function usePxAreas(state: string | null, type: PxKind, budget: number): Load<PxAreasResponse> {
   const b = Math.round(budget / 10000) * 10000;
-  return useCached(`areas|${state}|${type}|${b}`, () => fetchPxAreas(state, type, b));
+  return useCached(state ? `areas|${state}|${type}|${b}` : null, () => fetchPxAreas(state!, type, b));
 }
-export function usePxHome(district: string | null, type: PxType, tenure: 'F' | 'L', size: PxSize): Load<PxHomeResponse> {
+export function usePxHome(district: string | null, type: PxKind, tenure: 'F' | 'L', size: PxSize): Load<PxHomeResponse> {
   return useCached(district ? `home|${district}|${type}|${tenure}|${size}` : null, () => fetchPxHome(district!, type, tenure, size));
 }
 export function usePxTrend(state: string | null, type: PxType): Load<PxTrendResponse> {

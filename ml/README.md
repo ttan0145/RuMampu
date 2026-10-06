@@ -131,3 +131,12 @@ The per-year figure uses (1.159)^(1/5.25) − 1 ≈ 2.9%.
 3. **Thin series.** 61 of 138 state × type series are `thin`. Show "not enough sales" for them.
 4. **Trend ranges are cautious** (94% held, not 80%). **Home ranges are slightly narrow** (77% held, not 80%).
 5. **Years 2–3** are only tested up to 2 years ahead (8 quarters). Year 3 is extrapolation.
+
+## App district maps (`build_app_maps.py`)
+
+The app's district outline maps (all 16 states; Selangor, Kuala Lumpur and Putrajaya share one) are generated, not drawn by hand:
+
+1. Save DOSM's district boundaries (`administrative_2_district.geojson`, github.com/dosm-malaysia/data-open, `datasets/geodata`) as `data/dosm_district.geojson` (gitignored).
+2. Run `python build_app_maps.py` (needs `shapely`). It writes `../frontend/src/rumampu/pxmap.ts` (screen-space outlines for the Price Explorer) and `pxgeo.ts` (the same districts in latitude/longitude, for the House costs street map).
+
+District names are NAPIC's, matched to DOSM through `RENAME` in `geocode.py` (Sarawak's divisions are drawn as the union of their DOSM districts). `data/napic_districts.csv` lists every NAPIC district the app can show; refresh it if NAPIC adds one.

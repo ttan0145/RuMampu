@@ -117,14 +117,15 @@ class AuthApiRegressionTests(TestCase):
         user = User.objects.create_user(username="buffer-used@example.com", password="Passw0rd123")
         token = Token.objects.create(user=user)
         client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
-        current = {"target": 3000, "houseCost": 1382, "prevTarget": None, "msg": "used", "used": 1000}
+        current = {"target": 3000, "houseCost": 1382, "prevTarget": None, "msg": "used", "used": 1000,
+                   "name": "Rainy day fund"}
         legacy = {"saved": 100, "overflow": 20, "target": 905, "houseCost": 1382, "prevTarget": None, "msg": None}
         for state in (current, legacy):
             with self.subTest(state=state):
                 response = client.patch("/api/v1/auth/me/", {"buffer_state": state}, content_type="application/json")
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(client.get("/api/v1/auth/me/").json()["buffer_state"], state)
-        for bad in ({"used": -1}, {"used": "lots"}, {"used": True}):
+        for bad in ({"used": -1}, {"used": "lots"}, {"used": True}, {"name": "x" * 31}, {"name": 7}):
             with self.subTest(bad=bad):
                 response = client.patch("/api/v1/auth/me/", {"buffer_state": {**current, **bad}},
                                         content_type="application/json")

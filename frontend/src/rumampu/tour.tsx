@@ -30,10 +30,7 @@ export const GUIDES: Partial<Record<Route, { id: string; k: string }[]>> = {
     { id: 'hh.learn', k: 'g_hh4' }, { id: 'hh.saved', k: 'g_hh5' },
   ],
   result: [{ id: 'rx.chart', k: 'g_rx2' }, { id: 'rx.verdict', k: 'g_rx1' }, { id: 'rx.try', k: 'g_rx3' }, { id: 'rx.keep', k: 'g_rx4' }],
-  homecosts: [
-    { id: 'fh.seg', k: 'g_fh0' }, { id: 'fh.map', k: 'g_fh4' }, { id: 'fh.place', k: 'g_fh2' },
-    { id: 'fh.sel', k: 'g_fh1' }, { id: 'fh.info', k: 'g_fh3' },
-  ],
+  homecosts: [{ id: 'fh.map', k: 'g_fh4' }, { id: 'fh.sel', k: 'g_fh1' }, { id: 'fh.place', k: 'g_fh2' }],
   upfront: [{ id: 'uf.chart', k: 'g_uf1' }, { id: 'uf.stage', k: 'g_uf2' }, { id: 'uf.first', k: 'g_uf3' }],
   income: [{ id: 'in.seg', k: 'g_in1' }, { id: 'in.hero', k: 'g_in2' }, { id: 'in.wm', k: 'g_in3' }],
   expenses: [{ id: 'ex.sum', k: 'g_ex1' }, { id: 'ex.wm', k: 'g_ex3' }],

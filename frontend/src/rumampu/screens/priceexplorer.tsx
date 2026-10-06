@@ -11,9 +11,10 @@ import { BODY_FONT, C, DISP_FONT, SEMI_FONT, XBOLD_FONT } from '../theme';
 import { BodyS, Prov } from '../ui';
 import { GuideTarget } from '../tour';
 import { ScreenShell } from './shell';
-import { PX_MAP, PX_MAP_STATES, PX_STATE_OF } from '../pxmap';
+import { OutlineMap, groupOf } from '../outlinemap';
+import { PickSheet } from './homecosts';
 import {
-  PX_MAX, PX_MIN, PX_TYPES, Tone, binOf, fromStressTest, instalment, niceTicks, pct, rmK, shareSimilar,
+  PX_MAX, PX_MIN, PX_STATES, PX_TYPES, Tone, binOf, fromStressTest, instalment, niceTicks, pct, rmK, shareSimilar,
   startingSafePrice, usePxAreas, usePxHome, usePxTrend, verdictTone,
 } from '../priceExplorer';
 import type { PxAreasResponse, PxBand, PxHomeResponse, PxSize, PxType } from '../../../types/housing';
@@ -190,43 +191,17 @@ const anc = (px: number) => (px < 44 ? 'start' : px > 276 ? 'end' : 'middle');
 
 /* ---------- step 3: map and list ---------- */
 
-function DistrictMap({ shares, sel, onPick, t }: {
-  shares: Record<string, number | null>; sel: string | null;
-  onPick: (d: string) => void; t: T;
+function DistrictMap({ stateCode, shares, inState, sel, onPick, t, label }: {
+  stateCode: string; shares: Record<string, number | null>; inState: (d: string) => boolean; sel: string | null;
+  onPick: (d: string) => void; t: T; label: string;
 }) {
-  const ds = Object.keys(PX_MAP);
-  const order = [...ds.filter(d => d !== sel), ...ds.filter(d => d === sel)];
   return (
     <View style={st.mapwrap}>
-      <Svg viewBox="0 0 300 330" width="100%" style={{ aspectRatio: 300 / 330 }} accessibilityLabel={t('px_map_a')}>
-        <Defs>
-          <Pattern id="pxhatch" width={6} height={6} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <Rect width={6} height={6} fill="#EEF1F1" />
-            <Line x1={0} y1={0} x2={0} y2={6} stroke="#CFD8D8" strokeWidth={2} />
-          </Pattern>
-        </Defs>
-        {order.map(d => {
-          const s = shares[d] ?? null, on = d === sel;
-          return (
-            <Path key={d} d={PX_MAP[d].d} fill={BIN_FILL[binOf(s)]} stroke={on ? C.caution : '#FFFFFF'}
-              strokeWidth={on ? 4 : 1.6} strokeLinejoin="round" onPress={() => onPick(d)}
-              accessibilityLabel={`${d}: ${s === null ? t('px_few') : `${Math.round(s * 100)}%`}`}
-              testID={`px-d-${d}`} />
-          );
-        })}
-        {ds.map(d => {
-          const m = PX_MAP[d], s = shares[d] ?? null, b = binOf(s), sm = d === 'Kuala Lumpur' || d === 'Putrajaya';
-          const name = sm ? (d === 'Kuala Lumpur' ? 'KL' : 'P\'jaya') : d;
-          const val = s === null ? t('px_few') : `${Math.round(s * 100)}%`;
-          return (
-            <SvgText key={`l-${d}`} x={m.x} y={m.y} textAnchor="middle" pointerEvents="none" fill={BIN_TXT[b]}
-              fontFamily={SEMI_FONT} fontSize={sm ? 7 : 8}>
-              <TSpan x={m.x}>{name}</TSpan>
-              <TSpan x={m.x} dy={10} fontFamily={DISP_FONT}>{val}</TSpan>
-            </SvgText>
-          );
-        })}
-      </Svg>
+      <OutlineMap stateCode={stateCode} label={label} sel={sel} onPick={onPick} hatchId="pxhatch"
+        fill={d => (inState(d) && shares[d] != null ? BIN_FILL[binOf(shares[d])] : null)}
+        value={d => (!inState(d) ? null : shares[d] == null ? t('px_few') : `${Math.round(shares[d]! * 100)}%`)}
+        dark={d => binOf(shares[d] ?? null) >= 3}
+        canPick={inState} />
     </View>
   );
 }
@@ -392,6 +367,7 @@ export function PriceExplorerScreen() {
   const [draft, setDraft] = React.useState<number | null>(null);
   const [grow, setGrow] = React.useState(px.grow);
   const [open, setOpen] = React.useState<Record<string, boolean>>({});
+  const [pickState, setPickState] = React.useState(false);
   const shown = draft ?? budget;
   const setBudget = (v: number) => { setDraft(null); up(s => { s.px.budget = v; }); };
 
@@ -402,16 +378,22 @@ export function PriceExplorerScreen() {
   const toStep = (k: string) => scroll.current?.scrollTo({ y: Math.max(0, base.current + (ys.current[k] ?? 0) - 8), animated: true });
   const at = (k: string) => (e: LayoutChangeEvent) => { ys.current[k] = e.nativeEvent.layout.y; };
 
-  /* step 3: one call per state drawn on the map; keep the last figures while a new price loads */
-  const sgr = usePxAreas(PX_MAP_STATES[0], px.type, budget);
-  const kul = usePxAreas(PX_MAP_STATES[1], px.type, budget);
-  const pjy = usePxAreas(PX_MAP_STATES[2], px.type, budget);
-  const lastAreas = React.useRef<{ type: PxType; list: PxAreasResponse['areas'] } | null>(null);
-  const areaErr = sgr.error ?? kul.error ?? pjy.error;
-  if (sgr.data && kul.data && pjy.data) {
-    lastAreas.current = { type: px.type, list: [...sgr.data.areas, ...kul.data.areas, ...pjy.data.areas] };
+  /* step 3: one call per state drawn on the chosen state's map (Selangor's also holds KL and
+     Putrajaya); keep the last figures while a new price loads */
+  const group = groupOf(px.state);
+  const mapStates = group?.states ?? [px.state];
+  const a1 = usePxAreas(mapStates[0] ?? null, px.type, budget);
+  const a2 = usePxAreas(mapStates[1] ?? null, px.type, budget);
+  const a3 = usePxAreas(mapStates[2] ?? null, px.type, budget);
+  const calls = [a1, a2, a3].slice(0, mapStates.length);
+  const lastAreas = React.useRef<{ key: string; list: PxAreasResponse['areas'] } | null>(null);
+  const areaErr = calls.map(c => c.error).find(e => e != null) ?? null;
+  const areasKey = `${px.type}|${mapStates.join(',')}`;
+  if (calls.every(c => c.data)) {
+    lastAreas.current = { key: areasKey, list: calls.flatMap(c => c.data!.areas) };
   }
-  const areas = lastAreas.current?.type === px.type ? lastAreas.current.list : null;
+  const areas = lastAreas.current?.key === areasKey ? lastAreas.current.list : null;
+  const inMap = new Set((areas ?? []).map(a => a.district));
   const shares: Record<string, number | null> = {}, typical: Record<string, number | null> = {};
   (areas ?? []).forEach(a => { shares[a.district] = a.share_under; typical[a.district] = a.typical; });
 
@@ -460,10 +442,10 @@ export function PriceExplorerScreen() {
   const catchTxt = c50 === 0 ? t('px_c_now') : c50 > 0 ? t('px_c_typ', { n: c50 })
     : c10 === 0 ? t('px_c_low_now') : c10 > 0 ? t('px_c_low', { n: c10 }) : t('px_c_never');
   const catchTone: Tone = c50 >= 0 ? 'ok' : c10 >= 0 ? 'warn' : 'bad';
-  const stateCode = px.district ? PX_STATE_OF(px.district) : 'SGR';
+  const stateCode = (px.district && group?.d[px.district]?.s) || px.state;
   const stateName = t('px_st_' + stateCode);
   const sizeLbl = (b: PxSize) => t('px_' + b);
-  const listOrder = Object.keys(PX_MAP).sort((a, b) => (shares[b] ?? -1) - (shares[a] ?? -1) || (typical[a] ?? 9e9) - (typical[b] ?? 9e9));
+  const listOrder = [...inMap].sort((a, b) => (shares[b] ?? -1) - (shares[a] ?? -1) || (typical[a] ?? 9e9) - (typical[b] ?? 9e9));
   /* a tick only for what the person has actually done; the next move is gold */
   const s1: StepState = fromTest || px.budget != null ? 'done' : 'todo';
   const s2: StepState = px.typeSet ? 'done' : 'todo';
@@ -530,6 +512,11 @@ export function PriceExplorerScreen() {
                 <Text style={{ fontFamily: XBOLD_FONT, fontSize: 14, color: '#6E4C00', flex: 1 }}>{t('px_hint_tap')}</Text>
               </View>
             ) : null}
+            <Pressable onPress={() => setPickState(true)} accessibilityRole="button" style={st.stateBtn} testID="px-state">
+              <Text style={st.stateLbl}>{t('px_state')}</Text>
+              <Text style={st.stateVal} numberOfLines={1}>{t('px_st_' + px.state)}</Text>
+              <Text style={{ color: '#5B6E6F', fontSize: 12 }}>▾</Text>
+            </Pressable>
             <Tabs label={t('px_s3')} value={px.view} onChange={v => up(s => { s.px.view = v; })}
               options={[{ key: 'list', label: t('px_v_list') }, { key: 'map', label: t('px_v_map') }]} />
             {areaErr === 503 ? (
@@ -537,7 +524,7 @@ export function PriceExplorerScreen() {
             ) : areaErr != null && !areas ? (
               <View style={{ alignItems: 'center', gap: 8, paddingVertical: 18 }}>
                 <BodyS muted style={{ textAlign: 'center' }}>{t('px_error')}</BodyS>
-                <Pressable onPress={() => { sgr.retry(); kul.retry(); pjy.retry(); }} style={st.ghost}>
+                <Pressable onPress={() => calls.forEach(c => c.retry())} style={st.ghost}>
                   <Text style={{ fontFamily: XBOLD_FONT, color: C.brand }}>{t('px_retry')}</Text>
                 </Pressable>
               </View>
@@ -548,7 +535,8 @@ export function PriceExplorerScreen() {
               </View>
             ) : px.view === 'map' ? (
               <>
-                <DistrictMap shares={shares} sel={px.district} onPick={pick} t={t} />
+                <DistrictMap stateCode={px.state} shares={shares} inState={d => inMap.has(d)} sel={px.district} onPick={pick} t={t}
+                  label={t('px_map_a', { s: t('px_st_' + px.state) })} />
                 <Text style={[st.tiny, { color: C.ink, fontFamily: XBOLD_FONT, marginTop: 8 }]}>{t('px_legend', { type: typeLower, p: rmK(shown) })}</Text>
                 <Legend items={[
                   { c: R1, label: t('px_lg1') }, { c: R2, label: t('px_lg2') }, { c: R3, label: t('px_lg3') },
@@ -722,6 +710,11 @@ export function PriceExplorerScreen() {
           <Sure h={h} t={t} />
         </Accordion>
       </View>
+      {pickState ? (
+        <PickSheet title={t('px_state')} value={px.state} onClose={() => setPickState(false)}
+          options={PX_STATES.map(c => ({ key: c, label: t('px_st_' + c) })).sort((a, b) => a.label.localeCompare(b.label))}
+          onPick={c => up(s => { if (s.px.state !== c) { s.px.state = c; s.px.district = null; } })} />
+      ) : null}
     </ScreenShell>
   );
 }
@@ -807,7 +800,13 @@ const st = StyleSheet.create({
   note: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', backgroundColor: '#FFF4D6', borderWidth: 2, borderColor: '#F6DC8E', borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, marginTop: 8 },
   noteIc: { width: 22, height: 22, borderRadius: 11, backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center' },
   legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 6, marginTop: 8 },
-  mapwrap: { backgroundColor: '#EAF3F7', borderRadius: 18, padding: 6 },
+  mapwrap: { backgroundColor: '#F2F6F6', borderRadius: 18, padding: 6 },
+  stateBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: LINE2, borderRadius: 12,
+    paddingVertical: 9, paddingHorizontal: 12, marginBottom: 10, backgroundColor: '#fff',
+  },
+  stateLbl: { fontFamily: DISP_FONT, fontSize: 12, color: '#5B6E6F' },
+  stateVal: { fontFamily: XBOLD_FONT, fontSize: 15, color: C.ink, flex: 1 },
   item: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 4, borderRadius: 10 },
   lTrack: { width: 70, height: 8, borderRadius: 4, backgroundColor: SOFT, overflow: 'hidden' },
   pillMid: { fontFamily: XBOLD_FONT, fontSize: 12, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 9, backgroundColor: '#FFF1C9', color: '#8A6200', overflow: 'hidden' },
