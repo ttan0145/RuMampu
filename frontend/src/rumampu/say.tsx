@@ -232,7 +232,7 @@ function useSayDraft() {
             a: Number(a.amount),
             d: a.date || isoOffset(0),
             ...(a.kind === 'income' ? { s: a.target_id } : { c: a.target_id }),
-            confidence: { kind: 'high', amount: 'high', date: 'high', target: 'high' },
+            confidence: { kind: 'high', amount: 'high', date: 'high', target: a.target_id ? 'high' : 'low' },
           }) as VoiceItem);
         /* Voice entry is deliberately limited to record entries. A bill,
            limit, housing action or other non-entry command belongs in Ask

@@ -473,8 +473,14 @@ export function AssistantSheet() {
 
   const actionSummary = (action: AssistantAction): string => t(
     `as_action_${action.kind}_summary`,
-    { amount: rm(Number(action.amount)), date: action.date || '', target: action.target_label },
+    { amount: rm(Number(action.amount)), date: action.date || '', target: action.target_label || '—' },
   );
+
+  const chooseExpenseCategory = (index: number, targetId: string, targetLabel: string) => {
+    setPendingActions(actions => actions.map((action, actionIndex) => actionIndex === index
+      ? { ...action, target_id: targetId, target_label: targetLabel }
+      : action));
+  };
 
   const tryFinancialAction = async (content: string) => previewAssistantAction(content, S.lang, {
     incomeSources: S.data.sources.map(item => ({ id: item.id, label: shownLabel(item) })),
@@ -535,6 +541,7 @@ export function AssistantSheet() {
 
   const confirmAction = async () => {
     if (pendingActions.length === 0 || actionSaving) return;
+    if (pendingActions.some(action => action.kind === 'expense' && !action.target_id)) return;
     setActionSaving(true);
     try {
       const actionsToSave = [...pendingActions].sort((a, b) =>
@@ -663,14 +670,39 @@ export function AssistantSheet() {
                 <View style={st.actionCard}>
                   <Text style={st.actionTitle}>{t('as_action_review')}</Text>
                   <View style={{ gap: 6 }}>
-                    {pendingActions.map((action, index) => (
-                      <Text key={`${action.kind}-${action.target_id}-${index}`} style={st.actionText}>
-                        {`${index + 1}. ${actionSummary(action)}`}
-                      </Text>
-                    ))}
+                    {pendingActions.map((action, index) => {
+                      const categoryMissing = action.kind === 'expense' && !action.target_id;
+                      return (
+                        <View key={`${action.kind}-${action.target_id}-${index}`} style={{ gap: 6 }}>
+                          <Text style={st.actionText}>{`${index + 1}. ${actionSummary(action)}`}</Text>
+                          {categoryMissing ? (
+                            <View accessibilityLabel={t('vo_cat')} style={{ gap: 5 }}>
+                              <Text style={st.actionFieldLabel}>{t('vo_cat')}</Text>
+                              <View style={st.actionChoices}>
+                                {S.data.expenseCats.map(category => {
+                                  const label = shownLabel(category);
+                                  return (
+                                    <Pressable
+                                      key={category.id}
+                                      accessibilityRole="button"
+                                      accessibilityLabel={label}
+                                      onPress={() => chooseExpenseCategory(index, category.id, label)}
+                                      style={st.actionChoice}
+                                    >
+                                      <Text style={st.actionChoiceText}>{label}</Text>
+                                    </Pressable>
+                                  );
+                                })}
+                              </View>
+                            </View>
+                          ) : null}
+                        </View>
+                      );
+                    })}
                   </View>
                   <View style={st.actionButtons}>
                     <Pressable
+                      accessibilityRole="button"
                       disabled={actionSaving}
                       onPress={cancelAction}
                       style={[st.actionCancel, actionSaving && { opacity: 0.5 }]}
@@ -678,9 +710,14 @@ export function AssistantSheet() {
                       <Text style={st.actionCancelText}>{t('cancel')}</Text>
                     </Pressable>
                     <Pressable
-                      disabled={actionSaving}
+                      accessibilityRole="button"
+                      accessibilityState={{
+                        disabled: actionSaving || pendingActions.some(action => action.kind === 'expense' && !action.target_id),
+                      }}
+                      disabled={actionSaving || pendingActions.some(action => action.kind === 'expense' && !action.target_id)}
                       onPress={() => { void confirmAction(); }}
-                      style={[st.actionConfirm, actionSaving && { opacity: 0.5 }]}
+                      style={[st.actionConfirm,
+                        (actionSaving || pendingActions.some(action => action.kind === 'expense' && !action.target_id)) && { opacity: 0.5 }]}
                     >
                       {actionSaving ? <ActivityIndicator size="small" color="#fff" /> : (
                         <Text style={st.actionConfirmText}>
@@ -791,6 +828,13 @@ const st = StyleSheet.create({
   },
   actionTitle: { fontFamily: DISP_FONT, fontSize: 14, color: C.ink },
   actionText: { fontFamily: BODY_FONT, fontSize: 13.5, lineHeight: 19, color: C.ink },
+  actionFieldLabel: { fontFamily: BODY_FONT, fontSize: 12, color: C.ink64 },
+  actionChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  actionChoice: {
+    minHeight: 34, justifyContent: 'center', paddingHorizontal: 10,
+    borderWidth: 1.5, borderColor: C.ink40, borderRadius: 12, backgroundColor: C.paper,
+  },
+  actionChoiceText: { fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink },
   actionButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 2 },
   actionCancel: {
     minHeight: 40, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1.5,
