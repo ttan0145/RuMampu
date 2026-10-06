@@ -320,7 +320,15 @@ export function AssistantSheet() {
   const [confirmingOutlier, setConfirmingOutlier] = React.useState(false);
   const [inputHeight, setInputHeight] = React.useState(48);
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
-  const [webKeyboardInset, setWebKeyboardInset] = React.useState(0);
+  const [webInputFocused, setWebInputFocused] = React.useState(false);
+  const webInputFocusedRef = React.useRef(false);
+  const webLayoutBottomRef = React.useRef(0);
+  const [webViewport, setWebViewport] = React.useState<{
+    height: number;
+    offsetTop: number;
+    bottomInset: number;
+    occludedHeight: number;
+  } | null>(null);
   const scrollRef = React.useRef<ScrollView>(null);
   const speechText = React.useMemo(() => speechUiText(S.lang), [S.lang]);
 
@@ -386,19 +394,28 @@ export function AssistantSheet() {
   }, [stopSpeech]);
 
   React.useEffect(() => {
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const viewport = window.visualViewport;
       if (!viewport) return;
-      const updateInset = () => {
-        const inset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
-        setWebKeyboardInset(inset > 80 ? inset : 0);
+      const updateViewport = () => {
+        const visibleBottom = viewport.offsetTop + viewport.height;
+        if (!webInputFocusedRef.current) {
+          webLayoutBottomRef.current = Math.max(window.innerHeight, visibleBottom);
+        }
+        const layoutBottom = webLayoutBottomRef.current || Math.max(window.innerHeight, visibleBottom);
+        setWebViewport({
+          height: viewport.height,
+          offsetTop: viewport.offsetTop,
+          bottomInset: Math.max(0, window.innerHeight - visibleBottom),
+          occludedHeight: Math.max(0, layoutBottom - visibleBottom),
+        });
       };
-      updateInset();
-      viewport.addEventListener('resize', updateInset);
-      viewport.addEventListener('scroll', updateInset);
+      updateViewport();
+      viewport.addEventListener('resize', updateViewport);
+      viewport.addEventListener('scroll', updateViewport);
       return () => {
-        viewport.removeEventListener('resize', updateInset);
-        viewport.removeEventListener('scroll', updateInset);
+        viewport.removeEventListener('resize', updateViewport);
+        viewport.removeEventListener('scroll', updateViewport);
       };
     }
     const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
@@ -572,11 +589,22 @@ export function AssistantSheet() {
   const roomBelow = H - aTop - 160;
   const above = roomAbove >= roomBelow;
   const fits = Math.max(roomAbove, roomBelow) >= 372;
-  /* While the keyboard is up the chat sits just above it (teammate's keyboard
-     handling); otherwise it opens beside Ruma (v27b2). */
-  const keyboardUp = Platform.OS === 'web' ? webKeyboardInset > 0 : keyboardVisible;
-  const place = keyboardUp
-    ? { bottom: Platform.OS === 'web' ? webKeyboardInset + 12 : 12 + insets.bottom, maxHeight: H - 60 - (Platform.OS === 'web' ? webKeyboardInset : 0) }
+  /* On web, use the visual viewport's coordinate space while the focused input
+     is occluded. Giving the sheet an explicit visible height lets the messages
+     shrink instead of moving an intrinsically-sized sheet above the keyboard. */
+  const webKeyboardUp = Platform.OS === 'web'
+    && webInputFocused
+    && webViewport != null
+    && (webViewport.bottomInset > 0 || webViewport.occludedHeight > 0);
+  const keyboardUp = Platform.OS === 'web' ? webKeyboardUp : keyboardVisible;
+  const place = webKeyboardUp && webViewport
+    ? {
+        top: webViewport.offsetTop + 12,
+        height: Math.max(0, webViewport.height - 24),
+        maxHeight: Math.max(0, webViewport.height - 24),
+      }
+    : keyboardUp
+      ? { bottom: 12 + insets.bottom, maxHeight: H - 60 }
     : !fits
       ? { top: offY + 12, maxHeight: H - 92 }
       : above
@@ -606,7 +634,7 @@ export function AssistantSheet() {
             </View>
             <ScrollView
               ref={scrollRef}
-              style={{ flexGrow: 0, flexShrink: 1, maxHeight: 320 }}
+              style={st.messages}
               contentContainerStyle={{ gap: 8, paddingVertical: 10 }}
               onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
             >
@@ -664,58 +692,68 @@ export function AssistantSheet() {
                 </View>
               ) : null}
             </ScrollView>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-              {['ai_q1', 'ai_q2', 'ai_q3'].map(k => (
-                <Pressable
-                  key={k}
-                  disabled={pendingActions.length > 0}
-                  onPress={() => { void send(t(k)); }}
-                  style={[st.sugg, pendingActions.length > 0 && { opacity: 0.4 }]}
-                >
-                  <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink }}>{t(k)}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <View style={st.inputRow}>
-              <TextInput
-                style={[st.input, { height: inputHeight }]}
-                value={draft}
-                onChangeText={setDraft}
-                editable={pendingActions.length === 0}
-                multiline
-                submitBehavior="submit"
-                scrollEnabled={inputHeight >= 112}
-                onContentSizeChange={event => {
-                  const nextHeight = Math.max(48, Math.min(112, event.nativeEvent.contentSize.height + 2));
-                  setInputHeight(nextHeight);
-                }}
-                placeholder={listening ? speechText.listening : t('ai_ph')}
-                placeholderTextColor={C.ink40}
-                onSubmitEditing={() => { void send(); }}
-              />
-              <Pressable
-                onPress={() => { void toggleSpeech(); }}
-                disabled={sending || pendingActions.length > 0}
-                style={[st.micBtn, listening && st.micBtnActive, (sending || pendingActions.length > 0) && { opacity: 0.4 }]}
-                accessibilityLabel={listening ? speechText.stop : speechText.start}
-              >
-                <SvgXml
-                  xml={'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>'}
-                  width={22}
-                  height={22}
-                  color={listening ? '#fff' : C.brand}
+            <View style={st.footer}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {['ai_q1', 'ai_q2', 'ai_q3'].map(k => (
+                  <Pressable
+                    key={k}
+                    disabled={pendingActions.length > 0}
+                    onPress={() => { void send(t(k)); }}
+                    style={[st.sugg, pendingActions.length > 0 && { opacity: 0.4 }]}
+                  >
+                    <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink }}>{t(k)}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <View style={st.inputRow}>
+                <TextInput
+                  style={[st.input, { height: inputHeight }]}
+                  value={draft}
+                  onChangeText={setDraft}
+                  onFocus={() => {
+                    webInputFocusedRef.current = true;
+                    setWebInputFocused(true);
+                  }}
+                  onBlur={() => {
+                    webInputFocusedRef.current = false;
+                    setWebInputFocused(false);
+                  }}
+                  editable={pendingActions.length === 0}
+                  multiline
+                  submitBehavior="submit"
+                  scrollEnabled={inputHeight >= 112}
+                  onContentSizeChange={event => {
+                    const nextHeight = Math.max(48, Math.min(112, event.nativeEvent.contentSize.height + 2));
+                    setInputHeight(nextHeight);
+                  }}
+                  placeholder={listening ? speechText.listening : t('ai_ph')}
+                  placeholderTextColor={C.ink40}
+                  onSubmitEditing={() => { void send(); }}
                 />
-              </Pressable>
-              <Pressable
-                onPress={() => { void send(); }}
-                disabled={sending || pendingActions.length > 0 || !draft.trim()}
-                style={[st.sendBtn, (sending || pendingActions.length > 0 || !draft.trim()) && { opacity: 0.4 }]}
-                accessibilityLabel={t('ai_send')}
-              >
-                <SvgXml xml={'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 12h15M13 6l6 6-6 6"/></svg>'} width={22} height={22} />
-              </Pressable>
+                <Pressable
+                  onPress={() => { void toggleSpeech(); }}
+                  disabled={sending || pendingActions.length > 0}
+                  style={[st.micBtn, listening && st.micBtnActive, (sending || pendingActions.length > 0) && { opacity: 0.4 }]}
+                  accessibilityLabel={listening ? speechText.stop : speechText.start}
+                >
+                  <SvgXml
+                    xml={'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>'}
+                    width={22}
+                    height={22}
+                    color={listening ? '#fff' : C.brand}
+                  />
+                </Pressable>
+                <Pressable
+                  onPress={() => { void send(); }}
+                  disabled={sending || pendingActions.length > 0 || !draft.trim()}
+                  style={[st.sendBtn, (sending || pendingActions.length > 0 || !draft.trim()) && { opacity: 0.4 }]}
+                  accessibilityLabel={t('ai_send')}
+                >
+                  <SvgXml xml={'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M4 12h15M13 6l6 6-6 6"/></svg>'} width={22} height={22} />
+                </Pressable>
+              </View>
+              <Text style={st.disclaimer}>{t('as_disclaimer')}</Text>
             </View>
-            <Text style={st.disclaimer}>{t('as_disclaimer')}</Text>
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
@@ -739,7 +777,8 @@ const st = StyleSheet.create({
     shadowColor: 'rgba(15,32,33,1)', shadowOpacity: 0.4, shadowRadius: 56, shadowOffset: { width: 0, height: 22 },
     elevation: 14,
   },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
+  messages: { flex: 1, minHeight: 0, maxHeight: 320 },
   title: { fontFamily: DISP_FONT, fontSize: 19, color: C.ink },
   bubble: { maxWidth: '84%', borderRadius: 14, paddingVertical: 9, paddingHorizontal: 12 },
   bubbleUser: { alignSelf: 'flex-end', backgroundColor: C.brand, borderBottomRightRadius: 4 },
@@ -767,7 +806,8 @@ const st = StyleSheet.create({
     borderWidth: 1.5, borderColor: C.ink14, borderRadius: 16,
     paddingVertical: 6, paddingHorizontal: 11, minHeight: 32, justifyContent: 'center',
   },
-  inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 10 },
+  footer: { flexShrink: 0 },
+  inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 10, flexShrink: 0 },
   input: {
     /* minWidth 0: a web text input will not shrink below ~20 characters on its
        own, so with a larger phone font it pushed the Send button out of the
