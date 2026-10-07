@@ -95,7 +95,7 @@ function validNotificationPreferences(value: unknown): value is AppState['notifi
   }
   return Object.values(value.reminders).every(reminder => {
     if (!record(reminder) || typeof reminder.enabled !== 'boolean') return false;
-    if (!Number.isInteger(reminder.day) || (reminder.day as number) < 1 || (reminder.day as number) > 28) return false;
+    if (!Number.isInteger(reminder.day) || (reminder.day as number) < 1 || (reminder.day as number) > 31) return false;
     if (reminder.time !== undefined && (typeof reminder.time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(reminder.time))) return false;
     return reminder.notification_id === null || typeof reminder.notification_id === 'string';
   });

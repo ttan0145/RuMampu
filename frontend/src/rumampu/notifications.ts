@@ -1,7 +1,9 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
+import { nextBillReminderDates } from './reminder-date';
 
 const CHANNEL_ID = 'bill-reminders';
+const IDENTIFIER_BUNDLE_PREFIX = 'rumampu-bill-reminders-v1:';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -40,32 +42,49 @@ export function notificationSchedulingSupported(): boolean {
 export async function schedulePrivateBillReminder(billId: string, day: number, time: string): Promise<string | null> {
   if (Platform.OS === 'web') return null;
   await ensureChannel();
-  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time);
-  const hour = match ? Number(match[1]) : 9;
-  const minute = match ? Number(match[2]) : 0;
-  return Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'RuMampu',
-      // AC8.23.1: no amount, bill name, shortfall, balance, or guilt language
-      // may appear outside the protected app.
-      body: 'Something is waiting in RuMampu.',
-      // Identifying values stay in protected app data, never in title/body.
-      data: { route: 'commit', billId },
-      sound: false,
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.MONTHLY,
-      channelId: CHANNEL_ID,
-      day: Math.min(28, Math.max(1, Math.round(day))),
-      hour,
-      minute,
-    },
-  });
+  // A repeating day-31 calendar trigger skips short months on native platforms.
+  // Use a rolling window of concrete dates instead. Eight dates keep six bill
+  // reminders below iOS's pending-notification limit; Android can safely keep
+  // two years. Saving/editing a reminder refreshes the window.
+  const horizon = Platform.OS === 'ios' ? 8 : 24;
+  const dates = nextBillReminderDates(day, time, new Date(), horizon);
+  const identifiers: string[] = [];
+  try {
+    for (const date of dates) {
+      identifiers.push(await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'RuMampu',
+          // AC8.23.1: no amount, bill name, shortfall, balance, or guilt language
+          // may appear outside the protected app.
+          body: 'Something is waiting in RuMampu.',
+          // Identifying values stay in protected app data, never in title/body.
+          data: { route: 'commit', billId },
+          sound: false,
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          channelId: CHANNEL_ID,
+          date,
+        },
+      }));
+    }
+  } catch (error) {
+    await Promise.all(identifiers.map(identifier => Notifications.cancelScheduledNotificationAsync(identifier)));
+    throw error;
+  }
+  return IDENTIFIER_BUNDLE_PREFIX + JSON.stringify(identifiers);
 }
 
 export async function cancelReminder(identifier: string | null | undefined): Promise<void> {
   if (!identifier || Platform.OS === 'web') return;
-  await Notifications.cancelScheduledNotificationAsync(identifier);
+  let identifiers = [identifier];
+  if (identifier.startsWith(IDENTIFIER_BUNDLE_PREFIX)) {
+    try {
+      const decoded: unknown = JSON.parse(identifier.slice(IDENTIFIER_BUNDLE_PREFIX.length));
+      if (Array.isArray(decoded) && decoded.every(value => typeof value === 'string')) identifiers = decoded;
+    } catch { /* Preserve compatibility with old single notification identifiers. */ }
+  }
+  await Promise.all(identifiers.map(value => Notifications.cancelScheduledNotificationAsync(value)));
 }
 
 export async function cancelEveryReminder(): Promise<void> {

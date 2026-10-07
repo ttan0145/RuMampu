@@ -12,6 +12,7 @@ import {
   Fig, IcLab, KV, NoteC, NumInput, P, Prov, StackS, TextField,
   CardI, FigRow, MonthBtn,
 } from '../ui';
+import { isValidReminderDay } from '../reminder-date';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { SvgXml } from 'react-native-svg';
 import { LOG_META, logClock, logRecent, logWhen } from '../log';
@@ -1151,7 +1152,7 @@ export function CommitScreen() {
   const c = S.data.commitments;
   const billItems = [...c.living, ...c.debts];
   const [reminderItemId, setReminderItemId] = React.useState<string | null>(null);
-  const [reminderDay, setReminderDay] = React.useState(1);
+  const [reminderDay, setReminderDay] = React.useState('1');
   const [reminderTime, setReminderTime] = React.useState('09:00');
   const [reminderEnabled, setReminderEnabled] = React.useState(true);
   const [savingReminder, setSavingReminder] = React.useState(false);
@@ -1159,7 +1160,7 @@ export function CommitScreen() {
   const openReminder = (id: string) => {
     const pref = S.notificationPreferences.reminders[id];
     setReminderItemId(id);
-    setReminderDay(pref?.day ?? 1);
+    setReminderDay(String(pref?.day ?? 1));
     setReminderTime(pref?.time ?? '09:00');
     setReminderEnabled(pref?.enabled ?? true);
   };
@@ -1331,13 +1332,17 @@ export function CommitScreen() {
               </Pressable>
             </View>
             <BodyS muted>{t('br_choose')}</BodyS>
-            <NumInput value={reminderDay} onNum={value => setReminderDay(Math.min(28, Math.max(1, Math.round(value || 1))))} accessibilityLabel={t('br_choose')} />
+            <TextField value={reminderDay} onChangeText={setReminderDay} keyboardType="number-pad" inputMode="numeric" accessibilityLabel={t('br_choose')} />
+            <BodyS muted>{t('br_short_month')}</BodyS>
             <BodyS muted>{t('br_time')}</BodyS>
             <TextField value={reminderTime} onChangeText={setReminderTime} placeholder="09:00" accessibilityLabel={t('br_time')} />
             <Btn disabled={savingReminder} label={savingReminder ? t('saving') : t('save')} onPress={() => {
-              if (!reminderItem || !/^([01]\d|2[0-3]):[0-5]\d$/.test(reminderTime)) { toast(t('br_time_invalid'), 'error'); return; }
+              const parsedDay = Number(reminderDay.trim());
+              if (!reminderItem) return;
+              if (!isValidReminderDay(parsedDay)) { toast(t('br_day_invalid'), 'error'); return; }
+              if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(reminderTime)) { toast(t('br_time_invalid'), 'error'); return; }
               setSavingReminder(true);
-              void setBillReminder(reminderItem.id, reminderDay, reminderTime, reminderEnabled).then(result => {
+              void setBillReminder(reminderItem.id, parsedDay, reminderTime, reminderEnabled).then(result => {
                 if (result === 'saved') { toast(t('saved')); setReminderItemId(null); }
                 else toast(t('nt_denied'), 'error');
               }).catch(() => toast(t('br_failed'), 'error')).finally(() => setSavingReminder(false));
