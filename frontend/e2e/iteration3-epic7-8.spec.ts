@@ -140,9 +140,11 @@ test('US8.21 keeps two inline bill reminders independent by day, time and enable
   await page.getByRole('tab', { name: 'Money', exact: true }).click();
   await page.getByText('Bills and limits', { exact: true }).click();
 
-  await expect(page.getByText('Add your regular monthly bills. Turn on a reminder for any bill you want help remembering.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Regular monthly bills', { exact: true })).toBeVisible();
+  await expect(page.getByText('Enter the bills you usually pay each month. After you add an amount, you can turn on a reminder.', { exact: true })).toBeVisible();
   await expect(page.locator('body')).not.toContainText('🔔');
   await expect(page.locator('body')).not.toContainText('🔕');
+  await expect(page.getByRole('switch', { name: 'Family support reminder' })).toHaveCount(0);
 
   const amounts = page.getByRole('textbox');
   for (const [index, amount] of ['600', '500'].entries()) {
@@ -154,26 +156,51 @@ test('US8.21 keeps two inline bill reminders independent by day, time and enable
     expect((await saved).ok()).toBeTruthy();
   }
 
-  const bells = page.getByRole('button', { name: /^Set reminder for / });
-  await expect(bells.first()).toBeVisible();
-  await expect(bells.first()).toHaveText('Off');
-  await expect(bells.nth(1)).toHaveText('Off');
-  await bells.first().click();
+  const rentReminder = page.getByRole('switch', { name: 'Rent reminder' });
+  const foodReminder = page.getByRole('switch', { name: 'Food reminder' });
+  const familyReminder = page.getByRole('switch', { name: 'Family support reminder' });
+  await expect(rentReminder).toBeVisible();
+  await expect(rentReminder).not.toBeChecked();
+  await expect(foodReminder).not.toBeChecked();
+
+  let saved = page.waitForResponse(response =>
+    response.request().method() === 'PATCH' && response.url().includes('/api/v1/commitments/')
+  );
+  await amounts.nth(3).fill('600');
+  await amounts.nth(3).blur();
+  expect((await saved).ok()).toBeTruthy();
+  await expect(familyReminder).toBeVisible();
+  await expect(familyReminder).not.toBeChecked();
+
+  saved = page.waitForResponse(response =>
+    response.request().method() === 'PATCH' && response.url().includes('/api/v1/commitments/')
+  );
+  await amounts.nth(3).fill('0');
+  await amounts.nth(3).blur();
+  expect((await saved).ok()).toBeTruthy();
+  await expect(familyReminder).toHaveCount(0);
+
+  await foodReminder.click();
+  await page.getByText('Cancel', { exact: true }).click();
+  await expect(foodReminder).not.toBeChecked();
+
+  await rentReminder.click();
   await page.getByLabel('Day (1–28)').fill('12');
   await page.getByLabel('Time (24-hour HH:MM)').fill('18:30');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(bells.first()).toHaveText('On');
+  await expect(rentReminder).toBeChecked();
 
-  await bells.nth(1).click();
+  await foodReminder.click();
   await page.getByLabel('Day (1–28)').fill('28');
   await page.getByLabel('Time (24-hour HH:MM)').fill('09:15');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(bells.nth(1)).toHaveText('On');
+  await expect(foodReminder).toBeChecked();
 
-  await bells.first().click();
+  await rentReminder.click();
   await page.getByRole('switch', { name: 'Reminder on' }).click();
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(bells.first()).toHaveText('Off');
+  await expect(rentReminder).not.toBeChecked();
+  await expect(foodReminder).toBeChecked();
 
   await expect(page.getByText('Reminder settings can be prepared here. Scheduled notifications are available in the Android or iOS app.', { exact: true })).toHaveCount(0);
   await expect.poll(async () => page.evaluate(() => {
