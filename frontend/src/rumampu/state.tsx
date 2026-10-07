@@ -174,6 +174,9 @@ export interface VoiceItem {
   d: string;
   s?: string;
   c?: string;
+  /* AI-extracted open-ended expense category. It becomes a persisted custom
+     category only after the person confirms and saves the draft. */
+  categoryName?: string;
   /* Per-field confidence is kept with the draft. Low-confidence fields must
      be corrected or explicitly confirmed before Save is enabled (AC9.4.1/2). */
   confidence?: {

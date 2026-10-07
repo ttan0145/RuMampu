@@ -298,7 +298,9 @@ function termLabels(S: AppState, t: (k: string) => string): Record<string, strin
 }
 
 export function AssistantSheet() {
-  const { S, t, up, toast, saveIncomeEntry, saveExpenseEntry, saveCommitmentAmount } = useApp();
+  const {
+    S, t, up, toast, saveIncomeEntry, saveExpenseCategory, saveExpenseEntry, saveCommitmentAmount,
+  } = useApp();
   const insets = useSafeAreaInsets();
   /* v27b2: the chat opens beside Ruma, on whichever side has more room; on a
      short screen with no room either side, it drops from the top. On web the
@@ -538,11 +540,12 @@ export function AssistantSheet() {
 
   const confirmAction = async () => {
     if (pendingActions.length === 0 || actionSaving) return;
-    if (pendingActions.some(action => action.kind === 'expense' && !action.target_id)) return;
+    if (pendingActions.some(action => action.kind === 'expense' && !action.target_id && !action.target_label)) return;
     setActionSaving(true);
     try {
       const actionsToSave = [...pendingActions].sort((a, b) =>
         Number(b.kind === 'income') - Number(a.kind === 'income'));
+      const createdCategories = new Map<string, string>();
       for (const action of actionsToSave) {
         if (action.kind === 'income') {
           const result = await saveIncomeEntry({
@@ -557,10 +560,16 @@ export function AssistantSheet() {
             return;
           }
         } else if (action.kind === 'expense') {
+          let categoryId = action.target_id;
+          if (!categoryId) {
+            const key = action.target_label.trim().toLocaleLowerCase();
+            categoryId = createdCategories.get(key) || await saveExpenseCategory(action.target_label);
+            createdCategories.set(key, categoryId);
+          }
           await saveExpenseEntry({
             amount: Number(action.amount),
             date: action.date!,
-            categoryId: action.target_id,
+            categoryId,
           });
         } else if (action.kind === 'bill') {
           await saveCommitmentAmount(action.target_id, Number(action.amount));
@@ -668,7 +677,7 @@ export function AssistantSheet() {
                   <Text style={st.actionTitle}>{t('as_action_review')}</Text>
                   <View style={{ gap: 6 }}>
                     {pendingActions.map((action, index) => {
-                      const categoryMissing = action.kind === 'expense' && !action.target_id;
+                      const categoryMissing = action.kind === 'expense' && !action.target_id && !action.target_label;
                       return (
                         <View key={`${action.kind}-${action.target_id}-${index}`} style={{ gap: 6 }}>
                           <Text style={st.actionText}>{`${index + 1}. ${actionSummary(action)}`}</Text>
@@ -709,12 +718,12 @@ export function AssistantSheet() {
                     <Pressable
                       accessibilityRole="button"
                       accessibilityState={{
-                        disabled: actionSaving || pendingActions.some(action => action.kind === 'expense' && !action.target_id),
+                        disabled: actionSaving || pendingActions.some(action => action.kind === 'expense' && !action.target_id && !action.target_label),
                       }}
-                      disabled={actionSaving || pendingActions.some(action => action.kind === 'expense' && !action.target_id)}
+                      disabled={actionSaving || pendingActions.some(action => action.kind === 'expense' && !action.target_id && !action.target_label)}
                       onPress={() => { void confirmAction(); }}
                       style={[st.actionConfirm,
-                        (actionSaving || pendingActions.some(action => action.kind === 'expense' && !action.target_id)) && { opacity: 0.5 }]}
+                        (actionSaving || pendingActions.some(action => action.kind === 'expense' && !action.target_id && !action.target_label)) && { opacity: 0.5 }]}
                     >
                       {actionSaving ? <ActivityIndicator size="small" color="#fff" /> : (
                         <Text style={st.actionConfirmText}>

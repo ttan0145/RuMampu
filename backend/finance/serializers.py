@@ -662,7 +662,14 @@ class AssistantActionPreviewRequestSerializer(serializers.Serializer):
     text = serializers.CharField(max_length=2000, trim_whitespace=True)
     language = serializers.ChoiceField(choices=["en", "ms", "zh"], default="en")
     income_sources = AssistantActionOptionSerializer(many=True, max_length=100)
-    expense_categories = AssistantActionOptionSerializer(many=True, max_length=100)
+    expense_categories = AssistantActionOptionSerializer(
+        many=True,
+        max_length=100,
+        help_text=(
+            "Existing expense categories to prefer when they match. These are "
+            "suggestions, not an enum; the assistant may propose a new category."
+        ),
+    )
     commitments = AssistantActionOptionSerializer(many=True, max_length=100)
     limit_categories = AssistantActionOptionSerializer(many=True, max_length=101)
     default_income_source_id = serializers.CharField(
@@ -670,9 +677,23 @@ class AssistantActionPreviewRequestSerializer(serializers.Serializer):
     )
 
 
+class AssistantActionPreviewActionSerializer(serializers.Serializer):
+    kind = serializers.ChoiceField(choices=["income", "expense", "bill", "limit"])
+    amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        coerce_to_string=True,
+    )
+    date = serializers.DateField(allow_null=True)
+    target_id = serializers.CharField(max_length=80, allow_blank=True)
+    # For expenses this can be a proposed open-ended category name. The
+    # category is persisted only after the user confirms the preview.
+    target_label = serializers.CharField(max_length=120, allow_blank=True)
+
+
 class AssistantActionPreviewResponseSerializer(serializers.Serializer):
     status = serializers.ChoiceField(
         choices=["not_action", "needs_clarification", "ready"]
     )
     message = serializers.CharField(allow_blank=True)
-    actions = serializers.JSONField()
+    actions = AssistantActionPreviewActionSerializer(many=True)

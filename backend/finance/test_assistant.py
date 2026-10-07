@@ -165,14 +165,53 @@ class AssistantActionServiceTests(TestCase):
         self.assertEqual(result["status"], "ready")
         self.assertEqual(result["actions"][0]["target_id"], "21")
 
-    def test_unknown_expense_category_is_not_accepted(self):
+    def test_unknown_expense_category_is_left_blank_for_review(self):
         result = self.preview({
             "actions": [{
                 "intent": "expense", "amount": 12, "date": "2026-10-01", "target_id": "invented",
             }],
         })
-        self.assertEqual(result["status"], "needs_clarification")
-        self.assertEqual(result["actions"], [])
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["actions"][0]["target_id"], "")
+        self.assertEqual(result["actions"][0]["target_label"], "")
+
+    def test_missing_expense_category_is_left_blank_for_review(self):
+        result = self.preview({
+            "actions": [{
+                "intent": "expense", "amount": 12, "date": "2026-10-01", "target_id": None,
+            }],
+        })
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["actions"][0]["target_id"], "")
+
+    def test_new_expense_category_keeps_the_users_words(self):
+        result = self.preview({
+            "actions": [{
+                "intent": "expense", "amount": 42, "date": "2026-10-01",
+                "target_id": None, "category_name": "Cat food",
+            }],
+        })
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["actions"][0]["target_id"], "")
+        self.assertEqual(result["actions"][0]["target_label"], "Cat food")
+
+    def test_category_name_matching_an_existing_choice_reuses_its_id(self):
+        result = self.preview({
+            "actions": [{
+                "intent": "expense", "amount": 12, "date": "2026-10-01",
+                "target_id": None, "category_name": "meals",
+            }],
+        })
+        self.assertEqual(result["actions"][0]["target_id"], "21")
+        self.assertEqual(result["actions"][0]["target_label"], "Meals")
+
+    def test_prompt_says_expense_categories_are_open_ended(self):
+        prompt = self.service._prompt(
+            "spent 30 on cat food", "en", {"11": "E-hailing"},
+            {"21": "Meals", "22": "Other"}, {}, {},
+        )
+        self.assertIn("suggestions, not a closed list", prompt)
+        self.assertIn('Do not replace a clear new category with "Other"', prompt)
 
     def test_missing_amount_requires_clarification(self):
         result = self.preview({

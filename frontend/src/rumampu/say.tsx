@@ -175,7 +175,7 @@ function useReducedMotion(): boolean {
 }
 
 function useSayDraft() {
-  const { S, t, up, toast, saveIncomeEntry, saveExpenseEntry, ensureAiDisclosure } = useApp();
+  const { S, t, up, toast, saveIncomeEntry, saveExpenseCategory, saveExpenseEntry, ensureAiDisclosure } = useApp();
   const textRef = React.useRef('');
   const SRef = React.useRef(S);
   SRef.current = S;
@@ -231,8 +231,13 @@ function useSayDraft() {
             kind: a.kind === 'income' ? 'in' : 'out',
             a: Number(a.amount),
             d: a.date || isoOffset(0),
-            ...(a.kind === 'income' ? { s: a.target_id } : { c: a.target_id }),
-            confidence: { kind: 'high', amount: 'high', date: 'high', target: a.target_id ? 'high' : 'low' },
+            ...(a.kind === 'income'
+              ? { s: a.target_id }
+              : { c: a.target_id, categoryName: a.target_id ? undefined : a.target_label || undefined }),
+            confidence: {
+              kind: 'high', amount: 'high', date: 'high',
+              target: a.target_id || (a.kind === 'expense' && a.target_label) ? 'high' : 'low',
+            },
           }) as VoiceItem);
         /* Voice entry is deliberately limited to record entries. A bill,
            limit, housing action or other non-entry command belongs in Ask
@@ -381,7 +386,7 @@ function useSayDraft() {
     const invalid = V.items.some(it => {
       const amount = Number(it.a);
       return !Number.isFinite(amount) || (it.kind === 'in' ? amount < 0 : amount <= 0)
-        || (it.kind === 'in' ? !it.s : !it.c);
+        || (it.kind === 'in' ? !it.s : !it.c && !it.categoryName);
     });
     if (needsReview || invalid) {
       toast(t(needsReview ? 'vo_review_required' : 'vo_invalid_amount'), 'error');
@@ -392,6 +397,7 @@ function useSayDraft() {
     try {
       /* Income first: an unusually large one stops the save so it can be checked. */
       const order = V.items.map((it, i) => ({ it, i })).sort((a, b) => Number(b.it.kind === 'in') - Number(a.it.kind === 'in'));
+      const createdCategories = new Map<string, string>();
       for (const { it } of order) {
         const a = Math.round((Number(it.a) || 0) * 100) / 100;
         if (!Number.isFinite(a) || (it.kind === 'in' ? a < 0 : a <= 0)) continue;
@@ -404,7 +410,13 @@ function useSayDraft() {
           }
           said.push(t('vo_saved_in', { a: rmx(a) }));
         } else {
-          await saveExpenseEntry({ amount: a, date: it.d, categoryId: it.c || SRef.current.data.expenseCats[0]?.id || '' });
+          let categoryId = it.c || '';
+          if (!categoryId && it.categoryName) {
+            const key = it.categoryName.trim().toLocaleLowerCase();
+            categoryId = createdCategories.get(key) || await saveExpenseCategory(it.categoryName);
+            createdCategories.set(key, categoryId);
+          }
+          await saveExpenseEntry({ amount: a, date: it.d, categoryId });
           said.push(t('vo_saved_out', { a: rmx(a) }));
         }
       }
@@ -495,7 +507,11 @@ function DraftCard({ it, i, edit, remove, confirm }: {
     days.push({ v: it.d, l: `${d} ${monthName((m || 1) - 1)} ${y}` });
   }
   const list = inc ? S.data.sources : S.data.expenseCats;
-  const opts = list.map(x => ({ v: x.id, l: x.custom ? x.name || '' : t(x.k || '') }));
+  const proposedCategory = '__ai_proposed_category__';
+  const opts = [
+    ...(!inc && it.categoryName ? [{ v: proposedCategory, l: it.categoryName }] : []),
+    ...list.map(x => ({ v: x.id, l: x.custom ? x.name || '' : t(x.k || '') })),
+  ];
   const [amt, setAmt] = React.useState(String(it.a));
   React.useEffect(() => { setAmt(String(it.a)); }, [it.a]);
   const low = (field: keyof NonNullable<VoiceItem['confidence']>) => it.confidence?.[field] === 'low';
@@ -539,8 +555,12 @@ function DraftCard({ it, i, edit, remove, confirm }: {
       </View>
       <View style={sy.vrow}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Text style={sy.vrowK}>{t(inc ? 'vo_src' : 'vo_cat')}</Text>{check('target')}</View>
-        <InlineSelect label={t(inc ? 'vo_src' : 'vo_cat')} value={(inc ? it.s : it.c) || ''} options={opts}
-          onChange={v => edit(i, 'target', x => { if (inc) x.s = v; else x.c = v; })} />
+        <InlineSelect label={t(inc ? 'vo_src' : 'vo_cat')}
+          value={(inc ? it.s : it.c || (it.categoryName ? proposedCategory : '')) || ''} options={opts}
+          onChange={v => edit(i, 'target', x => {
+            if (inc) x.s = v;
+            else if (v !== proposedCategory) { x.c = v; x.categoryName = undefined; }
+          })} />
       </View>
       {anyLow && confirm ? (
         <Pressable onPress={() => confirm(i)} accessibilityRole="button" style={{ minHeight: 40, justifyContent: 'center', alignSelf: 'flex-start' }}>
@@ -588,7 +608,7 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
   const listening = stage === 'listen';
   const cannotSave = V.items.some(it => Object.values(it.confidence || {}).includes('low')
     || !Number.isFinite(Number(it.a))
-    || (it.kind === 'in' ? Number(it.a) < 0 || !it.s : Number(it.a) <= 0 || !it.c));
+    || (it.kind === 'in' ? Number(it.a) < 0 || !it.s : Number(it.a) <= 0 || (!it.c && !it.categoryName)));
 
   return (
     <Animated.View style={{ opacity: fade, gap: 14 }}>
