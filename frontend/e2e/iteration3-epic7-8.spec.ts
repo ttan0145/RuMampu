@@ -40,12 +40,13 @@ test('Iteration 3 Epic 7 saves an actual homeowner month and shows the cash posi
   expect(workCost.status()).toBe(201);
 
   await page.getByRole('tab', { name: 'House', exact: true }).click();
-  await page.getByText('Prepare for a house', { exact: true }).click();
-  await page.getByText('After buying: record actual home costs and compare them with your earlier test.', { exact: true }).click();
+  // v7 design: the House tab's "I've bought a home" opens Got the keys?
+  await page.getByText('I’ve bought a home', { exact: true }).click();
+  await expect(page.getByText('You can change the month later.', { exact: true })).toBeVisible();
   await expect(page.getByText('Estimates become actuals. The purchase itself happens outside RuMampu.', { exact: true })).toBeVisible();
-  await page.getByLabel('Purchase month (YYYY-MM)').fill('2026-09');
-  await page.getByRole('button', { name: 'I’ve bought the home', exact: true }).click();
-  await page.getByText('Record a month', { exact: true }).click();
+  await page.getByLabel('Month you bought').fill('2026-09');
+  await page.getByTestId('keys-bought').click();
+  await page.getByTestId('keys-record').click();
 
   const homeCosts = page.getByLabel('Actual home costs');
   await homeCosts.click();
@@ -72,11 +73,11 @@ test('Iteration 3 Epic 7 saves an actual homeowner month and shows the cash posi
 test('Epic 7 comparison distinguishes a missing earlier test from missing actual months', async ({ page }) => {
   await openGuestApp(page);
   await page.getByRole('tab', { name: 'House', exact: true }).click();
-  await page.getByText('Prepare for a house', { exact: true }).click();
-  await page.getByText('After buying: record actual home costs and compare them with your earlier test.', { exact: true }).click();
-  await page.getByLabel('Purchase month (YYYY-MM)').fill('2026-10');
-  await page.getByRole('button', { name: 'I’ve bought the home', exact: true }).click();
-  await page.getByText('Earlier test vs what happened', { exact: true }).click();
+  // v7 design: the House tab's "I've bought a home" opens Got the keys?
+  await page.getByText('I’ve bought a home', { exact: true }).click();
+  await page.getByLabel('Month you bought').fill('2026-10');
+  await page.getByTestId('keys-bought').click();
+  await page.getByTestId('keys-mbm').click();
 
   await expect(page.getByText('No earlier housing test is available.', { exact: true })).toBeVisible();
   await expect(page.getByText('No completed post-purchase month yet', { exact: true })).toBeVisible();
@@ -87,11 +88,11 @@ test('Epic 7 comparison distinguishes a missing earlier test from missing actual
 test('Epic 7 keeps the earlier test visible before the first actual month is complete', async ({ page }) => {
   await openEarlierHousingTest(page);
   await page.getByRole('tab', { name: 'House', exact: true }).click();
-  await page.getByText('Prepare for a house', { exact: true }).click();
-  await page.getByText('After buying: record actual home costs and compare them with your earlier test.', { exact: true }).click();
-  await page.getByLabel('Purchase month (YYYY-MM)').fill('2026-10');
-  await page.getByRole('button', { name: 'I’ve bought the home', exact: true }).click();
-  await page.getByText('Earlier test vs what happened', { exact: true }).click();
+  // v7 design: the House tab's "I've bought a home" opens Got the keys?
+  await page.getByText('I’ve bought a home', { exact: true }).click();
+  await page.getByLabel('Month you bought').fill('2026-10');
+  await page.getByTestId('keys-bought').click();
+  await page.getByTestId('keys-mbm').click();
 
   await expect(page.getByText('YOUR EARLIER TEST', { exact: true })).toBeVisible();
   await expect(page.getByText('2 of 12', { exact: true })).toBeVisible();
@@ -104,11 +105,11 @@ test('Epic 7 keeps the earlier test visible before the first actual month is com
 test('Epic 7 actual home cost starts empty and gains YOUR DATA only after save', async ({ page }) => {
   await openGuestApp(page);
   await page.getByRole('tab', { name: 'House', exact: true }).click();
-  await page.getByText('Prepare for a house', { exact: true }).click();
-  await page.getByText('After buying: record actual home costs and compare them with your earlier test.', { exact: true }).click();
-  await page.getByLabel('Purchase month (YYYY-MM)').fill('2026-10');
-  await page.getByRole('button', { name: 'I’ve bought the home', exact: true }).click();
-  await page.getByText('Record a month', { exact: true }).click();
+  // v7 design: the House tab's "I've bought a home" opens Got the keys?
+  await page.getByText('I’ve bought a home', { exact: true }).click();
+  await page.getByLabel('Month you bought').fill('2026-10');
+  await page.getByTestId('keys-bought').click();
+  await page.getByTestId('keys-record').click();
 
   const homeCosts = page.getByLabel('Actual home costs');
   const card = page.getByTestId('pv-actual-cost-card');

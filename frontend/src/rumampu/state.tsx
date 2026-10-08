@@ -66,6 +66,7 @@ import type { HousingScenarioResponse, HousingTestResult } from '../../types/hou
 import { HouseCostType, HouseCostsResponse, PxKind, PxSize, PxType, SavedHousingTestRecord } from '../../types/housing';
 import { logIt } from './log';
 import { rm, rmx } from './calc';
+import { PREP_DEFAULT, type PrepState } from './prep7state';
 import { accountSnapshot, hydrate, hydrateAccountState, snapshot } from './persist';
 
 /* Central app state — mirrors the prototype's `S` object and navigation model. */
@@ -79,6 +80,8 @@ export type Route =
   // does not make them an Iteration 1 implementation.
   // 中文：Epic 7 预览路由为未来 Iteration 3 工作保留；这不代表它们是 Iteration 1 实现。
   | 'prepare' | 'prepare_soon' | 'upfront' | 'buffer' | 'docs' | 'pv_switch' | 'pv_month' | 'pv_compare'
+  /* Prepare v7: "Can I pay each month?" as a short guided lesson */
+  | 'prepmonthly'
   /* v26/v27b: What buying involves, short lessons with pictures and badges. */
   | 'learn' | 'learnsec' | 'learnread'
   /* Price Explorer: one guided page from the price model */
@@ -96,7 +99,7 @@ export const TAB_OF: Record<Route, Tab> = {
   homecosts: 'test', acctdetails: 'profile',
   compare: 'test', shock: 'test',
   plan: 'money', profile: 'profile', prepare: 'test', prepare_soon: 'test', upfront: 'test', buffer: 'money', docs: 'test',
-  pv_switch: 'test', pv_month: 'test', pv_compare: 'test',
+  pv_switch: 'test', pv_month: 'test', pv_compare: 'test', prepmonthly: 'test',
   learn: 'test', learnsec: 'test', learnread: 'test', priceexplorer: 'test',
 };
 
@@ -279,6 +282,8 @@ export interface AppState {
      figures work from, and the renovation switch. */
   firstHome: boolean;
   ufTest: number | null;
+  /* Prepare v7: the monthly lesson's place and what-ifs, and the hub's choices */
+  prep: PrepState;
   ufReno: boolean;
   /* v24: name shown while the Result screen displays a saved test. */
   viewTestName: string | null;
@@ -459,7 +464,7 @@ function initialState(): AppState {
     plan: null, village: null, buffer: null, vHelp: false, planHorizon: null,
     moView: 'tiles', houseTab: 'test',
     houseCosts: null, houseCostsSync: 'idle', hcState: 'sgr', hcType: 'all', hcKind: 'all', hcBudget: null, firstHome: false,
-    potMoved: 0, potMovedMonths: [], ufTest: null, ufReno: false, viewTestName: null, scanAuto: false, pastT: 'inc', cardInfo: null, log: [],
+    potMoved: 0, potMovedMonths: [], ufTest: null, prep: { ...PREP_DEFAULT, mHome: { ...PREP_DEFAULT.mHome } }, ufReno: false, viewTestName: null, scanAuto: false, pastT: 'inc', cardInfo: null, log: [],
     tryPay: null, tryCust: false, depMode: null,
     incPick: false, incMode: 'type', incScan: { stage: 'pick', rows: [] }, incCsv: { stage: 'pick' }, incEdit: null,
     exMode: 'type', exCsv: { stage: 'pick' }, exEdit: null,

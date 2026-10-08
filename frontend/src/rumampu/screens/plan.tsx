@@ -10,6 +10,7 @@ import {
   planHorizonEffective, planMonthlyAsk, planMonthRows, monthlySaveCapacity, PLAN_HORIZONS,
 } from '../plan';
 import { commitTotal } from '../calc';
+import { ufSource } from '../fees';
 import { villageEnsure } from '../village';
 import { logIt } from '../log';
 import { getHousingTestResult } from '../../../services/housingSession';
@@ -289,7 +290,8 @@ export function PlanScreen() {
             <Prov p="calc" />
           </Row>
           <Bar pct={gpct} style={{ marginTop: 4 }} />
-          <BodyS muted>{t('p10_target_from')}</BodyS>
+          {/* the upfront goal can come from a home typed in on Prepare, not a house test */}
+          <BodyS muted>{t(!inBuffer && ufSource(S).typed ? 'p10_target_prep' : 'p10_target_from')}</BodyS>
           {inBuffer && shortN ? <Note>{t('p10_short_note', { s: shortN, n: testedN })}</Note> : null}
           {(v?.queued ?? 0) > 0 ? <BodyS muted>{t('vl_queue', { n: v?.queued ?? 0 })}</BodyS> : null}
         </Card>

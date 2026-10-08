@@ -121,6 +121,8 @@ export function planPause(s: AppState): void {
 export function planReset(s: AppState): void {
   s.plan = null;
   planEnsure(s);
+  /* work the target out again now; the plan screen only re-resolves when its inputs move */
+  planResolveTarget(s, getHousingTestResult());
 }
 
 /* v26/v27b and US5.8: one pot, counted once. The pot is what I already had, what

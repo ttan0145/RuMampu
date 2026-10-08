@@ -12,7 +12,7 @@ import {
   getHousingScenario, getHousingTestResult, getPreHousingResult,
   setHousingScenario, setHousingTestResult, setPreHousingResult,
 } from '../../../services/housingSession';
-import { Image, Pressable, StyleSheet, Text, TextInput, View, type DimensionValue } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View, type DimensionValue } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { useApp } from '../state';
 import { useFreshHousingTest } from '../useFreshHousingTest';
@@ -27,7 +27,6 @@ import {
 } from '../ui';
 import { Ico } from '../svgs';
 import { Ruma } from '../ruma-view';
-import { RUMA_IMG } from '../ruma';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { Band, Waterline } from '../charts';
 import { ScreenShell } from './shell';
@@ -289,47 +288,95 @@ export function HouseBody() {
 
 /* v22 House tab home: saved-tests chip, test / prepare segments. */
 
-/* A friendly meadow pinned to the foot of the House tab: soft hills, and Ruma
-   celebrating a football kick. Decoration only — content scrolls over it. */
-function HouseMeadow() {
-  const hills = `<svg width="100%" height="200" viewBox="0 0 390 200" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
-  <ellipse cx="86" cy="34" rx="34" ry="13" fill="#FFFFFF" opacity="0.8"/>
-  <ellipse cx="112" cy="40" rx="26" ry="10" fill="#FFFFFF" opacity="0.8"/>
-  <ellipse cx="300" cy="22" rx="30" ry="11" fill="#FFFFFF" opacity="0.7"/>
-  <path d="M-20 200 L-20 132 Q 95 74 240 122 Q 330 150 410 118 L410 200 Z" fill="#CBE6CF"/>
-  <path d="M-20 200 L-20 168 Q 90 118 210 152 Q 320 182 410 150 L410 200 Z" fill="#A5D6AE"/>
-  <g stroke="#63A96F" stroke-width="2.4" stroke-linecap="round" fill="none">
-    <path d="M52 172 q-2 -8 1 -12 M58 172 q0 -9 4 -12 M64 173 q3 -7 8 -9"/>
-    <path d="M300 168 q-2 -8 1 -12 M306 168 q0 -9 4 -12 M312 169 q3 -7 8 -9"/>
+/* Each House tab card wears its own tint and a small scene, so the four read
+   apart at a glance. Decoration only: the words carry the meaning. */
+const INK = '#3C5152';
+const HH_SCENE: Record<string, { bg: string; xml: string }> = {
+  house: { bg: '#E3F2EC', xml: `<svg viewBox="0 0 104 84" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="54" cy="42" r="38" fill="#CDE9DE"/>
+  <ellipse cx="26" cy="20" rx="11" ry="5" fill="#FFFFFF" opacity="0.9"/><ellipse cx="34" cy="17" rx="8" ry="5" fill="#FFFFFF" opacity="0.9"/>
+  <ellipse cx="52" cy="76" rx="42" ry="6" fill="#AFD8C7"/>
+  <rect x="28" y="40" width="40" height="34" rx="2" fill="#FFFFFF" stroke="${INK}" stroke-width="2"/>
+  <path d="M22 44 L48 22 L74 44 Z" fill="#3F8A8E" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>
+  <rect x="32" y="48" width="9" height="9" rx="1.5" fill="#E1EEED" stroke="${INK}" stroke-width="1.6"/>
+  <rect x="47" y="55" width="12" height="19" rx="2" fill="#F2C14E" stroke="${INK}" stroke-width="1.8"/>
+  <circle cx="82" cy="30" r="12" fill="#3F8A8E" stroke="${INK}" stroke-width="2"/>
+  <path d="M76.5 30 l4 4 l7.5 -7.5" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>` },
+  homecosts: { bg: '#FBF0DC', xml: `<svg viewBox="0 0 104 84" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="54" cy="42" r="38" fill="#F5E1BE"/>
+  <ellipse cx="52" cy="76" rx="44" ry="6" fill="#EBCF9C"/>
+  <rect x="14" y="56" width="20" height="18" rx="1.5" fill="#FFFFFF" stroke="${INK}" stroke-width="2"/>
+  <path d="M10 58 L24 46 L38 58 Z" fill="#E69A7A" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>
+  <rect x="40" y="46" width="22" height="28" rx="1.5" fill="#FFFFFF" stroke="${INK}" stroke-width="2"/>
+  <path d="M36 48 L51 34 L66 48 Z" fill="#3F8A8E" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>
+  <rect x="68" y="24" width="22" height="50" rx="2" fill="#FFFFFF" stroke="${INK}" stroke-width="2"/>
+  <g fill="#E1EEED" stroke="${INK}" stroke-width="1.3"><rect x="72" y="30" width="5" height="5"/><rect x="81" y="30" width="5" height="5"/><rect x="72" y="40" width="5" height="5"/><rect x="81" y="40" width="5" height="5"/><rect x="72" y="50" width="5" height="5"/><rect x="81" y="50" width="5" height="5"/></g>
+  <g transform="translate(12 12) rotate(-14)">
+    <path d="M0 0 H22 L29 8 L22 16 H0 Z" fill="#F2C14E" stroke="${INK}" stroke-width="1.8" stroke-linejoin="round"/>
+    <circle cx="23" cy="8" r="1.8" fill="${INK}"/>
+    <text x="3" y="11.5" font-family="sans-serif" font-size="9" font-weight="700" fill="${INK}">RM</text>
   </g>
-  <g>
-    <circle cx="86" cy="150" r="4.6" fill="#FFFFFF"/><circle cx="86" cy="150" r="1.7" fill="#F4D27A"/>
-    <circle cx="346" cy="178" r="4.6" fill="#FFFFFF"/><circle cx="346" cy="178" r="1.7" fill="#F4D27A"/>
+</svg>` },
+  prepare: { bg: '#E4EEF8', xml: `<svg viewBox="0 0 104 84" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="52" cy="42" r="38" fill="#CEDFF1"/>
+  <ellipse cx="52" cy="76" rx="42" ry="6" fill="#B5CDE8"/>
+  <circle cx="50" cy="12" r="6.5" fill="#F2C14E" stroke="${INK}" stroke-width="1.8"/>
+  <path d="M50 21 v4" stroke="${INK}" stroke-width="1.8" stroke-linecap="round"/>
+  <rect x="28" y="34" width="44" height="40" rx="11" fill="#FFFFFF" fill-opacity="0.92" stroke="${INK}" stroke-width="2"/>
+  <rect x="33" y="27" width="34" height="9" rx="3" fill="#3F8A8E" stroke="${INK}" stroke-width="2"/>
+  <path d="M44 31.5 h12" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+  <g fill="#F2C14E" stroke="#C2962C" stroke-width="1.6">
+    <circle cx="41" cy="64" r="6"/><circle cx="55" cy="65" r="6"/><circle cx="48" cy="54" r="6"/><circle cx="61" cy="53" r="5"/>
   </g>
-  <ellipse cx="148" cy="166" rx="17" ry="4.5" fill="#3C5152" opacity="0.12"/>
-  <g transform="translate(148 148) rotate(-14)">
-    <circle r="14" fill="#FFFFFF" stroke="#3C5152" stroke-width="2"/>
-    <path d="M0 -5.2 L5 -1.6 L3.1 4.3 L-3.1 4.3 L-5 -1.6 Z" fill="#3C5152"/>
-    <path d="M0 -14 L0 -9.4 M9.5 -6.8 L5 -1.6 M9.5 6.8 L3.1 4.3 M-9.5 6.8 L-3.1 4.3 M-9.5 -6.8 L-5 -1.6" stroke="#3C5152" stroke-width="1.6"/>
+  <g fill="none" stroke="#C2962C" stroke-width="3" stroke-linecap="round">
+    <circle cx="86" cy="42" r="6"/><path d="M86 48 V68 M86 60 h5 M86 66 h4"/>
   </g>
-  <g stroke="#7FB08A" stroke-width="2.6" stroke-linecap="round" fill="none" opacity="0.9">
-    <path d="M104 150 q10 -12 24 -14"/>
-    <path d="M112 162 q9 -8 20 -9"/>
-  </g>
-  <ellipse cx="252" cy="186" rx="34" ry="6" fill="#3C5152" opacity="0.14"/>
-</svg>`;
+</svg>` },
+  learn: { bg: '#FBE8E2', xml: `<svg viewBox="0 0 104 84" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="52" cy="44" r="38" fill="#F5D3C7"/>
+  <ellipse cx="52" cy="77" rx="40" ry="5" fill="#EDBBA9"/>
+  <path d="M12 38 Q31 30 52 40 L52 74 Q31 65 12 72 Z" fill="#FFFFFF" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M92 38 Q73 30 52 40 L52 74 Q73 65 92 72 Z" fill="#FFFFFF" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>
+  <g stroke="#E3A992" stroke-width="2" stroke-linecap="round"><path d="M19 46 q13 -5 26 1 M19 54 q13 -5 26 1 M19 62 q13 -5 20 0"/><path d="M59 47 q13 -6 26 -1 M59 55 q13 -6 26 -1"/></g>
+  <path d="M74 54 v18 l4 -3.5 l4 3.5 v-19" fill="#3F8A8E" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"/>
+  <circle cx="80" cy="18" r="11" fill="#F2C14E" stroke="${INK}" stroke-width="2"/>
+  <path d="M80 11.5 l2 4.2 l4.6 .6 l-3.3 3.2 l.8 4.6 l-4.1 -2.2 l-4.1 2.2 l.8 -4.6 l-3.3 -3.2 l4.6 -.6 Z" fill="#FFFFFF"/>
+  <g fill="#F2C14E"><circle cx="20" cy="22" r="2.4"/><circle cx="60" cy="16" r="1.8"/></g>
+</svg>` },
+};
+
+/* After buying: the months since, against the earlier test, as the House tab's first card. */
+function BoughtCard() {
+  const { S, t, go, monthName, refreshHomeownership } = useApp();
+  React.useEffect(() => { void refreshHomeownership().catch(() => undefined); }, [refreshHomeownership]);
+  const rows = S.homeownershipMonths.filter(r => r.is_complete && (!S.purchaseMonth || r.month >= S.purchaseMonth));
+  const short = rows.filter(r => r.short).length;
+  const pm = S.purchaseMonth;
+  const since = pm && /^\d{4}-\d{2}$/.test(pm) ? `${monthName(+pm.slice(5, 7) - 1)} ${pm.slice(0, 4)}` : '';
   return (
-    <View style={{ height: 200 }}>
-      <SvgXml xml={hills} width="100%" height={200} />
-      <Image
-        source={{ uri: RUMA_IMG.happy }}
-        resizeMode="contain"
-        style={{
-          position: 'absolute', right: 84, bottom: 26, width: 104, height: 104,
-          transform: [{ rotate: '-9deg' }],
-        }}
-      />
-    </View>
+    <Pressable onPress={() => go('pv_switch')} accessibilityRole="button" testID="hh-monitoring" style={({ pressed }) => [tx.hhmon, pressed && { opacity: 0.92 }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, width: '100%' }}>
+        <View style={tx.hhmonIc}><Ico name="key" size={22} color="#EEF6F6" /></View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 17, lineHeight: 22, color: '#EEF6F6' }}>{t('pv_monitor_t')}</Text>
+          <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: 'rgba(238,246,246,0.78)', marginTop: 2 }}>
+            {since ? t('p7_keys_since', { m: since }) : t('pv_then')}
+          </Text>
+        </View>
+        <Text style={{ fontSize: 20, color: 'rgba(238,246,246,0.78)' }}>{'\u203A'}</Text>
+      </View>
+      <View style={{ gap: 7, width: '100%' }}>
+        {rows.length ? (
+          <View style={{ flexDirection: 'row', gap: 3, height: 8 }}>
+            {rows.map(r => <View key={r.month} style={{ flex: 1, borderRadius: 3, backgroundColor: r.short ? '#F4A98A' : 'rgba(238,246,246,0.9)' }} />)}
+          </View>
+        ) : null}
+        <Text style={{ fontFamily: SEMI_FONT, fontSize: 12, color: 'rgba(238,246,246,0.78)' }}>
+          {rows.length ? t('p7_keys_short', { s: short, n: rows.length }) : t('pv_compare_empty_t')}
+        </Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -382,17 +429,18 @@ export function HousehomeScreen() {
   })();
 
   const HUB_ID: Record<string, string> = { house: 'hh.test', homecosts: 'hh.costs', prepare_soon: 'hh.prep', learn: 'hh.learn' };
-  const card = (to: Parameters<typeof go>[0], icon: string, title: string, desc: string, strip: React.ReactNode) => (
+  const card = (to: Parameters<typeof go>[0], scene: string, title: string, desc: string, strip: React.ReactNode) => (
     <GuideTarget key={to} id={HUB_ID[to] || `hh.${to}`}>
-    <Pressable onPress={() => go(to)} style={tx.hcard}>
-      <View style={tx.hblob} pointerEvents="none" />
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, width: '100%' }}>
-        <View style={tx.hcardIc}><Ico name={icon} size={24} color={C.brand} /></View>
+    <Pressable onPress={() => go(to)} accessibilityRole="button"
+      style={({ pressed }) => [tx.hcard, { backgroundColor: HH_SCENE[scene].bg }, pressed && { transform: [{ scale: 0.985 }] }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%' }}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={{ fontFamily: DISP_FONT, fontSize: 17, lineHeight: 22, color: C.ink }}>{t(title)}</Text>
           <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: C.ink64, marginTop: 3 }}>{t(desc)}</Text>
         </View>
-        <Text style={{ fontSize: 20, color: C.ink40 }}>{'›'}</Text>
+        <View pointerEvents="none" style={{ marginVertical: -8, marginRight: -6 }}>
+          <SvgXml xml={HH_SCENE[scene].xml} width={96} height={78} />
+        </View>
       </View>
       {strip}
     </Pressable>
@@ -404,7 +452,7 @@ export function HousehomeScreen() {
   );
 
   return (
-    <ScreenShell greet title={t('tab_test')} bg={<HouseMeadow />} right={
+    <ScreenShell greet title={t('tab_test')} noScene right={
       <GuideTarget id="hh.saved">
       <Pressable onPress={() => go('savedtests')} style={tx.savedchip} accessibilityLabel={t('sv_title')}>
         <SvgXml xml={`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="${C.ink}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M6.5 3.5h11V21L12 17l-5.5 4z"/></svg>`} width={13} height={13} />
@@ -415,6 +463,8 @@ export function HousehomeScreen() {
       </Pressable>
       </GuideTarget>
     }>
+      {/* after buying, monitoring leads the House tab (Epic 7) */}
+      {S.bought ? <BoughtCard /> : null}
       {card('house', 'house', 'hh_test', 'hh_test_d', (
         <View style={{ gap: 7, width: '100%' }}>
           {monthsStrip.segs ? (
@@ -427,10 +477,10 @@ export function HousehomeScreen() {
           {stripLbl(monthsStrip.label)}
         </View>
       ))}
-      {card('homecosts', 'bars', 'hh_cost', 'hh_cost_d', (
+      {card('homecosts', 'homecosts', 'hh_cost', 'hh_cost_d', (
         <View style={{ gap: 7, width: '100%' }}>
           {costStrip.a != null ? (
-            <View style={{ position: 'relative', height: 8, borderRadius: 5, backgroundColor: C.ink14 }}>
+            <View style={{ position: 'relative', height: 8, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.85)' }}>
               <View style={{
                 position: 'absolute', top: 0, bottom: 0, borderRadius: 5, backgroundColor: C.brand, opacity: 0.55,
                 left: `${costStrip.a}%` as DimensionValue, width: `${Math.max(2, (costStrip.b ?? 0) - costStrip.a)}%` as DimensionValue,
@@ -446,10 +496,10 @@ export function HousehomeScreen() {
           {stripLbl(costStrip.label)}
         </View>
       ))}
-      {card('prepare', 'wallet', 'hh_prep', 'hh_prep_d', (
+      {card('prepare', 'prepare', 'hh_prep', 'hh_prep_d', (
         <View style={{ gap: 7, width: '100%' }}>
           {prepStrip.pct != null ? (
-            <View style={{ height: 8, borderRadius: 5, backgroundColor: C.ink14, overflow: 'hidden' }}>
+            <View style={{ height: 8, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.85)', overflow: 'hidden' }}>
               <View style={{ width: `${prepStrip.pct}%` as DimensionValue, height: '100%', borderRadius: 5, backgroundColor: C.brand }} />
             </View>
           ) : null}
@@ -457,12 +507,19 @@ export function HousehomeScreen() {
         </View>
       ))}
       {/* v26/v27b: What buying involves, with pages read and badges earned. */}
-      {card('learn', 'book', 'hh_learn', 'hh_learn_d', <LearnStrip />)}
-      {/* v27b: the way into "I've bought a home", where the earlier test sits beside what happened */}
-      <Pressable onPress={() => go('pv_switch')} accessibilityRole="button" style={tx.hhbought}>
-        <IcLabB name="swap" label={t('pv_home_t')} />
-        <Text style={{ fontSize: 18, color: C.ink }}>{'\u203A'}</Text>
-      </Pressable>
+      {card('learn', 'learn', 'hh_learn', 'hh_learn_d', <LearnStrip />)}
+      {/* before buying: a quiet but solid way into "I've bought a home" (the Prepare path's
+          keys step leads there too, but only once Prepare has a home to work from) */}
+      {!S.bought ? (
+        <Pressable onPress={() => go('pv_switch')} accessibilityRole="button" style={({ pressed }) => [tx.hhbought, pressed && { opacity: 0.85 }]}>
+          <View style={tx.hhboughtIc}><Ico name="key" size={20} color={C.brand} /></View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink }}>{t('pv_home_t')}</Text>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, lineHeight: 17, color: C.ink64, marginTop: 1 }}>{t('hh_bought_d')}</Text>
+          </View>
+          <Text style={{ fontSize: 20, color: C.ink40 }}>{'\u203A'}</Text>
+        </Pressable>
+      ) : null}
     </ScreenShell>
   );
 }
@@ -1142,10 +1199,15 @@ export function ShockScreen() {
 
 const tx = StyleSheet.create({
   hhbought: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', minHeight: 50,
-    paddingVertical: 6, paddingHorizontal: 16, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed',
-    borderColor: 'rgba(60,81,82,0.22)',
+    flexDirection: 'row', alignItems: 'center', gap: 12, width: '100%', minHeight: 64,
+    paddingVertical: 12, paddingHorizontal: 16, borderRadius: 18, borderWidth: 1.5,
+    borderColor: '#E3EAE8', backgroundColor: '#fff',
   },
+  hhboughtIc: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#E4EFEC', alignItems: 'center', justifyContent: 'center' },
+  hhmon: {
+    width: '100%', backgroundColor: '#21494B', borderRadius: 18, paddingVertical: 18, paddingHorizontal: 16, gap: 14,
+  },
+  hhmonIc: { width: 46, height: 46, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   txintro: {
     backgroundColor: '#D3E7E5', borderRadius: 20, paddingVertical: 14, paddingHorizontal: 16,
     flexDirection: 'row', gap: 12, alignItems: 'center',
@@ -1184,16 +1246,8 @@ const tx = StyleSheet.create({
   },
   hcard: {
     width: '100%', backgroundColor: C.card, borderRadius: 18,
-    paddingVertical: 18, paddingHorizontal: 16, minHeight: 92,
-    justifyContent: 'center', gap: 14, position: 'relative', overflow: 'hidden',
-  },
-  hblob: {
-    position: 'absolute', right: -42, top: -46, width: 120, height: 120,
-    borderRadius: 60, backgroundColor: C.brand, opacity: 0.07,
-  },
-  hcardIc: {
-    width: 46, height: 46, borderRadius: 15, backgroundColor: C.paper,
-    alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 14, paddingHorizontal: 16, minHeight: 92,
+    justifyContent: 'center', gap: 10, position: 'relative', overflow: 'hidden',
   },
   hcrow: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 12, backgroundColor: '#fff',

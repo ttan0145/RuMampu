@@ -2,6 +2,7 @@ import type { AppState, BufferState, KeptTest, PlanState, VillageState } from '.
 import type { ApiAccountNotificationPreferences } from './api';
 import { getHousingScenario, getHousingTestResult, hydrateHousingSession } from '../../services/housingSession';
 import { isValidIsoDate } from './validation';
+import { PREP_DEFAULT, validPrep } from './prep7state';
 
 const VERSION = 1;
 /* AC5.8.10: the longest name a user can give their safety money. */
@@ -9,7 +10,7 @@ export const BUFFER_NAME_MAX = 30;
 const PERSISTED = ['plan', 'buffer', 'village', 'planHorizon',
   'potMovedMonths', 'potMoved', 'docsChecked', 'keptTests', 'tipsOff', 'seenG', 'lnProg',
   'bought', 'purchaseMonth', 'notificationPreferences', 'aiDisclosureAccepted',
-  'voiceDisclosureAccepted'] as const;
+  'voiceDisclosureAccepted', 'prep', 'ufTest'] as const;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -168,6 +169,10 @@ export function hydrate(s: AppState, raw: string | null): void {
     if (s.potMovedMonths.length && !(s.potMoved > 0)) s.potMovedMonths = [];
     if (validStringArray(payload.docsChecked)) s.docsChecked = payload.docsChecked;
     if (validKeptTests(payload.keptTests)) s.keptTests = payload.keptTests;
+    /* AC10.12.2: the kept test chosen under Upfront cash survives a reload */
+    if (payload.ufTest === null || (Number.isInteger(payload.ufTest) && (payload.ufTest as number) >= 0 && (payload.ufTest as number) < s.keptTests.length)) {
+      s.ufTest = payload.ufTest as number | null;
+    }
     /* v27b screen tips stay on this device. Under Playwright they stay off. */
     if (typeof payload.tipsOff === 'boolean' && process.env.EXPO_PUBLIC_E2E !== '1') s.tipsOff = payload.tipsOff;
     if (validStringArray(payload.seenG)) s.seenG = payload.seenG as AppState['seenG'];
@@ -175,6 +180,7 @@ export function hydrate(s: AppState, raw: string | null): void {
     if (record(payload.lnProg) && Object.values(payload.lnProg).every(v => finite(v) && v >= 0)) {
       s.lnProg = payload.lnProg as Record<string, number>;
     }
+    if (validPrep(payload.prep)) s.prep = { ...PREP_DEFAULT, ...payload.prep };
     if (typeof payload.bought === 'boolean') s.bought = payload.bought;
     if (payload.purchaseMonth === null || (typeof payload.purchaseMonth === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(payload.purchaseMonth))) {
       s.purchaseMonth = payload.purchaseMonth as string | null;

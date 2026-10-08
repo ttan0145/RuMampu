@@ -44,7 +44,7 @@ export function valuationFee(v: number): number {
   return Math.max(400, Math.round(f));
 }
 
-export interface UfSource { name: string | null; price: number; dep: number; saved: boolean }
+export interface UfSource { name: string | null; price: number; dep: number; saved: boolean; typed?: boolean }
 
 /* Which price the upfront figures work from: the chosen saved test, else the
    price on the house screen. */
@@ -58,6 +58,9 @@ export function ufSource(s: AppState): UfSource {
   if (h.knownPayment == null && (h.price ?? 0) > 0) {
     return { name: null, price: +(h.price ?? 0), dep: +h.deposit || 0, saved: false };
   }
+  /* a home typed in on Prepare for a house, with the usual 10% deposit */
+  const typed = Number(s.prep?.price) || 0;
+  if (!k && typed > 0) return { name: s.prep.name || null, price: typed, dep: Math.round(typed * 0.1), saved: false, typed: true };
   return { name: k?.name ?? null, price: 0, dep: 0, saved: !!k };
 }
 
