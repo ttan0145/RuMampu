@@ -28,6 +28,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.housing.models import SavedHousingTest
+from config.throttles import (
+    LoginIPThrottle,
+    LoginIdentifierThrottle,
+    PasswordResetConfirmThrottle,
+    PasswordResetEmailThrottle,
+    PasswordResetIPThrottle,
+)
 from finance.models import UserAppState
 from finance.services import (
     discard_guest_record_for_request,
@@ -563,6 +570,7 @@ class RegisterView(APIView):
 class LoginView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = [LoginIPThrottle, LoginIdentifierThrottle]
 
     def post(self, request):
         identifier = str(request.data.get("username", "")).strip()
@@ -783,6 +791,7 @@ class PasswordResetRequestView(APIView):
 
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = [PasswordResetIPThrottle, PasswordResetEmailThrottle]
 
     def post(self, request):
         email = str(request.data.get("email", "")).strip().lower()
@@ -851,6 +860,7 @@ class PasswordResetConfirmView(APIView):
 
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = [PasswordResetConfirmThrottle]
 
     @transaction.atomic
     def post(self, request):

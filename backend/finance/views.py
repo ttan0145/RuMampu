@@ -3,6 +3,8 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from config.throttles import AssistantActionPreviewThrottle, ReceiptScanThrottle
+
 from . import assistant_action_service, assistant_service, receipt_service
 from .import_service import confirm_income_import, preview_income_import, update_income_import_row
 from .models import (
@@ -520,6 +522,8 @@ class ExpenseEntryCoverageView(APIView):
 
 
 class IncomeScanView(APIView):
+    throttle_classes = [ReceiptScanThrottle]
+
     @extend_schema(
         operation_id="income_statement_scan",
         summary="Read an earnings statement photo into draft income rows",
@@ -533,6 +537,7 @@ class IncomeScanView(APIView):
         responses={
             200: IncomeScanResultSerializer,
             400: ApiErrorSerializer,
+            429: OpenApiResponse(ApiErrorSerializer, description="Receipt scan rate limit reached."),
             502: OpenApiResponse(ApiErrorSerializer, description="The vision model call failed."),
             503: OpenApiResponse(ApiErrorSerializer, description="No GROQ_API_KEY configured."),
         },
@@ -553,6 +558,8 @@ class IncomeScanView(APIView):
 
 
 class ExpenseReceiptScanView(APIView):
+    throttle_classes = [ReceiptScanThrottle]
+
     @extend_schema(
         operation_id="expense_receipt_scan",
         summary="Read a receipt photo into a draft expense",
@@ -566,6 +573,7 @@ class ExpenseReceiptScanView(APIView):
         responses={
             200: ReceiptScanResultSerializer,
             400: ApiErrorSerializer,
+            429: OpenApiResponse(ApiErrorSerializer, description="Receipt scan rate limit reached."),
             502: OpenApiResponse(ApiErrorSerializer, description="The vision model call failed."),
             503: OpenApiResponse(ApiErrorSerializer, description="No GROQ_API_KEY configured."),
         },
@@ -629,6 +637,8 @@ class AssistantChatView(APIView):
 class AssistantActionPreviewView(APIView):
     """Parse a submitted command into a proposal; this endpoint never writes data."""
 
+    throttle_classes = [AssistantActionPreviewThrottle]
+
     @extend_schema(
         operation_id="assistant_action_preview",
         summary="Create a reviewable preview from a financial command",
@@ -637,6 +647,7 @@ class AssistantActionPreviewView(APIView):
         responses={
             200: AssistantActionPreviewResponseSerializer,
             400: ApiErrorSerializer,
+            429: OpenApiResponse(ApiErrorSerializer, description="Action preview rate limit reached."),
             502: ApiErrorSerializer,
             503: ApiErrorSerializer,
         },

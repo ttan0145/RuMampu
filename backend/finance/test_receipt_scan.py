@@ -2,7 +2,10 @@ import datetime
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.core.cache import cache
 from django.test import Client, TestCase
+
+from config.throttles import ReceiptScanThrottle
 
 from . import receipt_service
 from .receipt_service import ReceiptScanError, normalise_result
@@ -13,6 +16,10 @@ class ReceiptScanApiTests(TestCase):
 
     def setUp(self):
         self.client = Client()
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
 
     def scan(self, **overrides):
         payload = {"image_base64": "aGVsbG8=", "media_type": "image/jpeg"}
@@ -75,6 +82,23 @@ class ReceiptScanApiTests(TestCase):
     def test_unsupported_media_type_is_rejected(self):
         response = self.scan(media_type="image/gif")
         self.assertEqual(response.status_code, 400)
+
+    @patch.object(ReceiptScanThrottle, "THROTTLE_RATES", {"receipt_scan": "1/hour"})
+    def test_repeated_receipt_scans_are_throttled_before_another_model_call(self):
+        result = {
+            "is_receipt": False,
+            "merchant": None,
+            "date": None,
+            "total": None,
+            "category_slug": None,
+        }
+        with patch("finance.views.receipt_service.scan_receipt", return_value=result) as scan:
+            first = self.scan()
+            blocked = self.scan()
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(blocked.status_code, 429)
+        scan.assert_called_once()
 
 
 class NormaliseResultTests(TestCase):

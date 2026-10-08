@@ -4,6 +4,8 @@ from unittest.mock import patch
 from django.core.cache import cache
 from django.test import Client, TestCase
 
+from config.throttles import AssistantActionPreviewThrottle
+
 from .assistant_service import DAILY_MESSAGE_LIMIT, AssistantError, build_financial_snapshot
 from .models import GuestProfile
 from .services import profile_for_request
@@ -76,6 +78,10 @@ class AssistantActionPreviewApiTests(TestCase):
 
     def setUp(self):
         self.client = Client()
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
 
     def payload(self):
         return {
@@ -121,6 +127,28 @@ class AssistantActionPreviewApiTests(TestCase):
             self.url, data=json.dumps(payload), content_type="application/json",
         )
         self.assertEqual(response.status_code, 400)
+
+    @patch.object(
+        AssistantActionPreviewThrottle,
+        "THROTTLE_RATES",
+        {"assistant_action_preview": "1/hour"},
+    )
+    def test_repeated_action_previews_are_throttled_before_another_model_call(self):
+        result = {"status": "clarify", "message": "Please add an amount.", "actions": []}
+        with patch(
+            "finance.views.assistant_action_service.preview_action",
+            return_value=result,
+        ) as preview:
+            first = self.client.post(
+                self.url, data=json.dumps(self.payload()), content_type="application/json",
+            )
+            blocked = self.client.post(
+                self.url, data=json.dumps(self.payload()), content_type="application/json",
+            )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(blocked.status_code, 429)
+        preview.assert_called_once()
 
 
 class AssistantActionServiceTests(TestCase):
