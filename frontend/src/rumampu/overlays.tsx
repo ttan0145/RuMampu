@@ -473,7 +473,8 @@ function VillageSheet() {
         </View>
         <View style={{ alignItems: 'center', marginTop: 16 }}>
           <View style={{ width: isleW, height: isleW * 292 / 440 }}>
-            <IsoIsland cells={v.cells} width={isleW} glow={villageGlow(S)} burst={villageGlow(S).length ? S.village?.spawnAt : undefined} />
+            <IsoIsland cells={v.cells} width={isleW} glow={villageGlow(S)} burst={villageGlow(S).length ? S.village?.spawnAt : undefined}
+              slide={S.village?.slide} slideKey={S.village?.moves} />
             {/* one arrow at the middle of each edge of the plot, pointing out of it:
                 tap it and every house slides to that edge */}
             {VILLAGE_EDGES.map(e => {

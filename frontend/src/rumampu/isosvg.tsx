@@ -83,12 +83,36 @@ export function isoIslandXml(cells: number[], glow: number[] = []): string {
   return s + '</svg>';
 }
 
-/* burst: change it (e.g. to the save time) to play a short "+1" above the first glowing square */
-export function IsoIsland({ cells, width, glow = [], burst }: { cells: number[]; width: number; glow?: number[]; burst?: number }) {
+/* A house drawn on its own, so it can travel across the plot. */
+function isoBodyXml(tier: number): string {
+  return `<svg viewBox="0 0 120 118" xmlns="http://www.w3.org/2000/svg">${ISO_BODY[ISO_TIERS[tier - 1]] || ''}</svg>`;
+}
+const SLIDE_MS = 190;
+
+/* burst: change it (e.g. to the save time) to play a short "+1" above the first glowing square.
+   slide + slideKey: when slideKey changes, every house in slide travels from its square to
+   where the move took it (two that merge meet on one square), then the plot redraws. */
+export function IsoIsland({ cells, width, glow = [], burst, slide, slideKey }: {
+  cells: number[]; width: number; glow?: number[]; burst?: number;
+  slide?: Array<{ f: number; t: number; tier: number }>; slideKey?: number;
+}) {
   const h = width * 292 / 440, k = width / 440;
   const anim = React.useRef(new Animated.Value(1)).current;
+  const move = React.useRef(new Animated.Value(1)).current;
   const [still, setStill] = React.useState(false);
+  const [sliding, setSliding] = React.useState<Array<{ f: number; t: number; tier: number }> | null>(null);
   React.useEffect(() => { void AccessibilityInfo.isReduceMotionEnabled().then(setStill).catch(() => undefined); }, []);
+  const firstKey = React.useRef(slideKey);
+  React.useEffect(() => {
+    /* only a move made while this plot is on screen slides, not the one before it opened */
+    if (slideKey === firstKey.current) return;
+    firstKey.current = slideKey;
+    if (still || !slide || !slide.some(m => m.f !== m.t)) return;
+    setSliding(slide);
+    move.setValue(0);
+    Animated.timing(move, { toValue: 1, duration: SLIDE_MS, easing: Easing.out(Easing.quad), useNativeDriver: false })
+      .start(() => setSliding(null));
+  }, [slideKey, slide, still, move]);
   React.useEffect(() => {
     if (!burst || still) return;
     anim.setValue(0);
@@ -97,6 +121,31 @@ export function IsoIsland({ cells, width, glow = [], burst }: { cells: number[];
   const g = glow[0];
   const gx = g == null ? 0 : (220 + ((g & 3) - (g >> 2)) * 52) * k;
   const gy = g == null ? 0 : (165 + ((g & 3) + (g >> 2) - 3) * 26) * k;
+  const at = (i: number) => ({ x: (220 + ((i & 3) - (i >> 2)) * 52) * k, y: (165 + ((i & 3) + (i >> 2) - 3) * 26) * k });
+  if (sliding) {
+    /* back to front by where each house ends up, as the still plot draws them */
+    const depth = (i: number) => ((i >> 2) + (i & 3)) * 4 + (i >> 2);
+    const order = [...sliding].sort((a, b) => depth(a.t) - depth(b.t));
+    return (
+      <View style={{ width, height: h }}>
+        <SvgXml xml={isoIslandXml(new Array(16).fill(0))} width={width} height={h} />
+        {order.map((m, n) => {
+          const a = at(m.f), b = at(m.t);
+          return (
+            <Animated.View key={`${m.f}-${n}`} pointerEvents="none" style={{
+              position: 'absolute', left: a.x - 60 * k, top: a.y - 76 * k, width: 120 * k, height: 118 * k,
+              transform: [
+                { translateX: move.interpolate({ inputRange: [0, 1], outputRange: [0, b.x - a.x] }) },
+                { translateY: move.interpolate({ inputRange: [0, 1], outputRange: [0, b.y - a.y] }) },
+              ],
+            }}>
+              <SvgXml xml={isoBodyXml(m.tier)} width={120 * k} height={118 * k} />
+            </Animated.View>
+          );
+        })}
+      </View>
+    );
+  }
   return (
     <View style={{ width, height: h }}>
       <SvgXml xml={isoIslandXml(cells, glow)} width={width} height={h} />

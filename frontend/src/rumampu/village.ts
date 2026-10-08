@@ -136,6 +136,8 @@ export function villageMove(s: AppState, dir: 'l' | 'r' | 'u' | 'd'): number {
   const g = v.cells;
   let changed = false, best = 0, gain = 0;
   const pop: number[] = [];
+  /* where every house goes on this move, so the plot can slide them there */
+  const slide: Array<{ f: number; t: number; tier: number }> = [];
   for (let a = 0; a < 4; a++) {
     const idxs: number[] = [];
     for (let b = 0; b < 4; b++) {
@@ -143,11 +145,14 @@ export function villageMove(s: AppState, dir: 'l' | 'r' | 'u' | 'd'): number {
       if (dir === 'l') { r = a; c = b; } else if (dir === 'r') { r = a; c = 3 - b; } else if (dir === 'u') { r = b; c = a; } else { r = 3 - b; c = a; }
       idxs.push(r * 4 + c);
     }
-    const vals = idxs.map(i => g[i]).filter(x => x);
+    const src = idxs.filter(i => g[i]);
+    const vals = src.map(i => g[i]);
     const out: number[] = [];
     for (let k = 0; k < vals.length; k++) {
       if (k + 1 < vals.length && vals[k] === vals[k + 1] && vals[k] < ISO_TIERS.length) {
         const next = vals[k] + 1;
+        const to = idxs[out.length];
+        slide.push({ f: src[k], t: to, tier: vals[k] }, { f: src[k + 1], t: to, tier: vals[k + 1] });
         best = Math.max(best, next);
         /* 2^tier scoring: kampung 2, teres 4, kondo 8, istana 16. */
         gain += Math.pow(2, next - 1);
@@ -162,12 +167,16 @@ export function villageMove(s: AppState, dir: 'l' | 'r' | 'u' | 'd'): number {
           pop.push(idxs[out.length - 1]);
         }
         k++;
-      } else out.push(vals[k]);
+      } else {
+        slide.push({ f: src[k], t: idxs[out.length], tier: vals[k] });
+        out.push(vals[k]);
+      }
     }
     while (out.length < 4) out.push(0);
     idxs.forEach((i, k) => { if (g[i] !== out[k]) { g[i] = out[k]; changed = true; } });
   }
   v.pop = pop;
+  v.slide = changed ? slide : [];
   v.gain = changed ? gain : 0;
   return changed ? best : -1;
 }
@@ -207,6 +216,7 @@ export function villageRestart(s: AppState): void {
   v.msg = '';
   v.pop = [];
   v.spawn = null;
+  v.slide = [];
 }
 
 /* Play: "Let's start!" the first time in a session, straight into the village after that. */

@@ -147,6 +147,8 @@ export interface VillageState {
   collection: number; queued: number; savedRm: number;
   /* the square the last swipe placed a ready Pondok on, and the move it happened on */
   spawn?: number | null; spawnAt?: number;
+  /* how each house travelled on the last move (from square, to square, its tier), for the slide */
+  slide?: Array<{ f: number; t: number; tier: number }>;
   msg?: string;
 }
 
