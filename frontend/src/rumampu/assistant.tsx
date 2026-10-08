@@ -14,7 +14,7 @@ import { ApiError, AssistantAction, assistantChat, previewAssistantAction } from
 import { rm } from './calc';
 import { BODY_FONT, C, DISP_FONT } from './theme';
 import { RumaHeadset, RumaHelpAvatar } from './ruma-view';
-import { getSpeechOwner, setSpeechOwner } from './speech';
+import { claimSpeechOwner, getSpeechOwner, releaseSpeechOwner } from './speech';
 import { GuideTarget, onScrollSettle } from './tour';
 import { GROQ_DPA_URL, GROQ_YOUR_DATA_URL } from './ai-disclosure';
 
@@ -274,6 +274,13 @@ export function AssistantFab() {
           onPress={() => {
             if (moved.current) return;
             top.stopAnimation(v => {
+              /* Opening Ask Ruma ends an in-progress quick entry before the
+                 second microphone control becomes reachable. */
+              if (getSpeechOwner() === 'say') {
+                try { ExpoSpeechRecognitionModule.abort(); } catch { /* already stopped */ }
+                releaseSpeechOwner('say');
+                up(s => { s.voice = null; s.sayOpen = false; s.qSay = false; });
+              }
               void ensureAiDisclosure().then(accepted => {
                 if (accepted) up(s => { s.aiAnchor = v + 8; s.assistantOpen = true; });
               });
@@ -336,7 +343,9 @@ function termLabels(S: AppState, t: (k: string) => string): Record<string, strin
 }
 
 export function AssistantSheet() {
-  const { S, t, up, toast, saveIncomeEntry, saveExpenseEntry, saveCommitmentAmount } = useApp();
+  const {
+    S, t, up, toast, saveIncomeEntry, saveIncomeSource, saveExpenseCategory, saveExpenseEntry, saveCommitmentAmount,
+  } = useApp();
   const insets = useSafeAreaInsets();
   /* v27b2: the chat opens beside Ruma, on whichever side has more room; on a
      short screen with no room either side, it drops from the top. On web the
@@ -367,6 +376,17 @@ export function AssistantSheet() {
   const scrollRef = React.useRef<ScrollView>(null);
   const speechText = React.useMemo(() => speechUiText(S.lang), [S.lang]);
 
+  /* Do not scroll directly from ScrollView's onContentSizeChange. On web,
+     scrollToEnd can itself change the measured content area (notably when a
+     multi-action review card introduces a scrollbar), which fires the callback
+     again and eventually crashes React with maximum update depth exceeded.
+     Scroll once for each logical chat change, after layout has settled. */
+  React.useEffect(() => {
+    if (!S.assistantOpen) return undefined;
+    const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 0);
+    return () => clearTimeout(timer);
+  }, [S.assistantOpen, S.assistantMsgs.length, sending, pendingActions]);
+
   React.useEffect(() => {
     if (!S.assistantOpen || !S.assistantDraft) return;
     setDraft(S.assistantDraft);
@@ -377,7 +397,11 @@ export function AssistantSheet() {
      chat started. */
   const mine = () => getSpeechOwner() === 'assistant';
   useSpeechRecognitionEvent('start', () => { if (mine()) setListening(true); });
-  useSpeechRecognitionEvent('end', () => { if (mine()) setListening(false); });
+  useSpeechRecognitionEvent('end', () => {
+    if (!mine()) return;
+    setListening(false);
+    releaseSpeechOwner('assistant');
+  });
   useSpeechRecognitionEvent('result', event => {
     if (!mine()) return;
     const transcript = event.results?.[0]?.transcript?.trim();
@@ -388,6 +412,7 @@ export function AssistantSheet() {
   useSpeechRecognitionEvent('error', event => {
     if (!mine()) return;
     setListening(false);
+    releaseSpeechOwner('assistant');
     if (event.error === 'aborted' || event.error === 'no-speech') return;
     const message = event.error === 'not-allowed' ? speechText.denied : speechText.failed;
     toast(message, 'error');
@@ -398,7 +423,8 @@ export function AssistantSheet() {
     // the async `start` event has updated `listening` in React state.
     // The Say an entry card shares the microphone; leave its recording alone.
     if (getSpeechOwner() === 'say') return;
-    ExpoSpeechRecognitionModule.abort();
+    try { ExpoSpeechRecognitionModule.abort(); } catch { /* already stopped */ }
+    releaseSpeechOwner('assistant');
     setListening(false);
   }, []);
 
@@ -470,24 +496,30 @@ export function AssistantSheet() {
       return;
     }
 
-    if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
-      toast(speechText.unavailable, 'error');
-      return;
-    }
+    try {
+      if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+        toast(speechText.unavailable, 'error');
+        return;
+      }
 
-    const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-    if (!permission.granted) {
-      toast(speechText.denied, 'error');
-      return;
-    }
+      const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!permission.granted) {
+        toast(speechText.denied, 'error');
+        return;
+      }
 
-    setSpeechOwner('assistant');
-    ExpoSpeechRecognitionModule.start({
-      lang: speechLocaleFromApp(S.lang),
-      interimResults: true,
-      continuous: false,
-      maxAlternatives: 1,
-    });
+      claimSpeechOwner('assistant', () => ExpoSpeechRecognitionModule.abort());
+      ExpoSpeechRecognitionModule.start({
+        lang: speechLocaleFromApp(S.lang),
+        interimResults: true,
+        continuous: false,
+        maxAlternatives: 1,
+      });
+    } catch {
+      releaseSpeechOwner('assistant');
+      setListening(false);
+      toast(speechText.failed, 'error');
+    }
   };
 
   /* A language switch starts a fresh chat: replies written while the app was
@@ -576,17 +608,31 @@ export function AssistantSheet() {
 
   const confirmAction = async () => {
     if (pendingActions.length === 0 || actionSaving) return;
-    if (pendingActions.some(action => action.kind === 'expense' && !action.target_id)) return;
+    if (pendingActions.some(action => (action.kind === 'income' || action.kind === 'expense') && !action.target_id && !action.target_label)) return;
     setActionSaving(true);
     try {
       const actionsToSave = [...pendingActions].sort((a, b) =>
         Number(b.kind === 'income') - Number(a.kind === 'income'));
+      const createdSources = new Map<string, string>();
+      const createdCategories = new Map<string, string>();
       for (const action of actionsToSave) {
         if (action.kind === 'income') {
+          let sourceId = action.target_id;
+          if (!sourceId) {
+            const key = action.target_label.trim().toLocaleLowerCase();
+            sourceId = createdSources.get(key) || await saveIncomeSource(action.target_label);
+            createdSources.set(key, sourceId);
+            /* Keep the created ID on the pending draft. If the amount needs a
+               second outlier confirmation, do not try to create the same
+               custom source again on the second press. */
+            setPendingActions(actions => actions.map(pending => pending === action
+              ? { ...pending, target_id: sourceId }
+              : pending));
+          }
           const result = await saveIncomeEntry({
             amount: Number(action.amount),
             date: action.date!,
-            sourceId: action.target_id,
+            sourceId,
             confirmOutlier: confirmingOutlier,
           });
           if (result === 'outlier') {
@@ -595,10 +641,16 @@ export function AssistantSheet() {
             return;
           }
         } else if (action.kind === 'expense') {
+          let categoryId = action.target_id;
+          if (!categoryId) {
+            const key = action.target_label.trim().toLocaleLowerCase();
+            categoryId = createdCategories.get(key) || await saveExpenseCategory(action.target_label);
+            createdCategories.set(key, categoryId);
+          }
           await saveExpenseEntry({
             amount: Number(action.amount),
             date: action.date!,
-            categoryId: action.target_id,
+            categoryId,
           });
         } else if (action.kind === 'bill') {
           await saveCommitmentAmount(action.target_id, Number(action.amount));
@@ -678,7 +730,6 @@ export function AssistantSheet() {
               ref={scrollRef}
               style={st.messages}
               contentContainerStyle={{ gap: 8, paddingVertical: 10 }}
-              onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
             >
               {S.assistantMsgs.length === 0 ? (
                 <View style={[st.bubble, st.bubbleBot]}>
@@ -706,22 +757,22 @@ export function AssistantSheet() {
                   <Text style={st.actionTitle}>{t('as_action_review')}</Text>
                   <View style={{ gap: 6 }}>
                     {pendingActions.map((action, index) => {
-                      const categoryMissing = action.kind === 'expense' && !action.target_id;
+                      const targetMissing = (action.kind === 'income' || action.kind === 'expense') && !action.target_id && !action.target_label;
                       return (
                         <View key={`${action.kind}-${action.target_id}-${index}`} style={{ gap: 6 }}>
                           <Text style={st.actionText}>{`${index + 1}. ${actionSummary(action)}`}</Text>
-                          {categoryMissing ? (
-                            <View accessibilityLabel={t('vo_cat')} style={{ gap: 5 }}>
-                              <Text style={st.actionFieldLabel}>{t('vo_cat')}</Text>
+                          {targetMissing ? (
+                            <View accessibilityLabel={t(action.kind === 'income' ? 'vo_src' : 'vo_cat')} style={{ gap: 5 }}>
+                              <Text style={st.actionFieldLabel}>{t(action.kind === 'income' ? 'vo_src' : 'vo_cat')}</Text>
                               <View style={st.actionChoices}>
-                                {S.data.expenseCats.map(category => {
-                                  const label = shownLabel(category);
+                                {(action.kind === 'income' ? S.data.sources : S.data.expenseCats).map(target => {
+                                  const label = shownLabel(target);
                                   return (
                                     <Pressable
-                                      key={category.id}
+                                      key={target.id}
                                       accessibilityRole="button"
                                       accessibilityLabel={label}
-                                      onPress={() => chooseExpenseCategory(index, category.id, label)}
+                                      onPress={() => chooseExpenseCategory(index, target.id, label)}
                                       style={st.actionChoice}
                                     >
                                       <Text style={st.actionChoiceText}>{label}</Text>
@@ -747,12 +798,12 @@ export function AssistantSheet() {
                     <Pressable
                       accessibilityRole="button"
                       accessibilityState={{
-                        disabled: actionSaving || pendingActions.some(action => action.kind === 'expense' && !action.target_id),
+                        disabled: actionSaving || pendingActions.some(action => (action.kind === 'income' || action.kind === 'expense') && !action.target_id && !action.target_label),
                       }}
-                      disabled={actionSaving || pendingActions.some(action => action.kind === 'expense' && !action.target_id)}
+                      disabled={actionSaving || pendingActions.some(action => (action.kind === 'income' || action.kind === 'expense') && !action.target_id && !action.target_label)}
                       onPress={() => { void confirmAction(); }}
                       style={[st.actionConfirm,
-                        (actionSaving || pendingActions.some(action => action.kind === 'expense' && !action.target_id)) && { opacity: 0.5 }]}
+                        (actionSaving || pendingActions.some(action => (action.kind === 'income' || action.kind === 'expense') && !action.target_id && !action.target_label)) && { opacity: 0.5 }]}
                     >
                       {actionSaving ? <ActivityIndicator size="small" color="#fff" /> : (
                         <Text style={st.actionConfirmText}>
@@ -779,7 +830,13 @@ export function AssistantSheet() {
               </View>
               <View style={st.inputRow}>
                 <TextInput
-                  style={[st.input, { height: inputHeight }]}
+                  /* react-native-web's content-size observer can oscillate when
+                     the action review card changes the popover's scrollbar and
+                     available width. A controlled height update from that
+                     observer then recurses until React throws error #185. Keep
+                     the web composer fixed and scrollable; native retains the
+                     measured auto-grow behaviour. */
+                  style={[st.input, { height: Platform.OS === 'web' ? 48 : inputHeight }]}
                   value={draft}
                   onChangeText={setDraft}
                   onFocus={() => {
@@ -793,10 +850,10 @@ export function AssistantSheet() {
                   editable={pendingActions.length === 0}
                   multiline
                   submitBehavior="submit"
-                  scrollEnabled={inputHeight >= 112}
-                  onContentSizeChange={event => {
+                  scrollEnabled={Platform.OS === 'web' || inputHeight >= 112}
+                  onContentSizeChange={Platform.OS === 'web' ? undefined : event => {
                     const nextHeight = Math.max(48, Math.min(112, event.nativeEvent.contentSize.height + 2));
-                    setInputHeight(nextHeight);
+                    setInputHeight(current => current === nextHeight ? current : nextHeight);
                   }}
                   placeholder={listening ? speechText.listening : t('ai_ph')}
                   placeholderTextColor={C.ink40}

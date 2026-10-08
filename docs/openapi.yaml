@@ -41,6 +41,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Action preview rate limit reached.
         '502':
           content:
             application/json:
@@ -470,7 +476,7 @@ paths:
   /api/v1/expenses/{entry_id}/move/:
     patch:
       operationId: expense_entry_move_to_work_cost
-      description: Move a daily expense to work costs while preserving its merchant. Optionally include an edited amount and/or date from the entry editor.
+      description: Move a daily expense to work costs while preserving its merchant.
       summary: Move a daily expense to work costs
       parameters:
       - in: path
@@ -550,6 +556,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Receipt scan rate limit reached.
         '502':
           content:
             application/json:
@@ -1643,6 +1655,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Receipt scan rate limit reached.
         '502':
           content:
             application/json:
@@ -1872,7 +1890,7 @@ paths:
   /api/v1/work-costs/entries/{entry_id}/move/:
     patch:
       operationId: work_cost_entry_move_to_expense
-      description: Move one work cost to daily spending without counting it twice. Optionally include an edited amount and/or date from the entry editor.
+      description: Move one work cost to daily spending without counting it twice.
       summary: Move a work-cost entry to daily expenses
       parameters:
       - in: path
@@ -1989,6 +2007,53 @@ components:
       required:
       - id
       - label
+    AssistantActionPreviewAction:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/AssistantActionPreviewActionKindEnum'
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        date:
+          type: string
+          format: date
+          nullable: true
+        target_id:
+          type: string
+          maxLength: 80
+        target_label:
+          type: string
+          maxLength: 120
+        confidence:
+          type: object
+          additionalProperties:
+            enum:
+            - high
+            - low
+            type: string
+            description: |-
+              * `high` - high
+              * `low` - low
+      required:
+      - amount
+      - date
+      - kind
+      - target_id
+      - target_label
+    AssistantActionPreviewActionKindEnum:
+      enum:
+      - income
+      - expense
+      - bill
+      - limit
+      type: string
+      description: |-
+        * `income` - income
+        * `expense` - expense
+        * `bill` - bill
+        * `limit` - limit
     AssistantActionPreviewRequestRequest:
       type: object
       properties:
@@ -2008,6 +2073,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AssistantActionOptionRequest'
+          description: Existing expense categories to prefer when they match. These
+            are suggestions, not an enum; the assistant may propose a new category.
         commitments:
           type: array
           items:
@@ -2033,7 +2100,10 @@ components:
           $ref: '#/components/schemas/AssistantActionPreviewResponseStatusEnum'
         message:
           type: string
-        actions: {}
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantActionPreviewAction'
       required:
       - actions
       - message

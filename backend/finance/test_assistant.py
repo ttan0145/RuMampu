@@ -6,6 +6,8 @@ from unittest.mock import patch
 from django.core.cache import cache
 from django.test import Client, TestCase
 
+from config.throttles import AssistantActionPreviewThrottle
+
 from .assistant_service import DAILY_MESSAGE_LIMIT, AssistantError, build_financial_snapshot
 from .models import FinancialPeriod, GuestProfile, IncomeEntry, WorkCostEntry
 from .services import profile_for_request
@@ -78,6 +80,10 @@ class AssistantActionPreviewApiTests(TestCase):
 
     def setUp(self):
         self.client = Client()
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
 
     def payload(self):
         return {
@@ -124,6 +130,28 @@ class AssistantActionPreviewApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    @patch.object(
+        AssistantActionPreviewThrottle,
+        "THROTTLE_RATES",
+        {"assistant_action_preview": "1/hour"},
+    )
+    def test_repeated_action_previews_are_throttled_before_another_model_call(self):
+        result = {"status": "clarify", "message": "Please add an amount.", "actions": []}
+        with patch(
+            "finance.views.assistant_action_service.preview_action",
+            return_value=result,
+        ) as preview:
+            first = self.client.post(
+                self.url, data=json.dumps(self.payload()), content_type="application/json",
+            )
+            blocked = self.client.post(
+                self.url, data=json.dumps(self.payload()), content_type="application/json",
+            )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(blocked.status_code, 429)
+        preview.assert_called_once()
+
 
 class AssistantActionServiceTests(TestCase):
     def setUp(self):
@@ -167,14 +195,100 @@ class AssistantActionServiceTests(TestCase):
         self.assertEqual(result["status"], "ready")
         self.assertEqual(result["actions"][0]["target_id"], "21")
 
-    def test_unknown_expense_category_is_not_accepted(self):
+    def test_unknown_expense_category_is_left_blank_for_review(self):
         result = self.preview({
             "actions": [{
                 "intent": "expense", "amount": 12, "date": "2026-10-01", "target_id": "invented",
             }],
         })
-        self.assertEqual(result["status"], "needs_clarification")
-        self.assertEqual(result["actions"], [])
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["actions"][0]["target_id"], "")
+        self.assertEqual(result["actions"][0]["target_label"], "")
+
+    def test_missing_expense_category_is_left_blank_for_review(self):
+        result = self.preview({
+            "actions": [{
+                "intent": "expense", "amount": 12, "date": "2026-10-01", "target_id": None,
+            }],
+        })
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["actions"][0]["target_id"], "")
+
+    def test_new_expense_category_keeps_the_users_words(self):
+        result = self.preview({
+            "actions": [{
+                "intent": "expense", "amount": 42, "date": "2026-10-01",
+                "target_id": None, "category_name": "Cat food",
+            }],
+        })
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["actions"][0]["target_id"], "")
+        self.assertEqual(result["actions"][0]["target_label"], "Cat food")
+
+    def test_category_name_matching_an_existing_choice_reuses_its_id(self):
+        result = self.preview({
+            "actions": [{
+                "intent": "expense", "amount": 12, "date": "2026-10-01",
+                "target_id": None, "category_name": "meals",
+            }],
+        })
+        self.assertEqual(result["actions"][0]["target_id"], "21")
+        self.assertEqual(result["actions"][0]["target_label"], "Meals")
+
+    def test_new_income_source_keeps_the_users_words_instead_of_defaulting(self):
+        result = self.preview({
+            "actions": [{
+                "intent": "income", "amount": 500, "date": "2026-10-01",
+                "target_id": None, "category_name": "Work",
+            }],
+        })
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["actions"][0]["target_id"], "")
+        self.assertEqual(result["actions"][0]["target_label"], "Work")
+
+    def test_income_source_name_matching_existing_choice_reuses_its_id(self):
+        result = self.preview({
+            "actions": [{
+                "intent": "income", "amount": 500, "date": "2026-10-01",
+                "target_id": None, "category_name": "e-hailing",
+            }],
+        })
+        self.assertEqual(result["actions"][0]["target_id"], "11")
+        self.assertEqual(result["actions"][0]["target_label"], "E-hailing")
+
+    def test_prompt_says_expense_categories_are_open_ended(self):
+        prompt = self.service._prompt(
+            "spent 30 on cat food", "en", {"11": "E-hailing"},
+            {"21": "Meals", "22": "Other"}, {}, {},
+        )
+        self.assertIn("suggestions, not closed lists", prompt)
+        self.assertIn('Do not replace a clear new value with "Other"', prompt)
+        self.assertIn('income from "my work at McDonald\'s" should use "Work"', prompt)
+        self.assertIn('confidence is an object', prompt)
+        self.assertIn('user\'s own words clearly support', prompt)
+
+    def test_missing_model_confidence_is_treated_as_low(self):
+        result = self.preview({
+            "actions": [{
+                "intent": "income", "amount": 200, "date": "2026-10-01",
+                "target_id": "11",
+            }],
+        })
+        self.assertEqual(result["actions"][0]["confidence"], {
+            "kind": "low", "amount": "low", "date": "low", "target": "low",
+        })
+
+    def test_model_field_confidence_is_preserved(self):
+        confidence = {
+            "kind": "high", "amount": "high", "date": "high", "target": "low",
+        }
+        result = self.preview({
+            "actions": [{
+                "intent": "income", "amount": 200, "date": "2026-10-01",
+                "target_id": "11", "confidence": confidence,
+            }],
+        })
+        self.assertEqual(result["actions"][0]["confidence"], confidence)
 
     def test_missing_amount_requires_clarification(self):
         result = self.preview({

@@ -355,6 +355,77 @@ async function loginThroughUi(page: Page, email: string, password: string): Prom
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible({ timeout: 15000 });
 }
 
+async function openBillsAndLimits(page: Page): Promise<void> {
+  await page.getByRole('tab', { name: 'Money', exact: true }).click();
+  await page.getByText('Bills and limits', { exact: true }).click();
+  await expect(page.getByText('Regular monthly bills', { exact: true })).toBeVisible();
+}
+
+async function saveBillAmount(page: Page, index: number, amount: string): Promise<void> {
+  const saved = page.waitForResponse(response => (
+    response.request().method() === 'PATCH'
+    && response.url().includes('/api/v1/commitments/')
+  ));
+  const input = page.getByRole('textbox').nth(index);
+  await input.fill(amount);
+  await input.blur();
+  expect((await saved).ok()).toBeTruthy();
+}
+
+async function saveBillReminder(
+  page: Page,
+  billName: string,
+  day: string,
+  time: string,
+  enabled: boolean,
+): Promise<void> {
+  await page.getByRole('switch', { name: `${billName} reminder` }).click();
+  await page.getByLabel('Day of month').fill(day);
+  await page.getByLabel('Time (24-hour HH:MM)').fill(time);
+  const enabledSwitch = page.getByRole('switch', { name: 'Reminder on' });
+  // A newly configured reminder opens On. This journey only toggles when it
+  // explicitly verifies that an existing reminder can be saved Off.
+  if (!enabled) {
+    await enabledSwitch.click();
+    await page.waitForTimeout(50);
+  }
+  const synced = page.waitForResponse(response => (
+    response.request().method() === 'PATCH'
+    && response.url().endsWith('/api/v1/auth/me/')
+    && (() => {
+      try {
+        const body = response.request().postDataJSON() as {
+          notification_preferences?: { reminders?: Record<string, { day: number; time: string; enabled: boolean }> };
+        };
+        return Object.values(body.notification_preferences?.reminders ?? {}).some(reminder => (
+          reminder.day === Number(day) && reminder.time === time && reminder.enabled === enabled
+        ));
+      } catch {
+        return false;
+      }
+    })()
+  ));
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  expect((await synced).ok()).toBeTruthy();
+}
+
+async function expectBillReminder(
+  page: Page,
+  billName: string,
+  day: string,
+  time: string,
+  enabled: boolean,
+): Promise<void> {
+  const inlineSwitch = page.getByRole('switch', { name: `${billName} reminder` });
+  await expect(inlineSwitch).toBeVisible();
+  if (enabled) await expect(inlineSwitch).toBeChecked();
+  else await expect(inlineSwitch).not.toBeChecked();
+  await inlineSwitch.click();
+  await expect(page.getByLabel('Day of month')).toHaveValue(day);
+  await expect(page.getByLabel('Time (24-hour HH:MM)')).toHaveValue(time);
+  await page.getByText('Cancel', { exact: true }).click();
+}
+
 function expectedLastMonthIso(): string {
   const now = new Date();
   const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -673,6 +744,49 @@ test('US8.17 direct account can add income after skipping rough onboarding incom
   expect((await accountIncomeRecord(page)).entries.map(entry => entry.amount)).toEqual(['3333.00']);
   await openRecord(page);
   await expect(page.locator('body')).toContainText('1 entries');
+});
+
+test('US8.21 signed-in bill reminders persist independently through refresh and logout/login', async ({ page }) => {
+  const email = `epic8-reminder-persistence-${Date.now()}@example.com`;
+  const password = 'Passw0rd123';
+
+  await createDirectAccountThroughOnboarding(page, email, password);
+  await openBillsAndLimits(page);
+  await saveBillAmount(page, 0, '600'); // Rent
+  await saveBillAmount(page, 1, '500'); // Food: deliberately no saved reminder
+  await saveBillAmount(page, 2, '300'); // Utilities
+
+  await saveBillReminder(page, 'Rent', '31', '09:15', true);
+
+  await page.reload();
+  await dismissSplashIfVisible(page);
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+  await openBillsAndLimits(page);
+  await expectBillReminder(page, 'Rent', '31', '09:15', true);
+  await saveBillReminder(page, 'Utilities', '15', '18:30', true);
+
+  await logoutCurrentAccount(page);
+  await loginThroughUi(page, email, password);
+  await openBillsAndLimits(page);
+  await expectBillReminder(page, 'Rent', '31', '09:15', true);
+  await expectBillReminder(page, 'Utilities', '15', '18:30', true);
+  const unsavedFoodReminder = page.getByRole('switch', { name: 'Food reminder' });
+  await expect(unsavedFoodReminder).not.toBeChecked();
+  await unsavedFoodReminder.click();
+  await expect(page.getByLabel('Day of month')).toHaveValue('1');
+  await expect(page.getByLabel('Time (24-hour HH:MM)')).toHaveValue('09:00');
+  await page.getByText('Cancel', { exact: true }).click();
+  await expect.poll(async () => page.getByRole('textbox').nth(0).inputValue()).toBe('600');
+  await expect.poll(async () => page.getByRole('textbox').nth(1).inputValue()).toBe('500');
+  await expect.poll(async () => page.getByRole('textbox').nth(2).inputValue()).toBe('300');
+
+  await saveBillReminder(page, 'Rent', '31', '09:15', false);
+  await logoutCurrentAccount(page);
+  await loginThroughUi(page, email, password);
+  await openBillsAndLimits(page);
+  await expectBillReminder(page, 'Rent', '31', '09:15', false);
+  await expectBillReminder(page, 'Utilities', '15', '18:30', true);
+  await expect(page.getByRole('switch', { name: 'Food reminder' })).not.toBeChecked();
 });
 
 test('US8.14.5 delete confirmation offers optional export first for a never-exported account', async ({ page }) => {
@@ -1226,8 +1340,8 @@ test('US8.4 exposes the four main areas and returns with Back', async ({ page })
   // EN: Epic 8 owns navigation into the Prepare area, not the detailed contents
   // of upfront-cash or document tools.
   // 中文：Epic 8 负责进入 Prepare 区域，不负责购房现金或文件工具的具体功能。
-  await expect(page.getByText('Upfront cash', { exact: true })).toBeVisible();
-  await expect(page.getByText('Documents & financing', { exact: true })).toBeVisible();
+  // v7 design: Prepare opens on the home it works from (none yet for a new guest).
+  await expect(page.getByText('Which home are you preparing for?', { exact: true })).toBeVisible();
   await expect(page.getByText('Coming soon', { exact: true })).toHaveCount(0);
   await page.getByLabel('Back').click();
   await expect(page.getByText('Prepare for a house', { exact: true })).toBeVisible();

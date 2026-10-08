@@ -28,6 +28,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.housing.models import SavedHousingTest
+from config.throttles import (
+    LoginIPThrottle,
+    LoginIdentifierThrottle,
+    PasswordResetConfirmThrottle,
+    PasswordResetEmailThrottle,
+    PasswordResetIPThrottle,
+)
 from finance.models import UserAppState
 from finance.services import (
     discard_guest_record_for_request,
@@ -81,6 +88,11 @@ def _auth_payload(user, token=None):
         "preferred_language": state.preferred_language,
         "preferred_income_source_id": state.preferred_income_source_id,
         "last_record_exported_at": state.last_record_exported_at.isoformat() if state.last_record_exported_at else None,
+        "notification_preferences": (
+            state.notification_preferences
+            if _valid_notification_preferences(state.notification_preferences)
+            else {}
+        ),
     }
     if token is not None:
         payload["token"] = token.key
@@ -92,7 +104,7 @@ _APP_STATE_FIELDS = {
     "homeownership_purchase_month",
     "expense_limits", "compare_payments", "saving_plan", "buffer_state",
     "village_state", "plan_horizon", "pot_moved_months", "pot_moved", "kept_tests",
-    "onboarding_completed", "preferred_language", "preferred_income_source_id",}
+    "notification_preferences", "onboarding_completed", "preferred_language", "preferred_income_source_id",}
 
 # Fields whose explicit null is a valid value (it clears them).
 _NULLABLE_APP_STATE_FIELDS = {"plan_horizon", "cash_on_hand_date", "homeownership_purchase_month"}
@@ -197,6 +209,28 @@ def _valid_village_state(value):
     return "msg" not in value or isinstance(value["msg"], str)
 
 
+def _valid_notification_preferences(value):
+    """Validate account choices only; device permission and schedule IDs are forbidden."""
+    if not isinstance(value, dict) or set(value) != {"bill_reminders", "reminders"}:
+        return False
+    if not isinstance(value["bill_reminders"], bool) or not isinstance(value["reminders"], dict):
+        return False
+    if len(value["reminders"]) > 100:
+        return False
+    for commitment_id, reminder in value["reminders"].items():
+        if not isinstance(commitment_id, str) or not commitment_id or len(commitment_id) > 128:
+            return False
+        if not isinstance(reminder, dict) or set(reminder) != {"enabled", "day", "time"}:
+            return False
+        if not isinstance(reminder["enabled"], bool):
+            return False
+        if not _valid_number(reminder["day"], integer=True, minimum=1) or reminder["day"] > 31:
+            return False
+        if not isinstance(reminder["time"], str) or not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", reminder["time"]):
+            return False
+    return True
+
+
 def _validate_app_state_field(field, value):
     if field == "learning_progress":
         # A bounded page count by stable lesson id; no arbitrary nested client state.
@@ -265,6 +299,8 @@ def _validate_app_state_field(field, value):
         return value if _valid_buffer_state(value) else None
     if field == "village_state":
         return value if _valid_village_state(value) else None
+    if field == "notification_preferences":
+        return value if _valid_notification_preferences(value) else None
     if field in {"onboarding_completed", "preferred_language"}:
         return value
     return None
@@ -545,6 +581,7 @@ class RegisterView(APIView):
 class LoginView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = [LoginIPThrottle, LoginIdentifierThrottle]
 
     def post(self, request):
         identifier = str(request.data.get("username", "")).strip()
@@ -765,6 +802,7 @@ class PasswordResetRequestView(APIView):
 
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = [PasswordResetIPThrottle, PasswordResetEmailThrottle]
 
     def post(self, request):
         email = str(request.data.get("email", "")).strip().lower()
@@ -833,6 +871,7 @@ class PasswordResetConfirmView(APIView):
 
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = [PasswordResetConfirmThrottle]
 
     @transaction.atomic
     def post(self, request):

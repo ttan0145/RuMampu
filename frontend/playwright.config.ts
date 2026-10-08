@@ -56,6 +56,15 @@ export default defineConfig({
 
         DEBUG: 'True',
         ENABLE_TEST_SCENARIOS: 'True',
+        // Test runs log in, scan and parse far more often than a person would;
+        // an empty rate switches each endpoint limit off for the test server only.
+        AUTH_LOGIN_IP_RATE: '',
+        AUTH_LOGIN_IDENTIFIER_RATE: '',
+        AUTH_PASSWORD_RESET_IP_RATE: '',
+        AUTH_PASSWORD_RESET_EMAIL_RATE: '',
+        AUTH_PASSWORD_RESET_CONFIRM_RATE: '',
+        RECEIPT_SCAN_RATE: '',
+        ASSISTANT_ACTION_PREVIEW_RATE: '',
         CORS_ALLOWED_ORIGINS: `http://localhost:${frontendPort},http://127.0.0.1:${frontendPort}`,
 
         // Local tests use SQLite; opt-in Epic 4 runs can use backend/.env Neon settings.

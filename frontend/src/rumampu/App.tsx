@@ -21,8 +21,9 @@ import {
   ResultScreen, SavedtestsScreen, ShockScreen,
 } from './screens/test';
 import {
-  BufferScreen, DocsScreen, PrepareComingSoonScreen, PrepareScreen, PvCompareScreen, PvMonthScreen, PvSwitchScreen, UpfrontScreen,
+  BufferScreen, DocsScreen, PrepareComingSoonScreen, PvCompareScreen, PvMonthScreen, PvSwitchScreen, UpfrontScreen,
 } from './screens/prepare';
+import { MonthlyLessonScreen, PrepareHubScreen } from './screens/prephub';
 import { ImportIncomeScreen } from './screens/imports';
 import { HomeCostsScreen } from './screens/homecosts';
 import { PriceExplorerScreen } from './screens/priceexplorer';
@@ -41,7 +42,7 @@ const SCREENS: Record<Route, React.ComponentType> = {
   range: RangeScreen, compare: CompareScreen, shock: ShockScreen,
   househome: HousehomeScreen, savedtests: SavedtestsScreen, profile: ProfileScreen,
   homecosts: HomeCostsScreen, acctdetails: AcctDetailsScreen, priceexplorer: PriceExplorerScreen,
-  prepare: PrepareScreen, prepare_soon: PrepareComingSoonScreen, upfront: UpfrontScreen, buffer: BufferScreen, docs: DocsScreen,
+  prepare: PrepareHubScreen, prepmonthly: MonthlyLessonScreen, prepare_soon: PrepareComingSoonScreen, upfront: UpfrontScreen, buffer: BufferScreen, docs: DocsScreen,
   pv_switch: PvSwitchScreen, pv_month: PvMonthScreen, pv_compare: PvCompareScreen,
   learn: LearnScreen, learnsec: LearnSecScreen, learnread: LearnReadScreen,
 };

@@ -94,6 +94,17 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "config.exceptions.api_exception_handler",
+    # These limits apply only to views that explicitly opt in with a throttle
+    # class. Set an environment variable to an empty value to disable a limit.
+    "DEFAULT_THROTTLE_RATES": {
+        "auth_login_ip": os.getenv("AUTH_LOGIN_IP_RATE", "30/min") or None,
+        "auth_login_identifier": os.getenv("AUTH_LOGIN_IDENTIFIER_RATE", "10/min") or None,
+        "auth_password_reset_ip": os.getenv("AUTH_PASSWORD_RESET_IP_RATE", "20/hour") or None,
+        "auth_password_reset_email": os.getenv("AUTH_PASSWORD_RESET_EMAIL_RATE", "3/hour") or None,
+        "auth_password_reset_confirm": os.getenv("AUTH_PASSWORD_RESET_CONFIRM_RATE", "30/hour") or None,
+        "receipt_scan": os.getenv("RECEIPT_SCAN_RATE", "20/hour") or None,
+        "assistant_action_preview": os.getenv("ASSISTANT_ACTION_PREVIEW_RATE", "60/hour") or None,
+    },
 }
 
 SPECTACULAR_SETTINGS = {
@@ -172,3 +183,7 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "RuMampu
 PASSWORD_RESET_URL_BASE = os.getenv("PASSWORD_RESET_URL_BASE", "rumampu://reset-password")
 # Django's default token timeout is one day. Keep it explicit for this app.
 PASSWORD_RESET_TIMEOUT = int(os.getenv("PASSWORD_RESET_TIMEOUT", "86400"))
+
+# Vercel Cron sends this value as `Authorization: Bearer <CRON_SECRET>`.
+# An empty value keeps the retention runner disabled rather than exposing it.
+CRON_SECRET = os.getenv("CRON_SECRET", "")

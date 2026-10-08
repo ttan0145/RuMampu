@@ -36,7 +36,7 @@ function fit(b: Bounds, w: number, h: number, pad: Pad, maxZoom: number): View_ 
   return { zoom, cx: ((x0 + x1) / 2) * k + (pad.right - pad.left) / 2, cy: ((y0 + y1) / 2) * k + (pad.bottom - pad.top) / 2 };
 }
 
-export function GeoMap({ group, fitTo, pad, maxZoom = 12, styleOf, pins, onPick, attribution }: {
+export function GeoMap({ group, fitTo, pad, maxZoom = 12, styleOf, pins, onPick, attribution, zoomLabels }: {
   group: string;
   /* what to show: a region's or a district's bounds; a new value re-fits the map */
   fitTo: Bounds;
@@ -46,6 +46,8 @@ export function GeoMap({ group, fitTo, pad, maxZoom = 12, styleOf, pins, onPick,
   pins: MapPin[];
   onPick: (district: string) => void;
   attribution: string;
+  /* accessible names for the + and - buttons, in the app's language */
+  zoomLabels?: { in: string; out: string };
 }) {
   const [size, setSize] = React.useState({ w: 0, h: 0 });
   const [view, setView] = React.useState<View_ | null>(null);
@@ -69,6 +71,15 @@ export function GeoMap({ group, fitTo, pad, maxZoom = 12, styleOf, pins, onPick,
     },
     onPanResponderTerminationRequest: () => true,
   }), []);
+
+  /* + and - zoom around the middle of the part of the map above the sheet */
+  const zoomBy = (d: number) => setView(v => {
+    if (!v || !size.w) return v;
+    const zoom = Math.max(5, Math.min(16, v.zoom + d));
+    const s = 2 ** (zoom - v.zoom);
+    const fx = size.w / 2, fy = (pad.top + size.h - pad.bottom) / 2;
+    return { zoom, cx: (v.cx - size.w / 2 + fx) * s + size.w / 2 - fx, cy: (v.cy - size.h / 2 + fy) * s + size.h / 2 - fy };
+  });
 
   const geo = PX_GEO[group];
   let body: React.ReactNode = null;
@@ -150,6 +161,19 @@ export function GeoMap({ group, fitTo, pad, maxZoom = 12, styleOf, pins, onPick,
       {...pan.panHandlers}>
       <View style={[StyleSheet.absoluteFill, { backgroundColor: '#E6EEF0', overflow: 'hidden' }]}>{body}</View>
       <Text style={[st.attr, { top: pad.top - 4 }]}>{attribution}</Text>
+      {view ? (
+        <View style={[st.zoom, { top: pad.top + 18 }]}>
+          <Pressable onPress={() => zoomBy(1)} accessibilityRole="button" accessibilityLabel={zoomLabels?.in ?? 'Zoom in'}
+            testID="map-zoom-in" style={({ pressed }) => [st.zoomBtn, pressed && { backgroundColor: '#EEF3F2' }]}>
+            <Text style={st.zoomT}>+</Text>
+          </Pressable>
+          <View style={st.zoomLine} />
+          <Pressable onPress={() => zoomBy(-1)} accessibilityRole="button" accessibilityLabel={zoomLabels?.out ?? 'Zoom out'}
+            testID="map-zoom-out" style={({ pressed }) => [st.zoomBtn, pressed && { backgroundColor: '#EEF3F2' }]}>
+            <Text style={st.zoomT}>{'\u2212'}</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -172,6 +196,14 @@ const st = StyleSheet.create({
     position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: '#fff', borderWidth: 3, borderColor: '#3C5152',
     shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 2,
   },
+  zoom: {
+    /* left edge: Ruma peeks in from the right edge of every screen */
+    position: 'absolute', left: 12, width: 44, borderRadius: 12, backgroundColor: '#fff', overflow: 'hidden',
+    shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 4,
+  },
+  zoomBtn: { height: 44, alignItems: 'center', justifyContent: 'center' },
+  zoomT: { fontFamily: DISP_FONT, fontSize: 22, lineHeight: 24, color: '#3C5152' },
+  zoomLine: { height: 1, backgroundColor: '#E3EAE8', marginHorizontal: 8 },
   attr: {
     position: 'absolute', right: 6, fontSize: 9, color: '#3C5152', backgroundColor: 'rgba(255,255,255,0.7)',
     paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3,

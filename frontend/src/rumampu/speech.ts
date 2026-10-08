@@ -9,8 +9,21 @@ export function getSpeechOwner(): SpeechOwner {
   return owner;
 }
 
-export function setSpeechOwner(next: SpeechOwner): void {
+/** Claim the single speech-recognition session for one feature.
+ *
+ * Event ownership alone is not enough: if the other surface is still
+ * listening, changing `owner` would merely hide its events while leaving its
+ * microphone open. Abort the old recognizer before handing ownership over.
+ */
+export function claimSpeechOwner(next: Exclude<SpeechOwner, null>, abort: () => void): void {
+  if (owner !== null) {
+    try { abort(); } catch { /* the previous recognizer had already ended */ }
+  }
   owner = next;
+}
+
+export function releaseSpeechOwner(current: Exclude<SpeechOwner, null>): void {
+  if (owner === current) owner = null;
 }
 
 /* Recognition follows the language chosen in RuMampu, not the device's. */

@@ -10,5 +10,11 @@
       "src": "/(.*)",
       "dest": "backend/config/wsgi.py"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/v1/internal/retention/run/",
+      "schedule": "15 2 * * *"
+    }
   ]
 }

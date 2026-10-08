@@ -14,7 +14,7 @@ import {
   IcLab, KV, NoteC, NumInput, P, Prov, StackS, TextField,
   CardI, MonthBtn,
 } from '../ui';
-import { C, CHART_COLS, DISP_FONT } from '../theme';
+import { BODY_FONT, C, CHART_COLS, DISP_FONT } from '../theme';
 import { Ico } from '../svgs';
 import { CatIcon, guessCat } from '../icons';
 import { CSV_SAMPLE_EX, csvAmount, parseCsv, parseDateAny } from '../csv';
@@ -197,7 +197,7 @@ function ExpenseCsvBody() {
  */
 export function ExpensesScreen() {
   const {
-    S, t, monthName, go, up, toast, saveExpenseEntry, saveWorkCostEntry,
+    S, t, monthName, go, up, toast, saveExpenseEntry, saveExpenseCategory, saveWorkCostEntry,
     updateWorkCostEntry, updateExpenseEntry, moveExpenseToWorkCost, moveWorkCostToExpense,
   } = useApp();
   const cats = useCatLabel();
@@ -225,7 +225,7 @@ export function ExpensesScreen() {
     const a = parseFloat(d.a) || 0;
     if (a <= 0) { setError('amount'); return; }
     if (!isValidIsoDate(d.d)) { setError('date'); return; }
-    if (!d.c || saving || S.expenseSync === 'loading') return;
+    if ((!d.c && !d.proposedTargetName) || saving || S.expenseSync === 'loading') return;
     const dd = d.d;
     const key = (+dd.slice(0, 4)) * 12 + (+dd.slice(5, 7) - 1);
     const total = (expByMonth(S.data).get(key)?.total || 0) + a;
@@ -241,8 +241,16 @@ export function ExpensesScreen() {
         setSaving(false);
         return;
       }
-      await saveExpenseEntry({ amount: a, date: dd, categoryId: d.c });
-      up(s => { s.expDraft = { a: '', c: s.expDraft.c, d: dd, per: s.expDraft.per }; });
+      let categoryId = d.c;
+      if (!categoryId && d.proposedTargetName) {
+        categoryId = await saveExpenseCategory(d.proposedTargetName);
+        up(s => {
+          s.expDraft.c = categoryId;
+          s.expDraft.proposedTargetName = undefined;
+        });
+      }
+      await saveExpenseEntry({ amount: a, date: dd, categoryId });
+      up(s => { s.expDraft = { a: '', c: categoryId, d: dd, per: s.expDraft.per }; });
       toast(t('ex_saved', { m: monthName(key % 12), x: nf(total) }));
     } catch {
       setError('save');
@@ -289,15 +297,26 @@ export function ExpensesScreen() {
       {/* v24 R7 item 3: one amount and one date. */}
       <InHero tint="out" pillLabel={t('io_out')} question={t('r7_ex_q')} decimal
         value={d.a}
-        onChangeText={v => { setError(null); up(s => { s.expDraft.a = v; }); }} />
+        onChangeText={v => { setError(null); up(s => {
+          s.expDraft.a = v;
+          if (s.expDraft.proposed) s.expDraft.proposed.amount = false;
+        }); }} />
+      {d.proposed?.kind ? <Text style={{ fontFamily: BODY_FONT, fontSize: 12, color: C.brand }}>{t('vo_proposed_kind')}</Text> : null}
+      {d.proposed?.amount ? <Text style={{ fontFamily: BODY_FONT, fontSize: 12, color: C.brand }}>{t('vo_proposed')}</Text> : null}
       <InSec>
-        <InLbl>{t('inc_q_when')}</InLbl>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <InLbl>{t('inc_q_when')}</InLbl>
+          {d.proposed?.date ? <Text style={{ fontFamily: BODY_FONT, fontSize: 12, color: C.brand }}>{t('vo_proposed')}</Text> : null}
+        </View>
         <DatePickerField
           value={d.d}
           mode="date"
           monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
           maximumDate={new Date()}
-          onChange={v => { setError(null); up(s => { s.expDraft.d = v; }); }}
+          onChange={v => { setError(null); up(s => {
+            s.expDraft.d = v;
+            if (s.expDraft.proposed) s.expDraft.proposed.date = false;
+          }); }}
         />
       </InSec>
       <InSec>
@@ -319,7 +338,10 @@ export function ExpensesScreen() {
         </Pressable>
       </InSec>
       <InSec>
-        <InLbl>{t('ex_q_cat')}</InLbl>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <InLbl>{t('ex_q_cat')}</InLbl>
+          {d.proposed?.target ? <Text style={{ fontFamily: BODY_FONT, fontSize: 12, color: C.brand }}>{t('vo_proposed')}</Text> : null}
+        </View>
         {forWork ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {S.data.workCostCategories.map(x => (
@@ -335,12 +357,18 @@ export function ExpensesScreen() {
           </View>
         ) : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {d.proposedTargetName ? (
+            <InChip tint="out" label={d.proposedTargetName} on={!d.c} onPress={() => undefined} />
+          ) : null}
           {S.data.expenseCats.map(x => (
             <InChip key={x.id} tint="out"
               icon={<CatIcon id={x.id} data={S.data} size={18} color={d.c === x.id ? '#fff' : C.ink} />}
               label={x.custom ? x.name || '' : t(x.k || '')}
               on={d.c === x.id}
-              onPress={() => up(s => { s.expDraft.c = x.id; })} />
+              onPress={() => up(s => {
+                s.expDraft.c = x.id; s.expDraft.proposedTargetName = undefined;
+                if (s.expDraft.proposed) s.expDraft.proposed.target = false;
+              })} />
           ))}
           <InChip dashed tint="out" label={t('xc_own').replace(/^\+\s*|^＋\s*/, '')}
             onPress={() => up(s => { s.sheet = 'xcown'; })} />

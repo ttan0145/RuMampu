@@ -63,12 +63,14 @@ import {
   notificationSchedulingSupported,
   schedulePrivateBillReminder,
 } from './notifications';
-import { fetchHouseCosts as fetchHouseCostsRequest, fetchSavedHousingTests as fetchSavedHousingTestsRequest } from '../../services/housingService';
+import { isValidReminderDay } from './reminder-date';
+import { fetchHouseCosts as fetchHouseCostsRequest, fetchSavedHousingTests as fetchSavedHousingTestsRequest, setSampleHousingData } from '../../services/housingService';
 import { clearHousingSession, getHousingScenario, getHousingTestResult, hydrateHousingSession, setHousingScenario, setHousingTestResult, subscribeHousingSession } from '../../services/housingSession';
 import type { HousingScenarioResponse, HousingTestResult } from '../../types/housing';
 import { HouseCostType, HouseCostsResponse, PxKind, PxSize, PxType, SavedHousingTestRecord } from '../../types/housing';
 import { logIt } from './log';
 import { rm, rmx } from './calc';
+import { PREP_DEFAULT, type PrepState } from './prep7state';
 import { accountSnapshot, hydrate, hydrateAccountState, snapshot } from './persist';
 
 /* Central app state — mirrors the prototype's `S` object and navigation model. */
@@ -82,6 +84,8 @@ export type Route =
   // does not make them an Iteration 1 implementation.
   // 中文：Epic 7 预览路由为未来 Iteration 3 工作保留；这不代表它们是 Iteration 1 实现。
   | 'prepare' | 'prepare_soon' | 'upfront' | 'buffer' | 'docs' | 'pv_switch' | 'pv_month' | 'pv_compare'
+  /* Prepare v7: "Can I pay each month?" as a short guided lesson */
+  | 'prepmonthly'
   /* v26/v27b: What buying involves, short lessons with pictures and badges. */
   | 'learn' | 'learnsec' | 'learnread'
   /* Price Explorer: one guided page from the price model */
@@ -99,7 +103,7 @@ export const TAB_OF: Record<Route, Tab> = {
   homecosts: 'test', acctdetails: 'profile',
   compare: 'test', shock: 'test',
   plan: 'money', profile: 'profile', prepare: 'test', prepare_soon: 'test', upfront: 'test', buffer: 'money', docs: 'test',
-  pv_switch: 'test', pv_month: 'test', pv_compare: 'test',
+  pv_switch: 'test', pv_month: 'test', pv_compare: 'test', prepmonthly: 'test',
   learn: 'test', learnsec: 'test', learnread: 'test', priceexplorer: 'test',
 };
 
@@ -145,6 +149,10 @@ export interface VillageState {
      savedRm is the truthful ringgit total behind the game — the only honest
      signal on screen; istanas themselves are decorative. */
   collection: number; queued: number; savedRm: number;
+  /* the square the last swipe placed a ready Pondok on, and the move it happened on */
+  spawn?: number | null; spawnAt?: number;
+  /* how each house travelled on the last move (from square, to square, its tier), for the slide */
+  slide?: Array<{ f: number; t: number; tier: number }>;
   msg?: string;
 }
 
@@ -178,6 +186,12 @@ export interface VoiceItem {
   d: string;
   s?: string;
   c?: string;
+  /* AI-extracted open-ended income source. It becomes a persisted custom
+     source only after the person confirms and saves the draft. */
+  sourceName?: string;
+  /* AI-extracted open-ended expense category. It becomes a persisted custom
+     category only after the person confirms and saves the draft. */
+  categoryName?: string;
   /* Per-field confidence is kept with the draft. Low-confidence fields must
      be corrected or explicitly confirmed before Save is enabled (AC9.4.1/2). */
   confidence?: {
@@ -197,6 +211,13 @@ export interface VoiceState {
   note?: string;
   /* An unusually large income was flagged once; the next Save confirms it. */
   outlier?: boolean;
+}
+
+export interface VoiceProposedFields {
+  kind?: boolean;
+  amount?: boolean;
+  date?: boolean;
+  target?: boolean;
 }
 
 export type EntryPer = 'day' | 'week' | 'month';
@@ -259,6 +280,11 @@ export interface AppState {
   village: VillageState | null;
   buffer: BufferState | null;
   vHelp: boolean;
+  /* the house a saved day just placed (not persisted): which square, how much, and the
+     move count then, so the glow stops once the houses have moved */
+  vLand: { at: number; a: number; cell: number | null; moves: number } | null;
+  /* "Let's start!" plays once a session; after that Play opens the village directly */
+  vFlashSeen: boolean;
   /* Months the user chose to spread the upfront need over (village phase).
      null = go by the record's median leftover, or 12 when there is no record. */
   planHorizon: number | null;
@@ -276,6 +302,8 @@ export interface AppState {
      figures work from, and the renovation switch. */
   firstHome: boolean;
   ufTest: number | null;
+  /* Prepare v7: the monthly lesson's place and what-ifs, and the hub's choices */
+  prep: PrepState;
   ufReno: boolean;
   /* v24: name shown while the Result screen displays a saved test. */
   viewTestName: string | null;
@@ -315,7 +343,11 @@ export interface AppState {
   dcOpen: boolean;
   docsChecked: string[];
   keptTests: KeptTest[];
-  expDraft: { a: string; c: string; d: string; per: EntryPer };
+  expDraft: {
+    a: string; c: string; d: string; per: EntryPer;
+    proposed?: VoiceProposedFields;
+    proposedTargetName?: string;
+  };
   scan: ScanState;
   exCatOpen: boolean;
   exMonthOpen: number | null;
@@ -331,7 +363,11 @@ export interface AppState {
   pendingBillReminderId: string | null;
   retentionNotice: ApiRetentionStatus | null;
   notificationPreferences: ApiNotificationPreferences;
-  incomeDraft: { a: string; d: string; s: string; flag: 'invalid' | 'neg' | 'outlier' | null; per: EntryPer };
+  incomeDraft: {
+    a: string; d: string; s: string; flag: 'invalid' | 'neg' | 'outlier' | null; per: EntryPer;
+    proposed?: VoiceProposedFields;
+    proposedTargetName?: string;
+  };
   incomeSync: 'disabled' | 'loading' | 'ready' | 'error';
   workCostSync: 'disabled' | 'loading' | 'ready' | 'error';
   workCostSelectedMonth: string;
@@ -450,10 +486,10 @@ function initialState(): AppState {
     onboard: 0, onboarded: false, splash: true,
     wstep: 0, authEntryOpen: false, authMode: 'login', acctMade: false, fgMail: '', guest: false, accountLastExportedAt: null, preferredIncomeSourceId: null, mergeGuestOnSignup: false, discardGuestOnSignup: false,
     knew: false, kstep: 0, jobs: ['taxi'], ownJobs: [], lastMonth: '',
-    plan: null, village: null, buffer: null, vHelp: false, planHorizon: null,
+    plan: null, village: null, buffer: null, vHelp: false, vLand: null, vFlashSeen: false, planHorizon: null,
     moView: 'tiles', houseTab: 'test',
     houseCosts: null, houseCostsSync: 'idle', hcState: 'sgr', hcType: 'all', hcKind: 'all', hcBudget: null, firstHome: false,
-    potMoved: 0, potMovedMonths: [], ufTest: null, ufReno: false, viewTestName: null, scanAuto: false, pastT: 'inc', cardInfo: null, log: [],
+    potMoved: 0, potMovedMonths: [], ufTest: null, prep: { ...PREP_DEFAULT, mHome: { ...PREP_DEFAULT.mHome } }, ufReno: false, viewTestName: null, scanAuto: false, pastT: 'inc', cardInfo: null, log: [],
     tryPay: null, tryCust: false, depMode: null,
     incPick: false, incMode: 'type', incScan: { stage: 'pick', rows: [] }, incCsv: { stage: 'pick' }, incEdit: null,
     exMode: 'type', exCsv: { stage: 'pick' }, exEdit: null,
@@ -646,7 +682,7 @@ export interface Ctx {
   refreshHomeownership: () => Promise<void>;
   saveHomeownershipMonth: (month: string, actualHomeCosts: number) => Promise<void>;
   setBillReminder: (commitmentId: string, day: number, time: string, enabled: boolean) => Promise<'saved' | 'denied'>;
-  setNotificationKind: (kind: 'bill_reminders' | 'record_warnings', enabled: boolean) => Promise<void>;
+  setNotificationKind: (kind: 'bill_reminders', enabled: boolean) => Promise<void>;
   ensureAiDisclosure: () => Promise<boolean>;
   answerAiDisclosure: (accepted: boolean) => void;
   ensureStatementDisclosure: () => Promise<boolean>;
@@ -767,6 +803,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const skipNextAccountSync = useRef(false);
   const accountAuthenticated = useRef(false);
   const localStateWriteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reminderRefreshStarted = useRef(false);
   /* The last snapshot written locally and, for accounts, patched to the
      server. Most state changes (a screen change, a data refresh landing) leave
      the declared progress untouched; without this check every one of them sent
@@ -907,6 +944,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => subscribeHousingSession(() => {
     setHousingSessionRevision(revision => revision + 1);
   }), []);
+
+  /* Native month-end reminders use a rolling set of concrete dates so 29–31
+     can fall back to a short month's final day. Refresh that window once when
+     the saved local preferences have loaded. Retention safeguards are separate
+     backend processes and never depend on these device notification settings. */
+  React.useEffect(() => {
+    if (!localStateReady || reminderRefreshStarted.current) return;
+    reminderRefreshStarted.current = true;
+    if (!notificationSchedulingSupported()
+      || !S.notificationPreferences.permission_granted
+      || !S.notificationPreferences.bill_reminders) return;
+    let active = true;
+    void (async () => {
+      const refreshed: Record<string, string | null> = {};
+      for (const [commitmentId, reminder] of Object.entries(S.notificationPreferences.reminders)) {
+        if (!reminder.enabled) continue;
+        await cancelReminder(reminder.notification_id);
+        refreshed[commitmentId] = await schedulePrivateBillReminder(commitmentId, reminder.day, reminder.time);
+      }
+      if (active) up(s => {
+        for (const [commitmentId, identifier] of Object.entries(refreshed)) {
+          const reminder = s.notificationPreferences.reminders[commitmentId];
+          if (reminder?.enabled) reminder.notification_id = identifier;
+        }
+      });
+    })().catch(() => { /* Keep the saved settings if native scheduling is temporarily unavailable. */ });
+    return () => { active = false; };
+  }, [S.notificationPreferences, localStateReady, up]);
 
   /* Persist the allow-listed declarations in one place. UI-only state (route,
      sheets, toasts, etc.) is ignored by snapshot(). Anonymous sessions remain
@@ -1824,12 +1889,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     time: string,
     enabled: boolean,
   ): Promise<'saved' | 'denied'> => {
+    if (!isValidReminderDay(day)) throw new RangeError('Reminder day must be a whole number from 1 to 31.');
     const current = S.notificationPreferences.reminders[commitmentId];
     if (!enabled) {
       await cancelReminder(current?.notification_id);
       up(s => {
         s.notificationPreferences.reminders[commitmentId] = {
-          day: Math.min(28, Math.max(1, Math.round(day))),
+          day,
           time,
           enabled: false,
           notification_id: null,
@@ -1854,7 +1920,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     up(s => {
       s.notificationPreferences.bill_reminders = true;
       s.notificationPreferences.reminders[commitmentId] = {
-        day: Math.min(28, Math.max(1, Math.round(day))),
+        day,
         time,
         enabled: true,
         notification_id: identifier,
@@ -1865,7 +1931,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [S.notificationPreferences, up]);
 
   const setNotificationKind = useCallback(async (
-    kind: 'bill_reminders' | 'record_warnings',
+    kind: 'bill_reminders',
     enabled: boolean,
   ): Promise<void> => {
     if (kind === 'bill_reminders' && !enabled) {
@@ -2158,6 +2224,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (wasDemo.current && !S.demo) toast(t('demo_cleared'));
     wasDemo.current = S.demo;
   }, [S.demo, t, toast]);
+
+  /* AC8.26.4: a house test on sample months runs against these months, never the server's record. */
+  React.useEffect(() => {
+    setSampleHousingData(S.demo ? S.data : null);
+  }, [S.demo, S.data]);
 
   const value = useMemo<Ctx>(() => ({
     S, authReady, up, t, monthName, go, goTab, backNav,

@@ -1,7 +1,9 @@
 import type { AppState, BufferState, KeptTest, PlanState, VillageState } from './state';
 import { STATEMENT_SCAN_DISCLOSURE_VERSION } from './ai-disclosure';
+import type { ApiAccountNotificationPreferences } from './api';
 import { getHousingScenario, getHousingTestResult, hydrateHousingSession } from '../../services/housingSession';
 import { isValidIsoDate } from './validation';
+import { PREP_DEFAULT, validPrep } from './prep7state';
 
 const VERSION = 1;
 /* AC5.8.10: the longest name a user can give their safety money. */
@@ -9,7 +11,7 @@ export const BUFFER_NAME_MAX = 30;
 const PERSISTED = ['plan', 'buffer', 'village', 'planHorizon',
   'potMovedMonths', 'potMoved', 'docsChecked', 'keptTests', 'tipsOff', 'seenG', 'lnProg',
   'bought', 'purchaseMonth', 'notificationPreferences', 'aiDisclosureAccepted', 'statementDisclosureVersion',
-  'voiceDisclosureAccepted'] as const;
+  'voiceDisclosureAccepted', 'prep', 'ufTest'] as const;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -96,10 +98,33 @@ function validNotificationPreferences(value: unknown): value is AppState['notifi
   }
   return Object.values(value.reminders).every(reminder => {
     if (!record(reminder) || typeof reminder.enabled !== 'boolean') return false;
-    if (!Number.isInteger(reminder.day) || (reminder.day as number) < 1 || (reminder.day as number) > 28) return false;
+    if (!Number.isInteger(reminder.day) || (reminder.day as number) < 1 || (reminder.day as number) > 31) return false;
     if (reminder.time !== undefined && (typeof reminder.time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(reminder.time))) return false;
     return reminder.notification_id === null || typeof reminder.notification_id === 'string';
   });
+}
+
+function validAccountNotificationPreferences(value: unknown): value is ApiAccountNotificationPreferences {
+  if (!record(value) || typeof value.bill_reminders !== 'boolean' || !record(value.reminders)) return false;
+  return Object.values(value.reminders).every(reminder => (
+    record(reminder)
+    && typeof reminder.enabled === 'boolean'
+    && Number.isInteger(reminder.day)
+    && (reminder.day as number) >= 1
+    && (reminder.day as number) <= 31
+    && typeof reminder.time === 'string'
+    && /^([01]\d|2[0-3]):[0-5]\d$/.test(reminder.time)
+  ));
+}
+
+function accountNotificationPreferences(s: AppState): ApiAccountNotificationPreferences {
+  return {
+    bill_reminders: s.notificationPreferences.bill_reminders,
+    reminders: Object.fromEntries(Object.entries(s.notificationPreferences.reminders).map(([id, reminder]) => [
+      id,
+      { day: reminder.day, time: reminder.time, enabled: reminder.enabled },
+    ])),
+  };
 }
 
 /** Serialize only declared, local progress; transient UI state is excluded. */
@@ -145,6 +170,10 @@ export function hydrate(s: AppState, raw: string | null): void {
     if (s.potMovedMonths.length && !(s.potMoved > 0)) s.potMovedMonths = [];
     if (validStringArray(payload.docsChecked)) s.docsChecked = payload.docsChecked;
     if (validKeptTests(payload.keptTests)) s.keptTests = payload.keptTests;
+    /* AC10.12.2: the kept test chosen under Upfront cash survives a reload */
+    if (payload.ufTest === null || (Number.isInteger(payload.ufTest) && (payload.ufTest as number) >= 0 && (payload.ufTest as number) < s.keptTests.length)) {
+      s.ufTest = payload.ufTest as number | null;
+    }
     /* v27b screen tips stay on this device. Under Playwright they stay off. */
     if (typeof payload.tipsOff === 'boolean' && process.env.EXPO_PUBLIC_E2E !== '1') s.tipsOff = payload.tipsOff;
     if (validStringArray(payload.seenG)) s.seenG = payload.seenG as AppState['seenG'];
@@ -154,6 +183,7 @@ export function hydrate(s: AppState, raw: string | null): void {
         && finite(v) && Number.isInteger(v) && v >= 0 && v <= 100)) {
       s.lnProg = payload.lnProg as Record<string, number>;
     }
+    if (validPrep(payload.prep)) s.prep = { ...PREP_DEFAULT, ...payload.prep };
     if (typeof payload.bought === 'boolean') s.bought = payload.bought;
     if (payload.purchaseMonth === null || (typeof payload.purchaseMonth === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(payload.purchaseMonth))) {
       s.purchaseMonth = payload.purchaseMonth as string | null;
@@ -206,6 +236,7 @@ export function accountSnapshot(s: AppState): {
   kept_tests: unknown[];
   bought_home: boolean;
   homeownership_purchase_month: string | null;
+  notification_preferences: ApiAccountNotificationPreferences;
 } {
   const local = JSON.parse(snapshot(s)) as JsonRecord;
   return {
@@ -223,6 +254,7 @@ export function accountSnapshot(s: AppState): {
     kept_tests: (local.keptTests as unknown[]) ?? [],
     bought_home: s.bought,
     homeownership_purchase_month: s.purchaseMonth,
+    notification_preferences: accountNotificationPreferences(s),
   };
 }
 
@@ -250,6 +282,32 @@ export function hydrateAccountState(s: AppState, remote: Record<string, unknown>
   hydrate(s, JSON.stringify(payload));
   if (validExpenseLimits(remote.expense_limits)) {
     s.data.expenseLimits = remote.expense_limits;
+  }
+  if (Object.prototype.hasOwnProperty.call(remote, 'notification_preferences')) {
+    const saved = remote.notification_preferences;
+    if (validAccountNotificationPreferences(saved)) {
+      const localReminders = s.notificationPreferences.reminders;
+      s.notificationPreferences.bill_reminders = saved.bill_reminders;
+      s.notificationPreferences.reminders = Object.fromEntries(
+        Object.entries(saved.reminders).map(([id, reminder]) => {
+          const local = localReminders[id];
+          const sameConfiguration = local?.day === reminder.day
+            && local.time === reminder.time
+            && local.enabled === reminder.enabled;
+          return [id, {
+            ...reminder,
+            notification_id: sameConfiguration ? local.notification_id : null,
+            last_recorded: sameConfiguration ? (local.last_recorded ?? null) : null,
+          }];
+        }),
+      );
+    } else {
+      // An empty account field means this account has no saved reminder choices.
+      // Device permission state is intentionally retained, but another local
+      // identity's bill settings must not cross the account boundary.
+      s.notificationPreferences.bill_reminders = true;
+      s.notificationPreferences.reminders = {};
+    }
   }
   const preferredSourceId = remote.preferred_income_source_id;
   s.preferredIncomeSourceId = preferredSourceId == null ? null : String(preferredSourceId);

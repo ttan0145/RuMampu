@@ -226,6 +226,18 @@ export interface ApiUser {
   date_joined: string;
 }
 
+/** Account-owned reminder choices. Device permission and schedule IDs stay local. */
+export interface ApiAccountReminderPreference {
+  day: number;
+  time: string;
+  enabled: boolean;
+}
+
+export interface ApiAccountNotificationPreferences {
+  bill_reminders: boolean;
+  reminders: Record<string, ApiAccountReminderPreference>;
+}
+
 export interface ApiAuthState {
   user: ApiUser;
   cash_on_hand: number | string;
@@ -250,6 +262,7 @@ export interface ApiAuthState {
   preferred_language: 'en' | 'ms' | 'zh' | '';
   preferred_income_source_id: number | null;
   last_record_exported_at: string | null;
+  notification_preferences: ApiAccountNotificationPreferences | Record<string, never>;
 }
 
 export interface ApiReminderPreference {
@@ -286,6 +299,7 @@ export interface AccountStatePatch {
   docs_checked: string[];
   learning_progress: Record<string, number>;
   kept_tests: unknown[];
+  notification_preferences: ApiAccountNotificationPreferences;
 }
 
 export interface ApiHomeownershipMonth {
@@ -960,6 +974,12 @@ export type AssistantAction = {
   date: string | null;
   target_id: string;
   target_label: string;
+  confidence?: {
+    kind: 'high' | 'low';
+    amount: 'high' | 'low';
+    date: 'high' | 'low';
+    target: 'high' | 'low';
+  };
 };
 
 export type AssistantActionPreview = {

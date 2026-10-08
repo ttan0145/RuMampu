@@ -7,6 +7,7 @@ import { Btn, BodyS, BtnQuiet, IcLab, P, SwRow } from '../ui';
 import { Ruma } from '../ruma-view';
 import { ScreenShell } from './shell';
 import { exportRecord } from '../api';
+import { GuideTarget } from '../tour';
 
 /* v22 profile tab: guest/signed hero, account rows, language, saved tests. */
 
@@ -22,7 +23,7 @@ export function ProfileScreen() {
   const [deleting, setDeleting] = React.useState(false);
   const [loggingOut, setLoggingOut] = React.useState(false);
   const shouldOfferDeleteExport = !S.guest && !S.accountLastExportedAt;
-  const notificationSwitch = (kind: 'bill_reminders' | 'record_warnings', label: string) => {
+  const notificationSwitch = (kind: 'bill_reminders', label: string) => {
     const on = S.notificationPreferences[kind];
     return (
       <Pressable
@@ -32,7 +33,7 @@ export function ProfileScreen() {
         aria-checked={on}
         accessibilityLabel={label}
         onPress={() => { void setNotificationKind(kind, !on); }}
-        style={[st.morow, kind === 'record_warnings' && st.morowLine]}
+        style={st.morow}
       >
         <P style={{ fontSize: 15 }}>{label}</P>
         <View style={[st.switchTrack, on && st.switchTrackOn]}>
@@ -95,6 +96,7 @@ export function ProfileScreen() {
 
   return (
     <ScreenShell greet title={t('pf_title')}>
+      <GuideTarget id="pf.hero">
       <View style={st.pfhero}>
         <View style={st.pfheroBubble} pointerEvents="none" />
         <Ruma w={84} pose="wave" />
@@ -113,6 +115,7 @@ export function ProfileScreen() {
           </Text>
         </View>
       </View>
+      </GuideTarget>
       {S.guest ? <Btn label={t('pf_create')} onPress={() => setSignupChoiceOpen(true)} /> : null}
       <Pressable onPress={() => up(s => { s.sheet = 'lang'; })} style={st.pfrow}>
         <Text style={{ fontSize: 22 }}>{FLAGS[S.lang]}</Text>
@@ -123,11 +126,12 @@ export function ProfileScreen() {
         <Text style={{ color: C.ink40 }}>▾</Text>
       </Pressable>
       {/* v27b: the invitation, the tour and the tips switch. Back on, every screen offers its tips again. */}
-      <View style={[st.mocard, { paddingHorizontal: 16, paddingVertical: 4 }]}>
+      <GuideTarget id="pf.tips" style={[st.mocard, { paddingHorizontal: 16, paddingVertical: 4 }]}>
         <SwRow on={!S.tipsOff} label={t('pf_tips')} hint={t('pf_tips_h')}
           onPress={() => up(s => { s.tipsOff = !s.tipsOff; if (!s.tipsOff) s.seenG = []; })} />
-      </View>
+      </GuideTarget>
       {/* v27b: look around with sample months, or put your own record back */}
+      <GuideTarget id="pf.sample">
       <BtnQuiet onPress={() => {
         if (S.demo) { leaveSampleMonths(); return; }
         enterSampleMonths();
@@ -135,28 +139,28 @@ export function ProfileScreen() {
       }} style={{ minHeight: 48 }}>
         <IcLab name="book"><P style={{ fontSize: 15 }}>{t(S.demo ? 'demo_clear' : 'demo_load')}</P></IcLab>
       </BtnQuiet>
-      <View style={{ gap: 7 }}>
+      </GuideTarget>
+      <GuideTarget id="pf.notif" style={{ gap: 7 }}>
         <BodyS muted>{t('nt_title')}</BodyS>
         <View style={st.mocard}>
           {notificationSwitch('bill_reminders', t('nt_bill'))}
-          {notificationSwitch('record_warnings', t('nt_record'))}
         </View>
         <BodyS muted>{t('nt_optional')}</BodyS>
         {S.notificationPreferences.permission_asked && !S.notificationPreferences.permission_granted ? (
           <BodyS muted>{t(Platform.OS === 'android' ? 'nt_denied_android' : Platform.OS === 'ios' ? 'nt_denied_ios' : 'nt_denied')}</BodyS>
         ) : null}
-      </View>
+      </GuideTarget>
       {S.guest ? (
-        <View style={st.mocard}>
+        <GuideTarget id="pf.recordg" style={st.mocard}>
           <Pressable onPress={() => setDeleteConfirmOpen(true)} style={st.morow}>
             <IcLab name="ring">
               <P style={{ fontSize: 15, color: C.ink }}>{t('pf_delete_guest')}</P>
             </IcLab>
             <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
           </Pressable>
-        </View>
+        </GuideTarget>
       ) : (
-        <View style={st.mocard}>
+        <GuideTarget id="pf.record" style={st.mocard}>
           <Pressable onPress={() => go('acctdetails')} style={st.morow}>
             <IcLab name="band"><P style={{ fontSize: 15 }}>{t('pf_acct')}</P></IcLab>
             <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
@@ -179,7 +183,7 @@ export function ProfileScreen() {
             </IcLab>
             <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
           </Pressable>
-        </View>
+        </GuideTarget>
       )}
 
       <Modal transparent visible={signupChoiceOpen} animationType="fade" onRequestClose={() => setSignupChoiceOpen(false)}>
