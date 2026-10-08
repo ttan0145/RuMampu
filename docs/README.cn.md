@@ -20,6 +20,9 @@
 - [US1.8 验收记录](epic-1/US1.8_HISTORICAL_IMPORT.cn.md)：历史 CSV 预览、错误行、确认入库与分析联动的 8 条 AC 证据。
 - [Epic 1 完成报告](epic-1/EPIC_1_COMPLETION_REPORT.cn.md)：v3 的 61 条可执行 AC、1 条明确暂缓项及新版 UI 回归总览。
 - [Epic 2 实施与验收索引](epic-2/README.cn.md)：18/18 AC、逐 US 证据、API 边界与浏览器验收。
+- [Epic 5 US/AC 基线](requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)：v5 与迭代 3 合并后的 8 个 US、68 条 AC，与 2026-10-08 LeanKit 核对一致。
+- [Epic 5 实施与验收索引](epic-5/README.cn.md)：购房准备、Learn、账号阅读进度与储蓄拆分的实现和检查证据。
+- [Learn 内容来源](epic-5/LEARN_SOURCES.md)：19 篇解释的公开依据、核对日期与本轮内容更正。
 - [Playwright 验收测试规范](testing/PLAYWRIGHT_ACCEPTANCE_STANDARD.cn.md)：Epic/US/AC 命名、精确追踪门槛、证据政策、命令和完成规则。
 - [真实线上网站测试](testing/LIVE_WEBSITE_TESTS.cn.md)：可重复运行的只读检查、明确开启的独立访客写入流程、报告及安全边界。
 - [US1.8 十二个月网约车司机综合 CSV](testing/US1.8_COMPREHENSIVE_CSV_FIXTURE.cn.md)：覆盖有效/无效行、来源复用、12 个月分析和持久化，并与完整司机收支场景对齐。

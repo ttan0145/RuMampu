@@ -62,6 +62,7 @@ def _auth_payload(user, token=None):
         "cash_on_hand_date": state.cash_on_hand_date.isoformat() if state.cash_on_hand_date else None,
         "upfront_costs": state.upfront_costs,
         "docs_checked": state.docs_checked,
+        "learning_progress": state.learning_progress,
         "bought_home": state.bought_home,
         "homeownership_purchase_month": (
             state.homeownership_purchase_month.strftime("%Y-%m")
@@ -87,7 +88,7 @@ def _auth_payload(user, token=None):
 
 
 _APP_STATE_FIELDS = {
-    "cash_on_hand", "cash_on_hand_date", "upfront_costs", "docs_checked", "bought_home",
+    "cash_on_hand", "cash_on_hand_date", "upfront_costs", "docs_checked", "learning_progress", "bought_home",
     "homeownership_purchase_month",
     "expense_limits", "compare_payments", "saving_plan", "buffer_state",
     "village_state", "plan_horizon", "pot_moved_months", "pot_moved", "kept_tests",
@@ -197,6 +198,16 @@ def _valid_village_state(value):
 
 
 def _validate_app_state_field(field, value):
+    if field == "learning_progress":
+        # A bounded page count by stable lesson id; no arbitrary nested client state.
+        if not isinstance(value, dict) or len(value) > 100:
+            return None
+        for lesson, page in value.items():
+            if not isinstance(lesson, str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", lesson):
+                return None
+            if not _valid_number(page, integer=True, minimum=0) or page > 100:
+                return None
+        return value
     if field in {"cash_on_hand", "pot_moved"}:
         if isinstance(value, bool):
             return None

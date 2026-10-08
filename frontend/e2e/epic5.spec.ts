@@ -772,9 +772,9 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
     await ac('AC5.4.4', 'Display SJKP published criteria', async () => {
       await expect(page.getByText('SJKP published criteria', { exact: true })).toBeVisible();
       for (const criterion of [
-        '· Malaysian citizen, age 18 to 70',
-        '· Gross income within SJKP’s published limit',
-        '· First home',
+        '· Malaysian citizen, age 18 or above',
+        '· Total loan repayments within 65% of gross monthly income',
+        '· First home, for own occupation',
       ]) {
         await expect(page.getByText(criterion, { exact: true })).toBeVisible();
       }
@@ -782,7 +782,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
 
     await ac('AC5.4.5', 'Display source and date', async () => {
       await page.getByLabel('What this is').click();
-      await expect(page.getByText('Source: sjkp.com.my, Aug 2026', { exact: true })).toBeVisible();
+      await expect(page.getByText('Source: sjkp.com.my/en/hcgs/eligibility, checked 8 Oct 2026', { exact: true })).toBeVisible();
       await page.getByText('Done', { exact: true }).click();
     });
 

@@ -3,10 +3,9 @@
 Language: **English** | [Chinese (CN)](README.cn.md)
 
 - Status: Built and covered by executable checks; awaiting owner acceptance
-- Scope: 5 user stories, 48 acceptance criteria: the 36 of v5 plus the team amendments of 2026-10-05 and 2026-10-06 (US5.8 with AC5.8.9 and AC5.8.10, AC5.3.8, AC5.3.9) ([baseline](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md), Drive `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v5.docx`)
+- Scope: 8 user stories, 68 acceptance criteria: the 36 of v5, the 20 Learn criteria for Iteration 3, plus the team amendments of 2026-10-05 and 2026-10-06 (US5.8 with AC5.8.9 and AC5.8.10, AC5.3.8, AC5.3.9) ([baseline](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md), Drive `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v5.docx`)
 - Entry points: House → **Prepare for a house**, and Money → **Cash buffer**
-- Not in this index: user stories 5.5 to 5.7 (Learn explanations, added for Iteration 3 in the Drive document "Added User Stories to Epics for Iteration 3"). They came with the v27b3 merge and have no acceptance checks yet (open point 6).
-- Decisions: [ADR 0004](../adr/0004-backend-authoritative-housing-calculations.md), see open point 2; [ADR 0005](../adr/0005-cash-buffer-deepest-fall.md) for how the cash buffer is measured
+- Decisions: [ADR 0004](../adr/0004-backend-authoritative-housing-calculations.md), see implementation boundary 3; [ADR 0005](../adr/0005-cash-buffer-deepest-fall.md) for how the cash buffer is measured
 
 | User story | Acceptance | Evidence |
 | --- | ---: | --- |
@@ -14,6 +13,9 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 | US5.2 — Check upfront cash readiness | 17/17 | You have / You need / Gap, the water-line chart, the itemised list grouped by when costs fall due, a dated cash entry, published-scale fees with sources, and the first-home switch |
 | US5.3 — Estimate a cash buffer from recorded short months | 9/9 | Server-calculated buffer (the deepest fall, ADR 0005), the months it ran between shaded on the 12-month running-balance chart, the zero line where zero falls, the record basis and the RM 0 explanation |
 | US5.4 — Review financing preparation documents | 7/7 | Five-item checklist, SJKP criteria with source and date, "needs review" instead of a verdict, and the disclaimer |
+| US5.5 — Learn what buying involves before I commit | 11/11 | Prepare entry, five tabs, 19 sourced explanations, terms, personal figures and page-fit checks |
+| US5.6 — Find what applies to someone without a payslip | 3/3 | No payslip, SJKP limits and checklist navigation |
+| US5.7 — See what I've already read | 6/6 | Read counts, resume, Prepare total and account progress on another device, without rewards |
 | US5.8 — Count my savings once across the cash buffer and the upfront costs (team amendment) | 10/10 | The buffer is held from the pot first; Upfront cash, House, the Saving plan and Home read the same split; Cash buffer says how much is covered and links to the plan |
 
 ## Acceptance record
@@ -55,9 +57,29 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 | AC5.4.2 Include visible document types | Passed | Bank statements, e-hailing earnings summary, statutory declaration of income, EPF statement, list of existing commitments |
 | AC5.4.3 Toggle checklist items | Passed | Selecting an item flips ☐ to ☑ and back; other items are unaffected |
 | AC5.4.4 Display SJKP published criteria | Passed | The three criteria are listed |
-| AC5.4.5 Display source and date | Passed | The info sheet shows *Source: sjkp.com.my, Aug 2026* |
+| AC5.4.5 Display source and date | Passed | The info sheet shows *Source: sjkp.com.my/en/hcgs/eligibility, checked 8 Oct 2026* |
 | AC5.4.6 Avoid displaying unsupported approval status | Passed | *65% check: needs review* with its reason; no pass, fail, approved or eligible wording |
 | AC5.4.7 Display financing disclaimer | Passed | The info sheet says RuMampu does not apply for the user and cannot tell whether a bank will say yes |
+| AC5.5.1 Open the explanations from Prepare | Passed | Prepare opens Learn |
+| AC5.5.2 Sections shown as tabs | Passed | Five ordered topic tabs |
+| AC5.5.3 Every explanation names its source and date | Passed | All 19 explanations show a linked source and checked date on their last page |
+| AC5.5.4 Government sources only | Passed | Government schemes and a direct SJKP participating-institution link |
+| AC5.5.5 Reach the right tab from each tool | Passed | Upfront and Documents open their related topics |
+| AC5.5.6 Show my own figure where one exists | Passed | Tested-home fees with a CALCULATED amount |
+| AC5.5.7 Explain terms where they appear | Passed | Terms expand in place |
+| AC5.5.8 Not advice | Passed | Every ending states the advice and approval boundary |
+| AC5.5.9 One idea per page | Passed | Actual content height on all 51 pages at 390×844 and 360×740 |
+| AC5.5.10 Move between pages with buttons | Passed | Back, Next, Finish and page numbers agree |
+| AC5.5.11 Refer EPF out rather than explain it | Passed | EPF boundary and KWSP link |
+| AC5.6.1 A tab for irregular income | Passed | No payslip tab and document lesson |
+| AC5.6.2 Explain the financing guarantee and its limits | Passed | Both SJKP limits, without promising approval |
+| AC5.6.3 Link documents to the checklist | Passed | Document lesson opens the checklist |
+| AC5.7.1 Show progress on each explanation | Passed | Read pages over total pages |
+| AC5.7.2 Grey out what I've finished | Passed | Read rows have 0.66 opacity and can reopen |
+| AC5.7.3 Resume where I stopped | Passed | Unfinished explanations resume their last page |
+| AC5.7.4 Show progress for each section and overall | Passed | Topic read counts and the total on Prepare |
+| AC5.7.5 Keep progress between sessions | Passed | Account PATCH, reload and a second browser signing into the same account |
+| AC5.7.6 Nothing is locked behind reading | Passed | Other features remain usable; reading has no reward or celebration |
 | AC5.8.1 Hold the buffer first | Passed | With RM 1,000 in the pot and a RM 905 buffer from the kept RM 250,000 test, *You have* is RM 95 and the gap is the need less RM 95 |
 | AC5.8.2 One reading on every screen | Passed | Upfront cash, the House card ("RM 95 of … set aside · RM 905 held as your safety buffer") and the Saving plan ("Safety buffer RM 905 · Upfront cash RM 95", pot RM 1,000) agree; Home states what is still to go for both goals |
 | AC5.8.3 Say what is held | Passed | "RM 905 of your pot is held as your safety buffer, so it is not counted here", and the pot's working lists the held amount |
@@ -78,20 +100,20 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 - Money moved in from finished months: `pot_moved` beside `pot_moved_months` ([migration 0019](../../backend/finance/migrations/0019_userappstate_pot_moved.py)) and in the local snapshot
 - Cash-buffer calculation: `_starting_liquidity` in [`services.py`](../../backend/apps/housing/services.py), the deepest fall with `fall_start` and `fall_end` ([ADR 0005](../adr/0005-cash-buffer-deepest-fall.md))
 - Backend regression for the 12-month fixture (RM 1,940, RM 904.74, RM 0 and RM 4,740 buffers with every monthly balance and where each fall runs), and an independent check of all chronological suffixes, without rotating months: `GigDriverStartingLiquidityTests` and `StartingLiquidityPathTests` in [`tests.py`](../../backend/apps/housing/tests.py)
-- Real-browser acceptance: [`epic5.spec.ts`](../../frontend/e2e/epic5.spec.ts) (36 acceptance criteria registered once each, plus five engineering regressions: TECH-5.1 the Money shortcut, TECH-5.2 edits and a covered need, TECH-5.3 a record that never goes below zero can still need a buffer, TECH-5.4 what the safety buffer holds is not counted again, TECH-5.5 money moved in survives a reload)
+- Real-browser acceptance: [`epic5.spec.ts`](../../frontend/e2e/epic5.spec.ts) (48 core acceptance criteria registered once each, plus engineering regressions: TECH-5.1 the Money shortcut, TECH-5.2 edits and a covered need, TECH-5.3 a record that never goes below zero can still need a buffer, TECH-5.4 what the safety buffer holds is not counted again, TECH-5.5 money moved in survives a reload)
+- Learn browser acceptance: [`epic5-learn.spec.ts`](../../frontend/e2e/epic5-learn.spec.ts), covering all 20 criteria for US5.5–5.7, all 51 pages and account progress across devices.
 - Fee-scale and pot arithmetic at the band edges: [`epic5-upfront-fees.spec.ts`](../../frontend/e2e/epic5-upfront-fees.spec.ts)
-- Traceability gate: `npm run test:e2e:traceability` checks Epic 5 at 48/48 acceptance criteria against the [baseline](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)
+- Traceability gate: `npm run test:e2e:traceability` checks Epic 5 at 68/68 acceptance criteria against the [baseline](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)
 - Screenshots: [`output/playwright/epic-5/evidence/`](../../output/playwright/epic-5/evidence/), refreshed with `UPDATE_EVIDENCE=1`
 - Run the Epic 5 checks: `npm run test:e2e:epic5` in `frontend/`
 
-## Open points
+## Implementation boundaries and acceptance process
 
-1. **US5.8 and the amended criteria need the product owner's sign-off.** On 2026-10-05 the team built US5.8 (count the pot once, buffer first) and AC5.3.8 and AC5.3.9, and amended AC5.1.5, AC5.2.9, AC5.2.17 and AC5.3.2, without waiting for the decision. The rule matches the v27b prototype (the pot fills the safety buffer first, then counts towards upfront cash). The [requirements baseline](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md) marks each one; they still need to go into the v5 document and onto LeanKit. The Epic 10 saving plan now reads the same rule (the buffer phase lasts while the pot is below the buffer), which changes AC10.1.3 and AC10.12.3 as proposed in the 2026-10-01 critique; the Epic 10 owner should confirm.
-2. **The cash buffer is the deepest fall (ADR 0005).** The amended AC5.3.2 records the reading; the figure can only rise (RM 680 became RM 1,940 on the fixture at RM 1,900 a month).
-3. **The upfront figures are calculated in the frontend.** ADR 0004 names Django as the authority for upfront gaps, but *You need* and *Gap* come from the published-scale engine in `fees.ts`. Fixed-value tests pin it, and moving the scales into a backend service is a separate package. The valuation scale is tagged `ASSUMPTION` on screen because it has not been checked against a gazette copy.
-4. **Some required wording sits behind the (i) button.** The sources for the fees and the SJKP criteria (AC5.2.13, AC5.2.14, AC5.4.5), the disclaimer (AC5.4.7) and the record basis (AC5.3.4 and AC5.3.5) are in info sheets, following the v24 design, and the checks open the sheets. Printing them on the page is a placement change if the team prefers it.
-5. **Re-verify published sources before release.** The SJKP criteria and the *Aug 2026* reference date, and the stamp-duty, legal-fee and valuation scales, were last checked on the dates shown in the info sheets.
-6. **Learn explanations (5.5 to 5.7) are built (v27b3, merged 2026-10-05) but have no acceptance checks yet.** Reading progress stays on the device and is not saved to the account, so AC5.7.5 (another device) is not met; the badges and the finished-topic celebration follow the prototype and depart from AC5.7.6 on purpose.
+1. **The current requirements and LeanKit agree.** The Iteration 3 files and board checked on 2026-10-08 contain 8 user stories and 68 criteria, including US5.8, AC5.3.8/.9 and four amendments. This repair updates the local baseline. Code verification, owner sign-off and card lanes are separate evidence; no cards were moved and external sign-off is not claimed.
+2. **The cash buffer is the deepest fall (ADR 0005).** Current AC5.3.2 records that rule; the fixture at RM 1,900 a month produces RM 1,940.
+3. **The upfront figures are calculated in the frontend.** ADR 0004 names Django as the authority, but You need and Gap still come from `fees.ts`. Fixed-value regressions remain; moving the scales into the backend is separate architecture work. The valuation scale remains ASSUMPTION.
+4. **Some required wording is in info sheets.** Fee and SJKP sources, disclaimers and the cash-buffer record basis are opened through (i) and checked by acceptance tests.
+5. **Public sources have explicit verification dates.** SJKP eligibility was checked against its official page on 2026-10-08. References and corrections for all 19 lessons are in [LEARN_SOURCES.md](LEARN_SOURCES.md). Stamp-duty scales retain their previous date rather than claiming a fresh complete verification.
 
 ## Approved boundaries
 
@@ -99,3 +121,31 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 - The cash buffer comes from the user's own recorded months and is never presented as a general rule.
 - Cash is whatever the user enters; RuMampu never fills it in, and never adds a figure of its own to a cost that has no published scale.
 - Applying for financing, credit scoring and post-purchase monitoring (Epic 7 preview) are outside Epic 5.
+
+## Iteration 3 Learn repair — 8 October 2026
+
+US5.5–5.7 are included in this index and the requirement baseline. `epic5-learn.spec.ts` registers their 20 criteria exactly once and follows the real UI, including 51 lesson pages at two phone sizes, sources and dates, term explanations, contextual figures, document navigation, reading counts, resume, reload and a second browser context signing into the same account.
+
+| User story | Criteria | Behaviour |
+| --- | ---: | --- |
+| US5.5 — Learn what buying involves before I commit | 11 | Prepare opens Learn; five ordered tabs, sourced and dated explanations, government schemes and the SJKP institution list, personal figures, terms, page controls, a disclaimer and KWSP link |
+| US5.6 — Find what applies to someone without a payslip | 3 | No payslip topic, SJKP guarantee limits and direct navigation to the checklist |
+| US5.7 — See what I've already read | 6 | Pages read, subdued read rows, resume, section and Prepare totals, account-backed cross-device progress, optional reading without rewards |
+
+Apply migration `finance.0022_userappstate_learning_progress` before deploying. Guests keep local reading progress; the authenticated account is authoritative at login. Empty account progress clears another account's local history. Invalid progress rejects a patch atomically.
+
+AC5.7.6 is implemented as written: reading badges and celebration were removed; completed explanations show their read state.
+
+Public content sources and corrections are in [LEARN_SOURCES.md](LEARN_SOURCES.md).
+
+## Final verification (2026-10-08 17:20 SGT)
+
+- `npm run typecheck`: frontend and E2E TypeScript passed.
+- `npm run test:e2e:traceability`: Epic 5 maps 68/68 criteria exactly once, with no deferrals.
+- Complete `npm run test:e2e`: all 111 tests passed in 16.4m, including 30 Epic 5 tests for all 68 formal criteria and engineering regressions.
+- Page fit: 102 checks across all 51 pages at two phone sizes, plus 10 checks of five personal figures at both sizes; all 112 fit without scrolling. The source area is clear of the assistant.
+- Complete Django suite on an isolated SQLite test database: all 215 tests passed; no migration drift.
+- House costs returns an explicit 503 rather than a 500 when raw sales data is unavailable. Regressions cover missing, partial, empty and loaded data, including transaction recovery.
+- Regenerated OpenAPI matches the committed file. Existing serializer-inference and operationId-collision diagnostics remain; generation is not claimed to be warning-free.
+
+Per-criterion evidence and deployment steps are in the [repair report (Chinese)](REPAIR_REPORT.cn.md).

@@ -29,9 +29,9 @@ const completedEpics = [
   },
   {
     epic: 'Epic 5',
-    expected: 48,
+    expected: 68,
     requirements: 'docs/requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md',
-    specification: 'frontend/e2e/epic5.spec.ts',
+    specifications: ['frontend/e2e/epic5.spec.ts', 'frontend/e2e/epic5-learn.spec.ts'],
   },
 ];
 
@@ -48,8 +48,9 @@ let failed = false;
 for (const item of completedEpics) {
   const inScope = id => !item.prefix || id.startsWith(item.prefix);
   const required = [...new Set(ids(read(item.requirements), /\b(AC\d+\.\d+\.\d+)\b/g))].filter(inScope);
-  const implemented = ids(read(item.specification), /\bac\(\s*['"](AC\d+\.\d+\.\d+)['"]/g).filter(inScope);
-  const deferred = ids(read(item.specification), /\bdeferredAc\(\s*['"](AC\d+\.\d+\.\d+)['"]/g).filter(inScope);
+  const specification = (item.specifications || [item.specification]).map(read).join('\n');
+  const implemented = ids(specification, /\bac\(\s*['"](AC\d+\.\d+\.\d+)['"]/g).filter(inScope);
+  const deferred = ids(specification, /\bdeferredAc\(\s*['"](AC\d+\.\d+\.\d+)['"]/g).filter(inScope);
   const implementedSet = new Set(implemented);
   const deferredSet = new Set(deferred);
   const mapped = [...implemented, ...deferred];

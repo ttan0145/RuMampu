@@ -9,7 +9,7 @@ import { useApp } from '../state';
 /* Screen shell: sticky header + scrolling content column (mirrors #screen + .hdr).
    `bg` paints a decorative layer pinned to the bottom, behind the content. */
 export function ScreenShell({
-  back, title, brand, greet, right, bg, footer, under, scrollRef: outerRef, children,
+  back, title, brand, greet, right, bg, footer, under, scrollRef: outerRef, compact, children,
 }: {
   back?: boolean; title?: string; brand?: boolean; greet?: boolean;
   right?: React.ReactNode; bg?: React.ReactNode;
@@ -20,10 +20,12 @@ export function ScreenShell({
   /* a row that stays under the title while the content scrolls (the Price Explorer summary) */
   under?: React.ReactNode;
   children: React.ReactNode;
+  /** Short lesson pages keep their illustration and text together, without a scene footer. */
+  compact?: boolean;
 }) {
   const { S } = useApp();
   /* v27b: each screen's scene at the foot of its content, unless it draws its own background */
-  const scene = !bg && S.onboarded && S.knew ? SCENE_OF[S.route] : undefined;
+  const scene = !compact && !bg && S.onboarded && S.knew ? SCENE_OF[S.route] : undefined;
   const scrollRef = React.useRef<ScrollView>(null);
   const frameRef = React.useRef<View>(null);
   /* v27b: the tour brings the part a tip points at into view. */
@@ -48,7 +50,7 @@ export function ScreenShell({
           scrollEventThrottle={32}
           testID="screen-scroll"
           style={{ flex: 1 }}
-          contentContainerStyle={[{ paddingHorizontal: 20, paddingBottom: 24, gap: 16 }, scene ? { flexGrow: 1 } : null]}
+          contentContainerStyle={[{ paddingHorizontal: 20, paddingBottom: compact ? 8 : 24, gap: compact ? 10 : 16 }, scene ? { flexGrow: 1 } : null]}
           keyboardShouldPersistTaps="handled"
         >
           {children}

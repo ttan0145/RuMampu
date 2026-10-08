@@ -14,39 +14,74 @@ export type LnBlock =
   | { go: { label: string; to: string } }
   | { jump: { label: string; a: string } };
 
-export interface LnArticle { id: string; title: string; lead: string; src?: string[]; draft?: boolean; pages: LnBlock[][] }
+export interface LnArticle { id: string; title: string; lead: string; src: string[]; pages: LnBlock[][] }
 export interface LnSection { id: string; tab: string; title: string; epf?: boolean; articles: LnArticle[] }
 
 export const LN_SRC: Record<string, { n: string; h: string; d: string }> = {
   "madani": {
-    "n": "Syarikat Jaminan Kredit Perumahan, HCGS-MADANI and HCGS scheme features",
+    "n": "SJKP: MADANI",
     "h": "https://www.sjkp.com.my/en/hcgs/hcgs-madani",
-    "d": "29 September 2026"
+    "d": "8 October 2026"
+  },
+  "hcgs": {
+    "n": "SJKP: HCGS",
+    "h": "https://www.sjkp.com.my/en/hcgs/scheme-features",
+    "d": "8 October 2026"
   },
   "elig": {
-    "n": "Syarikat Jaminan Kredit Perumahan, HCGS eligibility",
+    "n": "SJKP: Eligibility",
     "h": "https://www.sjkp.com.my/en/hcgs/eligibility",
-    "d": "29 September 2026"
+    "d": "8 October 2026"
+  },
+  "docs": {
+    "n": "SJKP: Documents to FIs",
+    "h": "https://www.sjkp.com.my/en/hcgs/documents-to-fis",
+    "d": "8 October 2026"
   },
   "sro": {
-    "n": "Solicitors’ Remuneration Order 2023, P.U. (A) 207/2023, as set out by the Malaysian Bar",
+    "n": "Malaysian Bar: SRO 2023",
     "h": "https://www.malaysianbar.org.my/cms/upload_files/document/Circular%20No%20258-2023.pdf",
-    "d": "29 September 2026"
+    "d": "8 October 2026"
   },
   "stamp": {
-    "n": "Stamp Act 1949 (Act 378), First Schedule items 32(a) and 27(a), Attorney General’s Chambers of Malaysia",
-    "h": "https://lom.agc.gov.my",
+    "n": "LHDN: Stamp Act 1949",
+    "h": "https://www.hasil.gov.my/media/hwdf2s3g/20240101-stamp-act-1949-act-378.pdf",
     "d": "10 September 2026"
   },
   "exempt": {
-    "n": "Malaysian Bar Circular No 128/2026 (16 April 2026), on P.U. (A) 53/2021 and 54/2021 as amended by P.U. (A) 448/2025 and 449/2025",
+    "n": "Malaysian Bar: First-home exemption",
     "h": "https://www.malaysianbar.org.my/cms/upload_files/document/Circular%20No%20128-2026.pdf",
-    "d": "29 September 2026"
+    "d": "8 October 2026"
   },
   "ccris": {
-    "n": "Bank Negara Malaysia, Central Credit Reference Information System",
-    "h": "https://www.bnm.gov.my/ccris",
-    "d": "29 September 2026"
+    "n": "BNM: CCRIS FAQ",
+    "h": "https://www.bnm.gov.my/faq/ccris",
+    "d": "8 October 2026"
+  },
+  "buyer": {
+    "n": "KPKT: Homebuyer FAQ",
+    "h": "https://ehome.kpkt.gov.my/index.php/pages/view/220",
+    "d": "8 October 2026"
+  },
+  "valuation": {
+    "n": "JPPH: Valuation FAQ",
+    "h": "https://www.jpph.gov.my/v3/?page_id=8647&lang=en",
+    "d": "8 October 2026"
+  },
+  "pr1ma": {
+    "n": "PR1MA: Eligibility",
+    "h": "https://www.pr1ma.my/eligibility-home",
+    "d": "8 October 2026"
+  },
+  "pr1mafaq": {
+    "n": "PR1MA: FAQ",
+    "h": "https://www.pr1ma.my/faq",
+    "d": "8 October 2026"
+  },
+  "rmr": {
+    "n": "MyGovernment: RMR",
+    "h": "https://www.malaysia.gov.my/en/categories/aid-welfare-and-assistance/housing-aid/rumah-mesra-rakyat-rmr-programme",
+    "d": "8 October 2026"
   }
 };
 
@@ -62,6 +97,7 @@ export const LEARN: LnSection[] = [
         "lead": "A loan guarantee for people without a fixed salary.",
         "src": [
           "madani",
+          "hcgs",
           "elig"
         ],
         "pages": [
@@ -77,10 +113,10 @@ export const LEARN: LnSection[] = [
           ],
           [
             {
-              "p": "Under SJKP MADANI, the guarantee can cover up to 120% of the purchase price: the price itself, plus costs such as [[MRTT|Mortgage Reducing Term Takaful. It pays off what is left of your loan if you die or become permanently unable to work, and the amount it covers shrinks as your loan does.]], legal fees, valuation, renovation and furnishing."
+              "p": "SJKP MADANI guarantees up to 120% of the purchase price, capped at RM360,000: up to 100% for the home and up to 20% for costs such as [[MRTT|Mortgage Reducing Term Takaful: cover for the remaining loan if the insured person dies or becomes permanently disabled.]], legal fees and furnishing."
             },
             {
-              "p": "The most it covers is RM360,000. The standard SJKP scheme covers financing of up to RM500,000."
+              "p": "The standard SJKP scheme has a financing limit of RM500,000. Eligibility does not mean approval."
             }
           ],
           [
@@ -95,7 +131,7 @@ export const LEARN: LnSection[] = [
             {
               "ext": {
                 "label": "SJKP’s participating institutions",
-                "href": "https://www.sjkp.com.my"
+                "href": "https://www.sjkp.com.my/en/fi-partners"
               }
             }
           ]
@@ -105,27 +141,24 @@ export const LEARN: LnSection[] = [
         "id": "docs",
         "title": "What to bring instead of a payslip",
         "lead": "Records that show income a payslip would.",
-        "draft": true,
         "pages": [
           [
             {
-              "p": "A bank needs to see that money comes in steadily enough to repay a loan. Without a payslip, other records can show it."
+              "p": "SJKP lists supporting records for applicants whose income does not come with a payslip. The financial institution reviews the application."
             }
           ],
           [
             {
               "ul": [
-                "Bank statements showing your earnings arriving",
-                "An earnings summary from the platform you work through",
-                "A statutory declaration of your income",
-                "Your EPF statement, if you have one",
-                "A list of what you already pay each month"
+                "Bank or deposit statements for the latest six months, if available",
+                "Income tax return or EPF statement",
+                "A confirmed declaration of self-employment or income stream"
               ]
             }
           ],
           [
             {
-              "p": "A longer record gives a clearer picture than one good month. Slow months belong in it too."
+              "p": "Your platform earnings summary and commitments can help organise your own record. The checklist is a preparation aid; the institution decides which evidence it accepts."
             },
             {
               "go": {
@@ -134,6 +167,9 @@ export const LEARN: LnSection[] = [
               }
             }
           ]
+        ],
+        "src": [
+          "docs"
         ]
       },
       {
@@ -177,16 +213,12 @@ export const LEARN: LnSection[] = [
         "pages": [
           [
             {
-              "steps": [
-                "To sign: the deposit. Part of it may already be paid as an [[earnest deposit|A first payment made when you book the home. It counts toward your deposit, not on top of it.]].",
-                "To complete: legal fees, stamp duty and the valuation fee.",
-                "To move in: deposits to connect the utilities and, for an apartment, toward the building’s upkeep."
-              ]
+              "p": "The purchase agreement sets when payments fall due. For regulated developer sales, KPKT says the developer cannot collect payment before the [[SPA|Sale and purchase agreement: the contract setting the home, price and payment terms.]] is signed."
             }
           ],
           [
             {
-              "p": "Knowing which moment a cost belongs to tells you when you need the money, as well as how much."
+              "p": "Upfront cash groups your estimate into signing, completion and moving in. These groups organise your scenario; your contract and invoices set the actual dates."
             },
             {
               "go": {
@@ -195,6 +227,10 @@ export const LEARN: LnSection[] = [
               }
             }
           ]
+        ],
+        "src": [
+          "buyer",
+          "sro"
         ]
       },
       {
@@ -209,7 +245,7 @@ export const LEARN: LnSection[] = [
           ],
           [
             {
-              "p": "A bank lends against its own [[valuation|An estimate of the home’s value, made by a registered valuer the bank appoints. It can differ from the price you agreed.]], which can differ from the price you agreed. If the valuation comes in lower, the loan shrinks and the difference comes out of your cash."
+              "p": "The cash you provide depends on the price and the financing actually agreed. RuMampu tests the deposit you enter; a test is not a loan offer."
             }
           ],
           [
@@ -219,9 +255,12 @@ export const LEARN: LnSection[] = [
           ],
           [
             {
-              "note": "The valuation often arrives late in the process, after the price has been agreed."
+              "note": "A RM0 deposit in a scenario does not guarantee that an institution will finance the whole purchase."
             }
           ]
+        ],
+        "src": [
+          "hcgs"
         ]
       },
       {
@@ -302,16 +341,15 @@ export const LEARN: LnSection[] = [
           [
             {
               "ul": [
-                "Deposits to connect electricity and water",
-                "For an apartment, a deposit toward the building’s upkeep",
-                "Basic furniture and appliances",
-                "Movers, or a van for the day"
+                "Your utility connection charges or deposits",
+                "Building charges stated in your agreement",
+                "Your own furniture and moving budget"
               ]
             }
           ],
           [
             {
-              "p": "None of these follow a published scale, so Upfront cash asks for your own figures instead of guessing them."
+              "p": "Upfront cash asks for your figures for these items. Use the charges or quotes that apply to your home; a blank field is not an estimate."
             },
             {
               "go": {
@@ -320,6 +358,9 @@ export const LEARN: LnSection[] = [
               }
             }
           ]
+        ],
+        "src": [
+          "buyer"
         ]
       }
     ]
@@ -333,22 +374,20 @@ export const LEARN: LnSection[] = [
         "id": "bank",
         "title": "What a bank looks at before saying yes",
         "lead": "Three things it will ask about.",
-        "draft": true,
         "pages": [
           [
             {
-              "ul": [
-                "Your income, and whether it is steady enough to cover the repayments",
-                "What you already pay toward other borrowing each month",
-                "Your record of repaying past borrowing"
-              ]
+              "p": "SJKP publishes conditions about income, total loan repayments and repayment history. These are scheme conditions, not a promise of financing."
             }
           ],
           [
             {
-              "p": "With irregular income, the first is the hardest to show. That is why records carry more weight for you than for someone paid a salary."
+              "p": "The application is assessed by the participating financial institution. RuMampu does not make its lending decision."
             }
           ]
+        ],
+        "src": [
+          "elig"
         ]
       },
       {
@@ -371,14 +410,14 @@ export const LEARN: LnSection[] = [
           ],
           [
             {
-              "p": "DSR says whether a bank may lend. It doesn’t say whether the repayment will be comfortable in your slower months. That is the question the house test answers."
+              "p": "A ratio is one input to a lending assessment. RuMampu’s house test shows how a scenario compares with your recorded months; it does not predict approval."
             }
           ]
         ]
       },
       {
         "id": "credit",
-        "title": "Your credit record: CCRIS and CTOS",
+        "title": "Your credit record: CCRIS",
         "lead": "What a bank can see about past borrowing.",
         "src": [
           "ccris"
@@ -386,32 +425,34 @@ export const LEARN: LnSection[] = [
         "pages": [
           [
             {
-              "p": "[[CCRIS|The Central Credit Reference Information System, owned and run by Bank Negara Malaysia. It lists the financing you hold and how you have repaid it.]] shows your borrowing and repayments over the past 12 months. You can check your own report free of charge through eCCRIS."
+              "p": "[[CCRIS|The Central Credit Reference Information System run by Bank Negara Malaysia. It collects credit information reported by participating financial institutions.]] records financing and repayment information. You can access your own report through eCCRIS without a fee."
             }
           ],
           [
             {
-              "p": "[[CTOS|A credit reporting agency approved in Malaysia. It keeps its own record, separate from CCRIS.]] is one of the agencies some lenders check as well."
+              "p": "CCRIS is not a blacklist or a credit rating. Institutions make their own lending decisions using it and other information."
             }
           ]
         ]
       },
       {
         "id": "thin",
-        "title": "No borrowing history isn’t a clean record",
-        "lead": "An empty record can count against you.",
-        "draft": true,
+        "title": "An empty credit record is not an approval",
+        "lead": "A report is information, not a decision.",
         "pages": [
           [
             {
-              "p": "Never having had a loan or a credit card can feel like a good sign. To a bank it can mean there is nothing to judge you on."
+              "p": "An empty record does not show a history of repaying borrowing. It is not a credit rating or a guarantee that an application will succeed."
             }
           ],
           [
             {
-              "p": "If your record is empty, expect the bank to rely more heavily on your income records, which makes a complete record of your earnings worth more."
+              "p": "Institutions use information from the application and supporting documents as well as credit records. RuMampu does not know what decision they will make."
             }
           ]
+        ],
+        "src": [
+          "ccris"
         ]
       }
     ]
@@ -425,60 +466,66 @@ export const LEARN: LnSection[] = [
         "id": "which",
         "title": "Which government schemes exist",
         "lead": "Each is meant for a different group.",
-        "draft": true,
         "pages": [
           [
             {
-              "ul": [
-                "PPR, the People’s Housing Programme, for lower-income households",
-                "Rumah Mesra Rakyat, for building a home on land you already own",
-                "PR1MA, for middle-income households in towns and cities",
-                "Residensi Wilayah, for people who live or work in the Federal Territories",
-                "State schemes such as Rumah Selangorku, run by each state for its own residents"
-              ]
+              "p": "PR1MA offers homes for eligible Malaysian applicants. Its published conditions include an income range and limits on existing property ownership."
             }
           ],
           [
             {
-              "p": "Each sets its own income range and conditions, and they change. Check the scheme’s own site before you apply."
+              "p": "Rumah Mesra Rakyat is a government programme through SPNB for lower-income households to build on land they own or have permission to use."
+            }
+          ],
+          [
+            {
+              "p": "These are different programmes with different conditions. Their official pages give the current application requirements."
             }
           ]
+        ],
+        "src": [
+          "pr1ma",
+          "rmr"
         ]
       },
       {
         "id": "ballot",
         "title": "Qualifying doesn’t guarantee a unit",
-        "lead": "Popular projects are allocated by ballot.",
-        "draft": true,
+        "lead": "Registration and selection are different steps.",
         "pages": [
           [
             {
-              "p": "When more people apply than there are homes, units are often allocated by ballot. Meeting the conditions puts you in the draw. It doesn’t reserve a home."
+              "p": "PR1MA describes a separate application step for newly launched developments. Registering does not automatically enter an applicant into a ballot."
             }
           ],
           [
             {
-              "p": "Some people apply to more than one project, where each scheme’s rules allow it."
+              "p": "Its process includes selection and checking eligibility. Meeting the basic criteria does not reserve a unit or promise financing."
             }
           ]
+        ],
+        "src": [
+          "pr1ma"
         ]
       },
       {
         "id": "resale",
-        "title": "Why you may not be able to sell for years",
-        "lead": "Affordable homes often carry a waiting period.",
-        "draft": true,
+        "title": "Check the resale conditions for the scheme",
+        "lead": "The scheme’s current terms matter.",
         "pages": [
           [
             {
-              "p": "Many schemes restrict selling or renting out the home for a set number of years after you buy. The period differs by scheme and is written into your agreement."
+              "p": "PR1MA’s FAQ asks purchasers to contact it for clarification of the moratorium period. This lesson does not supply a fixed waiting period."
             }
           ],
           [
             {
-              "p": "If you might need to move for work, check it before you commit."
+              "p": "Use the scheme’s current terms and your agreement to understand any limits on resale. Different programmes can have different conditions."
             }
           ]
+        ],
+        "src": [
+          "pr1mafaq"
         ]
       }
     ]
@@ -492,41 +539,35 @@ export const LEARN: LnSection[] = [
         "id": "spa",
         "title": "The SPA, step by step",
         "lead": "The order things usually happen in.",
-        "draft": true,
         "pages": [
           [
             {
-              "steps": [
-                "Book the home and pay the booking fee or earnest deposit.",
-                "Sign the [[SPA|Sale and purchase agreement: the contract between you and the seller that sets the price, the deposit and the dates.]] and pay the rest of the deposit.",
-                "Sign the loan agreement with your bank."
-              ]
+              "p": "For regulated developer sales, KPKT says payment cannot be collected before the [[SPA|Sale and purchase agreement: the contract setting the home, price and payment terms.]] is signed."
             }
           ],
           [
             {
-              "steps": [
-                "The [[MOT|Memorandum of transfer: the document that moves ownership of the home into your name at the land office.]] is registered, and stamp duty is paid.",
-                "Collect the keys."
-              ],
-              "start": 4
+              "p": "The signed agreement and its payment schedule set the purchase payments. The loan agreement is separate; both affect what is due."
             }
           ],
           [
             {
-              "p": "Buying from a developer follows a standard agreement set by law. Buying a home someone already owns follows an agreement the lawyers prepare."
+              "p": "The [[MOT|Memorandum of transfer: the document used to register ownership in your name.]] concerns transfer of title. Completion and key collection follow the terms of the transaction."
             }
           ]
+        ],
+        "src": [
+          "buyer"
         ]
       },
       {
         "id": "valuation",
-        "title": "Why the bank’s valuation matters more than your price",
-        "lead": "The loan follows the valuation.",
+        "title": "A lower valuation: a cash scenario",
+        "lead": "A worked example, not a loan offer.",
         "pages": [
           [
             {
-              "p": "If the valuer puts the home below the price you agreed, the bank lends less, and the gap comes out of your own cash."
+              "p": "JPPH says the public can obtain a market-value estimate from a private valuer. The next page assumes a value 5% below your tested price and the same financing share: an example, not a loan offer."
             }
           ],
           [
@@ -534,46 +575,49 @@ export const LEARN: LnSection[] = [
               "mine": "valuation"
             }
           ]
+        ],
+        "src": [
+          "valuation"
         ]
       },
       {
         "id": "deadlines",
         "title": "Dates that cost money if you miss them",
         "lead": "Worth noting as soon as you sign.",
-        "draft": true,
         "pages": [
           [
             {
-              "ul": [
-                "The stamp duty exemption applies only to agreements signed by 31 December 2027.",
-                "Defects in a new home must be reported within the period your agreement states.",
-                "Your agreement sets dates for paying the rest of the price, and missing them can bring late charges."
-              ]
+              "p": "The first-home stamp duty orders cover qualifying sale and purchase agreements signed from 1 January 2021 to 31 December 2027. The other conditions must also be met."
             }
           ]
+        ],
+        "src": [
+          "exempt"
         ]
       },
       {
         "id": "defects",
         "title": "Checking for defects before the window closes",
         "lead": "The developer repairs what you report in time.",
-        "draft": true,
         "pages": [
           [
             {
-              "p": "A new home comes with a [[defect liability period|The time after you get the keys during which the developer must repair defects you report. Your agreement states how long it lasts.]]."
+              "p": "For regulated new homes under Schedules G and H, KPKT states a 24-month [[defect liability period|The period after vacant possession during which defects are dealt with under the purchase agreement.]]. The agreement records the dates."
             }
           ],
           [
             {
-              "p": "Walk through the home soon after you get the keys, and note cracks, leaks, doors that won’t close and fittings that don’t work. Report them in writing and keep a copy."
+              "p": "Defects and any report about them relate to the home’s condition. The agreement and KPKT’s official information explain the applicable process."
             }
           ],
           [
             {
-              "p": "Once the period ends, repairs are yours to pay for."
+              "p": "The end of the period does not by itself settle every right or remedy. KPKT’s FAQ also describes tribunal claims."
             }
           ]
+        ],
+        "src": [
+          "buyer"
         ]
       }
     ]
@@ -698,7 +742,6 @@ export function lnSeen(prog: Record<string, number> | undefined, a: LnArticle): 
 export function lnDone(prog: Record<string, number> | undefined, a: LnArticle): boolean { return lnSeen(prog, a) >= a.pages.length; }
 export function lnDoneIn(prog: Record<string, number> | undefined, x: LnSection): number { return x.articles.filter(a => lnDone(prog, a)).length; }
 export function lnSecDone(prog: Record<string, number> | undefined, x: LnSection): boolean { return lnDoneIn(prog, x) === x.articles.length; }
-export function lnBadges(prog: Record<string, number> | undefined): number { return LEARN.filter(x => lnSecDone(prog, x)).length; }
 /* how much of the section is read: pages read over all pages */
 export function lnPct(prog: Record<string, number> | undefined): number {
   let a = 0, b = 0;

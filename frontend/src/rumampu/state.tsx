@@ -344,17 +344,12 @@ export interface AppState {
   voiceDisclosureAccepted: boolean;
   sayOpen: boolean;
   qSay: boolean;
-  /* v26/v27b What buying involves: the open topic, lesson and page; pages read
-     per lesson (kept on this device); whether the topic was already finished
-     and the lesson already read when it opened; the badge being celebrated. */
+  /* Epic 5: the open topic and page, and reading progress kept locally for
+     guests or synced to the signed-in account. */
   lnTab: string;
   lnArt: string | null;
   lnPg: number;
   lnProg: Record<string, number>;
-  lnWas: boolean | null;
-  lnArtWas: boolean;
-  lnCele: string | null;
-  lnPop: string | null;
   /* Price Explorer: the price being explored (null = start from the stress test),
      home type, picked district, size, tenure, year shown and the yearly growth
      of the user's price. Fetched figures stay inside the screen. */
@@ -490,7 +485,7 @@ function initialState(): AppState {
     incomePatternSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
     coverageSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
     voice: null, voiceDisclosureAccepted: false, sayOpen: false, qSay: false, aiY: null, aiAnchor: null, noBills: false, runPending: false, demo: false,
-    lnTab: 'nosalary', lnArt: null, lnPg: 1, lnProg: {}, lnWas: null, lnArtWas: false, lnCele: null, lnPop: null,
+    lnTab: 'nosalary', lnArt: null, lnPg: 1, lnProg: {},
     px: { budget: null, type: 'terrace', district: null, size: 'typical', tenure: 'F', year: 3, grow: 3, view: 'list', typeSet: false, state: 'SGR' },
     tour: null, tourAsk: null, tourHint: null, tipsOff: process.env.EXPO_PUBLIC_E2E === '1', seenG: [],
     sheet: null,

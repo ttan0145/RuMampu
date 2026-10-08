@@ -6,6 +6,10 @@ Language: **English** | [Chinese (CN)](API_CONTRACT.cn.md)
 - Base path: `/api/v1/`
 - Machine-readable version: [openapi.yaml](openapi.yaml)
 
+## Account reading progress (Epic 5)
+
+`GET /api/v1/auth/me/`, login and registration return `learning_progress`, an object mapping stable lesson ids to the last page read. `PATCH /api/v1/auth/me/` accepts the same field. Values are integers from 0 to 100, ids match `[a-z][a-z0-9_-]{0,63}`, and at most 100 entries are accepted. An empty object resets progress. Invalid input rejects the entire patch without changing other declarations. Progress is owned by the authenticated account; guests keep it on their device. The client clamps a saved page to the current lesson length. Apply migration `finance.0022_userappstate_learning_progress` before serving the updated client.
+
 ## 1. General conventions
 
 - Ordinary requests and responses use UTF-8 JSON; file-upload endpoints use `multipart/form-data`.
@@ -397,6 +401,8 @@ The price model runs offline in `ml/`; `manage.py load_price_model ml/app_export
 | `trend/` | `state`, `property_type` | `state` is aligned to the national quarters, with `null` where the state has no point. |
 
 Ranges are what-ifs, not valuations: clients show a range, never one price, and label the future as a what-if.
+
+`GET /api/v1/housing/house-costs/` returns HTTP 503 with `{"detail":"no transaction data loaded"}` when raw sales are empty, dependent tables are absent, or data queries are unavailable. It does not generate placeholder prices. Queries run inside a savepoint so a failed read does not break subsequent account or housing database operations. Successful aggregate responses retain their existing shape.
 
 ## 11. Compatibility and change policy
 

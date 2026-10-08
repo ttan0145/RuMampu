@@ -170,6 +170,7 @@ export interface ApiIncomePatternMonth {
   gross_income: string;
   work_costs: string;
   usable_income: string;
+  is_in_progress: boolean;
   is_lowest_recorded: boolean;
 }
 
@@ -188,6 +189,8 @@ export interface ApiIncomePattern {
   provenance: 'calculated_from_user_record';
   work_cost_basis: 'recorded_entries_by_month';
   months: ApiIncomePatternMonth[];
+  completed_months: ApiIncomePatternMonth[];
+  current_month_so_far: ApiIncomePatternMonth | null;
   statistics: ApiIncomePatternStatistics | null;
   lower_income: {
     basis: 'recorded_minimum';
@@ -211,6 +214,7 @@ export interface ApiIncomeCoverage {
   represented_slower_months: number[];
   unrepresented_slower_months: number[];
   recorded_calendar_months: number[];
+  current_month_so_far: ApiIncomePatternMonth | null;
   observation: ApiIncomeCoverageObservation | null;
 }
 
@@ -228,6 +232,7 @@ export interface ApiAuthState {
   cash_on_hand_date: string | null;
   upfront_costs: unknown[];
   docs_checked: string[];
+  learning_progress?: Record<string, number>;
   bought_home: boolean;
   homeownership_purchase_month: string | null;
   expense_limits: Record<string, unknown>;
@@ -278,6 +283,7 @@ export interface AccountStatePatch {
   pot_moved_months: string[];
   pot_moved: number;
   docs_checked: string[];
+  learning_progress: Record<string, number>;
   kept_tests: unknown[];
 }
 

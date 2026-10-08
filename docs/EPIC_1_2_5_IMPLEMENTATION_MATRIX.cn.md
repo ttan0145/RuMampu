@@ -50,12 +50,13 @@ Epic 2 以后端权威方式实现，2026-10-03 重新核验 18/18 AC，只返�
 | User Story | 当前状态 | 代码/证据 | 待决事项 |
 |---|---|---|---|
 | US5.1 Access homeownership preparation tools | Built（5/5 AC） | Prepare 列出 Upfront cash、Cash buffer、Documents & financing；House 和 Money 的入口已重新开放；House 卡片说明已存了多少；[验收索引](epic-5/README.cn.md) | 无 |
-| US5.2 Check upfront cash readiness | Built（17/17 AC） | 带日期的现金录入保存到账户（`cash_on_hand_date`，迁移 0018）；“You have”是与首页和 House 卡片共用的一个 pot，先从中留出现金缓冲（US5.8，2026-10-05）；费用引擎由分档边界测试锁定；图表几何、颜色、分组、来源和首套房开关已在浏览器中检查 | 修订后的 AC5.1.5、AC5.2.9 和 AC5.2.17 等产品负责人确认；金额在前端计算，而 ADR 0004 规定以 Django 为权威 |
-| US5.3 Estimate a cash buffer from recorded short months | Built（9/9 AC，含修订） | 服务端计算的缓冲金额，现按“不论记录从哪个月开始”的最大跌幅计算（[ADR 0005](adr/0005-cash-buffer-deepest-fall.cn.md)）；点出并标出跌幅月份；12 个月固定数据的后端回归；零线落在零实际位置 | 需产品负责人确认修订后的 AC5.3.2 以及新增的 AC5.3.8、AC5.3.9（固定数据上 RM 680 变为 RM 1,940） |
-| US5.4 Review financing preparation documents | Built（7/7 AC） | 五项清单；带来源和日期的 SJKP 条件；显示“需要复核”而非结论；免责声明 | SJKP 条件和 Aug 2026 参考日期需在发布前重新核验 |
-| US5.8 Count my savings once（团队修订） | Built（10/10 AC；Cash buffer 上“动用安全钱”的入口和起名待团队确认） | 一个罐子（已有现金 + 计划存下 + 转入），先留出缓冲；Upfront cash、House、罐子明细、储蓄计划和首页读同一套拆分；Cash buffer 显示覆盖情况并可打开储蓄计划；Epic 10 的缓冲阶段和月目标也按此计算 | 需产品负责人和 Epic 10 负责人确认，之后写进 v5 文档和 LeanKit |
+| US5.2 Check upfront cash readiness | Built（17/17 AC） | 带日期的现金录入保存到账户（`cash_on_hand_date`，迁移 0018）；“You have”是与首页和 House 卡片共用的一个 pot，先从中留出现金缓冲（US5.8，2026-10-05）；费用引擎由分档边界测试锁定；图表几何、颜色、分组、来源和首套房开关已在浏览器中检查 | 迭代 3 修订与 LeanKit 已对齐；金额仍在前端计算，而 ADR 0004 规定以 Django 为权威 |
+| US5.3 Estimate a cash buffer from recorded short months | Built（9/9 AC，含修订） | 服务端计算的缓冲金额，现按“不论记录从哪个月开始”的最大跌幅计算（[ADR 0005](adr/0005-cash-buffer-deepest-fall.cn.md)）；点出并标出跌幅月份；12 个月固定数据的后端回归；零线落在零实际位置 | 当前需求与看板包含这些修订；外部签核不由代码测试代替 |
+| US5.4 Review financing preparation documents | Built（7/7 AC） | 五项清单；带来源和日期的 SJKP 条件；显示“需要复核”而非结论；免责声明 | SJKP 条件已于 2026-10-08 核对；官方来源变化需同步正文与日期 |
+| US5.5–5.7 Learn 与阅读进度 | Built（20 条 AC 已映射） | Prepare 入口、19 篇来源与日期、全部 51 页的尺寸检查、账号跨设备进度、无阅读奖励；`epic5-learn.spec.ts` | 部署前执行迁移 0022；本轮最终结果见验收索引 |
+| US5.8 Count my savings once（团队修订） | Built（10/10 AC；Cash buffer 上“动用安全钱”的入口和起名待团队确认） | 一个罐子（已有现金 + 计划存下 + 转入），先留出缓冲；Upfront cash、House、罐子明细、储蓄计划和首页读同一套拆分；Cash buffer 显示覆盖情况并可打开储蓄计划；Epic 10 的缓冲阶段和月目标也按此计算 | 当前迭代 3 文档和 LeanKit 已包含 US5.8；卡片状态和外部签核另行记录 |
 
-48 条验收标准是 [v5 基线](requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)的 36 条加上 2026-10-05 的团队修订。User Story 5.5 到 5.7（迭代 3 新增的 Learn 解释页）随 v27b3 合并进来，还没有验收检查。Epic 5 的官方规则只能用于准备清单与信息展示，不能输出审批、资格或可负担结论。验收记录和待决事项见 [Epic 5 索引](epic-5/README.cn.md)。
+当前 [v5 + 迭代 3 基线](requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)包含 8 个 US、68 条 AC，全部有浏览器验收映射。官方规则用于准备清单与信息展示，不输出审批、资格或可负担结论。最终运行证据与实现边界见 [Epic 5 索引](epic-5/README.cn.md)。
 
 ## 推荐实施顺序
 
@@ -68,4 +69,4 @@ Epic 2 以后端权威方式实现，2026-10-03 重新核验 18/18 AC，只返�
 7. E1.7 收据起点流程 - 已按 10/10 AC 完成，真实 OCR 与人工确认边界分离。
 8. E1.8 历史 CSV 导入 - 已按 8/8 AC 完成。
 9. E2 后端权威收入形态与 coverage - 已按 18/18 AC 完成。
-10. E5 购房准备工具 - 已实现，48/48 条 AC（v5 加团队修订）有可执行证据。剩余：US5.8 和修订条目的确认、把前期费用标准移到后端、重新核验公开来源，并为 Learn 故事 5.5 到 5.7 补验收检查（以及把阅读进度存到账号）。
+10. E5 购房准备与 Learn — 8 个 US、68 条 AC 已实现并映射；本轮补齐来源、入口、无奖励规则与账号阅读进度。运行结果见验收索引；部署需迁移 0022，前期费用后端化仍是独立架构工作。

@@ -3,10 +3,9 @@
 语言：**中文（CN）** | [English](README.md)
 
 - 状态：已实现并有可执行检查覆盖，等待负责人验收
-- 范围：5 个 User Story，48 条验收标准：v5 的 36 条，加上 2026-10-05 和 2026-10-06 的团队修订（US5.8 含 AC5.8.9 和 AC5.8.10、AC5.3.8、AC5.3.9）（[基线](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)，云盘 `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v5.docx`）
+- 范围：8 个 User Story，68 条验收标准：v5 的 36 条、迭代 3 Learn 的 20 条，加上 2026-10-05 和 2026-10-06 的团队修订（US5.8 含 AC5.8.9 和 AC5.8.10、AC5.3.8、AC5.3.9）（[基线](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)，云盘 `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v5.docx`）
 - 入口：House → **Prepare for a house**，以及 Money → **Cash buffer**
-- 不在本索引内：User Story 5.5 到 5.7（Learn 解释页，来自云盘文档 "Added User Stories to Epics for Iteration 3"，为迭代 3 新增）。它们随 v27b3 合并进来，还没有验收检查（见待决事项 6）。
-- 决策：[ADR 0004](../adr/0004-backend-authoritative-housing-calculations.cn.md)，见待决事项 3；现金缓冲的计算方法见 [ADR 0005](../adr/0005-cash-buffer-deepest-fall.cn.md)
+- 决策：[ADR 0004](../adr/0004-backend-authoritative-housing-calculations.cn.md)，见实现边界 3；现金缓冲的计算方法见 [ADR 0005](../adr/0005-cash-buffer-deepest-fall.cn.md)
 
 | User Story | 验收标准 | 证据 |
 | --- | ---: | --- |
@@ -14,6 +13,9 @@
 | US5.2 — 检查前期现金是否充足 | 17/17 | You have / You need / Gap、水位线图表、按到期时间分组的分项清单、带日期的现金录入、按公布标准算出并写明来源的费用、首套房开关 |
 | US5.3 — 按记录中的短缺月份估算现金缓冲 | 9/9 | 服务端计算的缓冲金额（最大跌幅，ADR 0005）、在 12 个月滚动余额图上标出的跌幅月份、零线落在零实际位置、记录区间和 RM 0 的解释 |
 | US5.4 — 查看融资准备材料 | 7/7 | 五项清单、带来源和日期的 SJKP 条件、显示“需要复核”而非结论、免责声明 |
+| US5.5 — 买房知识解释 | 11/11 | Prepare 入口、五个主题、19 篇带来源日期的说明、术语与个人金额；逐页尺寸检查 |
+| US5.6 — 无固定工资者的信息 | 3/3 | No payslip、SJKP 担保上限与材料清单入口 |
+| US5.7 — 阅读进度 | 6/6 | 已读数、续读、Prepare 总进度、账号跨设备保存；无阅读奖励 |
 | US5.8 — 现金缓冲和首付共用的储蓄只算一次（团队修订） | 10/10 | 罐子先填缓冲；Upfront cash、House、储蓄计划和首页读同一套拆分；Cash buffer 写明已覆盖多少，并能打开储蓄计划 |
 
 ## 验收记录
@@ -55,9 +57,29 @@
 | AC5.4.2 Include visible document types | 通过 | 银行流水、电召车收入汇总、收入法定声明、EPF 对账单、现有承诺清单 |
 | AC5.4.3 Toggle checklist items | 通过 | 选中某项后 ☐ 变为 ☑，再点击恢复；其他项不受影响 |
 | AC5.4.4 Display SJKP published criteria | 通过 | 列出三条条件 |
-| AC5.4.5 Display source and date | 通过 | 信息弹层显示 *Source: sjkp.com.my, Aug 2026* |
+| AC5.4.5 Display source and date | 通过 | 信息弹层显示 *Source: sjkp.com.my/en/hcgs/eligibility, checked 8 Oct 2026* |
 | AC5.4.6 Avoid displaying unsupported approval status | 通过 | 显示 *65% check: needs review* 及原因；没有 pass、fail、approved 或 eligible 字样 |
 | AC5.4.7 Display financing disclaimer | 通过 | 信息弹层说明 RuMampu 不会替用户申请，也无法告诉用户银行是否会批准 |
+| AC5.5.1 Open the explanations from Prepare | 通过 | Prepare 的 Learn 入口可打开解释 |
+| AC5.5.2 Sections shown as tabs | 通过 | 五个主题按要求排列为标签 |
+| AC5.5.3 Every explanation names its source and date | 通过 | 19 篇解释的最后页显示可点击来源与核对日期 |
+| AC5.5.4 Government sources only | 通过 | 政府方案与 SJKP 参与机构清单直达链接 |
+| AC5.5.5 Reach the right tab from each tool | 通过 | Upfront 与 Documents 分别打开相关主题 |
+| AC5.5.6 Show my own figure where one exists | 通过 | 已测试房屋的费用带 CALCULATED 金额 |
+| AC5.5.7 Explain terms where they appear | 通过 | 点击正文术语显示解释并留在当前页 |
+| AC5.5.8 Not advice | 通过 | 每篇最后页显示非建议与非审批说明 |
+| AC5.5.9 One idea per page | 通过 | 51 页分别在 390×844、360×740 检查实际内容高度 |
+| AC5.5.10 Move between pages with buttons | 通过 | Back、Next、Finish 与页码一致 |
+| AC5.5.11 Refer EPF out rather than explain it | 通过 | EPF 边界说明与 KWSP 外链 |
+| AC5.6.1 A tab for irregular income | 通过 | No payslip 标签及材料解释 |
+| AC5.6.2 Explain the financing guarantee and its limits | 通过 | SJKP 两类方案的上限，符合条件不代表审批 |
+| AC5.6.3 Link documents to the checklist | 通过 | 材料解释直接打开清单 |
+| AC5.7.1 Show progress on each explanation | 通过 | 每篇显示已读页数/总页数 |
+| AC5.7.2 Grey out what I've finished | 通过 | 已读行淡化为 0.66，仍可重新打开 |
+| AC5.7.3 Resume where I stopped | 通过 | 未完成文章从上次页码继续 |
+| AC5.7.4 Show progress for each section and overall | 通过 | 主题已读数与 Prepare 总已读数 |
+| AC5.7.5 Keep progress between sessions | 通过 | PATCH 保存、刷新及另一浏览器登录同账号恢复 |
+| AC5.7.6 Nothing is locked behind reading | 通过 | 其他功能可直接使用，阅读无奖励或庆祝 |
 | AC5.8.1 Hold the buffer first | 通过 | 罐子里有 RM 1,000，保存的 RM 250,000 测试需要 RM 905 缓冲时，*You have* 为 RM 95，差额为所需金额减 RM 95 |
 | AC5.8.2 One reading on every screen | 通过 | Upfront cash、House 卡片（"RM 95 of … set aside · RM 905 held as your safety buffer"）和储蓄计划（"Safety buffer RM 905 · Upfront cash RM 95"，罐子 RM 1,000）一致；首页写明两项目标合计还差多少 |
 | AC5.8.3 Say what is held | 通过 | 显示 "RM 905 of your pot is held as your safety buffer, so it is not counted here"，罐子明细列出留作缓冲的金额 |
@@ -78,20 +100,20 @@
 - 结束月份转入的钱：`pot_moved_months` 旁边的 `pot_moved`（[迁移 0019](../../backend/finance/migrations/0019_userappstate_pot_moved.py)），本地快照里也保存
 - 现金缓冲计算：[`services.py`](../../backend/apps/housing/services.py) 中的 `_starting_liquidity`，取最大跌幅并返回 `fall_start` 和 `fall_end`（[ADR 0005](../adr/0005-cash-buffer-deepest-fall.cn.md)）
 - 12 个月固定数据的后端回归（RM 1,940、RM 904.74、RM 0、RM 4,740 四种缓冲，每月余额及跌幅起止月），以及“整份记录的缓冲等于所有按原时间顺序保留的后缀所需起始现金的最大值”的直接检查（不循环换序）：[`tests.py`](../../backend/apps/housing/tests.py) 中的 `GigDriverStartingLiquidityTests` 和 `StartingLiquidityPathTests`
-- 真实浏览器验收：[`epic5.spec.ts`](../../frontend/e2e/epic5.spec.ts)（36 条验收标准各登记一次，另有五条工程回归：TECH-5.1 Money 入口、TECH-5.2 修改与需要已满足、TECH-5.3 余额从未跌破零也可能需要缓冲、TECH-5.4 安全缓冲占用的钱不重复计算、TECH-5.5 转入的钱刷新后还在）
+- 真实浏览器验收：[`epic5.spec.ts`](../../frontend/e2e/epic5.spec.ts)（核心 48 条验收标准各登记一次，另有工程回归：TECH-5.1 Money 入口、TECH-5.2 修改与需要已满足、TECH-5.3 余额从未跌破零也可能需要缓冲、TECH-5.4 安全缓冲占用的钱不重复计算、TECH-5.5 转入的钱刷新后还在）
+- Learn 浏览器验收：[`epic5-learn.spec.ts`](../../frontend/e2e/epic5-learn.spec.ts)，覆盖 US5.5–5.7 的 20 条 AC、全部 51 页与跨设备阅读进度。
 - 费用标准和 pot 算术在分档边界上的回归：[`epic5-upfront-fees.spec.ts`](../../frontend/e2e/epic5-upfront-fees.spec.ts)
-- 追溯闸门：`npm run test:e2e:traceability` 对照[基线](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)检查 Epic 5 为 48/48 条验收标准
+- 追溯闸门：`npm run test:e2e:traceability` 对照[基线](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)检查 Epic 5 为 68/68 条验收标准
 - 截图：[`output/playwright/epic-5/evidence/`](../../output/playwright/epic-5/evidence/)，用 `UPDATE_EVIDENCE=1` 刷新
 - 运行 Epic 5 检查：在 `frontend/` 下执行 `npm run test:e2e:epic5`
 
-## 待决事项
+## 实现边界与验收流程
 
-1. **US5.8 和几条修订需要产品负责人签字。** 2026-10-05 团队没有等决定，先实现了 US5.8（罐子只算一次，先填缓冲）、AC5.3.8 和 AC5.3.9，并修订了 AC5.1.5、AC5.2.9、AC5.2.17 和 AC5.3.2。规则与 v27b 原型一致：罐子先填安全缓冲，剩下的才算首付现金。[需求基线](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)逐条标明了这些修订，还需要写进 v5 文档和 LeanKit。Epic 10 储蓄计划也改用同一规则（罐子低于缓冲时处于缓冲阶段），相当于 2026-10-01 批评分析里提议的 AC10.1.3 和 AC10.12.3 修订，需要 Epic 10 负责人确认。
-2. **现金缓冲按最大跌幅计算（ADR 0005）。** 修订后的 AC5.3.2 记下了这种理解；数字只会变大（固定数据每月 RM 1,900 时由 RM 680 变为 RM 1,940）。
-3. **首付数字在前端计算。** ADR 0004 规定首付差额以 Django 为准，但 *You need* 和 *Gap* 来自 `fees.ts` 里的公开费率引擎。固定值测试锁定了它，把费率移到后端服务是另一个工作包。估价费率在页面上标为 `ASSUMPTION`，因为还没有对照宪报原文核对。
-4. **部分必需文字放在 (i) 按钮后面。** 费用和 SJKP 条件的来源（AC5.2.13、AC5.2.14、AC5.4.5）、免责声明（AC5.4.7）和记录依据（AC5.3.4、AC5.3.5）都在信息弹层里，这是按 v24 设计做的，检查会打开弹层。如果团队希望直接印在页面上，只是位置调整。
-5. **发布前重新核对公开来源。** SJKP 条件和 *Aug 2026* 参考日期，以及印花税、律师费和估价费率，最后核对日期见各信息弹层。
-6. **Learn 解释页（5.5 到 5.7）已经做好（v27b3，2026-10-05 合并），但还没有验收检查。** 阅读进度只存在本机，没有存到账号，所以 AC5.7.5（换设备）没达到；徽章和读完一个主题的庆祝动画照原型做，是对 AC5.7.6 的有意偏离。
+1. **当前需求与 LeanKit 已对齐。** 2026-10-08 核对的迭代 3 文件和 LeanKit 都包含 8 个 US、68 条 AC，包括 US5.8、AC5.3.8/.9 与四条修订；本轮已更新本地基线。代码验证与负责人的签核、卡片泳道是不同证据，本轮未移动卡片或宣称外部签核完成。
+2. **现金缓冲按最大跌幅计算（ADR 0005）。** 当前 AC5.3.2 已记录该规则；固定数据每月 RM 1,900 的缓冲为 RM 1,940。
+3. **首付数字在前端计算。** ADR 0004 规定首付差额以 Django 为准，但 You need 与 Gap 仍来自 `fees.ts`。本轮保留固定值回归；移到后端是独立的架构工作。估价费率继续标为 ASSUMPTION。
+4. **部分必需文字在信息弹层中。** 费用、SJKP 的来源与免责声明、现金缓冲的记录依据均通过 (i) 打开，验收会检查弹层内容。
+5. **公开来源有明确核对日期。** SJKP 条件已于 2026-10-08 与官方页核对；19 篇 Learn 的依据与更正见 [LEARN_SOURCES.md](LEARN_SOURCES.md)。印花税标准保留此前核对日期，不把未完整复查的费率标成新核对。
 
 ## 已批准的边界
 
@@ -99,3 +121,31 @@
 - 现金缓冲来自用户自己记录的月份，从不当作通用规则呈现。
 - 现金由用户自己填写，RuMampu 不会代填，也不会替没有公布标准的费用补上自己的数字。
 - 申请融资、信用评分和购房后监测（Epic 7 预览）不属于 Epic 5。
+
+## 2026-10-08：迭代 3 的 Learn 修复
+
+US5.5–5.7 已纳入索引与正式基线；`epic5-learn.spec.ts` 将 20 条 AC 各登记一次，通过实际界面核对全部 51 页在两种手机尺寸下的布局、来源与日期、术语解释、个人金额、材料导航、已读数、续读、刷新和另一浏览器中相同账号的恢复。
+
+| User Story | AC 数 | 行为 |
+| --- | ---: | --- |
+| US5.5 — 提交购房决定前了解买房流程 | 11 | Prepare 的 Learn 入口、按顺序排列的五个标签、带来源日期的解释、政府方案与 SJKP 机构清单、个人金额、术语、分页、免责声明与 KWSP 链接 |
+| US5.6 — 查找无工资单者的信息 | 3 | No payslip 标签、SJKP 担保上限和材料清单入口 |
+| US5.7 — 看已读内容 | 6 | 已读页数、淡化已读行、续读、主题与 Prepare 总数、账号跨设备进度；阅读可选且无奖励 |
+
+部署前执行 `finance.0022_userappstate_learning_progress` 迁移。访客在本机保存；账号登录时以账号进度为准，空进度会清除其他账号遗留的本机历史。无效进度会拒绝整次 PATCH。
+
+AC5.7.6 按现行文字实现，阅读徽章与庆祝已移除；完成文章仅显示已读状态。
+
+内容依据及更正见 [LEARN_SOURCES.md](LEARN_SOURCES.md)。
+
+## 本轮最终验证（2026-10-08 17:20 SGT）
+
+- `npm run typecheck`：前端与 E2E TypeScript 均通过。
+- `npm run test:e2e:traceability`：Epic 5 为 68/68，每条登记一次，0 条延期。
+- 完整 `npm run test:e2e`：111 项全部通过，耗时 16.4m；其中 Epic 5 的 30 项测试覆盖 68 条正式 AC 与额外回归。
+- 布局：19 篇、51 页在两种手机尺寸下共 102 次检查，加上五处个人金额在两种尺寸下的 10 次检查，共 112 次，均无需滚动；来源区无遮挡。
+- 独立 SQLite 测试库中的完整 Django suite：215 项全部通过；`makemigrations --check --dry-run` 无漂移。
+- House costs 缺少原始交易数据时返回明确的 503，而不是 500；缺表、部分数据、空数据、正常统计响应及事务恢复均有回归。
+- OpenAPI 重新生成后与已提交文件一致。生成器仍输出既有的未声明 serializer 和 operationId 冲突信息，不把这项说成无警告。
+
+逐条 AC、部署步骤与证据见 [修复报告](REPAIR_REPORT.cn.md)。

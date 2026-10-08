@@ -202,6 +202,7 @@ class WorkCostEntry(models.Model):
     )
     cost_date = models.DateField()
     amount = models.DecimalField(max_digits=12, decimal_places=2)
+    merchant = models.CharField(max_length=160, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -460,6 +461,8 @@ class UserAppState(models.Model):
     cash_on_hand_date = models.DateField(null=True, blank=True)
     upfront_costs = models.JSONField(default=list, blank=True)
     docs_checked = models.JSONField(default=list, blank=True)
+    # Epic 5 reading progress belongs to the account, including on another device.
+    learning_progress = models.JSONField(default=dict, blank=True)
     bought_home = models.BooleanField(default=False)
     # First calendar month that belongs to the post-purchase record.  Keeping
     # this separately from the Boolean lets Epic 7 exclude pre-purchase and

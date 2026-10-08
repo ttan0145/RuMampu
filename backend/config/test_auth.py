@@ -50,6 +50,39 @@ def workbook_values(workbook):
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class AuthApiRegressionTests(TestCase):
+    def test_learning_progress_persists_for_the_account_on_another_device(self):
+        user = User.objects.create_user(username="reader@example.com", password="Passw0rd123")
+        token = Token.objects.create(user=user)
+        first = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+        self.assertEqual(first.get("/api/v1/auth/me/").json()["learning_progress"], {})
+        progress = {"sjkp": 2, "docs": 3}
+        saved = first.patch("/api/v1/auth/me/", {"learning_progress": progress}, content_type="application/json")
+        self.assertEqual(saved.status_code, 200)
+        second = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+        self.assertEqual(second.get("/api/v1/auth/me/").json()["learning_progress"], progress)
+        other = User.objects.create_user(username="other-reader@example.com", password="Passw0rd123")
+        isolated = Client(HTTP_AUTHORIZATION=f"Token {Token.objects.create(user=other).key}")
+        self.assertEqual(isolated.get("/api/v1/auth/me/").json()["learning_progress"], {})
+        self.assertEqual(second.patch("/api/v1/auth/me/", {"learning_progress": {}},
+                                     content_type="application/json").status_code, 200)
+        self.assertEqual(first.get("/api/v1/auth/me/").json()["learning_progress"], {})
+
+    def test_invalid_learning_progress_is_rejected_without_overwriting_saved_state(self):
+        user = User.objects.create_user(username="reader-validation@example.com", password="Passw0rd123")
+        token = Token.objects.create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+        client.patch("/api/v1/auth/me/", {"learning_progress": {"sjkp": 2}}, content_type="application/json")
+        for invalid in [None, [], {"sjkp": True}, {"sjkp": -1}, {"sjkp": 1.5},
+                        {"sjkp": 101}, {"sjkp": "2"}, {"bad id": 2}, {"x" * 65: 1},
+                        {f"lesson-{i}": 1 for i in range(101)}]:
+            with self.subTest(invalid=invalid):
+                response = client.patch("/api/v1/auth/me/", {"learning_progress": invalid, "cash_on_hand": 999},
+                                        content_type="application/json")
+                self.assertEqual(response.status_code, 400)
+                state = client.get("/api/v1/auth/me/").json()
+                self.assertEqual(state["learning_progress"], {"sjkp": 2})
+                self.assertEqual(state["cash_on_hand"], 0)
+
     def test_iteration3_purchase_month_and_account_details_round_trip(self):
         user = User.objects.create_user(
             username="old-address@example.com",

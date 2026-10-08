@@ -35,7 +35,7 @@ export const GUIDES: Partial<Record<Route, { id: string; k: string }[]>> = {
   income: [{ id: 'in.seg', k: 'g_in1' }, { id: 'in.hero', k: 'g_in2' }, { id: 'in.wm', k: 'g_in3' }],
   expenses: [{ id: 'ex.sum', k: 'g_ex1' }, { id: 'ex.wm', k: 'g_ex3' }],
   plan: [{ id: 'pl.setup', k: 'g_pl0' }, { id: 'pl.grid', k: 'g_pl3' }, { id: 'pl.phase', k: 'g_pl1' }, { id: 'pl.chips', k: 'g_pl2' }],
-  learn: [{ id: 'ln.hero', k: 'g_ln0' }, { id: 'ln.badges', k: 'g_ln3' }, { id: 'ln.secs', k: 'g_ln1' }],
+  learn: [{ id: 'ln.hero', k: 'g_ln0' }, { id: 'ln.secs', k: 'g_ln1' }],
   pv_compare: [{ id: 'pv.cards', k: 'g_pv1' }, { id: 'pv.chart', k: 'g_pv2' }],
   priceexplorer: [{ id: 'px.price', k: 'g_px1' }, { id: 'px.map', k: 'g_px2' }, { id: 'px.home', k: 'g_px3' }],
 };
@@ -394,19 +394,19 @@ export function TourHost({ tabBarHeight }: { tabBarHeight: number }) {
   const { S, up } = useApp();
   React.useEffect(() => {
     if (E2E || S.tipsOff || !S.onboarded || !S.knew || S.authEntryOpen) return undefined;
-    if (S.tour || S.tourAsk || S.sheet || S.assistantOpen || S.lnCele) return undefined;
+    if (S.tour || S.tourAsk || S.sheet || S.assistantOpen) return undefined;
     const route = S.route;
     if (!GUIDES[route] || S.seenG.includes(route) || QUIET.includes(route)) return undefined;
     /* wait for the screen's parts to mount and settle before counting them */
     const timer = setTimeout(() => up(s => {
-      if (s.tour || s.tourAsk || s.sheet || s.lnCele || s.route !== route || s.seenG.includes(route)) return;
+      if (s.tour || s.tourAsk || s.sheet || s.route !== route || s.seenG.includes(route)) return;
       if (!available(route).length) return;
       s.seenG.push(route);
       if (route === 'home') s.tourAsk = 'home';
       else s.tourHint = route;
     }), 700);
     return () => clearTimeout(timer);
-  }, [S.route, S.tipsOff, S.onboarded, S.knew, S.authEntryOpen, S.tour, S.tourAsk, S.sheet, S.assistantOpen, S.lnCele, S.seenG, up]);
+  }, [S.route, S.tipsOff, S.onboarded, S.knew, S.authEntryOpen, S.tour, S.tourAsk, S.sheet, S.assistantOpen, S.seenG, up]);
 
   /* a hint belongs to the screen it was offered on */
   React.useEffect(() => {

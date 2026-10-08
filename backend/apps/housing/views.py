@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
-from django.db import connection
+from django.db import DatabaseError, connection, transaction
 from django.http import JsonResponse
 from django.views.decorators.cache import cache_page
 from django.views.decorators.http import require_GET
@@ -300,14 +300,23 @@ def house_costs(request):
     except (TypeError, ValueError):
         n = DEFAULT_WINDOW
 
-    quarters = _window(n)
+    try:
+        # Raw sales tables are optional in SQLite development/CI. A savepoint
+        # also keeps a missing PostgreSQL table from poisoning the transaction.
+        with transaction.atomic():
+            quarters = _window(n)
+            if quarters:
+                income = _income()
+                places = _places(quarters)
+    except DatabaseError:
+        return JsonResponse({"detail": "no transaction data loaded"}, status=503)
+
     if not quarters:
         return JsonResponse({"detail": "no transaction data loaded"}, status=503)
 
-    income = _income()
     states = {}
 
-    for state_name, district, ptype, sales, median, under_thr in _places(quarters):
+    for state_name, district, ptype, sales, median, under_thr in places:
         skey = STATE_KEY.get(state_name)
         if skey is None:
             continue                      # a state we have no short key for

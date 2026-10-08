@@ -16,7 +16,7 @@ import { BODY_FONT, C, DISP_FONT, SEMI_FONT, XBOLD_FONT } from '../theme';
 import { Ico } from '../svgs';
 import { Ruma } from '../ruma-view';
 import { ScreenShell } from './shell';
-import { LnEnter } from './learn';
+import { LearnStrip, LnEnter } from './learn';
 import { GuideTarget } from '../tour';
 import { SheetFrame } from '../overlays';
 
@@ -28,6 +28,10 @@ export function PrepareBody() {
       <BtnQuiet onPress={() => go('upfront')}><IcLab name="wallet"><P>{t('pr_upfront')}</P></IcLab></BtnQuiet>
       <BtnQuiet onPress={() => go('buffer')}><IcLab name="ring"><P>{t('pr_buffer')}</P></IcLab></BtnQuiet>
       <BtnQuiet onPress={() => go('docs')}><IcLab name="file"><P>{t('pr_docs')}</P></IcLab></BtnQuiet>
+      <View testID="prepare-learning" style={{ gap: 8 }}>
+        <BtnQuiet onPress={() => go('learn')}><IcLab name="book"><P>{t('hh_learn')}</P></IcLab></BtnQuiet>
+        <LearnStrip />
+      </View>
       <Divider />
       <BtnQuiet style={{ paddingVertical: 12 }} onPress={() => go('pv_switch')}>
         <IcLab name="eye">

@@ -6,6 +6,10 @@
 - 基准路径：`/api/v1/`
 - 机器可读版本：[openapi.yaml](openapi.yaml)
 
+## 账号阅读进度（Epic 5）
+
+`GET /api/v1/auth/me/`、登录和注册返回 `learning_progress`，以稳定的文章 ID 对应已读页码；`PATCH /api/v1/auth/me/` 接受同一字段。页码必须是 0–100 的整数，ID 匹配 `[a-z][a-z0-9_-]{0,63}`，最多 100 项；空对象清空进度。无效输入会拒绝整次 PATCH，不覆盖其他数据。账号间隔离；访客仍仅在本机保存。前端把页码限制在现有文章页数内。部署更新前须执行 `finance.0022_userappstate_learning_progress` 迁移。
+
 ## 1. 通用规则
 
 - 一般请求与响应使用 UTF-8 JSON；文件上传端点使用 `multipart/form-data`。
@@ -382,6 +386,8 @@ API 不返回预测、稳定性、风险或固定阈值结论。
 测试请求可以携带 `tested_monthly_home_cost`，用于不持久化的付款比较；也可以携带 0 至 90 的 `income_shock_percent`，用于假设收入下降场景。两者都会复用已保存 scenario 的利率、年期、头期、附加成本及后端财务记录，且不会修改 scenario。响应包括测试月度结果、短缺、承担区间、参考房价换算及 `starting_liquidity` 路径。`starting_liquidity.required_amount` 是运行余额从之前某个高点（或从开头）到之后低点的最大跌幅，因此不论记录从哪个月开始都能撑过去；`fall_start` 和 `fall_end` 给出这段跌幅开始和跌到最低的月份（见 [ADR 0005](adr/0005-cash-buffer-deepest-fall.cn.md)）。
 
 `POST /api/v1/housing/test/` 仅作为旧版无状态客户端的兼容端点保留。正式前端不再调用它，也不会提交由客户端计算的财务月份副本。
+
+`GET /api/v1/housing/house-costs/` 在原始交易数据未加载、依赖表缺失或数据查询不可用时返回 HTTP 503 与 `{"detail":"no transaction data loaded"}`。不生成占位房价；查询在 savepoint 中执行，失败后其他账号/住房数据库操作仍可继续。成功响应的真实统计结构保持不变。
 
 ## 11. 兼容与变更
 

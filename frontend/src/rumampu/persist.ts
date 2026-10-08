@@ -148,7 +148,9 @@ export function hydrate(s: AppState, raw: string | null): void {
     if (typeof payload.tipsOff === 'boolean' && process.env.EXPO_PUBLIC_E2E !== '1') s.tipsOff = payload.tipsOff;
     if (validStringArray(payload.seenG)) s.seenG = payload.seenG as AppState['seenG'];
     /* v26 learning progress stays on this device: pages read per lesson. */
-    if (record(payload.lnProg) && Object.values(payload.lnProg).every(v => finite(v) && v >= 0)) {
+    if (record(payload.lnProg) && Object.keys(payload.lnProg).length <= 100
+      && Object.entries(payload.lnProg).every(([k, v]) => /^[a-z][a-z0-9_-]{0,63}$/.test(k)
+        && finite(v) && Number.isInteger(v) && v >= 0 && v <= 100)) {
       s.lnProg = payload.lnProg as Record<string, number>;
     }
     if (typeof payload.bought === 'boolean') s.bought = payload.bought;
@@ -196,6 +198,7 @@ export function accountSnapshot(s: AppState): {
   pot_moved_months: string[];
   pot_moved: number;
   docs_checked: string[];
+  learning_progress: Record<string, number>;
   kept_tests: unknown[];
   bought_home: boolean;
   homeownership_purchase_month: string | null;
@@ -212,6 +215,7 @@ export function accountSnapshot(s: AppState): {
     pot_moved_months: (local.potMovedMonths as string[]) ?? [],
     pot_moved: (local.potMoved as number) ?? 0,
     docs_checked: (local.docsChecked as string[]) ?? [],
+    learning_progress: (local.lnProg as Record<string, number>) ?? {},
     kept_tests: (local.keptTests as unknown[]) ?? [],
     bought_home: s.bought,
     homeownership_purchase_month: s.purchaseMonth,
@@ -232,6 +236,8 @@ export function hydrateAccountState(s: AppState, remote: Record<string, unknown>
     potMovedMonths: remote.pot_moved_months,
     potMoved: typeof remote.pot_moved === 'number' ? remote.pot_moved : Number(remote.pot_moved),
     docsChecked: remote.docs_checked,
+    // An empty account must clear another account's local reading history.
+    lnProg: remote.learning_progress ?? {},
     keptTests: remote.kept_tests,
     bought: remote.bought_home,
     purchaseMonth: remote.homeownership_purchase_month ?? null,

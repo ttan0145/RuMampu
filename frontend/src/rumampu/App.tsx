@@ -27,7 +27,7 @@ import { ImportIncomeScreen } from './screens/imports';
 import { HomeCostsScreen } from './screens/homecosts';
 import { PriceExplorerScreen } from './screens/priceexplorer';
 import { AcctDetailsScreen } from './screens/acctdetails';
-import { LearnCele, LearnReadScreen, LearnScreen, LearnSecScreen } from './screens/learn';
+import { LearnReadScreen, LearnScreen, LearnSecScreen } from './screens/learn';
 import { listenForNotificationOpen } from './notifications';
 
 const SCREENS: Record<Route, React.ComponentType> = {
@@ -83,8 +83,6 @@ function Root() {
       {/* US6.2: available on every page after onboarding, never before (AC6.2.10). */}
       {S.onboarded && S.knew ? <AssistantFab /> : null}
       {S.onboarded ? <AssistantSheet /> : null}
-      {/* v27b: a finished topic's badge first, then Ruma's invitation, then the tour. */}
-      <LearnCele />
       {/* v27b screen tips: the invitation, the hint and the tour sit above everything. */}
       <TourHost tabBarHeight={76 + insets.bottom} />
       {/* Product-wide AI disclosure must sit above tours, sheets and the edge bubble. */}

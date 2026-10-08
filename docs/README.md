@@ -20,6 +20,9 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 - [US1.8 acceptance record](epic-1/US1.8_HISTORICAL_IMPORT.md): evidence for 8 criteria covering CSV preview, invalid rows, confirmation, and analysis integration.
 - [Epic 1 completion report](epic-1/EPIC_1_COMPLETION_REPORT.md): overview of all 56 criteria, migrations, automation, and real-browser acceptance.
 - [Epic 2 implementation and acceptance index](epic-2/README.md): all 18 criteria, per-US evidence, API boundaries, and browser acceptance.
+- [Epic 5 US/AC baseline](requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md): 8 user stories and 68 criteria from v5 and Iteration 3, reconciled with LeanKit on 2026-10-08.
+- [Epic 5 implementation and acceptance index](epic-5/README.md): preparation tools, Learn, account reading progress and savings allocation, with executable evidence.
+- [Learn content sources](epic-5/LEARN_SOURCES.md): public references, verification dates and corrections for all 19 explanations.
 - [Playwright acceptance-test standard](testing/PLAYWRIGHT_ACCEPTANCE_STANDARD.md): Epic/US/AC naming, exact traceability gate, evidence policy, commands, and completion rules.
 - [Real production website checks](testing/LIVE_WEBSITE_TESTS.md): repeatable read-only smoke and opt-in isolated writing flow, reports, and safety boundaries.
 - [US1.8 comprehensive gig-driver CSV](testing/US1.8_COMPREHENSIVE_CSV_FIXTURE.md): 12-month income import with valid/invalid rows aligned to the complete driver scenario.

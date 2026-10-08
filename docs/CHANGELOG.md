@@ -2,6 +2,17 @@
 
 Language: **English** | [Chinese (CN)](CHANGELOG.cn.md)
 
+## 2026-10-08 — Complete the Iteration 3 Learn scope of Epic 5
+
+- Added all 20 criteria for US5.5–5.7 to the requirement baseline and executable browser suite; Epic 5 traceability now covers 68 criteria across two specs.
+- Prepare now opens Learn and shows completed explanations out of the total. Learn tabs expose their selected state; reading remains optional.
+- Reading progress now round-trips through the account API, with bounded validation and account isolation; guests keep local progress. Added migration 0022.
+- Removed learning badges, celebration overlays and reward copy to follow AC5.7.6. Existing money/village behaviour is unchanged.
+- All 19 explanations now name sources and checked dates. Reworded unsupported claims, corrected regulated developer pre-SPA payment copy, and linked SJKP's institution directory directly.
+- Reader uses compact illustrations and source labels. Browser checks cover all 51 pages at 390×844 and 360×740, including revisiting completed lessons.
+- House costs now returns an explicit 503 when raw data is unavailable, with transaction recovery and loaded-data regressions.
+- Verified: all 68 Epic 5 criteria mapped exactly once, all 111 E2E tests passed (16.4m), all 215 backend tests passed, typecheck passed and no migration drift. See the [repair report (Chinese)](epic-5/REPAIR_REPORT.cn.md).
+
 ## 2026-10-06 — One name for the safety money, and the user can change it (AC5.8.10)
 
 Status: built and checked locally

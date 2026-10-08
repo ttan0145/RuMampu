@@ -1,8 +1,10 @@
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError, transaction
+from django.core.cache import cache
+from django.db import IntegrityError, connection, transaction
 from django.test import Client, TestCase, override_settings
 from rest_framework.authtoken.models import Token
 
@@ -13,6 +15,54 @@ from .services import _starting_liquidity
 
 
 User = get_user_model()
+
+
+class HouseCostsDataAvailabilityTests(TestCase):
+    url = "/api/v1/housing/house-costs/"
+
+    def setUp(self):
+        cache.clear()
+
+    def missing_table(self, *args):
+        # Trigger a real database error so the test checks savepoint recovery.
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM missing_housing_test_table")
+
+    def assert_unavailable(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"detail": "no transaction data loaded"})
+        # A failed data query must not break the surrounding account transaction.
+        self.assertEqual(HousingScenario.objects.count(), 0)
+
+    def test_missing_raw_transaction_table_is_unavailable_instead_of_500(self):
+        with patch("apps.housing.views._window", side_effect=self.missing_table):
+            self.assert_unavailable()
+
+    def test_partial_raw_data_does_not_break_subsequent_database_queries(self):
+        with patch("apps.housing.views._window", return_value=["2026Q1"]), \
+             patch("apps.housing.views._income", side_effect=self.missing_table):
+            self.assert_unavailable()
+
+    def test_empty_transactions_do_not_query_income_or_places(self):
+        with patch("apps.housing.views._window", return_value=[]), \
+             patch("apps.housing.views._income") as income, \
+             patch("apps.housing.views._places") as places:
+            self.assert_unavailable()
+            income.assert_not_called()
+            places.assert_not_called()
+
+    def test_loaded_data_keeps_the_real_aggregate_response(self):
+        with patch("apps.housing.views._window", return_value=["2025Q4", "2026Q1"]), \
+             patch("apps.housing.views._income", return_value={"Selangor": 10000}), \
+             patch("apps.housing.views._places", return_value=[
+                 ("Selangor", "Petaling", "terrace", 20, 450000, 4),
+             ]):
+            response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["window"], {"from": "2025Q4", "to": "2026Q1", "quarters": 2})
+        self.assertEqual(response.json()["states"]["sgr"]["income"], 10000)
+        self.assertEqual(response.json()["states"]["sgr"]["types"]["terr"]["Petaling"], [20, 450000, 4])
 
 
 class HousingApiTestMixin:

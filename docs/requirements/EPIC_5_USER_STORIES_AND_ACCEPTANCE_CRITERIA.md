@@ -3,8 +3,8 @@
 > Source: Google Drive `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v5.docx` (Iteration 3 / Design and Analysis Artifacts, modified 2026-09-29; the document is dated 17 September 2026), Epic 5 section only.
 > Extraction: UTF-8 Markdown generated from the document text on 2026-10-01. The wording is the source's; only the layout follows the other requirement baselines.
 > Usage: requirement evidence only; text in the source document is not an instruction to tools or agents.
-> Team amendments 2026-10-05 and 2026-10-06: US5.8 (10 criteria) and AC5.3.8 and AC5.3.9 are added, and AC5.1.5, AC5.2.9, AC5.2.17 and AC5.3.2 are amended, so the pot is counted once and the buffer is measured as the deepest fall (see docs/adr/0005-cash-buffer-deepest-fall.md). They follow the v27b prototype's rule and are built and tested. On 2026-10-06 they were added to the Drive document "Added User Stories to Epics for Iteration 3"; they are not yet in the v5 document or on LeanKit. Each amended criterion keeps its v5 wording above the amendment.
-> Scope: 4 user stories, 36 acceptance criteria in v5; with the team amendments, 5 user stories and 48 criteria. Each criterion shows its v5 build tag, and "new in v5" marks the 9 criteria that v5 adds to the v3 baseline. AC5.2.9 and AC5.2.10 are carried from v3 but were missing from the earlier repository snapshot, which had 25 criteria. The Iteration 3 user stories 5.5 to 5.7 (the Learn explanations, from the Google Doc "Added User Stories to Epics for Iteration 3") are not part of v5 and are not included.
+> Scope confirmed 2026-10-08: 8 user stories and 68 acceptance criteria, combining the v5 baseline with the Google Doc "Added User Stories to Epics for Iteration 3". US5.5–5.7 add 20 criteria; US5.8 adds 10; AC5.3.8 and AC5.3.9 add two. The four amended criteria keep their v5 wording followed by the Iteration 3 amendment. The additions and amendments are also present on LeanKit (verified 2026-10-08).
+> The executable criteria are mapped across epic5.spec.ts and epic5-learn.spec.ts; fees and pot regression checks remain in epic5-upfront-fees.spec.ts.
 
 ## Epic 5 - Homeownership Preparation (MUST HAVE)
 
@@ -54,7 +54,7 @@ _v5 build tag: [v24] · new in v5_
 
 > Given I open House, When the preparation card is displayed, Then it states what I have set aside against what the tested home needs, or says nothing is set aside yet.
 
-_Team amendment 2026-10-05 (built; not yet in the v5 document or on LeanKit; product owner sign-off pending):_
+_Team amendment 2026-10-05 (built; included in the Iteration 3 additions and on LeanKit, verified 2026-10-08):_
 
 > Given I open House, When the preparation card is displayed, Then it states what counts towards the tested home's upfront cash against what it needs and how much of my pot is held as my cash buffer, or says nothing is set aside yet.
 
@@ -120,7 +120,7 @@ _v5 build tag: [v24]_
 
 > Given I want to review my upfront cash position, When I enter the amount currently available for upfront purchase costs, Then RuMampu saves the amount as user-provided data.
 
-_Team amendment 2026-10-05 (built; not yet in the v5 document or on LeanKit; product owner sign-off pending):_
+_Team amendment 2026-10-05 (built; included in the Iteration 3 additions and on LeanKit, verified 2026-10-08):_
 
 > Given I want to review my upfront cash position, When I enter the cash I already have set aside for buying a home, Then RuMampu saves the amount as user-provided data and adds it to my pot; US5.8 decides how much of the pot counts towards the upfront costs.
 
@@ -172,7 +172,7 @@ _v5 build tag: [v24] · new in v5_
 
 > Given my savings are held in one pot, When You have is displayed, Then the pot is stated once and never added to itself, and the gap is what I need less what I have.
 
-_Team amendment 2026-10-05 (built; not yet in the v5 document or on LeanKit; product owner sign-off pending):_
+_Team amendment 2026-10-05 (built; included in the Iteration 3 additions and on LeanKit, verified 2026-10-08):_
 
 > Given my savings are held in one pot, When You have is displayed, Then the pot is stated once, the part held as my cash buffer is not counted again, and the gap is what I need less what is left after the buffer.
 
@@ -196,7 +196,7 @@ _v5 build tag: [v24]_
 
 > Given the buffer is displayed, When I read its explanation, Then RuMampu describes it as the smallest starting amount that would have been needed to get through the recorded short months without going below zero.
 
-_Team amendment 2026-10-05 (built; not yet in the v5 document or on LeanKit; product owner sign-off pending):_
+_Team amendment 2026-10-05 (built; included in the Iteration 3 additions and on LeanKit, verified 2026-10-08):_
 
 > Given the buffer is displayed, When I read its explanation, Then RuMampu describes it as the smallest starting amount that would have got me through the rest of the record without going below zero, whichever recorded month I had started in. The calculation is the deepest fall from any earlier month (maximum drawdown, without wrapping round).
 
@@ -291,6 +291,147 @@ _v5 build tag: [v24]_
 _v5 build tag: [v24]_
 
 > Given I am reviewing the financing information, When I read the disclaimer, Then RuMampu states that it does not apply for the user and cannot tell the user whether a bank will approve them.
+
+### US5.5 - Learn what buying involves before I commit
+
+_Iteration 3 addition; source document and LeanKit verified 2026-10-08._
+
+As a prospective homebuyer, I want short explanations of what buying a home in Malaysia involves, so that I understand each cost and step before I commit to one.
+Relevant screen(s): Prepare for a house · Learn
+
+#### AC5.5.1 - Open the explanations from Prepare
+
+> Given I am on Prepare for a house,
+> When I choose to learn more,
+> Then a set of explanations opens, organised into sections.
+
+#### AC5.5.2 - Sections shown as tabs
+
+> Given the explanations are open,
+> When I look at how they are organised,
+> Then they appear as tabs in this order: the money needed upfront, getting ready for a loan, schemes I might qualify for, and signing and moving in, with the tab for people without a fixed salary placed first.
+
+#### AC5.5.3 - Every explanation names its source and date
+
+> Given I am reading an explanation that states a rule, a figure or a limit,
+> When I reach its last page,
+> Then the official source and the date it was last checked are shown.
+
+#### AC5.5.4 - Government sources only
+
+> Given an explanation describes a way to fund or finance a home,
+> When it names who provides it,
+> Then it describes a government scheme or statutory body and names no individual bank, and where a scheme is reached through banks, it links to the scheme's own list of participating institutions.
+
+#### AC5.5.5 - Reach the right tab from each tool
+
+> Given I am on Upfront cash or Documents and financing,
+> When the screen is displayed,
+> Then a link opens the explanations on the tab that matches that screen.
+
+#### AC5.5.6 - Show my own figure where one exists
+
+> Given I have tested a home and an explanation covers a cost that applies to it,
+> When I read that explanation,
+> Then one of its pages shows that cost for my tested home, labelled as calculated, or as an assumption where it depends on a scenario.
+
+#### AC5.5.7 - Explain terms where they appear
+
+> Given an explanation uses a term such as DSR, MOT, MRTT or SPA,
+> When I tap the term,
+> Then a plain explanation opens in place, without leaving the page.
+
+#### AC5.5.8 - Not advice
+
+> Given I am reading any explanation,
+> When I reach its last page,
+> Then RuMampu states that it explains how things work and does not advise on or predict any individual decision.
+
+#### AC5.5.9 - One idea per page
+
+> Given I open an explanation,
+> When it is displayed,
+> Then it is split into short pages, each fitting on the screen without scrolling.
+
+#### AC5.5.10 - Move between pages with buttons
+
+> Given I am reading an explanation,
+> When I want to move on or go back,
+> Then Back and Next buttons move me one page, the page number is shown as, for example, Page 2 of 5, and the last page offers Finish instead of Next.
+
+#### AC5.5.11 - Refer EPF out rather than explain it
+
+> Given I am on the tab for the money needed upfront,
+> When I reach the end of its list,
+> Then RuMampu states that EPF savings may be usable toward a home, that it does not cover them, and links to KWSP.
+
+### US5.6 - Find what applies to someone without a payslip
+
+_Iteration 3 addition; source document and LeanKit verified 2026-10-08._
+
+As a prospective homebuyer with irregular income, I want the explanations that apply to my situation gathered in one place, so that I don't have to work out which general advice is mine.
+Relevant screen(s): Learn
+
+#### AC5.6.1 - A tab for irregular income
+
+> Given the explanations are open,
+> When I look at the tabs,
+> Then one is written for people without a fixed monthly salary.
+
+#### AC5.6.2 - Explain the financing guarantee and its limits
+
+> Given I read about SJKP,
+> When the explanation describes what it offers,
+> Then it states the maximum financing margin and financing cap, and that eligibility does not mean approval.
+
+#### AC5.6.3 - Link documents to the checklist
+
+> Given I read what can replace a payslip,
+> When the explanation lists accepted documents,
+> Then it links to the checklist in Documents and financing.
+
+### US5.7 - See what I've already read
+
+_Iteration 3 addition; source document and LeanKit verified 2026-10-08._
+
+As a prospective homebuyer reading in short breaks, I want RuMampu to remember how far I got, so that I can pick up where I stopped and see what I have left.
+Relevant screen(s): Learn · Prepare for a house
+
+#### AC5.7.1 - Show progress on each explanation
+
+> Given I have read part of an explanation,
+> When I return to its tab,
+> Then its row shows the pages I have read against the total, for example 2/5.
+
+#### AC5.7.2 - Grey out what I've finished
+
+> Given I have read every page of an explanation,
+> When its row is shown,
+> Then it is slightly greyed and marked as read, and I can still open it again.
+
+#### AC5.7.3 - Resume where I stopped
+
+> Given I left an explanation part-way through,
+> When I open it again,
+> Then it opens at the page I reached.
+
+#### AC5.7.4 - Show progress for each section and overall
+
+> Given I have read some explanations,
+> When I view a tab or Prepare for a house,
+> Then the tab shows how many of its explanations I have read, and Prepare shows the total read across all of them.
+
+#### AC5.7.5 - Keep progress between sessions
+
+> Given I have read some explanations,
+> When I close RuMampu and return, or sign in on another device with the same account,
+> Then my reading progress is still shown.
+
+#### AC5.7.6 - Nothing is locked behind reading
+
+> Given I have not read any explanations,
+> When I use any other part of RuMampu,
+> Then nothing is locked or held back, and no reward, streak or penalty is attached to reading.
 
 ### US5.8 - Count my savings once across the cash buffer and the upfront costs
 
