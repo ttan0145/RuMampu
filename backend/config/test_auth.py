@@ -50,6 +50,68 @@ def workbook_values(workbook):
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class AuthApiRegressionTests(TestCase):
+    def test_bill_reminder_choices_survive_logout_and_login_without_device_state(self):
+        user = User.objects.create_user(
+            username="reminders@example.com",
+            email="reminders@example.com",
+            password="Passw0rd123",
+        )
+        token = Token.objects.create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+        preferences = {
+            "bill_reminders": True,
+            "reminders": {
+                "rent": {"enabled": True, "day": 31, "time": "09:15"},
+                "utilities": {"enabled": True, "day": 15, "time": "18:30"},
+                "food": {"enabled": False, "day": 8, "time": "12:00"},
+            },
+        }
+
+        saved = client.patch(
+            "/api/v1/auth/me/",
+            {"notification_preferences": preferences},
+            content_type="application/json",
+        )
+
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json()["notification_preferences"], preferences)
+        self.assertEqual(UserAppState.objects.get(user=user).notification_preferences, preferences)
+
+        self.assertEqual(client.post("/api/v1/auth/logout/").status_code, 204)
+        login = Client().post(
+            "/api/v1/auth/login/",
+            data={"username": "reminders@example.com", "password": "Passw0rd123"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(login.status_code, 200)
+        self.assertEqual(login.json()["notification_preferences"], preferences)
+        self.assertNotIn("notification_id", str(login.json()["notification_preferences"]))
+        self.assertNotIn("permission_granted", str(login.json()["notification_preferences"]))
+
+    def test_bill_reminder_choices_reject_invalid_or_device_local_data(self):
+        user = User.objects.create_user(username="invalid-reminders@example.com")
+        token = Token.objects.create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+        bad_preferences = [
+            {"bill_reminders": True, "reminders": {"rent": {"enabled": True, "day": 0, "time": "09:15"}}},
+            {"bill_reminders": True, "reminders": {"rent": {"enabled": True, "day": 32, "time": "09:15"}}},
+            {"bill_reminders": True, "reminders": {"rent": {"enabled": True, "day": 31, "time": "9:15"}}},
+            {"bill_reminders": True, "reminders": {"rent": {
+                "enabled": True, "day": 31, "time": "09:15", "notification_id": "device-only",
+            }}},
+        ]
+
+        for preferences in bad_preferences:
+            with self.subTest(preferences=preferences):
+                response = client.patch(
+                    "/api/v1/auth/me/",
+                    {"notification_preferences": preferences},
+                    content_type="application/json",
+                )
+                self.assertEqual(response.status_code, 400)
+        self.assertEqual(UserAppState.objects.get(user=user).notification_preferences, {})
+
     def test_iteration3_purchase_month_and_account_details_round_trip(self):
         user = User.objects.create_user(
             username="old-address@example.com",

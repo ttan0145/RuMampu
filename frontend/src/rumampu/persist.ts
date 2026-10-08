@@ -1,4 +1,5 @@
 import type { AppState, BufferState, KeptTest, PlanState, VillageState } from './state';
+import type { ApiAccountNotificationPreferences } from './api';
 import { getHousingScenario, getHousingTestResult, hydrateHousingSession } from '../../services/housingSession';
 import { isValidIsoDate } from './validation';
 
@@ -101,6 +102,29 @@ function validNotificationPreferences(value: unknown): value is AppState['notifi
   });
 }
 
+function validAccountNotificationPreferences(value: unknown): value is ApiAccountNotificationPreferences {
+  if (!record(value) || typeof value.bill_reminders !== 'boolean' || !record(value.reminders)) return false;
+  return Object.values(value.reminders).every(reminder => (
+    record(reminder)
+    && typeof reminder.enabled === 'boolean'
+    && Number.isInteger(reminder.day)
+    && (reminder.day as number) >= 1
+    && (reminder.day as number) <= 31
+    && typeof reminder.time === 'string'
+    && /^([01]\d|2[0-3]):[0-5]\d$/.test(reminder.time)
+  ));
+}
+
+function accountNotificationPreferences(s: AppState): ApiAccountNotificationPreferences {
+  return {
+    bill_reminders: s.notificationPreferences.bill_reminders,
+    reminders: Object.fromEntries(Object.entries(s.notificationPreferences.reminders).map(([id, reminder]) => [
+      id,
+      { day: reminder.day, time: reminder.time, enabled: reminder.enabled },
+    ])),
+  };
+}
+
 /** Serialize only declared, local progress; transient UI state is excluded. */
 export function snapshot(s: AppState): string {
   const payload: JsonRecord = { version: VERSION };
@@ -199,6 +223,7 @@ export function accountSnapshot(s: AppState): {
   kept_tests: unknown[];
   bought_home: boolean;
   homeownership_purchase_month: string | null;
+  notification_preferences: ApiAccountNotificationPreferences;
 } {
   const local = JSON.parse(snapshot(s)) as JsonRecord;
   return {
@@ -215,6 +240,7 @@ export function accountSnapshot(s: AppState): {
     kept_tests: (local.keptTests as unknown[]) ?? [],
     bought_home: s.bought,
     homeownership_purchase_month: s.purchaseMonth,
+    notification_preferences: accountNotificationPreferences(s),
   };
 }
 
@@ -240,6 +266,32 @@ export function hydrateAccountState(s: AppState, remote: Record<string, unknown>
   hydrate(s, JSON.stringify(payload));
   if (validExpenseLimits(remote.expense_limits)) {
     s.data.expenseLimits = remote.expense_limits;
+  }
+  if (Object.prototype.hasOwnProperty.call(remote, 'notification_preferences')) {
+    const saved = remote.notification_preferences;
+    if (validAccountNotificationPreferences(saved)) {
+      const localReminders = s.notificationPreferences.reminders;
+      s.notificationPreferences.bill_reminders = saved.bill_reminders;
+      s.notificationPreferences.reminders = Object.fromEntries(
+        Object.entries(saved.reminders).map(([id, reminder]) => {
+          const local = localReminders[id];
+          const sameConfiguration = local?.day === reminder.day
+            && local.time === reminder.time
+            && local.enabled === reminder.enabled;
+          return [id, {
+            ...reminder,
+            notification_id: sameConfiguration ? local.notification_id : null,
+            last_recorded: sameConfiguration ? (local.last_recorded ?? null) : null,
+          }];
+        }),
+      );
+    } else {
+      // An empty account field means this account has no saved reminder choices.
+      // Device permission state is intentionally retained, but another local
+      // identity's bill settings must not cross the account boundary.
+      s.notificationPreferences.bill_reminders = true;
+      s.notificationPreferences.reminders = {};
+    }
   }
   const preferredSourceId = remote.preferred_income_source_id;
   s.preferredIncomeSourceId = preferredSourceId == null ? null : String(preferredSourceId);

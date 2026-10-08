@@ -486,9 +486,8 @@ class UserAppState(models.Model):
         related_name="+",
     )
     last_record_exported_at = models.DateTimeField(null=True, blank=True)
-    # Notification scheduling identifiers stay in encrypted/local device
-    # storage. This reserved account field is intentionally not exposed by the
-    # API, so a device cannot accidentally inherit another device's schedule.
+    # Account-owned bill reminder choices live here. Device permission state and
+    # notification scheduling identifiers stay in encrypted/local device storage.
     notification_preferences = models.JSONField(default=dict, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
