@@ -1,0 +1,124 @@
+name: Production database migrations
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/database-migrate.yml"
+      - "backend/**/migrations/*.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-database-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Back up Neon and apply Django migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Validate and configure the production database
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${DATABASE_URL:-}" ]]; then
+            echo "::error::The NEON_DATABASE_URL GitHub Actions secret is not configured."
+            exit 1
+          fi
+
+          python - <<'PY'
+          import os
+          from urllib.parse import parse_qs, unquote, urlsplit
+
+          parts = urlsplit(os.environ["DATABASE_URL"])
+          if parts.scheme not in {"postgres", "postgresql"} or not parts.hostname:
+              raise SystemExit("NEON_DATABASE_URL must be a PostgreSQL connection URL.")
+
+          query = parse_qs(parts.query)
+          values = {
+              "PGHOST": parts.hostname,
+              "PGDATABASE": unquote(parts.path.lstrip("/")),
+              "PGUSER": unquote(parts.username or ""),
+              "PGPASSWORD": unquote(parts.password or ""),
+              "PGPORT": str(parts.port or 5432),
+              "PGSSLMODE": query.get("sslmode", ["require"])[0],
+          }
+          missing = [name for name in ("PGDATABASE", "PGUSER", "PGPASSWORD") if not values[name]]
+          if missing:
+              raise SystemExit("NEON_DATABASE_URL is missing: " + ", ".join(missing))
+
+          for value in values.values():
+              if value:
+                  print(f"::add-mask::{value}")
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
+              for name, value in values.items():
+                  delimiter = f"RUMAMPU_{name}_VALUE"
+                  env_file.write(f"{name}<<{delimiter}\n{value}\n{delimiter}\n")
+          PY
+
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+
+      - name: Create a pre-migration database backup
+        id: backup
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          backup_name="rumampu-pre-migration-${GITHUB_SHA}.dump"
+          docker pull postgres:18
+          docker run --rm \
+            --env DATABASE_URL \
+            --env BACKUP_NAME="$backup_name" \
+            --volume "${RUNNER_TEMP}:/backup" \
+            postgres:18 \
+            sh -ceu 'pg_dump "$DATABASE_URL" \
+              --format=custom \
+              --no-owner \
+              --no-acl \
+              --file="/backup/$BACKUP_NAME"'
+
+          test -s "${RUNNER_TEMP}/${backup_name}"
+          echo "name=$backup_name" >> "$GITHUB_OUTPUT"
+
+      - name: Retain the pre-migration backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.backup.outputs.name }}
+          path: ${{ runner.temp }}/${{ steps.backup.outputs.name }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Show the production migration plan
+        working-directory: backend
+        run: |
+          python manage.py check
+          python manage.py showmigrations finance housing
+          python manage.py migrate --plan
+
+      - name: Apply production migrations
+        working-directory: backend
+        run: python manage.py migrate --noinput
+
+      - name: Verify all migrations are applied
+        working-directory: backend
+        run: |
+          python manage.py migrate --check
+          python manage.py showmigrations finance housing
