@@ -6,7 +6,7 @@ from .auth_views import (
     GuestTransferView, LoginView, LogoutView, MeView, PasswordResetConfirmView,
     PasswordResetRequestView, RecordDeleteView, RecordExportView, RegisterView,
 )
-from .views import HealthCheckView
+from .views import HealthCheckView, RetentionCronView
 
 
 urlpatterns = [
@@ -17,6 +17,11 @@ urlpatterns = [
     path("api/redoc/", SpectacularRedocView.as_view(url_name="api-schema"), name="api-redoc"),
 
     path("api/v1/health/", HealthCheckView.as_view(), name="health-check-v1"),
+    path(
+        "api/v1/internal/retention/run/",
+        RetentionCronView.as_view(),
+        name="retention-cron",
+    ),
     path("api/v1/auth/register/", RegisterView.as_view(), name="auth-register"),
     path("api/v1/auth/login/", LoginView.as_view(), name="auth-login"),
     path("api/v1/auth/guest-transfer/", GuestTransferView.as_view(), name="auth-guest-transfer"),

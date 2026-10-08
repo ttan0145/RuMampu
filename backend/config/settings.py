@@ -183,3 +183,7 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "RuMampu
 PASSWORD_RESET_URL_BASE = os.getenv("PASSWORD_RESET_URL_BASE", "rumampu://reset-password")
 # Django's default token timeout is one day. Keep it explicit for this app.
 PASSWORD_RESET_TIMEOUT = int(os.getenv("PASSWORD_RESET_TIMEOUT", "86400"))
+
+# Vercel Cron sends this value as `Authorization: Bearer <CRON_SECRET>`.
+# An empty value keeps the retention runner disabled rather than exposing it.
+CRON_SECRET = os.getenv("CRON_SECRET", "")
