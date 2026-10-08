@@ -1851,6 +1851,43 @@ components:
       required:
       - id
       - label
+    AssistantActionPreviewAction:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/AssistantActionPreviewActionKindEnum'
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        date:
+          type: string
+          format: date
+          nullable: true
+        target_id:
+          type: string
+          maxLength: 80
+        target_label:
+          type: string
+          maxLength: 120
+      required:
+      - amount
+      - date
+      - kind
+      - target_id
+      - target_label
+    AssistantActionPreviewActionKindEnum:
+      enum:
+      - income
+      - expense
+      - bill
+      - limit
+      type: string
+      description: |-
+        * `income` - income
+        * `expense` - expense
+        * `bill` - bill
+        * `limit` - limit
     AssistantActionPreviewRequestRequest:
       type: object
       properties:
@@ -1870,6 +1907,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AssistantActionOptionRequest'
+          description: Existing expense categories to prefer when they match. These
+            are suggestions, not an enum; the assistant may propose a new category.
         commitments:
           type: array
           items:
@@ -1895,7 +1934,10 @@ components:
           $ref: '#/components/schemas/AssistantActionPreviewResponseStatusEnum'
         message:
           type: string
-        actions: {}
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssistantActionPreviewAction'
       required:
       - actions
       - message
