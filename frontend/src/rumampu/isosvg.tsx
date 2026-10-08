@@ -1,4 +1,5 @@
 import React from 'react';
+import { AccessibilityInfo, Animated, Easing, Text, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { ISO_TIERS } from './village';
 
@@ -19,8 +20,10 @@ export const ISO_BODY: Record<string, string> = {
     '<circle cx="60" cy="32" r="3" fill="#5B4226"/>',
   kampung: '<polygon points="34,78 60,90 60,58 34,46" fill="#EBDCBC"/>' +
     '<polygon points="86,78 60,90 60,58 86,46" fill="#D3BE97"/>' +
-    '<polygon points="60,26 24,44 34,52 60,38" fill="#6B8688"/>' +
-    '<polygon points="60,26 96,44 86,52 60,38" fill="#52696B"/>' +
+    /* a full roof over the walls (it used to be two thin strips with an empty gap) */
+    '<polygon points="60,24 25,47 60,63" fill="#6B8688"/>' +
+    '<polygon points="60,24 95,47 60,63" fill="#52696B"/>' +
+    '<polyline points="25,47 60,63 95,47" fill="none" stroke="#3F5455" stroke-width="1.5" stroke-linejoin="round"/>' +
     '<polygon points="64,72 76,66 76,57 64,63" fill="#35494A"/>' +
     '<polygon points="42,73 52,78 52,64 42,59" fill="#7A5C33"/>',
   teres: '<polygon points="60,30 90,45 60,60 30,45" fill="#F0EAD9"/>' +
@@ -54,7 +57,7 @@ export function isoHouseXml(tierId: string): string {
 }
 
 /* One contiguous isometric island: shared tile edges, a thick base, houses drawn back to front. */
-export function isoIslandXml(cells: number[]): string {
+export function isoIslandXml(cells: number[], glow: number[] = []): string {
   const cx = 220, cy = 165, tw = 52, th = 26, base = 16;
   const top = cy - 4 * th, right = cx + 4 * tw, bottom = cy + 4 * th, left = cx - 4 * tw;
   let s = '<svg viewBox="0 0 440 292" xmlns="http://www.w3.org/2000/svg">';
@@ -64,6 +67,11 @@ export function isoIslandXml(cells: number[]): string {
   for (let k = 1; k < 4; k++) {
     s += `<line x1="${cx - k * tw}" y1="${cy + (k - 4) * th}" x2="${cx + (4 - k) * tw}" y2="${cy + k * th}" stroke="#A3C797" stroke-width="1.5"/>`;
     s += `<line x1="${cx + k * tw}" y1="${cy + (k - 4) * th}" x2="${cx - (4 - k) * tw}" y2="${cy + k * th}" stroke="#A3C797" stroke-width="1.5"/>`;
+  }
+  /* the square a saved day just filled, lit gold under its house */
+  for (const i of glow) {
+    const r = i >> 2, c = i & 3, x = cx + (c - r) * tw, y = cy + (c + r - 3) * th;
+    s += `<polygon points="${x},${y - th} ${x + tw},${y} ${x},${y + th} ${x - tw},${y}" fill="#FFD66B" stroke="#E2A93B" stroke-width="2.5"/>`;
   }
   const order: number[] = [];
   for (let i = 0; i < 16; i++) if (cells[i]) order.push(i);
@@ -75,8 +83,34 @@ export function isoIslandXml(cells: number[]): string {
   return s + '</svg>';
 }
 
-export function IsoIsland({ cells, width }: { cells: number[]; width: number }) {
-  return <SvgXml xml={isoIslandXml(cells)} width={width} height={width * 292 / 440} />;
+/* burst: change it (e.g. to the save time) to play a short "+1" above the first glowing square */
+export function IsoIsland({ cells, width, glow = [], burst }: { cells: number[]; width: number; glow?: number[]; burst?: number }) {
+  const h = width * 292 / 440, k = width / 440;
+  const anim = React.useRef(new Animated.Value(1)).current;
+  const [still, setStill] = React.useState(false);
+  React.useEffect(() => { void AccessibilityInfo.isReduceMotionEnabled().then(setStill).catch(() => undefined); }, []);
+  React.useEffect(() => {
+    if (!burst || still) return;
+    anim.setValue(0);
+    Animated.timing(anim, { toValue: 1, duration: 1400, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [burst, still, anim]);
+  const g = glow[0];
+  const gx = g == null ? 0 : (220 + ((g & 3) - (g >> 2)) * 52) * k;
+  const gy = g == null ? 0 : (165 + ((g & 3) + (g >> 2) - 3) * 26) * k;
+  return (
+    <View style={{ width, height: h }}>
+      <SvgXml xml={isoIslandXml(cells, glow)} width={width} height={h} />
+      {g != null && burst && !still ? (
+        <Animated.View pointerEvents="none" style={{
+          position: 'absolute', left: gx - 20, top: gy - 70 * k - 18, width: 40, alignItems: 'center',
+          opacity: anim.interpolate({ inputRange: [0, 0.15, 0.75, 1], outputRange: [0, 1, 1, 0] }),
+          transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [10, -22] }) }],
+        }}>
+          <Text style={{ fontSize: 15, fontWeight: '800', color: '#B97F00' }}>+1</Text>
+        </Animated.View>
+      ) : null}
+    </View>
+  );
 }
 
 export function IsoHouse({ tier, size }: { tier: string; size: number }) {

@@ -1,5 +1,6 @@
 import { test as base } from '@playwright/test';
 import type { APIRequestContext, Page } from '@playwright/test';
+import { setEvidencePage } from './acceptance';
 
 type E2EPage = Page & { __rumampuE2EClientId?: string };
 
@@ -64,7 +65,10 @@ export const test = base.extend<{ e2eClientId: string }>({
           route.continue({ url: route.request().url().replace(':8000/', `:${backendPort}/`) }));
       }
 
+      // AC steps take their evidence screenshot from this page (support/acceptance.ts).
+      setEvidencePage(page);
       await use(clientId);
+      setEvidencePage(null);
     },
     { auto: true },
   ],

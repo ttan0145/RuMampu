@@ -145,6 +145,8 @@ export interface VillageState {
      savedRm is the truthful ringgit total behind the game — the only honest
      signal on screen; istanas themselves are decorative. */
   collection: number; queued: number; savedRm: number;
+  /* the square the last swipe placed a ready Pondok on, and the move it happened on */
+  spawn?: number | null; spawnAt?: number;
   msg?: string;
 }
 
@@ -272,6 +274,11 @@ export interface AppState {
   village: VillageState | null;
   buffer: BufferState | null;
   vHelp: boolean;
+  /* the house a saved day just placed (not persisted): which square, how much, and the
+     move count then, so the glow stops once the houses have moved */
+  vLand: { at: number; a: number; cell: number | null; moves: number } | null;
+  /* "Let's start!" plays once a session; after that Play opens the village directly */
+  vFlashSeen: boolean;
   /* Months the user chose to spread the upfront need over (village phase).
      null = go by the record's median leftover, or 12 when there is no record. */
   planHorizon: number | null;
@@ -476,7 +483,7 @@ function initialState(): AppState {
     onboard: 0, onboarded: false, splash: true,
     wstep: 0, authEntryOpen: false, authMode: 'login', acctMade: false, fgMail: '', guest: false, accountLastExportedAt: null, preferredIncomeSourceId: null, mergeGuestOnSignup: false, discardGuestOnSignup: false,
     knew: false, kstep: 0, jobs: ['taxi'], ownJobs: [], lastMonth: '',
-    plan: null, village: null, buffer: null, vHelp: false, planHorizon: null,
+    plan: null, village: null, buffer: null, vHelp: false, vLand: null, vFlashSeen: false, planHorizon: null,
     moView: 'tiles', houseTab: 'test',
     houseCosts: null, houseCostsSync: 'idle', hcState: 'sgr', hcType: 'all', hcKind: 'all', hcBudget: null, firstHome: false,
     potMoved: 0, potMovedMonths: [], ufTest: null, prep: { ...PREP_DEFAULT, mHome: { ...PREP_DEFAULT.mHome } }, ufReno: false, viewTestName: null, scanAuto: false, pastT: 'inc', cardInfo: null, log: [],

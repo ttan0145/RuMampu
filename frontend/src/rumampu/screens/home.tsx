@@ -8,8 +8,9 @@ import { housingResultStale, monthsAgg, recSpan, recordedOutFor, rm } from '../c
 import {
   planEnsure, planPhase, planResolveTarget, planSaved, planToggle, potGap, potLevel, potSplit, syncBufferTarget,
 } from '../plan';
-import { villageEnsure } from '../village';
+import { villageEnsure, villageGlow, villageOpen, villageQueueKey } from '../village';
 import { IsoIsland } from '../isosvg';
+import { ReadyTag } from '../overlays';
 import { RUMA_IMG } from '../ruma';
 import { BODY_FONT, C, DISP_FONT } from '../theme';
 import { BodyS, DemoChip, Display } from '../ui';
@@ -388,7 +389,11 @@ export function PlanCard() {
   const best = Math.max(0, ...v.cells);
   let stats = `${t('vl_builtn', { b: v.built })} · ${t('vl_onplot', { n: nCells })}${best ? ' · ' + t('vl_best', { t: t('vl_t' + best) }) : ''}`;
   if ((v.collection ?? 0) > 0) stats += ` · ${t('vl_collect', { n: v.collection, a: rm(v.savedRm ?? 0) })}`;
-  if ((v.queued ?? 0) > 0) stats += ` · ${t('vl_queue', { n: v.queued })}`;
+  const qKey = villageQueueKey(S);
+  /* the ready tag already shows Pondoks waiting for a swipe; other reasons are said here */
+  if (qKey && qKey !== 'vl_ready_swipe') stats += ` · ${t(qKey, { n: v.queued })}`;
+  /* a day just saved: its house lands on the plot below */
+  const land = S.vLand && Date.now() - S.vLand.at < 5 * 60 * 1000 ? S.vLand : null;
 
   const toggleToday = () => {
     /* 10.9: a paused month or a skipped day saves nothing, so say so instead of "Saved" */
@@ -480,12 +485,19 @@ ${lvl > 0 ? `<rect x="6.6" y="${fy}" width="10.8" height="${fh}" rx="1.4" fill="
         </BodyS>
       ) : (
         <>
-          <View style={{ alignItems: 'center', marginTop: 10 }}>
-            <IsoIsland cells={v.cells} width={Math.min(width, 390) - 72} />
-          </View>
+          <Pressable onPress={() => up(villageOpen)} accessibilityRole="button" accessibilityLabel={t('vl_title')}
+            style={{ alignItems: 'center', marginTop: 10 }} testID="home-village">
+            <IsoIsland cells={v.cells} width={Math.min(width, 390) - 72} glow={villageGlow(S)} />
+            <ReadyTag n={v.queued ?? 0} label={t('vl_ready', { n: v.queued ?? 0 })} style={{ position: 'absolute', left: 0, top: 0 }} />
+          </Pressable>
+          {land ? (
+            <Text style={st.vland} testID="village-landed">
+              {t('vl_landed_q', { a: rm(land.a) })}
+            </Text>
+          ) : null}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 6 }}>
             <BodyS muted style={{ flexShrink: 1 }}>{stats}</BodyS>
-            <Pressable onPress={() => up(s => { villageEnsure(s).msg = ''; s.vHelp = false; s.sheet = 'vflash'; })} style={st.plbtn}>
+            <Pressable onPress={() => up(villageOpen)} style={st.plbtn}>
               <Text style={st.plbtnTxt}>▶ {t('vl_play')}</Text>
             </Pressable>
           </View>
@@ -775,6 +787,7 @@ const st = StyleSheet.create({
     backgroundColor: '#F3F7F6', borderWidth: 1.5, borderColor: '#E3EAE8',
     borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16,
   },
+  vland: { fontFamily: DISP_FONT, fontSize: 13, color: '#9A6B00', textAlign: 'center', marginTop: 4 },
   plbtn: {
     minHeight: 40, paddingHorizontal: 16, borderRadius: 20, backgroundColor: C.brand,
     alignItems: 'center', justifyContent: 'center',

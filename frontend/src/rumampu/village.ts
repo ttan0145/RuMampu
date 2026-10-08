@@ -3,7 +3,8 @@ import { potSum } from './pot';
 
 /* v22 saving village — a 4x4 merge board (2048-style): saving a day spawns a
    Pondok, sliding merges two alike into the next tier. Ported verbatim from the
-   prototype. All functions mutate the draft state passed by up(). */
+   prototype. All functions mutate the draft state passed by up().
+   Since 8 Oct 2026 a saved day adds a Pondok to a ready pile, and each swipe places one. */
 
 export const ISO_TIERS = ['pondok', 'kampung', 'teres', 'kondo', 'istana'] as const;
 
@@ -47,32 +48,26 @@ export function canProgressVillage(s: AppState): boolean {
 /* A saved day always registers. If the board is full — or the buffer lock is
    on — the house waits in the queue instead of silently vanishing, so a
    saving never reads as "didn't count." */
+/* A saved day adds one Pondok to the ready pile ("queued"); it lands on the plot with the
+   player's next swipe, so saving and playing feel like one loop. */
 export function villageSpawn(s: AppState): boolean {
   const v = villageEnsure(s);
-  const empty = v.cells.map((c, i) => (c ? -1 : i)).filter(i => i >= 0);
   v.built++;
-  if (!empty.length || !canProgressVillage(s)) {
-    v.queued++;
-    v.pop = [];
-    return true;
-  }
-  const i = empty[Math.floor(Math.random() * empty.length)];
-  v.cells[i] = 1;
-  v.pop = [i];
+  v.queued++;
+  v.pop = [];
   return true;
 }
 
-/* Place waiting houses as squares free up. */
-export function villagePlaceQueued(s: AppState): void {
+/* Place one ready Pondok on a free square, if any is ready and the plot may grow. */
+function villagePlaceOne(s: AppState): number | null {
   const v = villageEnsure(s);
-  while (v.queued > 0 && canProgressVillage(s)) {
-    const empty = v.cells.map((c, i) => (c ? -1 : i)).filter(i => i >= 0);
-    if (!empty.length) return;
-    const i = empty[Math.floor(Math.random() * empty.length)];
-    v.cells[i] = 1;
-    v.queued--;
-    v.pop = [...v.pop, i];
-  }
+  if (v.queued <= 0 || !canProgressVillage(s)) return null;
+  const empty = v.cells.map((c, i) => (c ? -1 : i)).filter(i => i >= 0);
+  if (!empty.length) return null;
+  const i = empty[Math.floor(Math.random() * empty.length)];
+  v.cells[i] = 1;
+  v.queued--;
+  return i;
 }
 
 /* Un-saving a day takes one Pondok back. When every Pondok has already been
@@ -177,15 +172,63 @@ export function villageMove(s: AppState, dir: 'l' | 'r' | 'u' | 'd'): number {
   return changed ? best : -1;
 }
 
-/* One player move: slide, then update the score/message. Returns false if nothing moved. */
+/* One player move: slide and merge, then one ready Pondok lands on a free square (the "+1").
+   A swipe that only places a Pondok still counts as a move. Returns false if nothing happened. */
 export function villagePlay(s: AppState, dir: 'l' | 'r' | 'u' | 'd', builtLabel: (tier: number) => string): boolean {
   const r = villageMove(s, dir);
-  if (r < 0) return false;
   const v = villageEnsure(s);
+  const placed = villagePlaceOne(s);
+  if (r < 0 && placed == null) return false;
   v.msg = r >= 2 ? builtLabel(r) : '';
   v.moves++;
-  v.score += v.gain;
-  v.best = Math.max(v.best, v.score);
-  villagePlaceQueued(s);
+  if (r >= 0) {
+    v.score += v.gain;
+    v.best = Math.max(v.best, v.score);
+  }
+  v.spawn = placed;
+  v.spawnAt = v.moves;
   return true;
+}
+
+/* Start over: every house goes back to the ready pile as the Pondoks it was built from
+   (a tier-t house is 2^(t-1) Pondoks, an Istana in the collection is 16), so the ready
+   pile again holds every saved day and no saved day is lost. Score and moves restart;
+   the best score and the built count stay. */
+export function villageRestart(s: AppState): void {
+  const v = villageEnsure(s);
+  const back = v.cells.reduce((a, c) => a + (c > 0 ? Math.pow(2, c - 1) : 0), 0)
+    + v.collection * Math.pow(2, ISO_TIERS.length - 1);
+  v.cells = new Array(16).fill(0);
+  v.queued += back;
+  v.collection = 0;
+  v.score = 0;
+  v.moves = 0;
+  v.gain = 0;
+  v.msg = '';
+  v.pop = [];
+  v.spawn = null;
+}
+
+/* Play: "Let's start!" the first time in a session, straight into the village after that. */
+export function villageOpen(s: AppState): void {
+  villageEnsure(s).msg = '';
+  s.vHelp = false;
+  s.sheet = s.vFlashSeen ? 'village' : 'vflash';
+  s.vFlashSeen = true;
+}
+
+/* Houses that could not be placed yet, said as something ready rather than something lost:
+   either merging makes room, or they wait for the safety money to be full again. */
+export function villageQueueKey(s: AppState): string | null {
+  const v = s.village;
+  const q = v?.queued ?? 0;
+  if (q <= 0) return null;
+  if (!canProgressVillage(s)) return 'vl_queue_buf';
+  return v!.cells.some(c => !c) ? 'vl_ready_swipe' : 'vl_queue_room';
+}
+
+/* The square to light up: where the last swipe placed a ready Pondok, until the next move. */
+export function villageGlow(s: AppState): number[] {
+  const v = s.village;
+  return v && v.spawn != null && v.spawnAt === v.moves && v.cells[v.spawn] ? [v.spawn] : [];
 }

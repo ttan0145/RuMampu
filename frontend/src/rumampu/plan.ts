@@ -70,9 +70,16 @@ export function planSaved(p: PlanState): number {
   return p.amounts.reduce((a, x, i) => a + (p.done[i] ? x : 0), 0);
 }
 
+/* A day before the plan started is not part of it: it cannot be saved or skipped
+   (a day already saved there can still be undone). */
+export function planBeforeStart(p: PlanState, i: number): boolean {
+  return i < (p.from ?? 0) && !p.done[i];
+}
+
 export function planToggle(s: AppState, i: number): void {
   const p = planEnsure(s);
   if (p.paused) return;             /* 10.9.2: a paused month changes nothing */
+  if (planBeforeStart(p, i)) return;
   if (p.skipped?.[i]) return;       /* unskip first, then save */
   if (!p.buffered) p.buffered = p.done.map(done => done ? null : false);
   const allocation = p.done[i] ? p.buffered[i] : planPhase(s, getHousingTestResult()) === 'buffer';
@@ -91,8 +98,13 @@ export function planToggle(s: AppState, i: number): void {
      which it was, so undoing it later takes back a house only if it built one. */
   if (p.done[i]) {
     p.buffered[i] = allocation;
-    if (!allocation) villageSpawn(s);
+    if (!allocation) {
+      villageSpawn(s);
+      /* the plot shows where this day's house went (or that it is ready to place) */
+      s.vLand = { at: Date.now(), a: amount, cell: null, moves: vv.moves };
+    }
   } else {
+    s.vLand = null;
     p.buffered[i] = false;
     if (allocation === false) villageRemove(s);
     /* Older snapshots did not record it: assume a house only outside the buffer phase. */
@@ -104,7 +116,7 @@ export function planToggle(s: AppState, i: number): void {
    redistributed across the remaining unskipped, unsaved days. */
 export function planSkip(s: AppState, i: number): void {
   const p = planEnsure(s);
-  if (p.paused || p.done[i]) return;
+  if (p.paused || p.done[i] || planBeforeStart(p, i)) return;
   if (!p.skipped) p.skipped = new Array(p.n).fill(false);
   p.skipped[i] = !p.skipped[i];
   planRegen(p);

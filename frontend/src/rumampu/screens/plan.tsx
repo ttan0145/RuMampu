@@ -1,17 +1,19 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { HousingTestResult } from '../../../types/housing';
 import { useApp } from '../state';
 import { rm } from '../calc';
 import {
   bufferEnsure, feasibilityGap, planEnsure, planPause, planPhase, planReset, planResolveTarget,
-  planSaved, planShuffleLeft, planSkip, planToggle, syncBufferTarget, potGap, potLevel, potSplit,
+  planBeforeStart, planSaved, planShuffleLeft, planSkip, planToggle, syncBufferTarget, potGap, potLevel, potSplit,
   planHorizonEffective, planMonthlyAsk, planMonthRows, monthlySaveCapacity, PLAN_HORIZONS,
 } from '../plan';
 import { commitTotal } from '../calc';
 import { ufSource } from '../fees';
-import { villageEnsure } from '../village';
+import { villageEnsure, villageGlow, villageOpen, villageQueueKey } from '../village';
+import { IsoIsland } from '../isosvg';
+import { ReadyTag } from '../overlays';
 import { logIt } from '../log';
 import { getHousingTestResult } from '../../../services/housingSession';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT, XBOLD_FONT } from '../theme';
@@ -156,6 +158,7 @@ function InfoRow() {
 
 export function PlanScreen() {
   const { S, t, up, go, toast } = useApp();
+  const { width } = useWindowDimensions();
   const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
   const result = getHousingTestResult();
   React.useEffect(() => {
@@ -221,6 +224,9 @@ export function PlanScreen() {
   const p = S.plan;
   const b = S.buffer;
   const v = S.village;
+  const qKey = villageQueueKey(S);
+  /* a day just saved: its house lands on the village below */
+  const land = S.vLand && Date.now() - S.vLand.at < 5 * 60 * 1000 ? S.vLand : null;
   const today = new Date().getDate() - 1;
   const saved = planSaved(p);
   const pct = p.target > 0 ? Math.min(100, Math.round(saved / p.target * 100)) : 100;
@@ -243,7 +249,7 @@ export function PlanScreen() {
   const monthEnding = p.n - (today + 1) <= 2;
 
   const toggle = (i: number) => {
-    if (paused) return;
+    if (paused || planBeforeStart(p, i)) return;
     /* v27b: in Skip days mode a tap skips (or un-skips) a day not yet saved. */
     if (skipMode && !p.done[i]) { up(s => { planSkip(s, i); }); return; }
     if (p.skipped?.[i]) { up(s => { planSkip(s, i); }); return; }
@@ -293,10 +299,34 @@ export function PlanScreen() {
           {/* the upfront goal can come from a home typed in on Prepare, not a house test */}
           <BodyS muted>{t(!inBuffer && ufSource(S).typed ? 'p10_target_prep' : 'p10_target_from')}</BodyS>
           {inBuffer && shortN ? <Note>{t('p10_short_note', { s: shortN, n: testedN })}</Note> : null}
-          {(v?.queued ?? 0) > 0 ? <BodyS muted>{t('vl_queue', { n: v?.queued ?? 0 })}</BodyS> : null}
         </Card>
         </GuideTarget>
       )}
+
+      {/* The village sits with the days it is built from: a saved day lands here, and Play
+          opens the full village. In the safety-money phase saved days build no house yet. */}
+      {!inBuffer && v ? (
+        <Card gap={6}>
+          <Row>
+            <Display cls="h-m">{t('pl_village_h')}</Display>
+            <Pressable onPress={() => up(villageOpen)} accessibilityRole="button" testID="plan-village-play" style={st.vplay}>
+              <Text style={st.vplayT}>{'\u25B6'} {t('vl_play')}</Text>
+            </Pressable>
+          </Row>
+          <Pressable onPress={() => up(villageOpen)} accessibilityRole="button" accessibilityLabel={t('vl_title')}
+            style={{ alignItems: 'center' }} testID="plan-village">
+            <IsoIsland cells={v.cells} width={Math.min(width, 390) - 80} glow={villageGlow(S)} />
+            <ReadyTag n={v.queued ?? 0} label={t('vl_ready', { n: v.queued ?? 0 })} style={{ position: 'absolute', left: 0, top: 0 }} />
+          </Pressable>
+          {land ? (
+            <Text style={st.vland} testID="plan-village-landed">
+              {t('vl_landed_q', { a: rm(land.a) })}
+            </Text>
+          ) : null}
+          <BodyS muted>{t('vl_builtn', { b: v.built })} · {t('vl_onplot', { n: v.cells.filter(Boolean).length })}</BodyS>
+          {qKey && qKey !== 'vl_ready_swipe' ? <BodyS muted>{t(qKey, { n: v.queued })}</BodyS> : null}
+        </Card>
+      ) : null}
 
       {/* Spread it over: the record's answer or a number of months, as chips.
           The safety buffer is filled first and asks its whole gap, so the
@@ -350,22 +380,26 @@ export function PlanScreen() {
             const done = p.done[i];
             const skipped = !!p.skipped?.[i] && !done;
             const isToday = i === today;
-            const miss = !paused && i < today && !done && !skipped && a > 0;
+            const before = planBeforeStart(p, i);
+            const miss = !paused && i < today && !done && !skipped && !before && a > 0;
             return (
               <View key={i} style={st.plcell}>
                 <Pressable onPress={() => toggle(i)}
                   onLongPress={() => { if (!paused && !done) up(s => { planSkip(s, i); }); }}
-                  disabled={paused}
+                  disabled={paused || before}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: done }}
+                  accessibilityState={{ selected: done, disabled: paused || before }}
                   style={[st.plday,
+                    before && { backgroundColor: C.card, borderColor: C.card, opacity: 0.55 },
                     miss && { borderStyle: 'dashed', borderColor: C.caution, backgroundColor: '#FFF8E5' },
                     skipped && { borderStyle: 'dotted', backgroundColor: C.paper },
                     isToday && { borderColor: C.ink, borderWidth: 2 },
                     done && { backgroundColor: C.brand, borderColor: C.brand },
                   ]}>
                   <Text style={{ fontFamily: BODY_FONT, fontSize: 10, lineHeight: 12, color: done ? 'rgba(255,255,255,0.8)' : C.ink64 }}>{i + 1}</Text>
-                  {skipped ? (
+                  {before ? (
+                    <Text style={{ fontFamily: SEMI_FONT, fontSize: 10, lineHeight: 15, color: C.ink40 }}>{t('pl_before_short')}</Text>
+                  ) : skipped ? (
                     <Text style={{ fontFamily: SEMI_FONT, fontSize: 10, lineHeight: 15, color: C.ink64 }}>{t('pl_skip_short')}</Text>
                   ) : (
                     <View style={{ alignItems: 'center' }}>
@@ -428,6 +462,9 @@ function upfrontNeedOf(q: { need: number }): number {
 }
 
 const st = StyleSheet.create({
+  vplay: { backgroundColor: C.brand, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 14 },
+  vplayT: { fontFamily: DISP_FONT, fontSize: 13, color: '#fff' },
+  vland: { fontFamily: DISP_FONT, fontSize: 13, color: '#9A6B00', textAlign: 'center' },
   eyeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
   eyebrow: {
     fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.99, textTransform: 'uppercase',

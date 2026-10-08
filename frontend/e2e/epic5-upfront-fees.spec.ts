@@ -9,6 +9,7 @@ import { drawDownBuffer, planEnsure, planPhase, planToggle, potSplit, syncBuffer
 import { setHousingTestResult } from '../services/housingSession';
 import type { HousingTestResult } from '../types/housing';
 import { accountSnapshot, hydrateAccountState } from '../src/rumampu/persist';
+import { villageGlow, villagePlay, villageQueueKey, villageRestart } from '../src/rumampu/village';
 
 /* US5.2 engineering regression — the published fee scales behind "You need".
 
@@ -41,6 +42,11 @@ function stateFor(input: HouseInput): AppState {
     data: {
       house: { price: input.price, deposit: input.deposit, rate: 4.3, years: 35, knownPayment: null },
       upfront: MOCK.upfront.map(item => ({ ...item, a: input.entered?.[item.id] ?? 0 })),
+    },
+    /* every AppState now carries the reminder settings (US6.3, initialState in state.tsx),
+       and the account round trip reads them */
+    notificationPreferences: {
+      bill_reminders: true, record_warnings: true, permission_asked: false, permission_granted: false, reminders: {},
     },
   } as unknown as AppState;
 }
@@ -231,6 +237,9 @@ test.describe('Safety buffer saving reversals', { tag: ['@epic5', '@epic10', '@h
     planToggle(state, 0);
     planToggle(state, 1);
     expect(state.village?.built).toBe(1);
+    // The house waits as a ready Pondok until a swipe places it.
+    expect(state.village?.queued).toBe(1);
+    expect(state.village?.cells.every(cell => cell === 0)).toBe(true);
     const remote = JSON.parse(JSON.stringify(accountSnapshot(state)));
     state.plan = null;
     hydrateAccountState(state, remote);
@@ -244,7 +253,50 @@ test.describe('Safety buffer saving reversals', { tag: ['@epic5', '@epic10', '@h
     planToggle(state, 1);
     expect(potSum(state)).toBe(0);
     expect(state.village?.built).toBe(0);
+    expect(state.village?.queued).toBe(0);
     expect(state.village?.cells.every(cell => cell === 0)).toBe(true);
+  });
+
+  test('TECH-BUFFER-07 — Saved days wait as ready Pondoks; a move places one, and the wording says why one cannot be placed', () => {
+    const state = savingState([100, 40, 30]);
+    planToggle(state, 0); // fills the RM 100 buffer: no house
+    planToggle(state, 1);
+    planToggle(state, 2);
+    const v = state.village!;
+    expect(v).toMatchObject({ built: 2, queued: 2 });
+    expect(v.cells.every(cell => cell === 0)).toBe(true);
+    expect(villageQueueKey(state)).toBe('vl_ready_swipe');
+    // A move places one ready Pondok on a free square and lights it.
+    expect(villagePlay(state, 'l', () => '')).toBe(true);
+    expect(v.queued).toBe(1);
+    expect(v.moves).toBe(1);
+    expect(v.spawnAt).toBe(1);
+    expect(v.cells[v.spawn!]).toBe(1);
+    expect(villageGlow(state)).toEqual([v.spawn]);
+    // A full plot that cannot move: nothing happens, and the wording asks for a merge.
+    v.cells = [1, 2, 1, 2, 2, 1, 2, 1, 1, 2, 1, 2, 2, 1, 2, 1];
+    expect(villageQueueKey(state)).toBe('vl_queue_room');
+    expect(villagePlay(state, 'l', () => '')).toBe(false);
+    expect(v.moves).toBe(1);
+    expect(v.queued).toBe(1);
+    // Undoing the buffer day leaves the safety money short: Pondoks wait for it.
+    v.cells[0] = 0;
+    planToggle(state, 0);
+    expect(planPhase(state, result)).toBe('buffer');
+    expect(villageQueueKey(state)).toBe('vl_queue_buf');
+    // Undoing a house day takes from the ready pile first, leaving the plot alone.
+    const plot = [...v.cells];
+    planToggle(state, 2);
+    expect(v).toMatchObject({ built: 1, queued: 0 });
+    expect(v.cells).toEqual(plot);
+    // Start over: the plot empties and every house, Istanas included, goes back as its Pondoks.
+    v.score = 12;
+    v.best = 20;
+    v.collection = 1;
+    const back = plot.reduce((sum, tier) => sum + (tier ? 2 ** (tier - 1) : 0), 0) + 16;
+    villageRestart(state);
+    expect(v.cells.every(cell => cell === 0)).toBe(true);
+    expect(v).toMatchObject({ queued: back, collection: 0, score: 0, moves: 0, best: 20, built: 1 });
   });
 
   test('TECH-BUFFER-03 — Using the safety buffer spends from the pot, and every reading follows', () => {

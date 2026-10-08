@@ -544,7 +544,8 @@ export function HomeCostsScreen() {
       <GuideTarget id="fh.map" style={StyleSheet.absoluteFill}>
         {geo && fitTo ? (
           <GeoMap group={group} fitTo={fitTo} pad={pad} maxZoom={open ? 11.5 : 12} styleOf={styleOf} pins={pins}
-            onPick={openDistrict} attribution="© OpenStreetMap contributors" />
+            onPick={openDistrict} attribution="© OpenStreetMap contributors"
+            zoomLabels={{ in: t('hp_zoom_in'), out: t('hp_zoom_out') }} />
         ) : null}
       </GuideTarget>
 

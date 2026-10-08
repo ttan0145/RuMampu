@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Animated, Easing, Image, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions,
+  AccessibilityInfo, Animated, Easing, Image, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
@@ -14,10 +14,9 @@ import { getHousingTestResult } from '../../services/housingSession';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from './theme';
 import { Btn, BtnLine, BodyS, EditList, NumInput, PROV_G, TextField } from './ui';
 import { Ico } from './svgs';
-import { Ruma } from './ruma-view';
 import { PEEK_W, peekArt } from './ruma-peek';
 import { IsoHouse, IsoIsland } from './isosvg';
-import { ISO_TIERS, villagePlay } from './village';
+import { ISO_TIERS, villageGlow, villagePlay, villageQueueKey, villageRestart } from './village';
 import { logIt } from './log';
 import { DatePickerField } from './date-picker';
 import { isValidMoneyText } from './validation';
@@ -261,17 +260,101 @@ function VillageFlash() {
   );
 }
 
-function VStat({ label, value, hi, gain }: { label: string; value: number; hi?: boolean; gain?: number }) {
+/* Game HUD tiles: a chunky tile with a darker bottom edge (like a game button), an icon
+   bubble and a big number. Each tile has its own colour so they tell apart at a glance. */
+const HUD = {
+  score: { bg: '#3C5152', edge: '#26363A', ink: '#fff' },
+  best: { bg: '#FFC53D', edge: '#D99A0B', ink: '#6B4A00' },
+  moves: { bg: '#4A9195', edge: '#336B6E', ink: '#fff' },
+  ready: { bg: '#F28C6B', edge: '#C9643F', ink: '#fff' },
+  saved: { bg: '#58A86B', edge: '#3B8250', ink: '#fff' },
+  restart: { bg: '#8C7BC9', edge: '#6A59A8', ink: '#fff' },
+} as const;
+const HUD_ICON = {
+  score: '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="12,2.5 14.9,8.6 21.5,9.3 16.5,13.8 17.9,20.3 12,17 6.1,20.3 7.5,13.8 2.5,9.3 9.1,8.6" fill="#FFD25A" stroke="#E5A800" stroke-width="1.2" stroke-linejoin="round"/></svg>',
+  best: '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M7 5H4.5a2.6 2.6 0 0 0 3 4.4M17 5h2.5a2.6 2.6 0 0 1-3 4.4" fill="none" stroke="#8A5A00" stroke-width="1.8" stroke-linecap="round"/><path d="M7 3.5h10V8a5 5 0 0 1-10 0z" fill="#fff" stroke="#8A5A00" stroke-width="1.6" stroke-linejoin="round"/><rect x="10.8" y="12.8" width="2.4" height="3.6" fill="#8A5A00"/><rect x="7.8" y="16.2" width="8.4" height="3.6" rx="1.2" fill="#8A5A00"/><circle cx="12" cy="7.4" r="1.4" fill="#FFC53D"/></svg>',
+  moves: '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><ellipse cx="8.2" cy="10" rx="2.8" ry="4" fill="#fff"/><circle cx="6.3" cy="4.4" r="1" fill="#fff"/><circle cx="8.4" cy="3.9" r="1" fill="#fff"/><circle cx="10.3" cy="4.6" r="0.9" fill="#fff"/><ellipse cx="15.8" cy="16" rx="2.8" ry="4" fill="#fff"/><circle cx="13.9" cy="10.4" r="1" fill="#fff"/><circle cx="16" cy="9.9" r="1" fill="#fff"/><circle cx="17.9" cy="10.6" r="0.9" fill="#fff"/></svg>',
+  saved: '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><ellipse cx="12" cy="17.5" rx="7.5" ry="3" fill="#E5A800"/><ellipse cx="12" cy="15.5" rx="7.5" ry="3" fill="#FFD25A" stroke="#E5A800" stroke-width="1"/><ellipse cx="12" cy="11.5" rx="7.5" ry="3" fill="#E5A800"/><ellipse cx="12" cy="9.5" rx="7.5" ry="3" fill="#FFD25A" stroke="#E5A800" stroke-width="1"/><ellipse cx="12" cy="9.5" rx="3.6" ry="1.3" fill="none" stroke="#E5A800" stroke-width="1"/></svg>',
+} as const;
+
+function HudTile({ kind, label, value, id, a11y, children, badge }: {
+  kind: keyof typeof HUD; label: string; value?: string; id?: string; a11y?: string;
+  children?: React.ReactNode; badge?: React.ReactNode;
+}) {
+  const c = HUD[kind];
   return (
-    <View style={{ flex: 1, backgroundColor: hi ? C.brand : C.ink, borderRadius: 12, paddingVertical: 6, paddingHorizontal: 8, alignItems: 'center' }}>
-      <Text style={{ fontFamily: BODY_FONT, fontSize: 10, letterSpacing: 0.8, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' }}>{label}</Text>
-      <Text style={{ fontFamily: DISP_FONT, fontSize: 18, lineHeight: 22, color: '#fff', fontVariant: ['tabular-nums'] }}>{value}</Text>
-      {gain ? (
-        <Text style={{ position: 'absolute', right: 8, top: -4, fontFamily: DISP_FONT, fontSize: 14, color: '#2E9E4E' }}>+{gain}</Text>
-      ) : null}
+    <View accessible={!!a11y} accessibilityLabel={a11y} testID={id}
+      style={[sheetSt.hud, { backgroundColor: c.bg, borderBottomColor: c.edge }]}>
+      <View style={sheetSt.hudIco}>
+        {children ?? <SvgXml xml={HUD_ICON[kind as keyof typeof HUD_ICON]} width={18} height={18} />}
+      </View>
+      <View style={{ flexShrink: 1 }}>
+        <Text numberOfLines={1} style={[sheetSt.hudLbl, { color: c.ink, opacity: 0.8 }]}>{label}</Text>
+        <Text numberOfLines={1} style={[sheetSt.hudVal, { color: c.ink }, (value ?? '').length > 5 && { fontSize: 14.5 }]}>{value}</Text>
+      </View>
+      {badge}
     </View>
   );
 }
+
+/* A Pondok that bobs while some are waiting to be placed (still when reduce motion is on). */
+function BobbingPondok({ on }: { on: boolean }) {
+  const y = React.useRef(new Animated.Value(0)).current;
+  const [still, setStill] = React.useState(false);
+  React.useEffect(() => { void AccessibilityInfo.isReduceMotionEnabled().then(setStill).catch(() => undefined); }, []);
+  React.useEffect(() => {
+    if (!on || still) { y.setValue(0); return; }
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(y, { toValue: -3, duration: 420, easing: Easing.out(Easing.quad), useNativeDriver: Platform.OS !== 'web' }),
+      Animated.timing(y, { toValue: 0, duration: 420, easing: Easing.in(Easing.quad), useNativeDriver: Platform.OS !== 'web' }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [on, still, y]);
+  return <Animated.View style={{ transform: [{ translateY: y }] }}><IsoHouse tier="pondok" size={22} /></Animated.View>;
+}
+
+/* "+4" floating up off the score after a merge, and a NEW! ribbon when the best score moves. */
+function ScorePop({ gain, k }: { gain: number; k: number }) {
+  const a = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    if (!gain) return;
+    a.setValue(0);
+    Animated.timing(a, { toValue: 1, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: Platform.OS !== 'web' }).start();
+  }, [k, gain, a]);
+  if (!gain) return null;
+  return (
+    <Animated.Text pointerEvents="none" style={[sheetSt.hudPop, {
+      opacity: a.interpolate({ inputRange: [0, 0.7, 1], outputRange: [1, 1, 0] }),
+      transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [0, -18] }) }],
+    }]}>+{gain}</Animated.Text>
+  );
+}
+
+const REFRESH_SVG = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M19 8a8 8 0 1 0 1 6" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><path d="M20.5 3.5v5.5H15" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+/* How many saved days are waiting as Pondoks, shown as a small Pondok with a count. */
+export function ReadyTag({ n, label, style }: { n: number; label: string; style?: object }) {
+  if (n <= 0) return null;
+  return (
+    <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF5D9', borderRadius: 999,
+      borderWidth: 1.5, borderColor: '#F2C14E', paddingLeft: 2, paddingRight: 10, paddingVertical: 1 }, style]}
+      accessibilityLabel={label} testID="village-ready">
+      <IsoHouse tier="pondok" size={26} />
+      <Text style={{ fontFamily: DISP_FONT, fontSize: 13, color: '#8A6200' }}>{label}</Text>
+    </View>
+  );
+}
+
+/* The plot's four edges in IsoIsland's 440 x 292 drawing: the middle of each edge and the
+   direction pointing out of it (tiles are twice as wide as tall, so the normals lean 1:2).
+   The bottom two sit under the plot's thickness. */
+const VILLAGE_EDGES = [
+  { dir: 'l', glyph: '\u2196', label: 'vl_dir_l', x: 116, y: 113, nx: -0.45, ny: -0.89 },
+  { dir: 'u', glyph: '\u2197', label: 'vl_dir_u', x: 324, y: 113, nx: 0.45, ny: -0.89 },
+  { dir: 'd', glyph: '\u2199', label: 'vl_dir_d', x: 116, y: 225, nx: -0.45, ny: 0.89 },
+  { dir: 'r', glyph: '\u2198', label: 'vl_dir_r', x: 324, y: 225, nx: 0.45, ny: 0.89 },
+] as const;
 
 function VillageSheet() {
   const { S, t, up } = useApp();
@@ -283,23 +366,45 @@ function VillageSheet() {
   const close = () => up(s => { s.sheet = null; });
   const play = (dir: 'l' | 'r' | 'u' | 'd') => up(s => { villagePlay(s, dir, tier => t('vl_built', { t: t('vl_t' + tier) })); });
 
+  const [restartArmed, setRestartArmed] = React.useState(false);
   const pan = React.useRef(PanResponder.create({
     onMoveShouldSetPanResponder: (_e, g) => Math.max(Math.abs(g.dx), Math.abs(g.dy)) > 18,
     onPanResponderRelease: (_e, g) => {
       if (Math.max(Math.abs(g.dx), Math.abs(g.dy)) < 24) return;
-      const dir = Math.abs(g.dx) > Math.abs(g.dy) ? (g.dx > 0 ? 'r' : 'l') : (g.dy > 0 ? 'd' : 'u');
+      /* The plot is isometric: its four edges run diagonally on screen (tiles are
+         twice as wide as tall). A swipe goes to the edge it points at most:
+         top-left = l, top-right = u, bottom-left = d, bottom-right = r. */
+      const EDGES = [['l', -2, -1], ['u', 2, -1], ['d', -2, 1], ['r', 2, 1]] as const;
+      const dir = EDGES.reduce((a, e) => (e[1] * g.dx + e[2] * g.dy > a[1] * g.dx + a[2] * g.dy ? e : a))[0];
       play(dir);
     },
   })).current;
 
   const n = v.cells.filter(Boolean).length;
-  const best = Math.max(0, ...v.cells);
-  let stats = `${t('vl_builtn', { b: v.built })} · ${t('vl_onplot', { n })}${best ? ' · ' + t('vl_best', { t: t('vl_t' + best) }) : ''}`;
-  /* Epic 10 anchoring: the collection with its truthful ringgit total (the
-     istanas are decorative — the RM figure is the honest signal), plus any
-     houses waiting for space so a saved day never looks lost. */
-  if ((v.collection ?? 0) > 0) stats += `\n${t('vl_collect', { n: v.collection, a: rm(v.savedRm ?? 0) })}`;
-  if ((v.queued ?? 0) > 0) stats += `\n${t('vl_queue', { n: v.queued })}`;
+  /* Epic 10 anchoring: what the saved days became, as tiles. A finished Istana
+     (16 Pondoks) leaves the plot for the collection, so "Built" can be far more
+     than "On plot"; the ringgit total is the honest signal. */
+  const qKey = villageQueueKey(S);
+  const qText = qKey && qKey !== 'vl_ready_swipe' ? t(qKey, { n: v.queued }) : '';
+  const canRestart = n > 0 || (v.collection ?? 0) > 0;
+  /* NEW! on the best tile for the move that raised it */
+  const bestSeen = React.useRef(v.best);
+  const [newBest, setNewBest] = React.useState(false);
+  React.useEffect(() => {
+    if (v.best > bestSeen.current && v.moves > 0) {
+      setNewBest(true);
+      const timer = setTimeout(() => setNewBest(false), 2200);
+      bestSeen.current = v.best;
+      return () => clearTimeout(timer);
+    }
+    bestSeen.current = v.best;
+    return undefined;
+  }, [v.best, v.moves]);
+  React.useEffect(() => {
+    if (!restartArmed) return;
+    const timer = setTimeout(() => setRestartArmed(false), 3000);
+    return () => clearTimeout(timer);
+  }, [restartArmed]);
   const isleW = Math.min(width, 390) - 60;
 
   return (
@@ -328,24 +433,63 @@ function VillageSheet() {
           <BodyS muted style={{ marginTop: 6 }}>{t('sv_not_advice')}</BodyS>
         </View>
       ) : null}
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-        <VStat label={t('vl_score')} value={v.score} />
-        {/* <VStat label={t('vl_score')} value={v.score} gain={v.gain || undefined} /> */}
-        <VStat label={t('vl_bestscore')} value={v.best} hi />
-        <VStat label={t('vl_moves')} value={v.moves} />
+      {/* the game (score, best, moves) on top; below it what the saved days are:
+         the ready Pondoks that drop one per move, the ringgit behind them, and start over */}
+      <View style={{ gap: 6, marginTop: 10 }}>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          <HudTile kind="score" label={t('vl_score')} value={String(v.score)}
+            badge={<ScorePop gain={v.gain ?? 0} k={v.moves} />} />
+          <HudTile kind="best" label={t('vl_bestscore')} value={String(v.best)}
+            badge={newBest ? <View style={sheetSt.hudNew}><Text style={sheetSt.hudNewT}>{t('vl_newbest')}</Text></View> : null} />
+          <HudTile kind="moves" label={t('vl_moves')} value={String(v.moves)} />
+        </View>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          <HudTile kind="ready" label={t('vl_t_ready')} value={String(v.queued ?? 0)} id="village-ready-n"
+            a11y={t('vl_ready', { n: v.queued ?? 0 })}>
+            <BobbingPondok on={(v.queued ?? 0) > 0} />
+          </HudTile>
+          <HudTile kind="saved" label={t('vl_t_saved')} value={rm(v.savedRm ?? 0)} id="village-saved"
+            a11y={t('vl_t_saved') + ' ' + rm(v.savedRm ?? 0)} />
+          {/* start over: two taps, so a stray tap never clears the plot */}
+          <Pressable disabled={!canRestart} onPress={() => {
+            if (!restartArmed) { setRestartArmed(true); return; }
+            setRestartArmed(false);
+            up(villageRestart);
+          }} accessibilityRole="button" accessibilityLabel={t(restartArmed ? 'vl_restart_confirm' : 'vl_restart')}
+            accessibilityState={{ disabled: !canRestart }} testID="village-restart"
+            style={({ pressed }) => [sheetSt.hud, { backgroundColor: HUD.restart.bg, borderBottomColor: HUD.restart.edge },
+              restartArmed && { backgroundColor: C.short, borderBottomColor: '#B8401B' },
+              !canRestart && { opacity: 0.45 }, pressed && { borderBottomWidth: 1, transform: [{ translateY: 3 }] }]}>
+            <View style={sheetSt.hudIco}><SvgXml xml={REFRESH_SVG} width={17} height={17} /></View>
+            <Text numberOfLines={2} style={{ flexShrink: 1, fontFamily: DISP_FONT, fontSize: 12.5, lineHeight: 15, color: '#fff' }}>
+              {t(restartArmed ? 'vl_restart_tap' : 'vl_restart')}
+            </Text>
+          </Pressable>
+        </View>
       </View>
       <View {...pan.panHandlers} style={sheetSt.vscene}>
         <View style={{ position: 'absolute', right: 18, top: 10 }}>
           <SvgXml xml={'<svg viewBox="0 0 40 40" width="34" height="34" xmlns="http://www.w3.org/2000/svg"><circle cx="20" cy="20" r="11" fill="#FEC844"/></svg>'} width={34} height={34} />
         </View>
-        <View style={{ position: 'absolute', left: 14, top: 12, opacity: 0.95 }}>
-          <SvgXml xml={'<svg viewBox="0 0 64 32" width="70" height="35" fill="#fff" xmlns="http://www.w3.org/2000/svg"><ellipse cx="18" cy="22" rx="14" ry="9"/><ellipse cx="34" cy="16" rx="16" ry="12"/><ellipse cx="49" cy="22" rx="12" ry="8"/></svg>'} width={70} height={35} />
-        </View>
-        <View style={{ position: 'absolute', left: 16, bottom: 18, zIndex: 2 }}>
-          <Ruma w={64} pose="happy" float={false} />
-        </View>
         <View style={{ alignItems: 'center', marginTop: 16 }}>
-          <IsoIsland cells={v.cells} width={isleW} />
+          <View style={{ width: isleW, height: isleW * 292 / 440 }}>
+            <IsoIsland cells={v.cells} width={isleW} glow={villageGlow(S)} burst={villageGlow(S).length ? S.village?.spawnAt : undefined} />
+            {/* one arrow at the middle of each edge of the plot, pointing out of it:
+                tap it and every house slides to that edge */}
+            {VILLAGE_EDGES.map(e => {
+              const k = isleW / 440, size = 36, d = 26;
+              return (
+                <Pressable key={e.dir} onPress={() => play(e.dir)} accessibilityRole="button" accessibilityLabel={t(e.label)}
+                  testID={`village-${e.dir}`} hitSlop={6}
+                  style={({ pressed }) => [sheetSt.vedge, {
+                    width: size, height: size, borderRadius: size / 2,
+                    left: e.x * k + e.nx * d - size / 2, top: e.y * k + e.ny * d - size / 2,
+                  }, pressed && { backgroundColor: C.brand, transform: [{ scale: 0.92 }] }]}>
+                  {({ pressed }) => <Text style={{ fontSize: 18, fontWeight: '700', color: pressed ? '#fff' : C.ink }}>{e.glyph}</Text>}
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       </View>
       <BodyS muted style={{ textAlign: 'center', marginTop: 4, fontSize: 11.5 }}>{t('vl_swipe')}</BodyS>
@@ -353,14 +497,7 @@ function VillageSheet() {
         fontFamily: DISP_FONT, minHeight: 18, textAlign: 'center', color: C.confirm,
         fontSize: 13, marginTop: 6,
       }}>{v.msg || ''}</Text>
-      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 4 }}>
-        {([['l', '←'], ['u', '↑'], ['d', '↓'], ['r', '→']] as const).map(([d, a]) => (
-          <Pressable key={d} onPress={() => play(d)} style={sheetSt.varrow}>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: C.ink }}>{a}</Text>
-          </Pressable>
-        ))}
-      </View>
-      <BodyS muted style={{ marginTop: 8 }}>{stats}</BodyS>
+      {qText ? <BodyS muted style={{ marginTop: 8 }}>{qText}</BodyS> : null}
       <View style={{ flexDirection: 'row', marginTop: 8 }}>
         {ISO_TIERS.map((id, i) => (
           <View key={id} style={{ flex: 1, alignItems: 'center' }}>
@@ -1122,11 +1259,28 @@ const sheetSt = StyleSheet.create({
   },
   vscene: {
     marginTop: 10, borderRadius: 18, overflow: 'hidden', backgroundColor: '#E2F1EE',
-    paddingTop: 26, paddingHorizontal: 6, paddingBottom: 4, minHeight: 230,
+    paddingTop: 26, paddingHorizontal: 6, paddingBottom: 30, minHeight: 230,
   },
-  varrow: {
-    width: 46, height: 40, borderRadius: 12, backgroundColor: '#fff',
-    borderWidth: 1.5, borderColor: C.ink14, alignItems: 'center', justifyContent: 'center',
+  hud: {
+    flex: 1, height: 56, borderRadius: 14, borderBottomWidth: 4, paddingHorizontal: 7,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+  },
+  hudIco: {
+    width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.28)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  hudLbl: { fontFamily: SEMI_FONT, fontSize: 9.5, letterSpacing: 0.7, textTransform: 'uppercase' },
+  hudVal: { fontFamily: DISP_FONT, fontSize: 18, lineHeight: 21, fontVariant: ['tabular-nums'] },
+  hudPop: { position: 'absolute', right: 8, top: 2, fontFamily: DISP_FONT, fontSize: 15, color: '#FFD25A' },
+  hudNew: {
+    position: 'absolute', top: -7, right: -4, backgroundColor: C.short, borderRadius: 999,
+    paddingHorizontal: 6, paddingVertical: 1, transform: [{ rotate: '8deg' }],
+  },
+  hudNewT: { fontFamily: DISP_FONT, fontSize: 9.5, color: '#fff', letterSpacing: 0.5 },
+  vedge: {
+    position: 'absolute', backgroundColor: 'rgba(255,255,255,0.92)', borderWidth: 1.5, borderColor: C.ink14,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2,
   },
 });
 
