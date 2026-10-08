@@ -299,7 +299,7 @@ function termLabels(S: AppState, t: (k: string) => string): Record<string, strin
 
 export function AssistantSheet() {
   const {
-    S, t, up, toast, saveIncomeEntry, saveExpenseCategory, saveExpenseEntry, saveCommitmentAmount,
+    S, t, up, toast, saveIncomeEntry, saveIncomeSource, saveExpenseCategory, saveExpenseEntry, saveCommitmentAmount,
   } = useApp();
   const insets = useSafeAreaInsets();
   /* v27b2: the chat opens beside Ruma, on whichever side has more room; on a
@@ -540,18 +540,31 @@ export function AssistantSheet() {
 
   const confirmAction = async () => {
     if (pendingActions.length === 0 || actionSaving) return;
-    if (pendingActions.some(action => action.kind === 'expense' && !action.target_id && !action.target_label)) return;
+    if (pendingActions.some(action => (action.kind === 'income' || action.kind === 'expense') && !action.target_id && !action.target_label)) return;
     setActionSaving(true);
     try {
       const actionsToSave = [...pendingActions].sort((a, b) =>
         Number(b.kind === 'income') - Number(a.kind === 'income'));
+      const createdSources = new Map<string, string>();
       const createdCategories = new Map<string, string>();
       for (const action of actionsToSave) {
         if (action.kind === 'income') {
+          let sourceId = action.target_id;
+          if (!sourceId) {
+            const key = action.target_label.trim().toLocaleLowerCase();
+            sourceId = createdSources.get(key) || await saveIncomeSource(action.target_label);
+            createdSources.set(key, sourceId);
+            /* Keep the created ID on the pending draft. If the amount needs a
+               second outlier confirmation, do not try to create the same
+               custom source again on the second press. */
+            setPendingActions(actions => actions.map(pending => pending === action
+              ? { ...pending, target_id: sourceId }
+              : pending));
+          }
           const result = await saveIncomeEntry({
             amount: Number(action.amount),
             date: action.date!,
-            sourceId: action.target_id,
+            sourceId,
             confirmOutlier: confirmingOutlier,
           });
           if (result === 'outlier') {
@@ -677,22 +690,22 @@ export function AssistantSheet() {
                   <Text style={st.actionTitle}>{t('as_action_review')}</Text>
                   <View style={{ gap: 6 }}>
                     {pendingActions.map((action, index) => {
-                      const categoryMissing = action.kind === 'expense' && !action.target_id && !action.target_label;
+                      const targetMissing = (action.kind === 'income' || action.kind === 'expense') && !action.target_id && !action.target_label;
                       return (
                         <View key={`${action.kind}-${action.target_id}-${index}`} style={{ gap: 6 }}>
                           <Text style={st.actionText}>{`${index + 1}. ${actionSummary(action)}`}</Text>
-                          {categoryMissing ? (
-                            <View accessibilityLabel={t('vo_cat')} style={{ gap: 5 }}>
-                              <Text style={st.actionFieldLabel}>{t('vo_cat')}</Text>
+                          {targetMissing ? (
+                            <View accessibilityLabel={t(action.kind === 'income' ? 'vo_src' : 'vo_cat')} style={{ gap: 5 }}>
+                              <Text style={st.actionFieldLabel}>{t(action.kind === 'income' ? 'vo_src' : 'vo_cat')}</Text>
                               <View style={st.actionChoices}>
-                                {S.data.expenseCats.map(category => {
-                                  const label = shownLabel(category);
+                                {(action.kind === 'income' ? S.data.sources : S.data.expenseCats).map(target => {
+                                  const label = shownLabel(target);
                                   return (
                                     <Pressable
-                                      key={category.id}
+                                      key={target.id}
                                       accessibilityRole="button"
                                       accessibilityLabel={label}
-                                      onPress={() => chooseExpenseCategory(index, category.id, label)}
+                                      onPress={() => chooseExpenseCategory(index, target.id, label)}
                                       style={st.actionChoice}
                                     >
                                       <Text style={st.actionChoiceText}>{label}</Text>
@@ -718,12 +731,12 @@ export function AssistantSheet() {
                     <Pressable
                       accessibilityRole="button"
                       accessibilityState={{
-                        disabled: actionSaving || pendingActions.some(action => action.kind === 'expense' && !action.target_id && !action.target_label),
+                        disabled: actionSaving || pendingActions.some(action => (action.kind === 'income' || action.kind === 'expense') && !action.target_id && !action.target_label),
                       }}
-                      disabled={actionSaving || pendingActions.some(action => action.kind === 'expense' && !action.target_id && !action.target_label)}
+                      disabled={actionSaving || pendingActions.some(action => (action.kind === 'income' || action.kind === 'expense') && !action.target_id && !action.target_label)}
                       onPress={() => { void confirmAction(); }}
                       style={[st.actionConfirm,
-                        (actionSaving || pendingActions.some(action => action.kind === 'expense' && !action.target_id && !action.target_label)) && { opacity: 0.5 }]}
+                        (actionSaving || pendingActions.some(action => (action.kind === 'income' || action.kind === 'expense') && !action.target_id && !action.target_label)) && { opacity: 0.5 }]}
                     >
                       {actionSaving ? <ActivityIndicator size="small" color="#fff" /> : (
                         <Text style={st.actionConfirmText}>

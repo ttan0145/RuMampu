@@ -101,6 +101,17 @@ function chineseNumber(str: string): number {
   return total + sec + num;
 }
 
+function customIncomeSource(text: string): string | undefined {
+  if (/\b(?:work|job|kerja)\b|mcdonald'?s/.test(text)) return 'Work';
+  if (/\bclubs?\b/.test(text)) return 'Clubs';
+  const match = text.match(/\b(?:from|dari)\s+(?:my\s+)?([^|,.;!?]{1,60})/i);
+  if (!match) return undefined;
+  const name = match[1]
+    .replace(/\b(?:today|yesterday|last\s+\w+|hari\s+ini|semalam)\b.*$/i, '')
+    .trim();
+  return name ? name.charAt(0).toUpperCase() + name.slice(1) : undefined;
+}
+
 export function parseSpokenEntries(text: string, S: AppState): VoiceItem[] {
   let s = ` ${String(text || '').toLowerCase()} `;
   s = s.replace(/rm\s*/g, ' ').replace(/(\d),(\d{3})/g, '$1$2');
@@ -147,7 +158,8 @@ export function parseSpokenEntries(text: string, S: AppState): VoiceItem[] {
           : /freelance|klien|client|projek|project|自由职业/.test(p) ? sourceBy(['freelance'])
             : /part.?time|gaji/.test(p) ? sourceBy(['parttime']) : undefined;
       it.s = sid;
-      it.confidence!.target = sid ? 'high' : 'low';
+      if (!sid) it.sourceName = customIncomeSource(p);
+      it.confidence!.target = sid || it.sourceName ? 'high' : 'low';
     } else {
       const slug = /makan|lunch|dinner|breakfast|food|nasi|kopi|吃|饭|餐/.test(p) ? 'meals'
         : /barang|grocer|pasar|mart|kedai|超市|菜/.test(p) ? 'groc'
@@ -175,7 +187,7 @@ function useReducedMotion(): boolean {
 }
 
 function useSayDraft() {
-  const { S, t, up, toast, saveIncomeEntry, saveExpenseCategory, saveExpenseEntry, ensureAiDisclosure } = useApp();
+  const { S, t, up, toast, saveIncomeEntry, saveIncomeSource, saveExpenseCategory, saveExpenseEntry, ensureAiDisclosure } = useApp();
   const textRef = React.useRef('');
   const SRef = React.useRef(S);
   SRef.current = S;
@@ -232,11 +244,11 @@ function useSayDraft() {
             a: Number(a.amount),
             d: a.date || isoOffset(0),
             ...(a.kind === 'income'
-              ? { s: a.target_id }
+              ? { s: a.target_id, sourceName: a.target_id ? undefined : a.target_label || undefined }
               : { c: a.target_id, categoryName: a.target_id ? undefined : a.target_label || undefined }),
             confidence: {
               kind: 'high', amount: 'high', date: 'high',
-              target: a.target_id || (a.kind === 'expense' && a.target_label) ? 'high' : 'low',
+              target: a.target_id || a.target_label ? 'high' : 'low',
             },
           }) as VoiceItem);
         /* Voice entry is deliberately limited to record entries. A bill,
@@ -386,7 +398,7 @@ function useSayDraft() {
     const invalid = V.items.some(it => {
       const amount = Number(it.a);
       return !Number.isFinite(amount) || (it.kind === 'in' ? amount < 0 : amount <= 0)
-        || (it.kind === 'in' ? !it.s : !it.c && !it.categoryName);
+        || (it.kind === 'in' ? !it.s && !it.sourceName : !it.c && !it.categoryName);
     });
     if (needsReview || invalid) {
       toast(t(needsReview ? 'vo_review_required' : 'vo_invalid_amount'), 'error');
@@ -397,12 +409,23 @@ function useSayDraft() {
     try {
       /* Income first: an unusually large one stops the save so it can be checked. */
       const order = V.items.map((it, i) => ({ it, i })).sort((a, b) => Number(b.it.kind === 'in') - Number(a.it.kind === 'in'));
+      const createdSources = new Map<string, string>();
       const createdCategories = new Map<string, string>();
-      for (const { it } of order) {
+      for (const { it, i } of order) {
         const a = Math.round((Number(it.a) || 0) * 100) / 100;
         if (!Number.isFinite(a) || (it.kind === 'in' ? a < 0 : a <= 0)) continue;
         if (it.kind === 'in') {
-          const result = await saveIncomeEntry({ amount: a, date: it.d, sourceId: it.s, confirmOutlier: !!V.outlier });
+          let sourceId = it.s || '';
+          if (!sourceId && it.sourceName) {
+            const key = it.sourceName.trim().toLocaleLowerCase();
+            sourceId = createdSources.get(key) || await saveIncomeSource(it.sourceName);
+            createdSources.set(key, sourceId);
+            up(s => {
+              const pending = s.voice?.items[i];
+              if (pending) pending.s = sourceId;
+            });
+          }
+          const result = await saveIncomeEntry({ amount: a, date: it.d, sourceId, confirmOutlier: !!V.outlier });
           if (result === 'outlier') {
             up(s => { if (s.voice) s.voice.outlier = true; });
             toast(t('as_action_outlier'), 'error');
@@ -507,8 +530,10 @@ function DraftCard({ it, i, edit, remove, confirm }: {
     days.push({ v: it.d, l: `${d} ${monthName((m || 1) - 1)} ${y}` });
   }
   const list = inc ? S.data.sources : S.data.expenseCats;
+  const proposedSource = '__ai_proposed_source__';
   const proposedCategory = '__ai_proposed_category__';
   const opts = [
+    ...(inc && it.sourceName ? [{ v: proposedSource, l: it.sourceName }] : []),
     ...(!inc && it.categoryName ? [{ v: proposedCategory, l: it.categoryName }] : []),
     ...list.map(x => ({ v: x.id, l: x.custom ? x.name || '' : t(x.k || '') })),
   ];
@@ -526,8 +551,13 @@ function DraftCard({ it, i, edit, remove, confirm }: {
         <View style={{ flex: 1 }} />
         <Pressable hitSlop={6} onPress={() => edit(i, 'kind', x => {
           x.kind = x.kind === 'in' ? 'out' : 'in';
-          if (x.kind === 'in' && !x.s) x.s = S.preferredIncomeSourceId || S.incomeDraft.s || S.data.sources[0]?.id;
-          if (x.kind === 'out' && !x.c) x.c = S.data.expenseCats[0]?.id;
+          if (x.kind === 'in') {
+            x.c = undefined; x.categoryName = undefined;
+            if (!x.s && !x.sourceName) x.s = S.preferredIncomeSourceId || S.incomeDraft.s || S.data.sources[0]?.id;
+          } else {
+            x.s = undefined; x.sourceName = undefined;
+            if (!x.c && !x.categoryName) x.c = S.data.expenseCats[0]?.id;
+          }
         })}>
           <Text style={sy.vswap}>{t(inc ? 'vo_to_out' : 'vo_to_in')}</Text>
         </Pressable>
@@ -556,10 +586,11 @@ function DraftCard({ it, i, edit, remove, confirm }: {
       <View style={sy.vrow}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Text style={sy.vrowK}>{t(inc ? 'vo_src' : 'vo_cat')}</Text>{check('target')}</View>
         <InlineSelect label={t(inc ? 'vo_src' : 'vo_cat')}
-          value={(inc ? it.s : it.c || (it.categoryName ? proposedCategory : '')) || ''} options={opts}
+          value={(inc ? it.s || (it.sourceName ? proposedSource : '') : it.c || (it.categoryName ? proposedCategory : '')) || ''} options={opts}
           onChange={v => edit(i, 'target', x => {
-            if (inc) x.s = v;
-            else if (v !== proposedCategory) { x.c = v; x.categoryName = undefined; }
+            if (inc) {
+              if (v !== proposedSource) { x.s = v; x.sourceName = undefined; }
+            } else if (v !== proposedCategory) { x.c = v; x.categoryName = undefined; }
           })} />
       </View>
       {anyLow && confirm ? (
@@ -608,7 +639,7 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
   const listening = stage === 'listen';
   const cannotSave = V.items.some(it => Object.values(it.confidence || {}).includes('low')
     || !Number.isFinite(Number(it.a))
-    || (it.kind === 'in' ? Number(it.a) < 0 || !it.s : Number(it.a) <= 0 || (!it.c && !it.categoryName)));
+    || (it.kind === 'in' ? Number(it.a) < 0 || (!it.s && !it.sourceName) : Number(it.a) <= 0 || (!it.c && !it.categoryName)));
 
   return (
     <Animated.View style={{ opacity: fade, gap: 14 }}>

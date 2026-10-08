@@ -175,6 +175,9 @@ export interface VoiceItem {
   d: string;
   s?: string;
   c?: string;
+  /* AI-extracted open-ended income source. It becomes a persisted custom
+     source only after the person confirms and saves the draft. */
+  sourceName?: string;
   /* AI-extracted open-ended expense category. It becomes a persisted custom
      category only after the person confirms and saves the draft. */
   categoryName?: string;
