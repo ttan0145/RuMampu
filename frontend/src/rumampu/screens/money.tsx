@@ -12,6 +12,7 @@ import {
   Fig, IcLab, KV, NoteC, NumInput, P, Prov, StackS, TextField,
   CardI, FigRow, MonthBtn,
 } from '../ui';
+import { isValidReminderDay } from '../reminder-date';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { SvgXml } from 'react-native-svg';
 import { LOG_META, logClock, logRecent, logWhen } from '../log';
@@ -316,6 +317,26 @@ const mo = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     minHeight: 44, paddingHorizontal: 4,
   },
+  billsHelper: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+    backgroundColor: C.card, borderRadius: 12, paddingVertical: 11, paddingHorizontal: 12,
+  },
+  billsHelperIcon: {
+    width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: C.brand,
+    alignItems: 'center', justifyContent: 'center', marginTop: 1,
+  },
+  billsHelperTitle: { fontFamily: SEMI_FONT, fontSize: 13.5, lineHeight: 18, color: C.ink },
+  billAccessorySlot: { width: 46, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  reminderSwitch: {
+    width: 46, height: 28, borderRadius: 14, padding: 3, justifyContent: 'center',
+  },
+  reminderThumb: {
+    width: 22, height: 22, borderRadius: 11, backgroundColor: C.paper,
+    shadowColor: C.ink, shadowOpacity: 0.16, shadowRadius: 2, shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  commitmentsSummary: { gap: 10 },
+  commitmentsAmount: { gap: 3, alignItems: 'flex-start' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(25,35,36,0.45)', alignItems: 'center', justifyContent: 'center', padding: 20 },
   reminderModal: { width: '100%', maxWidth: 380, backgroundColor: '#fff', borderRadius: 20, padding: 18, gap: 12 },
 });
@@ -1131,7 +1152,7 @@ export function CommitScreen() {
   const c = S.data.commitments;
   const billItems = [...c.living, ...c.debts];
   const [reminderItemId, setReminderItemId] = React.useState<string | null>(null);
-  const [reminderDay, setReminderDay] = React.useState(1);
+  const [reminderDay, setReminderDay] = React.useState('1');
   const [reminderTime, setReminderTime] = React.useState('09:00');
   const [reminderEnabled, setReminderEnabled] = React.useState(true);
   const [savingReminder, setSavingReminder] = React.useState(false);
@@ -1139,7 +1160,7 @@ export function CommitScreen() {
   const openReminder = (id: string) => {
     const pref = S.notificationPreferences.reminders[id];
     setReminderItemId(id);
-    setReminderDay(pref?.day ?? 1);
+    setReminderDay(String(pref?.day ?? 1));
     setReminderTime(pref?.time ?? '09:00');
     setReminderEnabled(pref?.enabled ?? true);
   };
@@ -1202,7 +1223,15 @@ export function CommitScreen() {
   return (
     <ScreenShell back title={t('bl_title')}>
       {segBar}
-      <BodyS muted>{t('bl_bills_help')}</BodyS>
+      <View style={mo.billsHelper}>
+        <View style={mo.billsHelperIcon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 11, color: C.brand }}>i</Text>
+        </View>
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <Text style={mo.billsHelperTitle}>{t('bl_bills_helper_title')}</Text>
+          <BodyS muted>{t('bl_bills_helper_body')}</BodyS>
+        </View>
+      </View>
       {S.commitmentSync === 'loading' ? <NoteC><BodyS>{t('cm_sync_loading')}</BodyS></NoteC> : null}
       {S.commitmentSync === 'error' ? <NoteC><BodyS>{t('cm_sync_error')}</BodyS></NoteC> : null}
       {presets.length ? (
@@ -1238,35 +1267,41 @@ export function CommitScreen() {
               if (!id) return;
               void saveCommitmentAmount(id, n).catch(() => toast(t('cm_save_failed')));
             }}
-            renderAccessory={item => Number(item.a) > 0 ? (() => {
+            renderAccessory={item => {
               const enabled = Boolean(S.notificationPreferences.reminders[item.id]?.enabled);
               return (
-                <Pressable
-                  onPress={() => openReminder(item.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('br_edit_for', { n: itemName(item) })}
-                  accessibilityState={{ selected: enabled }}
-                  style={{
-                    minWidth: 50, height: 32, borderRadius: 16, paddingHorizontal: 11,
-                    alignItems: 'center', justifyContent: 'center',
-                    backgroundColor: enabled ? C.brand : C.card,
-                    borderWidth: enabled ? 0 : 1.5, borderColor: C.ink14,
-                  }}>
-                  <Text style={{ fontFamily: SEMI_FONT, fontSize: 12, color: enabled ? '#fff' : C.ink64 }}>
-                    {t(enabled ? 'br_on' : 'br_off_label')}
-                  </Text>
-                </Pressable>
+                <View style={mo.billAccessorySlot}>
+                  {Number(item.a) > 0 ? (
+                    <Pressable
+                      onPress={() => openReminder(item.id)}
+                      accessibilityRole="switch"
+                      accessibilityLabel={t('br_toggle_for', { n: itemName(item) })}
+                      accessibilityState={{ checked: enabled }}
+                      aria-checked={enabled}
+                      hitSlop={8}
+                      style={({ pressed }) => [
+                        mo.reminderSwitch,
+                        {
+                          backgroundColor: enabled ? C.brand : C.ink14,
+                          alignItems: enabled ? 'flex-end' : 'flex-start',
+                          opacity: pressed ? 0.82 : 1,
+                        },
+                      ]}>
+                      <View style={mo.reminderThumb} />
+                    </Pressable>
+                  ) : null}
+                </View>
               );
-            })() : null}
+            }}
           />
           <FigRow p="user" />
         </Card>
       ))}
       {/* v24: the working behind a fully recorded month lives one tap away, on the total. */}
-      <Card>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Card style={mo.commitmentsSummary}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ fontFamily: BODY_FONT, fontSize: 15, color: C.ink }}>{t('cm_total')}</Text>
+            <Text style={{ fontFamily: SEMI_FONT, fontSize: 14, color: C.ink }}>{t('cm_total')}</Text>
             {actualMonths(S.data).some(r => commitSwap(S.data, r.y * 12 + r.m)) ? (
               <Pressable onPress={() => up(s => { s.sheet = 'blswap'; })}
                 accessibilityLabel={t('ci_more')} hitSlop={8}
@@ -1278,7 +1313,10 @@ export function CommitScreen() {
               </Pressable>
             ) : null}
           </View>
-          <Fig value={rm(commitTotal(S.data))} p="calc" />
+        </View>
+        <View style={mo.commitmentsAmount}>
+          <Display cls="h-l">{rm(commitTotal(S.data))}</Display>
+          <Prov p="calc" />
         </View>
       </Card>
       <Modal visible={Boolean(reminderItem)} transparent animationType="fade" onRequestClose={() => setReminderItemId(null)}>
@@ -1294,13 +1332,17 @@ export function CommitScreen() {
               </Pressable>
             </View>
             <BodyS muted>{t('br_choose')}</BodyS>
-            <NumInput value={reminderDay} onNum={value => setReminderDay(Math.min(28, Math.max(1, Math.round(value || 1))))} accessibilityLabel={t('br_choose')} />
+            <TextField value={reminderDay} onChangeText={setReminderDay} keyboardType="number-pad" inputMode="numeric" accessibilityLabel={t('br_choose')} />
+            <BodyS muted>{t('br_short_month')}</BodyS>
             <BodyS muted>{t('br_time')}</BodyS>
             <TextField value={reminderTime} onChangeText={setReminderTime} placeholder="09:00" accessibilityLabel={t('br_time')} />
             <Btn disabled={savingReminder} label={savingReminder ? t('saving') : t('save')} onPress={() => {
-              if (!reminderItem || !/^([01]\d|2[0-3]):[0-5]\d$/.test(reminderTime)) { toast(t('br_time_invalid'), 'error'); return; }
+              const parsedDay = Number(reminderDay.trim());
+              if (!reminderItem) return;
+              if (!isValidReminderDay(parsedDay)) { toast(t('br_day_invalid'), 'error'); return; }
+              if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(reminderTime)) { toast(t('br_time_invalid'), 'error'); return; }
               setSavingReminder(true);
-              void setBillReminder(reminderItem.id, reminderDay, reminderTime, reminderEnabled).then(result => {
+              void setBillReminder(reminderItem.id, parsedDay, reminderTime, reminderEnabled).then(result => {
                 if (result === 'saved') { toast(t('saved')); setReminderItemId(null); }
                 else toast(t('nt_denied'), 'error');
               }).catch(() => toast(t('br_failed'), 'error')).finally(() => setSavingReminder(false));

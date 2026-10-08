@@ -59,6 +59,7 @@ import {
   notificationSchedulingSupported,
   schedulePrivateBillReminder,
 } from './notifications';
+import { isValidReminderDay } from './reminder-date';
 import { fetchHouseCosts as fetchHouseCostsRequest, fetchSavedHousingTests as fetchSavedHousingTestsRequest } from '../../services/housingService';
 import { clearHousingSession, getHousingScenario, getHousingTestResult, hydrateHousingSession, setHousingScenario, setHousingTestResult, subscribeHousingSession } from '../../services/housingSession';
 import type { HousingScenarioResponse, HousingTestResult } from '../../types/housing';
@@ -643,7 +644,7 @@ export interface Ctx {
   refreshHomeownership: () => Promise<void>;
   saveHomeownershipMonth: (month: string, actualHomeCosts: number) => Promise<void>;
   setBillReminder: (commitmentId: string, day: number, time: string, enabled: boolean) => Promise<'saved' | 'denied'>;
-  setNotificationKind: (kind: 'bill_reminders' | 'record_warnings', enabled: boolean) => Promise<void>;
+  setNotificationKind: (kind: 'bill_reminders', enabled: boolean) => Promise<void>;
   ensureAiDisclosure: () => Promise<boolean>;
   answerAiDisclosure: (accepted: boolean) => void;
   loadHouseCosts: () => Promise<void>;
@@ -762,6 +763,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const skipNextAccountSync = useRef(false);
   const accountAuthenticated = useRef(false);
   const localStateWriteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reminderRefreshStarted = useRef(false);
   /* The last snapshot written locally and, for accounts, patched to the
      server. Most state changes (a screen change, a data refresh landing) leave
      the declared progress untouched; without this check every one of them sent
@@ -901,6 +903,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => subscribeHousingSession(() => {
     setHousingSessionRevision(revision => revision + 1);
   }), []);
+
+  /* Native month-end reminders use a rolling set of concrete dates so 29–31
+     can fall back to a short month's final day. Refresh that window once when
+     the saved local preferences have loaded. Retention safeguards are separate
+     backend processes and never depend on these device notification settings. */
+  React.useEffect(() => {
+    if (!localStateReady || reminderRefreshStarted.current) return;
+    reminderRefreshStarted.current = true;
+    if (!notificationSchedulingSupported()
+      || !S.notificationPreferences.permission_granted
+      || !S.notificationPreferences.bill_reminders) return;
+    let active = true;
+    void (async () => {
+      const refreshed: Record<string, string | null> = {};
+      for (const [commitmentId, reminder] of Object.entries(S.notificationPreferences.reminders)) {
+        if (!reminder.enabled) continue;
+        await cancelReminder(reminder.notification_id);
+        refreshed[commitmentId] = await schedulePrivateBillReminder(commitmentId, reminder.day, reminder.time);
+      }
+      if (active) up(s => {
+        for (const [commitmentId, identifier] of Object.entries(refreshed)) {
+          const reminder = s.notificationPreferences.reminders[commitmentId];
+          if (reminder?.enabled) reminder.notification_id = identifier;
+        }
+      });
+    })().catch(() => { /* Keep the saved settings if native scheduling is temporarily unavailable. */ });
+    return () => { active = false; };
+  }, [S.notificationPreferences, localStateReady, up]);
 
   /* Persist the allow-listed declarations in one place. UI-only state (route,
      sheets, toasts, etc.) is ignored by snapshot(). Anonymous sessions remain
@@ -1713,12 +1743,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     time: string,
     enabled: boolean,
   ): Promise<'saved' | 'denied'> => {
+    if (!isValidReminderDay(day)) throw new RangeError('Reminder day must be a whole number from 1 to 31.');
     const current = S.notificationPreferences.reminders[commitmentId];
     if (!enabled) {
       await cancelReminder(current?.notification_id);
       up(s => {
         s.notificationPreferences.reminders[commitmentId] = {
-          day: Math.min(28, Math.max(1, Math.round(day))),
+          day,
           time,
           enabled: false,
           notification_id: null,
@@ -1743,7 +1774,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     up(s => {
       s.notificationPreferences.bill_reminders = true;
       s.notificationPreferences.reminders[commitmentId] = {
-        day: Math.min(28, Math.max(1, Math.round(day))),
+        day,
         time,
         enabled: true,
         notification_id: identifier,
@@ -1754,7 +1785,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [S.notificationPreferences, up]);
 
   const setNotificationKind = useCallback(async (
-    kind: 'bill_reminders' | 'record_warnings',
+    kind: 'bill_reminders',
     enabled: boolean,
   ): Promise<void> => {
     if (kind === 'bill_reminders' && !enabled) {

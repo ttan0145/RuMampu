@@ -22,7 +22,7 @@ export function ProfileScreen() {
   const [deleting, setDeleting] = React.useState(false);
   const [loggingOut, setLoggingOut] = React.useState(false);
   const shouldOfferDeleteExport = !S.guest && !S.accountLastExportedAt;
-  const notificationSwitch = (kind: 'bill_reminders' | 'record_warnings', label: string) => {
+  const notificationSwitch = (kind: 'bill_reminders', label: string) => {
     const on = S.notificationPreferences[kind];
     return (
       <Pressable
@@ -32,7 +32,7 @@ export function ProfileScreen() {
         aria-checked={on}
         accessibilityLabel={label}
         onPress={() => { void setNotificationKind(kind, !on); }}
-        style={[st.morow, kind === 'record_warnings' && st.morowLine]}
+        style={st.morow}
       >
         <P style={{ fontSize: 15 }}>{label}</P>
         <View style={[st.switchTrack, on && st.switchTrackOn]}>
@@ -139,7 +139,6 @@ export function ProfileScreen() {
         <BodyS muted>{t('nt_title')}</BodyS>
         <View style={st.mocard}>
           {notificationSwitch('bill_reminders', t('nt_bill'))}
-          {notificationSwitch('record_warnings', t('nt_record'))}
         </View>
         <BodyS muted>{t('nt_optional')}</BodyS>
         {S.notificationPreferences.permission_asked && !S.notificationPreferences.permission_granted ? (

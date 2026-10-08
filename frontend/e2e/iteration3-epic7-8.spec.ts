@@ -1,6 +1,7 @@
 import { expect, Page } from '@playwright/test';
 import { e2eGet, e2ePost, test } from './support/fixtures';
 import { API, openApp, openGuestApp, syncClientIdFromBrowser } from './support/app';
+import { billReminderDateForMonth, isValidReminderDay, nextBillReminderDates } from '../src/rumampu/reminder-date';
 
 async function openEarlierHousingTest(page: Page): Promise<void> {
   const loaded = await e2ePost(page, `${API}/dev/scenarios/my-gig-driver-12m/load/`, {
@@ -119,20 +120,44 @@ test('Epic 7 actual home cost starts empty and gains YOUR DATA only after save',
 });
 
 
-test('Iteration 3 Epic 8 keeps notification kinds independent and optional', async ({ page }) => {
+test('Iteration 3 Epic 8 exposes bill reminders but keeps retention safeguards system-managed', async ({ page }) => {
   await openGuestApp(page);
   await page.getByRole('tab', { name: 'Profile', exact: true }).click();
 
   await expect(page.getByText('Notifications', { exact: true })).toBeVisible();
   const billSwitch = page.getByRole('switch', { name: 'Bill reminders' });
-  const safetySwitch = page.getByRole('switch', { name: 'Record safety warnings' });
   await expect(billSwitch).toBeChecked();
-  await expect(safetySwitch).toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Record safety warnings' })).toHaveCount(0);
+  await expect(page.getByText('Record safety warnings', { exact: true })).toHaveCount(0);
 
   await billSwitch.click();
   await expect(billSwitch).not.toBeChecked();
-  await expect(safetySwitch).toBeChecked();
-  await expect(page.getByText('Each kind is optional. Turning one off leaves the other unchanged.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Bill reminders are optional. Record-retention safeguards remain automatic.', { exact: true })).toBeVisible();
+});
+
+test('bill reminder dates accept 1–31 and clamp missing days to the month end', () => {
+  for (const day of [1, 28, 29, 30, 31]) expect(isValidReminderDay(day)).toBeTruthy();
+  for (const day of [0, 32, -1, 1.5, Number.NaN]) expect(isValidReminderDay(day)).toBeFalsy();
+
+  const cases: Array<[number, number, number, number]> = [
+    [2027, 3, 31, 30],
+    [2027, 1, 31, 28],
+    [2028, 1, 31, 29],
+    [2027, 1, 30, 28],
+    [2028, 1, 29, 29],
+  ];
+  for (const [year, month, selectedDay, expectedDay] of cases) {
+    const scheduled = billReminderDateForMonth(year, month, selectedDay, '18:45');
+    expect(scheduled.getDate()).toBe(expectedDay);
+    expect(scheduled.getHours()).toBe(18);
+    expect(scheduled.getMinutes()).toBe(45);
+  }
+
+  const rolling = nextBillReminderDates(31, '09:15', new Date(2027, 0, 1, 0, 0), 4);
+  expect(rolling.map(date => [date.getMonth(), date.getDate()])).toEqual([
+    [0, 31], [1, 28], [2, 31], [3, 30],
+  ]);
+  expect(rolling.every(date => date.getHours() === 9 && date.getMinutes() === 15)).toBeTruthy();
 });
 
 test('US8.21 keeps two inline bill reminders independent by day, time and enabled state', async ({ page }) => {
@@ -140,9 +165,11 @@ test('US8.21 keeps two inline bill reminders independent by day, time and enable
   await page.getByRole('tab', { name: 'Money', exact: true }).click();
   await page.getByText('Bills and limits', { exact: true }).click();
 
-  await expect(page.getByText('Add your regular monthly bills. Turn on a reminder for any bill you want help remembering.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Regular monthly bills', { exact: true })).toBeVisible();
+  await expect(page.getByText('Enter the bills you usually pay each month. After you add an amount, you can turn on a reminder.', { exact: true })).toBeVisible();
   await expect(page.locator('body')).not.toContainText('🔔');
   await expect(page.locator('body')).not.toContainText('🔕');
+  await expect(page.getByRole('switch', { name: 'Family support reminder' })).toHaveCount(0);
 
   const amounts = page.getByRole('textbox');
   for (const [index, amount] of ['600', '500'].entries()) {
@@ -154,33 +181,65 @@ test('US8.21 keeps two inline bill reminders independent by day, time and enable
     expect((await saved).ok()).toBeTruthy();
   }
 
-  const bells = page.getByRole('button', { name: /^Set reminder for / });
-  await expect(bells.first()).toBeVisible();
-  await expect(bells.first()).toHaveText('Off');
-  await expect(bells.nth(1)).toHaveText('Off');
-  await bells.first().click();
-  await page.getByLabel('Day (1–28)').fill('12');
+  const rentReminder = page.getByRole('switch', { name: 'Rent reminder' });
+  const foodReminder = page.getByRole('switch', { name: 'Food reminder' });
+  const familyReminder = page.getByRole('switch', { name: 'Family support reminder' });
+  await expect(rentReminder).toBeVisible();
+  await expect(rentReminder).not.toBeChecked();
+  await expect(foodReminder).not.toBeChecked();
+
+  let saved = page.waitForResponse(response =>
+    response.request().method() === 'PATCH' && response.url().includes('/api/v1/commitments/')
+  );
+  await amounts.nth(3).fill('600');
+  await amounts.nth(3).blur();
+  expect((await saved).ok()).toBeTruthy();
+  await expect(familyReminder).toBeVisible();
+  await expect(familyReminder).not.toBeChecked();
+
+  saved = page.waitForResponse(response =>
+    response.request().method() === 'PATCH' && response.url().includes('/api/v1/commitments/')
+  );
+  await amounts.nth(3).fill('0');
+  await amounts.nth(3).blur();
+  expect((await saved).ok()).toBeTruthy();
+  await expect(familyReminder).toHaveCount(0);
+
+  await foodReminder.click();
+  await page.getByText('Cancel', { exact: true }).click();
+  await expect(foodReminder).not.toBeChecked();
+
+  await rentReminder.click();
+  await expect(page.getByText("For shorter months, we'll remind you on the last day.", { exact: true })).toBeVisible();
+  for (const invalidDay of ['0', '32', '-1', 'not-a-day']) {
+    await page.getByLabel('Day of month').fill(invalidDay);
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByText('Choose a whole number from 1 to 31.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Rent', { exact: true }).last()).toBeVisible();
+  }
+  await page.getByLabel('Day of month').fill('31');
   await page.getByLabel('Time (24-hour HH:MM)').fill('18:30');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(bells.first()).toHaveText('On');
+  await expect(rentReminder).toBeChecked();
 
-  await bells.nth(1).click();
-  await page.getByLabel('Day (1–28)').fill('28');
+  await foodReminder.click();
+  await page.getByLabel('Day of month').fill('28');
   await page.getByLabel('Time (24-hour HH:MM)').fill('09:15');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(bells.nth(1)).toHaveText('On');
+  await expect(foodReminder).toBeChecked();
 
-  await bells.first().click();
+  await rentReminder.click();
   await page.getByRole('switch', { name: 'Reminder on' }).click();
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(bells.first()).toHaveText('Off');
+  await expect(rentReminder).not.toBeChecked();
+  await expect(foodReminder).toBeChecked();
 
   await expect(page.getByText('Reminder settings can be prepared here. Scheduled notifications are available in the Android or iOS app.', { exact: true })).toHaveCount(0);
   await expect.poll(async () => page.evaluate(() => {
     const local = JSON.parse(window.localStorage.getItem('rumampu_local_state') || '{}');
     return Object.values(local.notificationPreferences?.reminders || {});
   })).toEqual(expect.arrayContaining([
-    expect.objectContaining({ day: 12, time: '18:30', enabled: false }),
+    expect.objectContaining({ day: 31, time: '18:30', enabled: false }),
     expect.objectContaining({ day: 28, time: '09:15', enabled: true }),
   ]));
 });
