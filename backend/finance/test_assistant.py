@@ -234,6 +234,31 @@ class AssistantActionServiceTests(TestCase):
         self.assertIn("suggestions, not closed lists", prompt)
         self.assertIn('Do not replace a clear new value with "Other"', prompt)
         self.assertIn('income from "my work at McDonald\'s" should use "Work"', prompt)
+        self.assertIn('confidence is an object', prompt)
+        self.assertIn('user\'s own words clearly support', prompt)
+
+    def test_missing_model_confidence_is_treated_as_low(self):
+        result = self.preview({
+            "actions": [{
+                "intent": "income", "amount": 200, "date": "2026-10-01",
+                "target_id": "11",
+            }],
+        })
+        self.assertEqual(result["actions"][0]["confidence"], {
+            "kind": "low", "amount": "low", "date": "low", "target": "low",
+        })
+
+    def test_model_field_confidence_is_preserved(self):
+        confidence = {
+            "kind": "high", "amount": "high", "date": "high", "target": "low",
+        }
+        result = self.preview({
+            "actions": [{
+                "intent": "income", "amount": 200, "date": "2026-10-01",
+                "target_id": "11", "confidence": confidence,
+            }],
+        })
+        self.assertEqual(result["actions"][0]["confidence"], confidence)
 
     def test_missing_amount_requires_clarification(self):
         result = self.preview({

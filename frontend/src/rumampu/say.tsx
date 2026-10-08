@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  AccessibilityInfo, ActivityIndicator, Animated, Easing, Pressable, StyleSheet, Text, TextInput, View,
+  AccessibilityInfo, ActivityIndicator, Animated, AppState as NativeAppState, Easing, Platform, Pressable, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import {
   ExpoSpeechRecognitionModule,
@@ -12,7 +12,7 @@ import { previewAssistantAction } from './api';
 import { rmx } from './calc';
 import { BODY_FONT, C, DISP_FONT, XBOLD_FONT } from './theme';
 import { Ico } from './svgs';
-import { getSpeechOwner, setSpeechOwner, speechLocale } from './speech';
+import { claimSpeechOwner, getSpeechOwner, releaseSpeechOwner, speechLocale } from './speech';
 
 /* v27b3 Say an entry. The person says, or types, what they earned or spent.
    The words go to the same reader Ask Ruma uses, which proposes entries and
@@ -42,7 +42,7 @@ function lastWeekdayIso(weekday: number): string {
   return `${d.getFullYear()}-${month}-${day}`;
 }
 
-function spokenDate(text: string): string {
+function spokenDate(text: string): string | null {
   if (/kelmarin|前天/.test(text)) return isoOffset(-2);
   if (/semalam|yesterday|昨天/.test(text)) return isoOffset(-1);
   const weekdays: Array<[RegExp, number]> = [
@@ -55,7 +55,9 @@ function spokenDate(text: string): string {
     [/last saturday|sabtu lepas|上周六|上星期六/, 6],
   ];
   const match = weekdays.find(([pattern]) => pattern.test(text));
-  return match ? lastWeekdayIso(match[1]) : isoOffset(0);
+  if (match) return lastWeekdayIso(match[1]);
+  if (/today|hari ini|今天|今日/.test(text)) return isoOffset(0);
+  return null;
 }
 
 /* ---------- the fallback parser (ported from the prototype) ---------- */
@@ -125,12 +127,18 @@ export function parseSpokenEntries(text: string, S: AppState): VoiceItem[] {
   /* Colloquial money such as "twelve fifty" is normally RM12.50, not two
      separate entries. numberWords() has already made it "12 50" here. */
   s = s.replace(/\b(\d+)\s+(\d{2})(?=\D|$)/g, '$1.$2');
-  const entryDate = spokenDate(s);
   const parts = s.split(/\||\blepas tu\b|\blepastu\b|\bpastu\b|\band then\b|\bthen\b|然后|接着/);
+  const partDates = parts.map(spokenDate);
+  const datedParts = partDates.filter((date): date is string => date !== null);
+  /* A single spoken date can describe the whole sentence. When separate parts
+     carry separate dates, keep each one instead of applying the final date to
+     every draft. */
+  const sharedDate = datedParts.length === 1 ? datedParts[0] : null;
   const sourceBy = (slugs: string[]) => S.data.sources.find(x => slugs.some(sl => x.k === `src_${sl}`))?.id;
   const catBy = (slug: string) => S.data.expenseCats.find(x => x.k === `xc_${slug}`)?.id;
   const items: VoiceItem[] = [];
-  for (const p of parts) {
+  for (let partIndex = 0; partIndex < parts.length; partIndex += 1) {
+    const p = parts[partIndex];
     const m = p.match(/(-?\d+(?:\.\d+)?)/);
     if (!m) continue;
     const a = Math.round(parseFloat(m[1]) * 100) / 100;
@@ -144,7 +152,7 @@ export function parseSpokenEntries(text: string, S: AppState): VoiceItem[] {
     else if (iE >= 0) kind = 'out';
     else { kind = /grab|foodpanda|lalamove|shopee|freelance/.test(p) ? 'in' : 'out'; kindCertain = false; }
     const it: VoiceItem = {
-      kind, a, d: entryDate,
+      kind, a, d: partDates[partIndex] || sharedDate || isoOffset(0),
       confidence: {
         kind: kindCertain ? 'high' : 'low',
         amount: (kind === 'in' ? a >= 0 : a > 0) ? 'high' : 'low',
@@ -247,8 +255,12 @@ function useSayDraft() {
               ? { s: a.target_id, sourceName: a.target_id ? undefined : a.target_label || undefined }
               : { c: a.target_id, categoryName: a.target_id ? undefined : a.target_label || undefined }),
             confidence: {
-              kind: 'high', amount: 'high', date: 'high',
-              target: a.target_id || a.target_label ? 'high' : 'low',
+              /* Older servers do not return confidence. Treat absent evidence
+                 as low confidence so a model guess can never bypass review. */
+              kind: a.confidence?.kind || 'low',
+              amount: a.confidence?.amount || 'low',
+              date: a.confidence?.date || 'low',
+              target: a.target_id || a.target_label ? a.confidence?.target || 'low' : 'low',
             },
           }) as VoiceItem);
         /* Voice entry is deliberately limited to record entries. A bill,
@@ -285,11 +297,12 @@ function useSayDraft() {
         toast(t('vo_mic_denied'), 'error');
         return;
       }
-      setSpeechOwner('say');
+      claimSpeechOwner('say', () => ExpoSpeechRecognitionModule.abort());
       ExpoSpeechRecognitionModule.start({
         lang: speechLocale(SRef.current.lang), interimResults: true, continuous: false, maxAlternatives: 1,
       });
     } catch {
+      releaseSpeechOwner('say');
       setVoice(null);
       toast(t('vo_mic_failed'), 'error');
     }
@@ -322,7 +335,7 @@ function useSayDraft() {
   });
   useSpeechRecognitionEvent('end', () => {
     if (!mine()) return;
-    setSpeechOwner(null);
+    releaseSpeechOwner('say');
     const V = SRef.current.voice;
     if (!V || V.stage !== 'listen') return;
     if (textRef.current.trim()) void finish(textRef.current);
@@ -330,7 +343,7 @@ function useSayDraft() {
   });
   useSpeechRecognitionEvent('error', event => {
     if (!mine()) return;
-    setSpeechOwner(null);
+    releaseSpeechOwner('say');
     if (event.error === 'aborted') return;
     if (!textRef.current.trim()) {
       setVoice(null);
@@ -342,7 +355,7 @@ function useSayDraft() {
   const halt = React.useCallback(() => {
     if (getSpeechOwner() === 'say') {
       try { ExpoSpeechRecognitionModule.abort(); } catch { /* not listening */ }
-      setSpeechOwner(null);
+      releaseSpeechOwner('say');
     }
     up(s => { s.voice = null; });
   }, [up]);
@@ -390,6 +403,51 @@ function useSayDraft() {
     halt();
     up(s => { s.sayOpen = false; s.qSay = false; });
   }, [halt, up]);
+
+  const transferToTyped = React.useCallback((i: number) => {
+    const item = SRef.current.voice?.items[i];
+    if (!item) return;
+    const confidence = item.confidence;
+    const proposed = {
+      kind: confidence?.kind === 'high',
+      amount: confidence?.amount === 'high',
+      date: confidence?.date === 'high',
+      target: confidence?.target === 'high',
+    };
+    up(s => {
+      const from = s.route;
+      if (item.kind === 'in') {
+        s.incomeDraft = {
+          a: proposed.amount ? String(item.a) : '',
+          d: proposed.date ? item.d : isoOffset(0),
+          s: proposed.target ? item.s || '' : '',
+          flag: null,
+          per: 'day',
+          proposed,
+          proposedTargetName: proposed.target ? item.sourceName : undefined,
+        };
+        s.incMode = 'type';
+        if (from !== 'income') s.stack.push(from);
+        s.route = 'income';
+      } else {
+        s.expDraft = {
+          a: proposed.amount ? String(item.a) : '',
+          d: proposed.date ? item.d : isoOffset(0),
+          c: proposed.target ? item.c || '' : '',
+          per: 'day',
+          proposed,
+          proposedTargetName: proposed.target ? item.categoryName : undefined,
+        };
+        s.exMode = 'type';
+        if (from !== 'expenses') s.stack.push(from);
+        s.route = 'expenses';
+      }
+      s.voice = null;
+      s.sayOpen = false;
+      s.qSay = false;
+      s.sheet = null;
+    });
+  }, [up]);
 
   const save = async (onSaved: (msg: string) => void) => {
     const V = SRef.current.voice;
@@ -463,7 +521,7 @@ function useSayDraft() {
     }
   };
 
-  return { start, micTap, reset, edit, confirm, close, halt, save, saving, finish };
+  return { start, micTap, reset, edit, confirm, close, halt, save, saving, finish, transferToTyped };
 }
 
 /* ---------- pieces ---------- */
@@ -525,12 +583,13 @@ function InlineSelect({ value, options, onChange, label }: {
   );
 }
 
-function DraftCard({ it, i, edit, remove, confirm }: {
+function DraftCard({ it, i, edit, remove, confirm, transferToTyped }: {
   it: VoiceItem;
   i: number;
   edit: (i: number, field: keyof NonNullable<VoiceItem['confidence']>, fn: (it: VoiceItem) => void) => void;
   remove: (i: number) => void;
   confirm?: (i: number) => void;
+  transferToTyped?: (i: number) => void;
 }) {
   const { S, t, monthName } = useApp();
   const inc = it.kind === 'in';
@@ -604,9 +663,16 @@ function DraftCard({ it, i, edit, remove, confirm }: {
           })} />
       </View>
       {anyLow && confirm ? (
-        <Pressable onPress={() => confirm(i)} accessibilityRole="button" style={{ minHeight: 40, justifyContent: 'center', alignSelf: 'flex-start' }}>
-          <Text style={sy.btnLine}>{t('vo_confirm_draft')}</Text>
-        </Pressable>
+        <View style={{ alignItems: 'flex-start' }}>
+          <Pressable onPress={() => confirm(i)} accessibilityRole="button" style={{ minHeight: 40, justifyContent: 'center' }}>
+            <Text style={sy.btnLine}>{t('vo_confirm_draft')}</Text>
+          </Pressable>
+          {transferToTyped ? (
+            <Pressable onPress={() => transferToTyped(i)} accessibilityRole="button" style={{ minHeight: 40, justifyContent: 'center' }}>
+              <Text style={sy.btnLine}>{t('vo_finish_typed')}</Text>
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
     </View>
   );
@@ -640,6 +706,29 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
     return () => d.halt();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* Closing a browser page does not reliably unmount React before the browser
+     releases media. Abort proactively on every app/page lifecycle exit. */
+  React.useEffect(() => {
+    const nativeState = Platform.OS === 'web' ? null : NativeAppState.addEventListener('change', next => {
+      if (next !== 'active') d.halt();
+    });
+    const onVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') d.halt();
+    };
+    const onPageHide = () => d.halt();
+    if (Platform.OS === 'web' && typeof document !== 'undefined' && typeof window !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityChange);
+      window.addEventListener('pagehide', onPageHide);
+    }
+    return () => {
+      nativeState?.remove();
+      if (Platform.OS === 'web' && typeof document !== 'undefined' && typeof window !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+        window.removeEventListener('pagehide', onPageHide);
+      }
+    };
+  }, [d.halt]);
 
   const status = stage === 'listen' ? t('vo_listening_time', { n: listeningSeconds })
       : stage === 'parsing' ? t('as_thinking')
@@ -722,6 +811,7 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
                 {V.items.map((it, i) => (
                   <DraftCard key={i} it={it} i={i} edit={d.edit}
                     confirm={d.confirm}
+                    transferToTyped={d.transferToTyped}
                     remove={k => up(s => { s.voice?.items.splice(k, 1); })} />
                 ))}
               </View>

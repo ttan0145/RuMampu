@@ -689,6 +689,10 @@ class AssistantActionPreviewActionSerializer(serializers.Serializer):
     # For expenses this can be a proposed open-ended category name. The
     # category is persisted only after the user confirms the preview.
     target_label = serializers.CharField(max_length=120, allow_blank=True)
+    confidence = serializers.DictField(
+        child=serializers.ChoiceField(choices=["high", "low"]),
+        required=False,
+    )
 
 
 class AssistantActionPreviewResponseSerializer(serializers.Serializer):

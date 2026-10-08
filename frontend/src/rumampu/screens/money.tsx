@@ -684,7 +684,7 @@ function IncomeScanBody() {
  * 中文：US1.1 录入金额、日期和来源，并保留警告与来源标识状态。
  */
 export function IncomeScreen() {
-  const { S, t, monthName, up, go, saveIncomeEntry, toast } = useApp();
+  const { S, t, monthName, up, go, saveIncomeEntry, saveIncomeSource, toast } = useApp();
   const d = S.incomeDraft;
   const [saving, setSaving] = React.useState(false);
 
@@ -750,10 +750,18 @@ export function IncomeScreen() {
     }
     setSaving(true);
     try {
+      let sourceId = d.s;
+      if (!sourceId && d.proposedTargetName) {
+        sourceId = await saveIncomeSource(d.proposedTargetName);
+        up(s => {
+          s.incomeDraft.s = sourceId;
+          s.incomeDraft.proposedTargetName = undefined;
+        });
+      }
       const result = await saveIncomeEntry({
         amount: a,
         date: d.d,
-        sourceId: d.s,
+        sourceId,
         /* v22: the "for a month" segment is the US1.2 whole-month total. */
         entryMethod: (d.per || 'day') === 'month' ? 'historical_total' : 'manual',
         confirmOutlier: keep,
@@ -770,7 +778,7 @@ export function IncomeScreen() {
       const entryCount = S.data.income.length + 1;
 
       up(s => {
-        s.incomeDraft = { a: '', d: d.d, s: d.s, flag: null, per: d.per || 'day' };
+        s.incomeDraft = { a: '', d: d.d, s: sourceId, flag: null, per: d.per || 'day' };
       });
       /* v27b: an entry in the month still running joins the test once that month ends. */
       const nowD = new Date();
@@ -795,28 +803,49 @@ export function IncomeScreen() {
       <GuideTarget id="in.hero">
       <InHero tint="in" pillLabel={t('io_in')} question={t('r7_inc_q')} decimal
         value={d.a}
-        onChangeText={v => up(s => { s.incomeDraft.a = v; s.incomeDraft.flag = null; })} />
+        onChangeText={v => up(s => {
+          s.incomeDraft.a = v; s.incomeDraft.flag = null;
+          if (s.incomeDraft.proposed) s.incomeDraft.proposed.amount = false;
+        })} />
+      {d.proposed?.kind ? <Text style={{ fontFamily: BODY_FONT, fontSize: 12, color: C.brand }}>{t('vo_proposed_kind')}</Text> : null}
+      {d.proposed?.amount ? <Text style={{ fontFamily: BODY_FONT, fontSize: 12, color: C.brand }}>{t('vo_proposed')}</Text> : null}
       </GuideTarget>
       <InSec>
-        <InLbl>{t('inc_q_when')}</InLbl>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <InLbl>{t('inc_q_when')}</InLbl>
+          {d.proposed?.date ? <Text style={{ fontFamily: BODY_FONT, fontSize: 12, color: C.brand }}>{t('vo_proposed')}</Text> : null}
+        </View>
         <DatePickerField
           value={d.d}
           mode="date"
           monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
           maximumDate={new Date()}
-          onChange={v => up(s => { s.incomeDraft.d = v; s.incomeDraft.flag = null; })}
+          onChange={v => up(s => {
+            s.incomeDraft.d = v; s.incomeDraft.flag = null;
+            if (s.incomeDraft.proposed) s.incomeDraft.proposed.date = false;
+          })}
         />
       </InSec>
       <InSec>
-        <InLbl>{t('inc_q_src')}</InLbl>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <InLbl>{t('inc_q_src')}</InLbl>
+          {d.proposed?.target ? <Text style={{ fontFamily: BODY_FONT, fontSize: 12, color: C.brand }}>{t('vo_proposed')}</Text> : null}
+        </View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {d.proposedTargetName ? (
+            <InChip label={d.proposedTargetName} on={!d.s}
+              selectionRole="radio" onPress={() => undefined} />
+          ) : null}
           {S.data.sources.map(x => (
             <InChip key={x.id}
               icon={<SrcIcon id={x.id} data={S.data} size={18} color={d.s === x.id ? '#fff' : C.ink} />}
               label={x.custom ? x.name || '' : t(x.k || '')}
               on={d.s === x.id}
               selectionRole="radio"
-              onPress={() => up(s => { s.incomeDraft.s = x.id; s.incomeDraft.flag = null; })} />
+              onPress={() => up(s => {
+                s.incomeDraft.s = x.id; s.incomeDraft.proposedTargetName = undefined; s.incomeDraft.flag = null;
+                if (s.incomeDraft.proposed) s.incomeDraft.proposed.target = false;
+              })} />
           ))}
           <InChip dashed label={t('src_own').replace(/^\+\s*|^＋\s*/, '')}
             onPress={() => up(s => { s.sheet = 'srcown'; })} />

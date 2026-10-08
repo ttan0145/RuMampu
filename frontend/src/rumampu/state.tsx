@@ -205,6 +205,13 @@ export interface VoiceState {
   outlier?: boolean;
 }
 
+export interface VoiceProposedFields {
+  kind?: boolean;
+  amount?: boolean;
+  date?: boolean;
+  target?: boolean;
+}
+
 export type EntryPer = 'day' | 'week' | 'month';
 export type EntryMode = 'type' | 'scan' | 'csv';
 export type AuthMode = 'login' | 'signup' | 'forgot' | 'checkmail';
@@ -323,7 +330,11 @@ export interface AppState {
   dcOpen: boolean;
   docsChecked: string[];
   keptTests: KeptTest[];
-  expDraft: { a: string; c: string; d: string; per: EntryPer };
+  expDraft: {
+    a: string; c: string; d: string; per: EntryPer;
+    proposed?: VoiceProposedFields;
+    proposedTargetName?: string;
+  };
   scan: ScanState;
   exCatOpen: boolean;
   exMonthOpen: number | null;
@@ -339,7 +350,11 @@ export interface AppState {
   pendingBillReminderId: string | null;
   retentionNotice: ApiRetentionStatus | null;
   notificationPreferences: ApiNotificationPreferences;
-  incomeDraft: { a: string; d: string; s: string; flag: 'invalid' | 'neg' | 'outlier' | null; per: EntryPer };
+  incomeDraft: {
+    a: string; d: string; s: string; flag: 'invalid' | 'neg' | 'outlier' | null; per: EntryPer;
+    proposed?: VoiceProposedFields;
+    proposedTargetName?: string;
+  };
   incomeSync: 'disabled' | 'loading' | 'ready' | 'error';
   workCostSync: 'disabled' | 'loading' | 'ready' | 'error';
   workCostSelectedMonth: string;

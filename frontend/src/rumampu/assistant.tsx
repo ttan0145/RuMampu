@@ -14,7 +14,7 @@ import { ApiError, AssistantAction, assistantChat, previewAssistantAction } from
 import { rm } from './calc';
 import { BODY_FONT, C, DISP_FONT } from './theme';
 import { RumaHeadset, RumaHelpAvatar } from './ruma-view';
-import { getSpeechOwner, setSpeechOwner } from './speech';
+import { claimSpeechOwner, getSpeechOwner, releaseSpeechOwner } from './speech';
 import { GuideTarget, onScrollSettle } from './tour';
 
 /* Flip to false to hide the whole Ask RuMampu UI (bubble, header
@@ -236,6 +236,13 @@ export function AssistantFab() {
           onPress={() => {
             if (moved.current) return;
             top.stopAnimation(v => {
+              /* Opening Ask Ruma ends an in-progress quick entry before the
+                 second microphone control becomes reachable. */
+              if (getSpeechOwner() === 'say') {
+                try { ExpoSpeechRecognitionModule.abort(); } catch { /* already stopped */ }
+                releaseSpeechOwner('say');
+                up(s => { s.voice = null; s.sayOpen = false; s.qSay = false; });
+              }
               void ensureAiDisclosure().then(accepted => {
                 if (accepted) up(s => { s.aiAnchor = v + 8; s.assistantOpen = true; });
               });
@@ -341,7 +348,11 @@ export function AssistantSheet() {
      chat started. */
   const mine = () => getSpeechOwner() === 'assistant';
   useSpeechRecognitionEvent('start', () => { if (mine()) setListening(true); });
-  useSpeechRecognitionEvent('end', () => { if (mine()) setListening(false); });
+  useSpeechRecognitionEvent('end', () => {
+    if (!mine()) return;
+    setListening(false);
+    releaseSpeechOwner('assistant');
+  });
   useSpeechRecognitionEvent('result', event => {
     if (!mine()) return;
     const transcript = event.results?.[0]?.transcript?.trim();
@@ -352,6 +363,7 @@ export function AssistantSheet() {
   useSpeechRecognitionEvent('error', event => {
     if (!mine()) return;
     setListening(false);
+    releaseSpeechOwner('assistant');
     if (event.error === 'aborted' || event.error === 'no-speech') return;
     const message = event.error === 'not-allowed' ? speechText.denied : speechText.failed;
     toast(message, 'error');
@@ -362,7 +374,8 @@ export function AssistantSheet() {
     // the async `start` event has updated `listening` in React state.
     // The Say an entry card shares the microphone; leave its recording alone.
     if (getSpeechOwner() === 'say') return;
-    ExpoSpeechRecognitionModule.abort();
+    try { ExpoSpeechRecognitionModule.abort(); } catch { /* already stopped */ }
+    releaseSpeechOwner('assistant');
     setListening(false);
   }, []);
 
@@ -434,24 +447,30 @@ export function AssistantSheet() {
       return;
     }
 
-    if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
-      toast(speechText.unavailable, 'error');
-      return;
-    }
+    try {
+      if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+        toast(speechText.unavailable, 'error');
+        return;
+      }
 
-    const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-    if (!permission.granted) {
-      toast(speechText.denied, 'error');
-      return;
-    }
+      const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!permission.granted) {
+        toast(speechText.denied, 'error');
+        return;
+      }
 
-    setSpeechOwner('assistant');
-    ExpoSpeechRecognitionModule.start({
-      lang: speechLocaleFromApp(S.lang),
-      interimResults: true,
-      continuous: false,
-      maxAlternatives: 1,
-    });
+      claimSpeechOwner('assistant', () => ExpoSpeechRecognitionModule.abort());
+      ExpoSpeechRecognitionModule.start({
+        lang: speechLocaleFromApp(S.lang),
+        interimResults: true,
+        continuous: false,
+        maxAlternatives: 1,
+      });
+    } catch {
+      releaseSpeechOwner('assistant');
+      setListening(false);
+      toast(speechText.failed, 'error');
+    }
   };
 
   /* A language switch starts a fresh chat: replies written while the app was

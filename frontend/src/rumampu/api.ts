@@ -947,6 +947,12 @@ export type AssistantAction = {
   date: string | null;
   target_id: string;
   target_label: string;
+  confidence?: {
+    kind: 'high' | 'low';
+    amount: 'high' | 'low';
+    date: 'high' | 'low';
+    target: 'high' | 'low';
+  };
 };
 
 export type AssistantActionPreview = {
