@@ -205,13 +205,35 @@ class AssistantActionServiceTests(TestCase):
         self.assertEqual(result["actions"][0]["target_id"], "21")
         self.assertEqual(result["actions"][0]["target_label"], "Meals")
 
+    def test_new_income_source_keeps_the_users_words_instead_of_defaulting(self):
+        result = self.preview({
+            "actions": [{
+                "intent": "income", "amount": 500, "date": "2026-10-01",
+                "target_id": None, "category_name": "Work",
+            }],
+        })
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["actions"][0]["target_id"], "")
+        self.assertEqual(result["actions"][0]["target_label"], "Work")
+
+    def test_income_source_name_matching_existing_choice_reuses_its_id(self):
+        result = self.preview({
+            "actions": [{
+                "intent": "income", "amount": 500, "date": "2026-10-01",
+                "target_id": None, "category_name": "e-hailing",
+            }],
+        })
+        self.assertEqual(result["actions"][0]["target_id"], "11")
+        self.assertEqual(result["actions"][0]["target_label"], "E-hailing")
+
     def test_prompt_says_expense_categories_are_open_ended(self):
         prompt = self.service._prompt(
             "spent 30 on cat food", "en", {"11": "E-hailing"},
             {"21": "Meals", "22": "Other"}, {}, {},
         )
-        self.assertIn("suggestions, not a closed list", prompt)
-        self.assertIn('Do not replace a clear new category with "Other"', prompt)
+        self.assertIn("suggestions, not closed lists", prompt)
+        self.assertIn('Do not replace a clear new value with "Other"', prompt)
+        self.assertIn('income from "my work at McDonald\'s" should use "Work"', prompt)
 
     def test_missing_amount_requires_clarification(self):
         result = self.preview({
