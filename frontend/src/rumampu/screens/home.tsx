@@ -381,7 +381,7 @@ export function PlanCard() {
   const v = S.village;
   const today = new Date().getDate() - 1;
   const saved = planSaved(p);
-  const pct = Math.min(100, Math.round(saved / p.target * 100));
+  const pct = p.target > 0 ? Math.min(100, Math.round(saved / p.target * 100)) : 0;
   const doneN = p.done.filter(Boolean).length;
   const mx = Math.max(1, ...p.amounts);
   const nCells = v.cells.filter(Boolean).length;
@@ -391,6 +391,9 @@ export function PlanCard() {
   if ((v.queued ?? 0) > 0) stats += ` · ${t('vl_queue', { n: v.queued })}`;
 
   const toggleToday = () => {
+    /* 10.9: a paused month or a skipped day saves nothing, so say so instead of "Saved" */
+    if (p.paused) { toast(t('pl_paused_b')); return; }
+    if (p.skipped?.[today]) { toast(t('pl_today_skipped')); return; }
     const wasDone = p.done[today];
     up(s => { planToggle(s, today); });
     toast(wasDone

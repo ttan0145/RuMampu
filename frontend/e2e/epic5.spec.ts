@@ -23,7 +23,6 @@ import { API, captureEvidence, openGuestApp, pinGuestClientId, reloadApp } from 
 const INK = 'rgb(60, 81, 82)';
 const SHORT = 'rgb(241, 89, 42)';
 
-const PREPARE_ROWS = ['Upfront cash', 'Cash buffer', 'Documents & financing'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 test.setTimeout(120_000);
@@ -101,14 +100,21 @@ async function back(page: Page): Promise<void> {
   await page.getByLabel('Back').click();
 }
 
+/* v7 design: Prepare is a path. Its steps appear once there is a home to prepare for. */
 async function openPrepare(page: Page): Promise<void> {
   await page.getByRole('tab', { name: 'House', exact: true }).click();
   await page.getByText('Prepare for a house', { exact: true }).click();
-  await expectPrepareRows(page);
+  await expect(page.getByTestId('prep-node-1').or(page.getByTestId('prep-use-home'))).toBeVisible();
 }
 
-async function expectPrepareRows(page: Page): Promise<void> {
-  for (const row of PREPARE_ROWS) await expect(page.getByText(row, { exact: true })).toBeVisible();
+/* With no tested or typed price yet, types a RM 300,000 home on Prepare so the path shows. */
+async function ensureHome(page: Page): Promise<void> {
+  const use = page.getByTestId('prep-use-home');
+  if (await use.isVisible()) {
+    await page.getByLabel('Price', { exact: true }).fill('300000');
+    await use.click();
+  }
+  await expect(page.getByTestId('prep-node-1')).toBeVisible();
 }
 
 /* Types the price and picks a deposit on the house screen. The upfront-cash
@@ -123,22 +129,43 @@ async function enterHouse(page: Page, price: number, deposit: '0%' | '10%' | '20
 
 async function openUpfrontCash(page: Page): Promise<void> {
   await openPrepare(page);
-  await page.getByText('Upfront cash', { exact: true }).click();
-  await expect(page.getByText('You need', { exact: true })).toBeVisible();
+  await ensureHome(page);
+  await page.getByTestId('prep-node-1').click();
+  await expect(page.getByTestId('upfront-summary')).toBeVisible();
+  await openCosts(page);
 }
 
-/* The You have / You need / Gap rows: label on the left, figure and tag beside it. */
-function figureRow(page: Page, label: string) {
-  return page.getByText(label, { exact: true }).locator('xpath=..');
+/* v7: what makes up the need opens grouped by when it is paid (AC5.2.11); make sure every group is open. */
+async function openCosts(page: Page, view: 'type' | 'when' = 'when'): Promise<void> {
+  const open = async (id: string) => {
+    const el = page.getByTestId(id);
+    if ((await el.getAttribute('aria-expanded')) !== 'true') await el.click();
+  };
+  await open('upfront-included');
+  await page.getByText(view === 'when' ? 'By when you pay' : 'By cost type', { exact: true }).click();
+  const groups = page.locator(view === 'when' ? '[data-testid^="upfront-stage-"]' : '[data-testid^="upfront-cat-"]');
+  for (let i = 0; i < await groups.count(); i++) {
+    const g = groups.nth(i);
+    if ((await g.getAttribute('aria-expanded')) !== 'true') await g.click();
+  }
 }
 
-/* The (i) beside "What you pay, in the usual order", which carries the published sources. */
+/* The summary card: "You have RM x of RM y" under what is still to find. */
+const haveLine = (page: Page) => page.getByTestId('upfront-have-need');
+const gapFigure = (page: Page) => page.getByTestId('upfront-gap-figure');
+async function expectGap(page: Page, amount: string): Promise<void> {
+  await expect(gapFigure(page)).toHaveText(amount === 'RM 0' ? 'Covered' : amount);
+}
+async function needOf(page: Page): Promise<number> {
+  const all = (await haveLine(page).innerText()).match(/RM [\d,]+(\.\d+)?/g) ?? [];
+  return parseRm(all[all.length - 1] ?? 'RM 0');
+}
+
+/* The (i) beside "What makes up RM x", which carries the published sources. */
 async function openCostSources(page: Page): Promise<void> {
-  await page.getByText('What you pay, in the usual order', { exact: true }).locator('xpath=..')
-    .getByLabel('What this is').click();
+  await page.getByText(/^What makes up RM/).locator('xpath=..').getByLabel('What this is').click();
 }
 
-/* Runs the housing test from a monthly payment the user already knows. */
 async function runKnownPaymentTest(page: Page, payment: number): Promise<void> {
   await page.getByRole('tab', { name: 'House', exact: true }).click();
   await page.getByText('Test a house', { exact: true }).click();
@@ -167,8 +194,9 @@ async function runPriceTest(page: Page, price: number): Promise<void> {
   await expect(page.getByText(/months would run short|All \d+ months would carry it/)).toBeVisible();
 }
 
+/* v7: Cash buffer is reached from the Money tab (the Prepare path folds it into the monthly lesson). */
 async function openCashBuffer(page: Page): Promise<void> {
-  await openPrepare(page);
+  await page.getByRole('tab', { name: 'Money', exact: true }).click();
   await page.getByText('Cash buffer', { exact: true }).click();
   await expect(page.getByText('Running balance by month', { exact: true }).or(
     page.getByText('Run the housing test first so this screen can use the server-calculated result.', { exact: true }),
@@ -261,10 +289,13 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
   test('US5.1 — Access homeownership preparation tools', { tag: '@us5.1' }, async ({ page }) => {
     // An account that already holds RM 8,000, so the House card can show what is set aside.
     await signInWithCash(page, 8000);
-    await page.getByRole('tab', { name: 'House', exact: true }).click();
-    await page.getByText('Prepare for a house', { exact: true }).click();
+    // v7 design: Prepare is a path of three questions for one home, so start from a RM 300,000 price.
+    await enterHouse(page, 300000, '10%');
+    await back(page);
+    await openPrepare(page);
 
     await ac('AC5.1.1', 'Show Upfront cash', async () => {
+      // Each step on the path is named for its tool; "Do I have the cash?" is Upfront cash.
       await expect(page.getByText('Upfront cash', { exact: true })).toBeVisible();
     });
 
@@ -280,10 +311,9 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
     await ac('AC5.1.4', 'Navigate to preparation tools', async () => {
       // Each option opens its own screen, recognised by content that only that screen shows.
       await page.getByText('Upfront cash', { exact: true }).click();
-      await expect(page.getByText('You need', { exact: true })).toBeVisible();
-      await expect(page.getByText('You have', { exact: true })).toBeVisible();
+      await expect(page.getByTestId('upfront-summary')).toBeVisible();
+      await expect(haveLine(page)).toContainText('You have RM 8,000 of RM 44,125');
       await back(page);
-      await expectPrepareRows(page);
 
       await page.getByText('Cash buffer', { exact: true }).click();
       await expect(page.getByText(
@@ -291,12 +321,11 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
         { exact: true },
       )).toBeVisible();
       await back(page);
-      await expectPrepareRows(page);
 
       await page.getByText('Documents & financing', { exact: true }).click();
-      await expect(page.getByText(/^☐ Bank statements, 6 months$/)).toBeVisible();
+      await expect(page.getByRole('checkbox', { name: 'Bank statements, 6 months', exact: true })).toBeVisible();
       await back(page);
-      await expectPrepareRows(page);
+      await expect(page.getByText('Upfront cash', { exact: true })).toBeVisible();
     });
 
     await ac('AC5.1.5', 'Show what is set aside so far', async () => {
@@ -308,7 +337,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
 
       // With nothing entered, the card says nothing is set aside yet.
       await openUpfrontCash(page);
-      await page.getByLabel('Cash I already have').fill('');
+      await page.getByLabel('Cash I have now').fill('');
       await page.getByRole('tab', { name: 'House', exact: true }).click();
       await expect(page.getByText('Nothing set aside yet', { exact: true })).toBeVisible();
     });
@@ -323,41 +352,41 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
     await openUpfrontCash(page);
 
     await ac('AC5.2.1', 'Display cash available', async () => {
-      await expect(figureRow(page, 'You have')).toContainText('RM 8,000');
+      await expect(haveLine(page)).toContainText(`You have ${'RM 8,000'} of`);
     });
 
     await ac('AC5.2.2', 'Identify cash available as user data', async () => {
-      await expect(figureRow(page, 'You have')).toContainText('YOUR DATA');
+      await expect(page.getByTestId('upfront-row-cash')).toContainText('YOUR DATA');
     });
 
     await ac('AC5.2.3', 'Display cash required', async () => {
-      await expect(figureRow(page, 'You need')).toContainText('RM 44,125');
-      await expect(figureRow(page, 'You need')).toContainText('CALCULATED');
+      await expect(haveLine(page)).toContainText(`of ${'RM 44,125'}`);
+      await expect(page.getByTestId('upfront-summary')).toContainText('CALCULATED');
     });
 
     await ac('AC5.2.4', 'Display upfront gap', async () => {
-      await expect(figureRow(page, 'Gap')).toContainText('RM 36,125');
-      await expect(figureRow(page, 'Gap')).toContainText('CALCULATED');
+      await expectGap(page, 'RM 36,125');
+      await expect(page.getByTestId('upfront-summary')).toContainText('CALCULATED');
     });
 
     await ac('AC5.2.5', 'Visualise available versus required', async () => {
       await expect(page.getByRole('img', { name: 'You have RM 8,000 of the RM 44,125 needed.' })).toBeVisible();
-      // The chart ceiling is 112% of the larger figure, so the 120 px plot shows
-      // RM 8,000 as 8,000 / (44,125 x 1.12) of its height.
-      await expect.poll(async () => (await page.getByTestId('upfront-available').boundingBox())?.height ?? 0)
-        .toBeCloseTo(19.43, 0);
+      // v7 design: a bar filled to what I have, out of what I need (8,000 / 44,125 of its width).
+      const track = (await page.getByTestId('upfront-meter').boundingBox())!;
+      await expect.poll(async () => ((await page.getByTestId('upfront-available').boundingBox())?.width ?? 0) / track.width)
+        .toBeCloseTo(8000 / 44125, 2);
     });
 
     await ac('AC5.2.6', 'Highlight an upfront shortfall', async () => {
+      // The unfilled stretch is the gap, on the shortfall tint, and the figure above says how much.
       const gap = page.getByTestId('upfront-gap');
       await expect(gap).toBeVisible();
-      await expect(gap).toHaveCSS('background-color', SHORT);
-      await expect(page.getByTestId('upfront-available')).toHaveCSS('background-color', INK);
-      // The gap is the stretch between the cash bar and the requirement line.
-      await expect.poll(async () => (await gap.boundingBox())?.height ?? 0).toBeCloseTo(87.71, 0);
-      const cash = await page.getByTestId('upfront-available').boundingBox();
-      const shortfall = await gap.boundingBox();
-      expect(Math.abs(shortfall!.y + shortfall!.height - cash!.y)).toBeLessThan(1);
+      await expect(page.getByTestId('upfront-meter')).toHaveCSS('background-color', 'rgb(248, 230, 224)');
+      await expect(page.getByTestId('upfront-available')).toHaveCSS('background-color', 'rgb(63, 138, 142)');
+      const cash = (await page.getByTestId('upfront-available').boundingBox())!;
+      const rest = (await gap.boundingBox())!;
+      expect(Math.abs(cash.x + cash.width - rest.x)).toBeLessThan(1);
+      await expect(page.getByTestId('upfront-gap-figure')).toHaveText('RM 36,125');
     });
 
     await ac('AC5.2.7', 'Display upfront cost components', async () => {
@@ -378,7 +407,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
         listed += parseRm(amount);
       }
       // The listed items add up to the amount the screen says is needed.
-      expect(listed).toBe(parseRm(await figureRow(page, 'You need').innerText()));
+      expect(listed).toBe(await needOf(page));
       await captureEvidence(page, 'epic-5', 'ac5.2__upfront-cash.png');
     });
 
@@ -389,7 +418,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
       await expect(page.getByText('Deposit RM 0: upfront cash is fees and setting up, not the deposit.', { exact: true }))
         .toBeVisible();
       // With no deposit the requirement is still the fees: 5,000 + 1,500 + 3,750 + 3,750 + 650.
-      await expect(figureRow(page, 'You need')).toContainText('RM 14,650');
+      await expect(haveLine(page)).toContainText(`of ${'RM 14,650'}`);
       await captureEvidence(page, 'epic-5', 'ac5.2.8__zero-deposit.png');
     });
   });
@@ -403,12 +432,12 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
     const account = async () => (await (await page.request.get(`${API}/auth/me/`, {
       headers: { Authorization: `Token ${token}` },
     })).json()) as { cash_on_hand: number; cash_on_hand_date: string | null };
-    const cashField = page.getByLabel('Cash I already have', { exact: true });
+    const cashField = page.getByLabel('Cash I have now', { exact: true });
 
     await ac('AC5.2.9', 'Enter available upfront cash', async () => {
       // RuMampu fills nothing in: the field starts empty and "You have" starts at RM 0.
       await expect(cashField).toHaveValue('');
-      await expect(figureRow(page, 'You have')).toContainText('RM 0');
+      await expect(haveLine(page)).toContainText(`You have ${'RM 0'} of`);
 
       const saved = page.waitForResponse(response =>
         response.request().method() === 'PATCH'
@@ -421,8 +450,8 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
       expect((await saved).status()).toBe(200);
 
       // The amount is in "You have" and the gap, marked as my data, and the server holds it.
-      await expect(figureRow(page, 'You have')).toContainText('RM 12,000');
-      await expect(figureRow(page, 'Gap')).toContainText('RM 32,125');
+      await expect(haveLine(page)).toContainText(`You have ${'RM 12,000'} of`);
+      await expectGap(page, 'RM 32,125');
       await expect(page.getByTestId('upfront-row-cash')).toContainText('YOUR DATA');
       expect((await account()).cash_on_hand).toBe(12000);
     });
@@ -438,17 +467,18 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
       await openUpfrontCash(page);
       await expect(cashField).toHaveValue('12000');
       await expect(page.getByTestId('upfront-row-cash')).toContainText(`Reported on ${todayLabel()}`);
-      await expect(figureRow(page, 'You have')).toContainText('RM 12,000');
+      await expect(haveLine(page)).toContainText(`You have ${'RM 12,000'} of`);
 
       // The house price is not kept across a reload, so put it back for the checks below.
       await enterHouse(page, 300000, '10%');
       await back(page);
       await openUpfrontCash(page);
-      await expect(figureRow(page, 'You need')).toContainText('RM 44,125');
+      await expect(haveLine(page)).toContainText(`of ${'RM 44,125'}`);
     });
 
     await ac('AC5.2.11', 'Group the costs by when they fall due', async () => {
-      // Headings and the rows under them run down the screen in this order.
+      // v7 design: "By when you pay" in What makes up; headings and rows run down in this order.
+      await openCosts(page, 'when');
       const order = [
         'To sign', 'Earnest deposit',
         'To complete', 'Balance of the down payment', 'Stamp duty (loan)', 'Mortgage insurance',
@@ -474,7 +504,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
         await expect(field).toHaveValue('');
         await expect(field).toHaveAttribute('placeholder', `e.g. ${example}`);
       }
-      await expect(figureRow(page, 'You need')).toContainText('RM 44,125');
+      await expect(haveLine(page)).toContainText(`of ${'RM 44,125'}`);
     });
 
     await ac('AC5.2.12', 'Treat the earnest deposit as part of the deposit', async () => {
@@ -482,8 +512,8 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
       // The balance of the down payment is the deposit less the earnest deposit (30,000 - 5,000)...
       await expect(page.getByTestId('upfront-row-baldp')).toContainText('RM 25,000');
       // ...and the total does not move.
-      await expect(figureRow(page, 'You need')).toContainText('RM 44,125');
-      await expect(figureRow(page, 'Gap')).toContainText('RM 32,125');
+      await expect(haveLine(page)).toContainText(`of ${'RM 44,125'}`);
+      await expectGap(page, 'RM 32,125');
     });
 
     await ac('AC5.2.13', 'Work out the legal fees from the published scale', async () => {
@@ -542,17 +572,17 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
     const planAdded = await savedByPlan(page, 1);
     expect(planAdded).toBeGreaterThan(0);
     await openUpfrontCash(page);
-    await page.getByLabel('Cash I already have', { exact: true }).fill('1000');
+    await page.getByLabel('Cash I have now', { exact: true }).fill('1000');
 
     await ac('AC5.2.17', 'State the pot once', async () => {
       const pot = 1000 + planAdded;
       const gap = Math.max(0, 3600 - pot);
       // "You have" appears once, and it is the whole pot.
-      await expect(page.getByText('You have', { exact: true })).toHaveCount(1);
-      await expect(figureRow(page, 'You have')).toContainText(rmText(pot));
+      await expect(page.getByText(/^You have RM/)).toHaveCount(1);
+      await expect(haveLine(page)).toContainText(`You have ${rmText(pot)} of`);
 
       // Its working names each part once, and the parts sum to the pot.
-      await figureRow(page, 'You have').getByLabel('How this adds up').click();
+      await page.getByTestId('upfront-summary').getByLabel('How this adds up').click();
       await expect(page.getByText('What I already had', { exact: true }).locator('xpath=..')).toContainText('RM 1,000');
       await expect(page.getByText('What the plan has added', { exact: true }).locator('xpath=..')).toContainText(rmText(planAdded));
       await expect(page.getByText('Moved in from finished months', { exact: true }).locator('xpath=..')).toContainText('RM 0');
@@ -561,7 +591,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
       await page.getByText('Done', { exact: true }).click();
 
       // The gap is what I need less what I have, here and on Home (this test needs no buffer).
-      await expect(figureRow(page, 'Gap')).toContainText(rmText(gap));
+      await expectGap(page, rmText(gap));
       await page.getByRole('tab', { name: 'Home', exact: true }).click();
       await expect(page.getByText(`${rmText(gap)} more to go for your safety money and upfront cash`, { exact: true })).toBeVisible();
     });
@@ -574,14 +604,14 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
     await openUpfrontCash(page);
 
     // RM 80,000, no deposit: duty 800 + 400, legal 1,000 + 1,000, valuation 400 = RM 3,600.
-    await expect(figureRow(page, 'You need')).toContainText('RM 3,600');
-    await expect(figureRow(page, 'Gap')).toContainText('RM 0');
+    await expect(haveLine(page)).toContainText(`of ${'RM 3,600'}`);
+    await expectGap(page, 'RM 0');
     await expect(page.getByTestId('upfront-gap')).toHaveCount(0);
 
     // A figure the user enters is added to the need and is tagged as theirs.
     await page.getByLabel('Mortgage insurance').fill('6000');
-    await expect(figureRow(page, 'You need')).toContainText('RM 9,600');
-    await expect(figureRow(page, 'Gap')).toContainText('RM 1,600');
+    await expect(haveLine(page)).toContainText(`of ${'RM 9,600'}`);
+    await expectGap(page, 'RM 1,600');
     await expect(page.getByTestId('upfront-gap')).toBeVisible();
     await expect(page.getByRole('img', { name: 'You have RM 8,000 of the RM 9,600 needed.' })).toBeVisible();
 
@@ -589,7 +619,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
     const exemption = page.getByRole('switch', { name: /first home/i });
     const box = await exemption.boundingBox();
     await exemption.click({ position: { x: box!.width - 24, y: box!.height / 2 } });
-    await expect(figureRow(page, 'You need')).toContainText('RM 8,400');
+    await expect(haveLine(page)).toContainText(`of ${'RM 8,400'}`);
     await expect(page.getByTestId('upfront-row-stampT')).toContainText('Exempt, first home RM 500,000 or less');
     await expect(page.getByTestId('upfront-row-stampT')).toContainText('RM 0');
   });
@@ -738,7 +768,8 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
   test('US5.4 — Review financing preparation documents', { tag: '@us5.4' }, async ({ page }) => {
     await openGuestApp(page);
     await openPrepare(page);
-    await page.getByText('Documents & financing', { exact: true }).click();
+    await ensureHome(page);
+    await page.getByTestId('prep-node-2').click();
 
     const documents = [
       'Bank statements, 6 months',
@@ -748,33 +779,38 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
       'List of existing commitments',
     ];
 
+    // v7 design: each document is a checkbox (role and aria-checked), not a ☐ / ☑ character.
+    const doc = (name: string) => page.getByRole('checkbox', { name, exact: true });
+    const ticked = page.locator('[role="checkbox"][aria-checked="true"]');
+
     await ac('AC5.4.1', 'Display document checklist', async () => {
-      await expect(page.getByText(/^☐ /)).toHaveCount(documents.length);
+      await expect(page.getByRole('checkbox')).toHaveCount(documents.length);
+      await expect(ticked).toHaveCount(0);
     });
 
     await ac('AC5.4.2', 'Include visible document types', async () => {
       for (const document of documents) {
-        await expect(page.getByText(`☐ ${document}`, { exact: true })).toBeVisible();
+        await expect(doc(document)).toBeVisible();
+        await expect(doc(document)).toHaveAttribute('aria-checked', 'false');
       }
     });
 
     await ac('AC5.4.3', 'Toggle checklist items', async () => {
-      await page.getByText('☐ Bank statements, 6 months', { exact: true }).click();
-      await expect(page.getByText('☑ Bank statements, 6 months', { exact: true })).toBeVisible();
-      await expect(page.getByText('☐ Bank statements, 6 months', { exact: true })).toHaveCount(0);
+      await doc('Bank statements, 6 months').click();
+      await expect(doc('Bank statements, 6 months')).toHaveAttribute('aria-checked', 'true');
       // Only the selected item changes.
-      await expect(page.getByText(/^☑ /)).toHaveCount(1);
-      await page.getByText('☑ Bank statements, 6 months', { exact: true }).click();
-      await expect(page.getByText('☐ Bank statements, 6 months', { exact: true })).toBeVisible();
-      await expect(page.getByText(/^☑ /)).toHaveCount(0);
+      await expect(ticked).toHaveCount(1);
+      await doc('Bank statements, 6 months').click();
+      await expect(doc('Bank statements, 6 months')).toHaveAttribute('aria-checked', 'false');
+      await expect(ticked).toHaveCount(0);
     });
 
     await ac('AC5.4.4', 'Display SJKP published criteria', async () => {
-      await expect(page.getByText('SJKP published criteria', { exact: true })).toBeVisible();
+      await expect(page.getByText('SJKP guarantee scheme', { exact: true })).toBeVisible();
       for (const criterion of [
-        '· Malaysian citizen, age 18 to 70',
-        '· Gross income within SJKP’s published limit',
-        '· First home',
+        'Malaysian citizen, age 18 to 70',
+        'Gross income within SJKP’s published limit',
+        'First home',
       ]) {
         await expect(page.getByText(criterion, { exact: true })).toBeVisible();
       }
@@ -787,23 +823,25 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
     });
 
     await ac('AC5.4.6', 'Avoid displaying unsupported approval status', async () => {
+      // The income criterion says "Needs review"; why is behind the (i).
+      await expect(page.getByText('Needs review', { exact: true })).toBeVisible();
+      await page.getByLabel('What this is').click();
       await expect(page.getByText('65% check: needs review', { exact: true })).toBeVisible();
       await expect(page.getByText(
         'SJKP measures gross income; RuMampu measures income after work costs. Until that gap is settled, no pass or fail is shown here.',
         { exact: true },
       )).toBeVisible();
+      await page.getByText('Done', { exact: true }).click();
       // No verdict is shown for the check.
       await expect(page.getByText(/^(pass|passed|fail|failed|approved|eligible)$/i)).toHaveCount(0);
       await captureEvidence(page, 'epic-5', 'ac5.4__documents-and-financing.png');
     });
 
     await ac('AC5.4.7', 'Display financing disclaimer', async () => {
-      await page.getByLabel('What this is').click();
       await expect(page.getByText(
         'RuMampu does not apply for you and cannot tell you whether a bank will say yes.',
         { exact: true },
       )).toBeVisible();
-      await page.getByText('Done', { exact: true }).click();
     });
   });
 
@@ -813,10 +851,10 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
     // buffer refills from the rest and stays full, so RM 8,595 counts towards upfront cash.
     await startWithTwelveMonths(page);
     await openUpfrontCash(page);
-    await page.getByLabel('Cash I already have', { exact: true }).fill('10000');
+    await page.getByLabel('Cash I have now', { exact: true }).fill('10000');
     await keepPriceTest(page, 250000);
     await openUpfrontCash(page);
-    await expect(figureRow(page, 'You have')).toContainText('RM 9,095');
+    await expect(haveLine(page)).toContainText(`You have ${'RM 9,095'} of`);
 
     await ac('AC5.8.9', 'Using the buffer takes it off the pot', async () => {
       await openCashBuffer(page);
@@ -844,8 +882,8 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
 
       // The pot drops by RM 500 and so does what counts towards upfront cash.
       await openUpfrontCash(page);
-      await expect(figureRow(page, 'You have')).toContainText('RM 8,595');
-      await figureRow(page, 'You have').getByLabel('How this adds up').click();
+      await expect(haveLine(page)).toContainText(`You have ${'RM 8,595'} of`);
+      await page.getByTestId('upfront-summary').getByLabel('How this adds up').click();
       await expect(page.getByText('Used from your safety money', { exact: true }).locator('xpath=..')).toContainText('−RM 500');
       await expect(page.getByText('In the pot', { exact: true }).locator('xpath=..')).toContainText('RM 9,500');
       await expect(page.getByText('Held as your safety money', { exact: true }).locator('xpath=..')).toContainText('RM 905');
@@ -874,7 +912,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
       await openUpfrontCash(page);
       await expect(page.getByTestId('upfront-held')).toHaveText(
         'RM 905 of your pot is held as your Rainy day fund, so it is not counted here.');
-      await figureRow(page, 'You have').getByLabel('How this adds up').click();
+      await page.getByTestId('upfront-summary').getByLabel('How this adds up').click();
       await expect(page.getByText('Held as your Rainy day fund', { exact: true })).toBeVisible();
       await expect(page.getByText('Used from your Rainy day fund', { exact: true })).toBeVisible();
       await page.getByText('Done', { exact: true }).click();
@@ -924,28 +962,28 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
     // target). The pot is the cash I already have; the buffer is held from it first.
     await startWithTwelveMonths(page);
     await openUpfrontCash(page);
-    await page.getByLabel('Cash I already have', { exact: true }).fill('1000');
+    await page.getByLabel('Cash I have now', { exact: true }).fill('1000');
 
     await ac('AC5.8.5', 'Nothing is held without a buffer', async () => {
       // No house test is kept yet, so the whole pot counts towards the upfront cash.
-      await expect(figureRow(page, 'You have')).toContainText('RM 1,000');
+      await expect(haveLine(page)).toContainText(`You have ${'RM 1,000'} of`);
       await expect(page.getByTestId('upfront-held')).toHaveCount(0);
     });
 
     await keepPriceTest(page, 250000);
     await openUpfrontCash(page);
-    const need = parseRm(await figureRow(page, 'You need').innerText());
+    const need = await needOf(page);
 
     await ac('AC5.8.1', 'Hold the buffer first', async () => {
       // RM 905 of the RM 1,000 pot is held; only RM 95 counts towards the upfront cash.
-      await expect(figureRow(page, 'You have')).toContainText('RM 95');
-      await expect(figureRow(page, 'Gap')).toContainText(rmText(need - 95));
+      await expect(haveLine(page)).toContainText(`You have ${'RM 95'} of`);
+      await expectGap(page, rmText(need - 95));
     });
 
     await ac('AC5.8.3', 'Say what is held', async () => {
       await expect(page.getByTestId('upfront-held')).toHaveText(
         'RM 905 of your pot is held as your safety money, so it is not counted here.');
-      await figureRow(page, 'You have').getByLabel('How this adds up').click();
+      await page.getByTestId('upfront-summary').getByLabel('How this adds up').click();
       await expect(page.getByText('In the pot', { exact: true }).locator('xpath=..')).toContainText('RM 1,000');
       await expect(page.getByText('Held as your safety money', { exact: true }).locator('xpath=..')).toContainText('RM 905');
       await page.getByText('Done', { exact: true }).click();
@@ -973,8 +1011,8 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
         'Your pot already covers all of this. It is held here first, before anything counts towards your upfront cash.');
       // With RM 500 in the pot, RM 500 is covered and RM 404.74 is still to set aside.
       await openUpfrontCash(page);
-      await page.getByLabel('Cash I already have', { exact: true }).fill('500');
-      await expect(figureRow(page, 'You have')).toContainText('RM 0');
+      await page.getByLabel('Cash I have now', { exact: true }).fill('500');
+      await expect(haveLine(page)).toContainText(`You have ${'RM 0'} of`);
       await openCashBuffer(page);
       await expect(page.getByTestId('buffer-covered')).toHaveText(
         'Your pot already covers RM 500 of this. RM 404.74 is still to set aside.');
@@ -993,7 +1031,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
       await expect(page.getByText(`${rmText(905 + need - 500)} more to go for your safety money and upfront cash`, { exact: true })).toBeVisible();
       await expect(page.getByText(/can(not|'t)? afford|not affordable|you qualify/i)).toHaveCount(0);
       await openUpfrontCash(page);
-      await expect(figureRow(page, 'Gap')).toContainText(rmText(need));
+      await expectGap(page, rmText(need));
       await expect(page.getByText(/can(not|'t)? afford|not affordable|you qualify/i)).toHaveCount(0);
     });
 
@@ -1004,7 +1042,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
       await openUpfrontCash(page);
       await expect(page.getByTestId('upfront-held-moved')).toHaveText(
         /^Your newer house test moved your safety money from RM 905 to RM [\d,]+, so the amount held changed\. Your pot itself has not changed\.$/);
-      await figureRow(page, 'You have').getByLabel('How this adds up').click();
+      await page.getByTestId('upfront-summary').getByLabel('How this adds up').click();
       await expect(page.getByText('In the pot', { exact: true }).locator('xpath=..')).toContainText('RM 500');
       await page.getByText('Done', { exact: true }).click();
     });

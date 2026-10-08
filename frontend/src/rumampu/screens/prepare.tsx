@@ -19,6 +19,11 @@ import { ScreenShell } from './shell';
 import { LnEnter } from './learn';
 import { GuideTarget } from '../tour';
 import { SheetFrame } from '../overlays';
+import { DOC_KEYS } from '../prep7state';
+import { goalFromKept, prepLoan } from '../prep7';
+import {
+  ActBar, b1, Btn2, BtnDeep, Chip7, Fold, G, Group, Hdr7, PAGE, Ph, Rich, RumaImg, Sec, Seg, SHADOW, T7, Toggle, x,
+} from './p7ui';
 
 /* v22: prepare rows live inside the House tab's "Get ready" segment. */
 export function PrepareBody() {
@@ -119,24 +124,60 @@ const Switch = ({ on, onPress, label, info }: { on: boolean; onPress: () => void
     </View>
   </Pressable>
 );
-const Stage = ({ n, k, info, children }: { n: number; k: string; info?: React.ReactNode; children: React.ReactNode }) => {
-  const { t } = useApp();
+/* v7 Upfront cash (RuMampu_Prepare_Loan_v7_1.html): what is still to find, the
+   money I can use, and what makes up the need folded away, by cost type or by
+   when it is paid. AC5.2: "You have" is the one pot, stated once; every cost
+   row keeps its tag (official, calculated, assumed, my entry). */
+function Li({ id, label, kind, note, info, children }: {
+  id?: string; label: string; kind: 'user' | 'calc' | 'official' | 'assume'; note?: string; info?: React.ReactNode; children: React.ReactNode;
+}) {
   return (
-    <View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ fontFamily: DISP_FONT, fontSize: 12, color: '#fff' }}>{n}</Text>
+    <View testID={id ? `upfront-row-${id}` : undefined} style={uv.li}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={{ fontFamily: G.r, fontSize: 13.5, color: T7.text }}>{label}</Text>{info}
         </View>
-        <Text style={{ fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.99, textTransform: 'uppercase', color: C.ink64 }}>{t(k)}</Text>
-        {info}
+        <View style={{ alignItems: 'flex-start', marginTop: 2 }}><Prov p={kind} /></View>
+        {note ? <Text style={{ fontFamily: G.r, fontSize: 11.5, lineHeight: 16, color: T7.text2, marginTop: 2 }}>{note}</Text> : null}
       </View>
-      <Card gap={0} style={{ marginTop: 8 }}>{children}</Card>
+      {children}
     </View>
   );
-};
+}
+const Amt7 = ({ v, s }: { v: number; s?: string }) => (
+  <Text style={{ fontFamily: G.s, fontSize: 13.5, color: T7.text, fontVariant: ['tabular-nums'] }}>{s ?? rm(Math.round(v))}</Text>
+);
+function In7({ id }: { id: string }) {
+  const { S, t, up } = useApp();
+  const it = S.data.upfront.find(x => x.id === id) ?? { a: 0, ex: 0, k: '' };
+  return (
+    <NumInput value={+it.a || ''} placeholder={t('eg_ph', { v: it.ex ?? 0 })} decimal={false}
+      onNum={n => up(s => { const r = s.data.upfront.find(x => x.id === id); if (r) r.a = Math.max(0, n); })}
+      accessibilityLabel={t((it as { k?: string }).k || '')} style={uv.liIn} />
+  );
+}
+/* .stg: one cost group that opens to its rows */
+function Stg({ n, title, sub, amt, children, testID }: { n: string; title: string; sub?: string; amt: string; children: React.ReactNode; testID?: string }) {
+  const [open, setOpen] = React.useState(true);
+  return (
+    <View style={{ borderTopWidth: 1, borderTopColor: T7.line }}>
+      <Pressable onPress={() => setOpen(o => !o)} accessibilityRole="button" accessibilityState={{ expanded: open }} aria-expanded={open} testID={testID}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, paddingHorizontal: 2 }}>
+        <View style={uv.stgN}><Text style={{ fontFamily: G.s, fontSize: 12, color: T7.accentInk }}>{n}</Text></View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontFamily: G.s, fontSize: 14.5, color: T7.text }}>{title}</Text>
+          {sub ? <Text style={{ fontFamily: G.r, fontSize: 12, color: T7.text2, marginTop: 1 }}>{sub}</Text> : null}
+        </View>
+        <Text style={{ fontFamily: G.s, fontSize: 15, color: T7.text, fontVariant: ['tabular-nums'] }}>{amt}</Text>
+        <View style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}><Ph name="down" size={17} color={T7.text3} /></View>
+      </Pressable>
+      {open ? <View style={{ paddingLeft: 46, paddingRight: 2, paddingBottom: 8 }}>{children}</View> : null}
+    </View>
+  );
+}
 
 export function UpfrontScreen() {
-  const { S, t, up, toast, monthName } = useApp();
+  const { S, t, up, monthName, go, toast } = useApp();
   const f = upfrontFees(S);
   const src = f.src;
   const dep = src.price ? src.dep : S.data.house.deposit;
@@ -150,15 +191,16 @@ export function UpfrontScreen() {
   const have = q.up;
   const gap = Math.max(0, need - have);
   const loan = Math.max(0, src.price - src.dep);
-  const earnest = S.data.upfront.find(x => x.id === 'earnest') ?? { a: 0, ex: 0 };
-  const bal = Math.max(0, dep - (+earnest.a || 0));
+  const item = (id: string) => S.data.upfront.find(x => x.id === id) ?? { a: 0, ex: 0 };
+  const bal = Math.max(0, dep - (+item('earnest').a || 0));
   const stampNote = f.exempt ? t('uf_exempt') : (S.firstHome && src.price > 500000 ? t('uf_noexempt') : '');
-  const scale = Math.max(need, have, 1) * 1.12;
-  const pct = (v: number) => v / scale * 100;
+  const pct = need > 0 ? Math.min(1, have / need) : have > 0 ? 1 : 0;
+  const [view, setView] = React.useState<'type' | 'when'>('when');
+  /* AC10.12.2: the saved test the figures (and the saving plan's goal) follow is chosen here */
   const [pick, setPick] = React.useState(false);
   const testsWithPrice = S.keptTests
     .map((k, i) => ({ k, i }))
-    .filter(x => x.k.propertyPrice != null && Number(x.k.propertyPrice) > 0);
+    .filter(z => z.k.propertyPrice != null && Number(z.k.propertyPrice) > 0);
 
   /* AC5.2.9 and AC5.2.10: the cash the user already has is their own entry, saved
      with the day it was reported. Clearing it clears the day. */
@@ -172,149 +214,194 @@ export function UpfrontScreen() {
     ? t('uf_cash_on', { d: `${+cashDay.slice(8, 10)} ${monthName(+cashDay.slice(5, 7) - 1)} ${cashDay.slice(0, 4)}` })
     : undefined;
 
+  /* the rows, each kept once and shown by type or by when it is paid */
+  const moveIn = (id: string) => (+item(id).a || 0);
+  const reno = S.ufReno ? moveIn('reno') : 0;
+  const R: Record<string, React.ReactNode> = {
+    earnest: <Li key="earnest" label={t('uf_earn')} kind="user" note={t('uf_earn_in')} info={<CardI t="uf_earn" b={['uf_earn_h']} p="user" />}><In7 id="earnest" /></Li>,
+    baldp: <Li key="baldp" id="baldp" label={t('uf_baldp')} kind="calc"><Amt7 v={bal} /></Li>,
+    spa: <Li key="spa" id="spa" label={t('uf_spa')} kind="official"><Amt7 v={f.spa} /></Li>,
+    loanlegal: <Li key="loanlegal" id="loanlegal" label={t('uf_loanlegal')} kind="official"><Amt7 v={f.loanLegal} /></Li>,
+    stampT: <Li key="stampT" id="stampT" label={t('uf_stampT')} kind="official" note={stampNote || t('uf_stampT_h', { p: rm(src.price) })}><Amt7 v={f.t} /></Li>,
+    stampL: <Li key="stampL" id="stampL" label={t('uf_stampL')} kind="official" note={stampNote || t('uf_stampL_h', { p: rm(loan) })}><Amt7 v={f.l} /></Li>,
+    val: <Li key="val" id="val" label={t('uf_val')} kind="assume"><Amt7 v={f.val} /></Li>,
+    mrta: <Li key="mrta" label={t('uf_mrta')} kind="user" info={<CardI t="uf_mrta" b={['uf_mrta_h']} p="user" />}><In7 id="mrta" /></Li>,
+    util: <Li key="util" label={t('uf_util')} kind="user" info={<CardI t="uf_util" b={['uf_util_h']} p="user" />}><In7 id="util" /></Li>,
+    strata: <Li key="strata" label={t('uf_strata')} kind="user" info={<CardI t="uf_strata" b={['uf_strata_h']} p="user" />}><In7 id="strata" /></Li>,
+    furn: <Li key="furn" label={t('uf_furn')} kind="user" info={<CardI t="uf_furn" b={['uf_furn_h']} p="user" />}><In7 id="furn" /></Li>,
+    renoSw: (
+      <Pressable key="renoSw" onPress={() => up(s => { s.ufReno = !s.ufReno; })} accessibilityRole="switch" accessibilityState={{ checked: S.ufReno }} aria-checked={S.ufReno}
+        accessibilityLabel={t('uf_reno_sw')} style={[uv.sw, { borderTopWidth: 0, marginTop: 0 }]}>
+        <Text style={{ flex: 1, fontFamily: G.s, fontSize: 14, color: T7.text }}>{t('uf_reno_sw')}</Text>
+        <Toggle on={S.ufReno} />
+      </Pressable>
+    ),
+    reno: S.ufReno ? <Li key="reno" label={t('uf_reno')} kind="user" info={<CardI t="uf_reno" b={['uf_reno_h']} p="user" />}><In7 id="reno" /></Li> : null,
+  };
+  const rows = (ids: string[]) => ids.map(id => R[id]).filter(Boolean);
+  const price = src.price > 0;
+  const cats = [
+    { k: 'dp', col: T7.accentDeep, a: dep, ids: price ? ['earnest', 'baldp'] : ['earnest'] },
+    { k: 'legal', col: T7.accent, a: price ? f.spa + f.loanLegal : 0, ids: price ? ['spa', 'loanlegal'] : [] },
+    { k: 'stamp', col: '#7DB6B8', a: price ? f.t + f.l : 0, ids: price ? ['stampT', 'stampL'] : [] },
+    { k: 'val', col: '#5E7172', a: price ? f.val : 0, ids: price ? ['val'] : [] },
+    { k: 'ins', col: '#A9B7B8', a: moveIn('mrta') + moveIn('util') + moveIn('strata') + moveIn('furn') + reno, ids: ['mrta', 'util', 'strata', 'furn', 'renoSw', 'reno'] },
+  ].filter(cg => cg.ids.length);
+  const stages = [
+    { n: '1', k: 'uf_s1', ids: ['earnest'], a: +item('earnest').a || 0 },
+    { n: '2', k: 'uf_s2', ids: price ? ['baldp', 'spa', 'stampT', 'loanlegal', 'stampL', 'val', 'mrta'] : ['mrta'],
+      a: (price ? bal + f.spa + f.t + f.loanLegal + f.l + f.val : 0) + moveIn('mrta') },
+    { n: '3', k: 'uf_s3', ids: ['util', 'strata', 'furn', 'renoSw', 'reno'], a: moveIn('util') + moveIn('strata') + moveIn('furn') + reno },
+  ];
+  const missing = ['mrta', 'util', 'strata', 'furn'].filter(id => !(+item(id).a)).map(id => t((item(id) as { k?: string }).k || ''));
+  const shown = cats.filter(cg => cg.a > 0);
 
   return (
-    <ScreenShell back title={t('pr_upfront')}>
-      {/* v24: name the tested price these figures come from, and let the user switch. */}
-      {src.price ? (
-        <Pressable onPress={() => testsWithPrice.length > 1 && setPick(true)} style={pr.ufsrc}>
+    <ScreenShell tint={T7.bg} noScene header={<Hdr7 title={t('pr_upfront')} />} contentStyle={PAGE}
+      footer={gap > 0 ? <ActBar><View style={{ flex: 1 }}><BtnDeep label={t('p7_uf_plan', { a: rm(Math.round(gap)) })} onPress={() => go('plan')} /></View></ActBar> : undefined}>
+      {/* which tested price the figures come from, and the saved test to use */}
+      {price ? (
+        <Pressable onPress={() => testsWithPrice.length > 1 && setPick(true)} disabled={testsWithPrice.length < 2}
+          accessibilityRole="button" testID="upfront-source" style={uv.src}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <BodyS muted style={{ fontSize: 11 }}>{t('uf_for')}</BodyS>
-            <Text style={{ fontFamily: DISP_FONT, fontSize: 14.5, color: C.ink }} numberOfLines={1}>
-              {src.name ? `${src.name} \u00b7 ${rm(src.price)}` : `${rm(src.price)} \u00b7 ${t('uf_for_house')}`}
+            <Text style={{ fontFamily: G.r, fontSize: 12, color: T7.text2 }}>{t('uf_for')}</Text>
+            <Text style={{ fontFamily: G.s, fontSize: 14.5, color: T7.text }} numberOfLines={1}>
+              {src.name && src.name !== rm(src.price) ? `${src.name}, ${rm(src.price)}` : src.saved ? rm(src.price) : `${rm(src.price)}, ${t('uf_for_house')}`}
             </Text>
           </View>
-          {testsWithPrice.length > 1 ? <BodyS muted>{t('uf_switch')} {'\u25be'}</BodyS> : null}
+          {testsWithPrice.length > 1 ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <Ph name="edit" size={14} color={T7.accentInk} />
+              <Text style={{ fontFamily: G.s, fontSize: 13, color: T7.accentInk }}>{t('uf_switch')}</Text>
+            </View>
+          ) : null}
         </Pressable>
       ) : (
-        <NoteC><BodyS>{t('uf_notest')}</BodyS></NoteC>
+        <View style={[x.cardx, { marginTop: 4, marginBottom: 14 }]}><Text style={x.tiny}>{t('uf_notest')}</Text></View>
       )}
+      {/* .cardx: what is still to find */}
       <GuideTarget id="uf.chart">
-      <KV k={t('uf_have')}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Fig value={rm(have)} p="user" cls="h-l" />
-          {/* The pot behind "You have": what I already had, what the plan added, what was moved in. */}
-          <Pressable onPress={() => up(s => { s.sheet = 'pothow'; })} accessibilityLabel={t('ph_title')} hitSlop={8}
-            style={{
-              width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: C.ink40,
-              alignItems: 'center', justifyContent: 'center', marginLeft: 6,
-            }}>
-            <Text style={{ fontFamily: DISP_FONT, fontSize: 11, color: C.ink64 }}>i</Text>
-          </Pressable>
+      <View style={x.cardx} testID="upfront-summary">
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={x.k}>{gap ? t('p7_uf_still') : t('p7_uf_upfront')}</Text>
+          <Prov p="calc" />
         </View>
-      </KV>
-      {held > 0 ? (
-        <View testID="upfront-held"><BodyS muted>{t('uf_held', { a: rm(held) })}</BodyS></View>
-      ) : null}
+        <Text style={uv.bignum} testID="upfront-gap-figure">{gap ? rm(Math.round(gap)) : t('p7_uf_covered')}</Text>
+        <View style={uv.mb} accessibilityRole="image" accessibilityLabel={t('uf_ch_alt', { h: rm(have), n: rm(need) })} testID="upfront-meter">
+          <View testID="upfront-available" style={{ width: `${pct * 100}%`, height: '100%', borderRadius: 5, backgroundColor: T7.accent }} />
+          {gap > 0 ? <View testID="upfront-gap" style={{ flex: 1, height: '100%' }} /> : null}
+        </View>
+        <View style={uv.ml}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1 }}>
+            <Text style={{ fontFamily: G.r, fontSize: 12.5, color: T7.text2 }} testID="upfront-have-need">{t('p7_uf_have', { a: rm(have), b: rm(need) })}</Text>
+            <Pressable onPress={() => up(s => { s.sheet = 'pothow'; })} accessibilityLabel={t('ph_title')} hitSlop={8} style={{ paddingLeft: 4 }}>
+              <Ph name="info" size={14} color={T7.text3} />
+            </Pressable>
+          </View>
+          <Text style={{ fontFamily: G.r, fontSize: 12.5, color: T7.text2 }}>{Math.round(pct * 100)}%</Text>
+        </View>
+      </View>
+      </GuideTarget>
+      {held > 0 ? <View testID="upfront-held"><Text style={[x.tiny, { marginTop: 10 }]}>{t('uf_held', { a: rm(held) })}</Text></View> : null}
       {/* AC5.8.7: a newer house test moved the buffer, so the amount held changed. */}
       {S.buffer?.msg === 'moved' && S.buffer.prevTarget != null && S.buffer.target != null ? (
-        <View testID="upfront-held-moved">
-          <NoteC><BodyS>{t('uf_moved', { a: rm(S.buffer.prevTarget), b: rm(S.buffer.target) })}</BodyS></NoteC>
-        </View>
+        <View testID="upfront-held-moved"><Text style={[x.tiny, { marginTop: 6 }]}>{t('uf_moved', { a: rm(S.buffer.prevTarget), b: rm(S.buffer.target) })}</Text></View>
       ) : null}
-      <KV k={t('uf_need')}><Fig value={rm(need)} p="calc" cls="h-l" /></KV>
-      <KV k={t('uf_gap')}><Fig value={rm(gap)} p="calc" cls="h-l" /></KV>
-      <View style={{ paddingTop: 10, paddingRight: 34, paddingBottom: 8, paddingLeft: 2 }}
-        accessibilityRole="image" accessibilityLabel={t('uf_ch_alt', { h: rm(have), n: rm(need) })}>
-        <View style={{ height: 120, alignItems: 'center', justifyContent: 'flex-end' }}>
-          <View style={{ width: 120, height: '100%', justifyContent: 'flex-end' }}>
-            <View testID="upfront-available"
-              style={{ height: `${pct(have)}%`, backgroundColor: C.ink, borderTopLeftRadius: 3, borderTopRightRadius: 3 }} />
-            {gap > 0 ? (
-              <View testID="upfront-gap" style={{
-                position: 'absolute', left: '15%', width: '70%',
-                bottom: `${pct(have)}%`, height: `${pct(need) - pct(have)}%`,
-                backgroundColor: C.short, borderRadius: 2, opacity: 0.95,
-              }} />
-            ) : null}
+      {price && dep === 0 ? <Text style={[x.tiny, { marginTop: 10 }]}>{t('uf_dep0')}</Text> : null}
+      {/* money you can use */}
+      <Sec title={t('p7_uf_money')} />
+      <Group>
+        <View style={uv.arow} testID="upfront-row-cash">
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ fontFamily: G.m, fontSize: 14, color: T7.text }}>{t('p7_uf_cash')}</Text>
+              <CardI t="uf_cash_l" b={['uf_cash_h']} p="user" />
+            </View>
+            <View style={{ alignItems: 'flex-start', marginTop: 2 }}><Prov p="user" /></View>
+            {cashNote ? <Text style={{ fontFamily: G.r, fontSize: 11.5, color: T7.text2, marginTop: 2 }}>{cashNote}</Text> : null}
           </View>
-          <View style={{ position: 'absolute', left: -2, right: -14, bottom: `${pct(need)}%`, borderTopWidth: 2.5, borderTopColor: C.ink }} />
-          <View style={{
-            position: 'absolute', right: 0, bottom: `${pct(need)}%`,
-            transform: [{ translateY: -21 }],
-            backgroundColor: C.paper, paddingVertical: 2, paddingHorizontal: 5,
-            borderRadius: 5, borderWidth: 1.5, borderColor: C.ink14,
-          }}>
-            <Text style={{ fontSize: 11, letterSpacing: 0.66, color: C.ink, fontWeight: '700', fontVariant: ['tabular-nums'] }}>
-              {rm(need)}
-            </Text>
+          <View style={uv.pin}>
+            <Text style={{ fontFamily: G.m, fontSize: 14, color: T7.text2 }}>RM</Text>
+            <NumInput value={+S.data.cashOnHand || ''} placeholder="0" onNum={setCash} accessibilityLabel={t('p7_uf_cash')} style={uv.pinIn} />
           </View>
         </View>
-        <View style={{ marginTop: 6, alignItems: 'flex-start' }}><Prov p="calc" /></View>
-      </View>
-      </GuideTarget>
-      {/* AC5.2.9 / AC5.2.10: the cash I already have, entered by me and dated. */}
-      <Card gap={0}>
-        <Row id="cash" label={t('uf_cash_l')} kind="user" note={cashNote}
-          info={<CardI t="uf_cash_l" b={['uf_cash_h']} p="user" />}>
-          <View style={{ width: 110 }}>
-            <NumInput value={+S.data.cashOnHand || ''} placeholder="0" alignRight
-              onNum={setCash} accessibilityLabel={t('uf_cash_l')} />
+      </Group>
+      {/* what makes up the need */}
+      <Sec title={t('p7_uf_makes', { a: rm(need) })}
+        info={<CardI t="uf_steps" b={['uf_steps_h', 'uf_baldp_h', 'uf_spa_h_g', 'uf_val_h_g', 'uf_dep0', 'uf_stamp_src', 'uf_legal_src', 'uf_val_src', 'uf_scope']} p="calc" />} />
+      <Group>
+        <Fold title={t('p7_uf_incl')} testID="upfront-included" open>
+          {shown.length ? (
+            <>
+              <View style={uv.sbar}>
+                {shown.map(cg => <View key={cg.k} style={{ width: `${cg.a / Math.max(1, need) * 100}%`, backgroundColor: cg.col }} />)}
+              </View>
+              <View style={{ marginTop: 8 }}>
+                {shown.map((cg, i) => (
+                  <View key={cg.k} style={[uv.cl, i === shown.length - 1 && { borderBottomWidth: 0 }]}>
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: cg.col }} />
+                      <Text style={{ fontFamily: G.r, fontSize: 13.5, color: T7.text }}>{t(`p7_cat_${cg.k}`)}</Text>
+                    </View>
+                    <Text style={{ fontFamily: G.s, fontSize: 13.5, color: T7.text }}>{rm(Math.round(cg.a))}</Text>
+                    <Text style={{ width: 40, textAlign: 'right', fontFamily: G.r, fontSize: 12, color: T7.text2 }}>{Math.round(cg.a / Math.max(1, need) * 100)}%</Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          ) : null}
+          {missing.length ? <Rich s={t('p7_uf_notyet', { x: b1(missing.join(', ')) })} style={uv.miss} bold={{ color: T7.text }} /> : null}
+          {/* v24: the first-home stamp exemption, with the rule it applies */}
+          <GuideTarget id="uf.first">
+            <Pressable onPress={() => up(s => { s.firstHome = !s.firstHome; })} accessibilityRole="switch" accessibilityState={{ checked: S.firstHome }}
+              aria-checked={S.firstHome} accessibilityLabel={t('uf_first')} style={uv.sw}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={{ fontFamily: G.s, fontSize: 14.5, color: T7.text }}>{t('uf_first')}</Text>
+                  <CardI t="uf_first" b={['uf_first_h', 'uf_first_src']} p="official" />
+                </View>
+                <Text style={{ fontFamily: G.r, fontSize: 12.5, color: T7.text2, marginTop: 2 }}>{t('p7_uf_first_s')}</Text>
+              </View>
+              <Toggle on={S.firstHome} />
+            </Pressable>
+          </GuideTarget>
+          <View style={{ marginTop: 12, marginBottom: 6 }}>
+            <Seg wide items={[{ v: 'type' as const, l: t('p7_uf_type') }, { v: 'when' as const, l: t('p7_uf_when') }]} on={view} onPick={setView} />
           </View>
-        </Row>
-      </Card>
-      {dep === 0
-        ? (src.price ? <NoteC><BodyS>{t('uf_dep0')}</BodyS></NoteC> : null)
-        : <KV k={t('uf_dep')}><Fig value={rm(dep)} p="user" /></KV>}
-      {/* v24: the first-home stamp exemption, with the rule it applies. */}
-      <GuideTarget id="uf.first">
-      <Card gap={4}>
-        <Switch on={S.firstHome} onPress={() => up(s => { s.firstHome = !s.firstHome; })}
-          label={t('uf_first')} info={<CardI t="uf_first" b={['uf_first_h', 'uf_first_src']} p="official" />} />
-      </Card>
-      </GuideTarget>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <Text style={{ fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.99, textTransform: 'uppercase', color: C.ink64 }}>
-          {t('uf_steps')}
-        </Text>
-        <CardI t="uf_steps"
-          b={['uf_steps_h', 'uf_baldp_h', 'uf_spa_h_g', 'uf_val_h_g', 'uf_dep0', 'uf_stamp_src', 'uf_legal_src', 'uf_val_src', 'uf_scope']}
-          p="calc" />
-      </View>
-      <GuideTarget id="uf.stage">
-      <Stage n={1} k="uf_s1">
-        <Row label={t('uf_earn')} kind="user" note={t('uf_earn_in')} info={<CardI t="uf_earn" b={['uf_earn_h']} p="user" />}><Input id="earnest" /></Row>
-      </Stage>
-      </GuideTarget>
-      <Stage n={2} k="uf_s2">
-        {src.price ? (
-          <>
-            <Row id="baldp" label={t('uf_baldp')} kind="calc"><Amt v={bal} /></Row>
-            <Row id="spa" label={t('uf_spa')} kind="official"><Amt v={f.spa} /></Row>
-            <Row id="stampT" label={t('uf_stampT')} kind="official" note={stampNote || t('uf_stampT_h', { p: rm(src.price) })}><Amt v={f.t} /></Row>
-            <Row id="loanlegal" label={t('uf_loanlegal')} kind="official"><Amt v={f.loanLegal} /></Row>
-            <Row id="stampL" label={t('uf_stampL')} kind="official" note={stampNote || t('uf_stampL_h', { p: rm(loan) })}><Amt v={f.l} /></Row>
-            <Row id="val" label={t('uf_val')} kind="assume"><Amt v={f.val} /></Row>
-            <Row label={t('uf_mrta')} kind="user" info={<CardI t="uf_mrta" b={['uf_mrta_h']} p="user" />}><Input id="mrta" /></Row>
-          </>
-        ) : (
-          <Row label={t('uf_mrta')} kind="user" info={<CardI t="uf_mrta" b={['uf_mrta_h']} p="user" />}><Input id="mrta" /></Row>
-        )}
-      </Stage>
-      <Stage n={3} k="uf_s3" info={<CardI t="uf_s3" b={['uf_s3_h']} p="user" />}>
-        {/* v27b: say up front that only typed amounts count here */}
-        <BodyS muted style={{ paddingTop: 8, paddingBottom: 4 }}>{t('uf_s3_in')}</BodyS>
-        <Row label={t('uf_util')} kind="user" info={<CardI t="uf_util" b={['uf_util_h']} p="user" />}><Input id="util" /></Row>
-        <Row label={t('uf_strata')} kind="user" info={<CardI t="uf_strata" b={['uf_strata_h']} p="user" />}><Input id="strata" /></Row>
-        <Row label={t('uf_furn')} kind="user" info={<CardI t="uf_furn" b={['uf_furn_h']} p="user" />}><Input id="furn" /></Row>
-        <Switch on={S.ufReno} onPress={() => up(s => { s.ufReno = !s.ufReno; })} label={t('uf_reno_sw')} />
-        {S.ufReno ? <Row label={t('uf_reno')} kind="user" info={<CardI t="uf_reno" b={['uf_reno_h']} p="user" />}><Input id="reno" /></Row> : null}
-      </Stage>
+          <GuideTarget id="uf.stage">
+          {view === 'type' ? cats.map(cg => (
+            <Stg key={cg.k} testID={`upfront-cat-${cg.k}`} n={`${Math.round(cg.a / Math.max(1, need) * 100)}%`} title={t(`p7_cat_${cg.k}`)} sub={t(`p7_cat_${cg.k}_s`)}
+              amt={cg.k === 'stamp' && f.exempt ? t('p7_exempt') : rm(Math.round(cg.a))}>
+              {rows(cg.ids)}
+            </Stg>
+          )) : stages.map(sg => (
+            <Stg key={sg.n} testID={`upfront-stage-${sg.n}`} n={sg.n} title={t(sg.k)} amt={rm(Math.round(sg.a))}>
+              {sg.n === '3' ? <Text style={[x.tiny, { marginTop: 4 }]}>{t('uf_s3_in')}</Text> : null}
+              {rows(sg.ids)}
+            </Stg>
+          ))}
+          </GuideTarget>
+        </Fold>
+      </Group>
+      <Text style={x.disc}>{t('p7_uf_disc')}</Text>
       {/* v26: what these costs are, as short lessons */}
-      <LnEnter tab="upfront" k="ln_link_upfront" />
+      <View style={{ marginTop: 14 }}><LnEnter tab="upfront" k="ln_link_upfront" /></View>
       {pick ? (
         <SheetFrame pose="curious" onClose={() => setPick(false)}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={{ fontFamily: DISP_FONT, fontSize: 19, color: C.ink }}>{t('uf_pick_t')}</Text>
-            <Pressable onPress={() => setPick(false)} hitSlop={10}><Text style={{ fontSize: 18, color: C.ink }}>✕</Text></Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ flex: 1, fontFamily: G.s, fontSize: 18, letterSpacing: -0.18, color: T7.text }}>{t('uf_pick_t')}</Text>
+            <Pressable onPress={() => setPick(false)} hitSlop={10} accessibilityRole="button" accessibilityLabel={t('p7_close')}><Ph name="x" size={20} /></Pressable>
           </View>
-          <BodyS muted style={{ marginTop: 4 }}>{t('uf_pick_h')}</BodyS>
-          <View style={{ marginTop: 10, gap: 4 }}>
+          <Text style={[x.tiny, { marginTop: 4 }]}>{t('uf_pick_h')}</Text>
+          <View style={{ marginTop: 8 }}>
             {testsWithPrice.map(({ k, i }) => (
-              <Pressable key={i} onPress={() => { up(s => { s.ufTest = i; }); setPick(false); toast(t('saved')); }}
-                style={[pr.opt, S.ufTest === i && { backgroundColor: C.card }]}>
-                <P style={{ fontSize: 15 }}>{k.name || rm(Number(k.propertyPrice) || 0)}</P>
-                <BodyS muted>{rm(Number(k.propertyPrice) || 0)}</BodyS>
+              <Pressable key={i} onPress={() => { goalFromKept(S.keptTests[i]); up(s => { s.ufTest = i; }); setPick(false); toast(t('saved')); }} accessibilityRole="button"
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 13, paddingHorizontal: 2, borderBottomWidth: 1, borderBottomColor: T7.line }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontFamily: G.s, fontSize: 15, color: T7.text }}>{k.name || rm(Number(k.propertyPrice) || 0)}</Text>
+                  <Text style={{ fontFamily: G.r, fontSize: 12.5, color: T7.text2, marginTop: 1 }}>{rm(Number(k.propertyPrice) || 0)}</Text>
+                </View>
+                {S.ufTest === i ? <Ph name="check" size={20} color={T7.accentInk} /> : null}
               </Pressable>
             ))}
           </View>
@@ -324,7 +411,25 @@ export function UpfrontScreen() {
   );
 }
 
+const uv = StyleSheet.create({
+  src: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: T7.surface2, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14, marginTop: 4, marginBottom: 14 },
+  bignum: { fontFamily: G.s, fontSize: 36, lineHeight: 40, letterSpacing: -1.08, color: T7.text, marginTop: 4, fontVariant: ['tabular-nums'] },
+  mb: { height: 10, borderRadius: 5, backgroundColor: T7.badSoft, overflow: 'hidden', flexDirection: 'row', marginTop: 10 },
+  ml: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 8 },
+  arow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 12, paddingHorizontal: 16 },
+  pin: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  pinIn: { width: 112, borderWidth: 1, borderColor: T7.line2, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 10, fontFamily: G.s, fontSize: 15, textAlign: 'right', color: T7.text, backgroundColor: T7.surface, minHeight: 0 },
+  sbar: { flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden', gap: 2 },
+  cl: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: T7.line },
+  miss: { fontFamily: G.r, fontSize: 12.5, lineHeight: 18, color: T7.text2, marginTop: 10 },
+  sw: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 2, borderTopWidth: 1, borderTopColor: T7.line, marginTop: 8 },
+  stgN: { minWidth: 34, paddingHorizontal: 6, height: 26, borderRadius: 999, backgroundColor: T7.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  li: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: T7.line },
+  liIn: { width: 100, borderWidth: 1, borderColor: T7.line2, borderRadius: 12, paddingVertical: 7, paddingHorizontal: 9, fontFamily: G.s, fontSize: 13.5, textAlign: 'right', color: T7.text, backgroundColor: T7.surface, minHeight: 0 },
+});
+
 const pr = StyleSheet.create({
+  keysCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.card, borderRadius: 18, padding: 14 },
   pvintro: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.card, borderRadius: 18, padding: 12 },
   pvhub: {
     flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E3EAE8',
@@ -350,10 +455,6 @@ const pr = StyleSheet.create({
     justifyContent: 'center',
     gap: 16,
     paddingVertical: 48,
-  },
-  ufsrc: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#EDF2F1', borderRadius: 14, paddingVertical: 10, paddingHorizontal: 14, minHeight: 54,
   },
   sheet: {
     backgroundColor: C.paper, borderTopLeftRadius: 22, borderTopRightRadius: 22,
@@ -502,41 +603,61 @@ export function BufferScreen() {
   );
 }
 
+/* v7 Documents & financing: a checklist with real boxes and the SJKP scheme.
+   The criteria are listed, not ticked: RuMampu cannot tell whether they are met,
+   and the income check stays "needs review" (SJKP measures gross income,
+   RuMampu income after work costs), so no pass or fail is shown. */
 export function DocsScreen() {
   const { S, t, up } = useApp();
-  const check = (k: string) => (
-    <BtnQuiet key={k} arrow={false} style={{ minHeight: 48 }} onPress={() => up(s => {
-      const i = s.docsChecked.indexOf(k);
-      if (i >= 0) s.docsChecked.splice(i, 1); else s.docsChecked.push(k);
-    })}>
-      <P>{(S.docsChecked.includes(k) ? '☑' : '☐') + ' ' + t(k)}</P>
-    </BtnQuiet>
-  );
+  const ready = DOC_KEYS.filter(k => S.docsChecked.includes(k)).length;
+  const toggle = (k: string) => up(s => {
+    const i = s.docsChecked.indexOf(k);
+    if (i >= 0) s.docsChecked.splice(i, 1); else s.docsChecked.push(k);
+  });
   return (
-    <ScreenShell back title={t('pr_docs')}>
-      <Card gap={8}>
-        {['dc_bank', 'dc_ehail', 'dc_statdec', 'dc_epf', 'dc_commitlist'].map(check)}
-      </Card>
-      <Card gap={8}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <BodyS muted style={{ flexShrink: 1 }}>{t('dc_sjkp')}</BodyS>
-          <CardI t="pr_docs" b={['dc_src', 'dc_plain']} p="official" />
-        </View>
-        {['dc_sj1', 'dc_sj2', 'dc_sj3'].map(k => <BodyS key={k}>· {t(k)}</BodyS>)}
-        {/* The 65% check stays "needs review": SJKP measures gross income and
-            RuMampu measures income after work costs, so no pass or fail is shown. */}
-        <NoteC>
-          <View style={{ gap: 4 }}>
-            <P style={{ fontFamily: SEMI_FONT, fontSize: 14.5, lineHeight: 20 }}>{t('dc_65')}</P>
-            <BodyS muted>{t('dc_65_note')}</BodyS>
+    <ScreenShell tint={T7.bg} noScene header={<Hdr7 title={t('pr_docs')} />} contentStyle={PAGE}>
+      <View style={[x.cardx, { flexDirection: 'row', gap: 14, alignItems: 'center', marginTop: 4 }]}>
+        <Ph name="info" size={26} color={T7.accentInk} />
+        <Text style={{ flex: 1, fontFamily: G.r, fontSize: 13.5, lineHeight: 20, color: T7.text }}>{t('p7_dc_intro')}</Text>
+      </View>
+      <Sec title={t('p7_dc_your')} right={t('p7_dc_n', { n: ready, m: DOC_KEYS.length })} />
+      <Group>
+        {DOC_KEYS.map(k => {
+          const on = S.docsChecked.includes(k);
+          return (
+            <Pressable key={k} onPress={() => toggle(k)} accessibilityRole="checkbox" accessibilityState={{ checked: on }} aria-checked={on}
+              accessibilityLabel={t(k)} testID={`doc-${k}`} style={({ pressed }) => [dv.chk, pressed && { backgroundColor: T7.surface2 }]}>
+              <View style={[dv.bx, on && { backgroundColor: T7.accent, borderColor: T7.accent }]}>{on ? <Ph name="check" size={14} color={T7.onAccent} /> : null}</View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontFamily: G.m, fontSize: 14.5, color: on ? T7.text2 : T7.text }}>{t(k)}</Text>
+                <Text style={{ fontFamily: G.r, fontSize: 12.5, color: T7.text2, marginTop: 1 }}>{t(`p7_${k}_d`)}</Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </Group>
+      <Sec title={t('p7_dc_sjkp')} right={t('p7_dc_src_s')} info={<CardI t="pr_docs" b={['dc_src', 'dc_65', 'dc_65_note', 'dc_plain']} p="official" />} />
+      <View style={[x.cardx, { paddingTop: 4, paddingBottom: 14 }]}>
+        {['dc_sj1', 'dc_sj3', 'dc_sj2'].map(k => (
+          <View key={k} style={dv.li}>
+            <Text style={{ flex: 1, fontFamily: G.r, fontSize: 13.5, color: T7.text }}>{t(k)}</Text>
+            {k === 'dc_sj2' ? <Chip7 label={t('p7_dc_review')} tone="warn" /> : <View style={dv.dot} />}
           </View>
-        </NoteC>
-      </Card>
+        ))}
+        <Text style={{ fontFamily: G.r, fontSize: 12.5, lineHeight: 18, color: T7.text2, marginTop: 10 }}>{t('dc_plain')}</Text>
+      </View>
       {/* v26: the lesson on what to bring instead of a payslip */}
-      <LnEnter tab="nosalary" k="ln_link_docs" />
+      <View style={{ marginTop: 14 }}><LnEnter tab="nosalary" k="ln_link_docs" /></View>
     </ScreenShell>
   );
 }
+
+const dv = StyleSheet.create({
+  chk: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, paddingHorizontal: 16 },
+  bx: { width: 24, height: 24, borderRadius: 7, borderWidth: 1.5, borderColor: T7.line2, alignItems: 'center', justifyContent: 'center' },
+  li: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: T7.line },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: T7.text3 },
+});
 
 function monthKey(value = new Date()): string {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
@@ -561,8 +682,8 @@ function latestCompletedRecordedMonth(income: { d: string }[]): string | null {
 function PvHubCard({ to, ic, k, d }: { to: Parameters<ReturnType<typeof useApp>['go']>[0]; ic: string; k: string; d: string }) {
   const { t, go } = useApp();
   return (
-    <Pressable onPress={() => go(to)} accessibilityRole="button" style={pr.pvhub}>
-      <View style={pr.pvhubIc}><Ico name={ic} size={24} color={C.brand} /></View>
+    <Pressable onPress={() => go(to)} accessibilityRole="button" style={[{ backgroundColor: T7.surface, borderRadius: 16, padding: 16, ...SHADOW }, { flexDirection: 'row', alignItems: 'center', gap: 14 }]}>
+      <View style={[pr.pvhubIc, { backgroundColor: T7.accentSoft }]}><Ico name={ic} size={24} color={T7.accentInk} /></View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ fontFamily: DISP_FONT, fontSize: 17, lineHeight: 22, color: C.ink }}>{t(k)}</Text>
         <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: C.ink64, marginTop: 3 }}>{t(d)}</Text>
@@ -572,60 +693,120 @@ function PvHubCard({ to, ic, k, d }: { to: Parameters<ReturnType<typeof useApp>[
   );
 }
 
+/* v7 Got the keys? Before buying: Ruma, one line, the month you bought (blank
+   until you pick it), and one button. After: how the months since buying went. */
+function MonthField({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  if (Platform.OS === 'web') {
+    return React.createElement('input', {
+      type: 'month', value, max: monthKey(), 'aria-label': label,
+      onChange: (e: { target: { value: string } }) => onChange(e.target.value),
+      style: {
+        display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 6, border: `1px solid ${T7.line2}`, borderRadius: 12,
+        padding: 12, fontSize: 15, fontFamily: G.r, color: T7.text, background: T7.surface,
+      },
+    });
+  }
+  return (
+    <View style={{ marginTop: 6 }}>
+      <TextField value={value} onChangeText={onChange} placeholder="YYYY-MM" accessibilityLabel={label} />
+    </View>
+  );
+}
+
 export function PvSwitchScreen() {
-  const { S, t, up, toast, monthName } = useApp();
+  const { S, t, up, toast, monthName, go, refreshHomeownership } = useApp();
   const latestRecorded = latestCompletedRecordedMonth(S.data.income);
-  const suggested = latestRecorded || monthKey();
-  const [purchase, setPurchase] = React.useState(S.purchaseMonth || suggested);
+  const [purchase, setPurchase] = React.useState(S.purchaseMonth || '');
   const [editing, setEditing] = React.useState(!S.bought || !S.purchaseMonth);
+  React.useEffect(() => { if (S.bought) void refreshHomeownership().catch(() => undefined); }, [S.bought, refreshHomeownership]);
   const saveMode = () => {
-    if (!validMonth(purchase) || purchase > monthKey()) {
-      toast(t('pv_purchase_invalid'), 'error');
-      return;
-    }
+    if (!purchase) { toast(t('p7_keys_pick'), 'error'); return; }
+    if (!validMonth(purchase) || purchase > monthKey()) { toast(t('pv_purchase_invalid'), 'error'); return; }
     up(s => {
       s.bought = true;
       s.purchaseMonth = purchase;
       // Start with the latest completed recorded month when one is available;
       // otherwise the confirmed purchase month is the safest first actual.
-      s.homeownershipMonth = latestRecorded && latestRecorded >= purchase
-        ? latestRecorded
-        : purchase;
+      s.homeownershipMonth = latestRecorded && latestRecorded >= purchase ? latestRecorded : purchase;
     });
     setEditing(false);
-    toast(t('saved'));
+    toast(t('p7_keys_switched'));
   };
+  const form = !(S.bought && S.purchaseMonth && !editing);
+
+  if (form) {
+    return (
+      <ScreenShell tint={T7.bg} noScene header={<Hdr7 title={t('pr_pv')} />} contentStyle={PAGE}
+        footer={<ActBar><View style={{ flex: 1 }}><BtnDeep label={t('p7_keys_btn')} onPress={saveMode} testID="keys-bought" /></View></ActBar>}>
+        <View style={[x.cardx, { flexDirection: 'row', gap: 14, alignItems: 'center', marginTop: 4 }]}>
+          <RumaImg pose="wave" w={76} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontFamily: G.s, fontSize: 18, color: T7.text }}>{t('p7_q_keys')}</Text>
+            <Text style={{ fontFamily: G.r, fontSize: 13.5, lineHeight: 20, color: T7.text2, marginTop: 4 }}>{t('pv_home_b')}</Text>
+          </View>
+        </View>
+        <View style={{ marginTop: 20 }}>
+          <Text style={{ fontFamily: G.s, fontSize: 13, color: T7.text }}>{t('p7_keys_month')}</Text>
+          <MonthField value={purchase} onChange={setPurchase} label={t('p7_keys_month')} />
+        </View>
+        {/* AC 7.1.6 and 7.1.7: the month splits planning months from the months after buying */}
+        <Text style={[x.tiny, { marginTop: 8, marginHorizontal: 2 }]}>{t('pv_purchase_help')}</Text>
+        <Text style={[x.tiny, { marginTop: 4, marginHorizontal: 2 }]}>{t('p7_keys_later')}</Text>
+        {/* AC 7.1.2 and 7.1.3: estimates become actuals; the purchase happens outside RuMampu */}
+        <Text style={[x.tiny, { marginTop: 4, marginHorizontal: 2 }]}>{t('pv_switch_note')}</Text>
+        {S.bought ? <Btn2 label={t('cancel')} onPress={() => { setPurchase(S.purchaseMonth || ''); setEditing(false); }} /> : null}
+      </ScreenShell>
+    );
+  }
+
+  /* after buying: the months since, against the earlier test */
+  const result = S.testRan ? getHousingTestResult() : null;
+  const rows = S.homeownershipMonths.filter(r => r.is_complete && (!S.purchaseMonth || r.month >= S.purchaseMonth)).sort((a, b) => a.month.localeCompare(b.month));
+  const short = rows.filter(r => r.short).length;
+  const en = result ? (result.tested_months ?? result.months.length) : 0;
+  const es = result ? Number(result.short_month_count) || 0 : 0;
+  const pm = S.purchaseMonth as string;
+  const since = `${STRINGS_MONTH_LONG(monthName, pm)}`;
+  const inst = prepLoan(S).mo || (result ? Number(result.tested_home_cost) : 0);
   return (
-    <ScreenShell back title={t(S.bought ? 'pv_monitor_t' : 'pv_switch_t')}>
-      <View style={pr.pvintro}>
-        <Ruma w={84} pose="happy" float={false} />
-        <BodyS style={{ flex: 1, minWidth: 0 }}>{t('pv_home_b')}</BodyS>
+    <ScreenShell tint={T7.bg} noScene header={<Hdr7 title={t('pr_pv')} />} contentStyle={PAGE}
+      footer={<ActBar><View style={{ flex: 1 }}><BtnDeep label={t('pv_month')} onPress={() => go('pv_month')} testID="keys-record" /></View></ActBar>}>
+      <View style={[x.cardx, { marginTop: 4 }]} testID="keys-summary">
+        <Text style={x.k}>{t('p7_keys_since', { m: since })}</Text>
+        <Text style={{ fontFamily: G.s, fontSize: 28, lineHeight: 32, letterSpacing: -0.84, color: T7.text, marginTop: 4 }}>
+          {rows.length ? t('p7_keys_short', { s: short, n: rows.length }) : t('pv_compare_empty_t')}
+        </Text>
+        {rows.length ? (
+          <View style={{ flexDirection: 'row', gap: 2, height: 8, marginTop: 12 }}>
+            {rows.map(r => <View key={r.month} style={{ flex: 1, borderRadius: 2, backgroundColor: r.short ? T7.short : T7.accent }} />)}
+          </View>
+        ) : null}
       </View>
-      {S.bought && S.purchaseMonth && !editing ? (
-        <>
-          <Card gap={5}>
-            <BodyS muted>{t('pv_purchase')}</BodyS>
-            <P style={{ fontFamily: DISP_FONT }}>{monthLabel(S.purchaseMonth, monthName)}</P>
-            <BtnLine label={t('pv_purchase_edit')} onPress={() => setEditing(true)} />
-          </Card>
-          <PvHubCard to="pv_compare" ic="swap" k="pv_then" d="pv_then_d" />
-          <PvHubCard to="pv_month" ic="calday" k="pv_month" d="pv_month_d" />
-        </>
-      ) : (
-        <>
-          <Field label={t('pv_purchase')}>
-            <TextField value={purchase} onChangeText={setPurchase} placeholder="YYYY-MM" accessibilityLabel={t('pv_purchase')} />
-          </Field>
-          <BodyS muted>{t('pv_purchase_help')}</BodyS>
-          <Btn label={t('pv_switch_btn')} onPress={saveMode} />
-          {S.bought ? <BtnLine label={t('cancel')} onPress={() => { setPurchase(S.purchaseMonth || suggested); setEditing(false); }} /> : null}
-          <BodyS muted>{t('pv_switch_note')}</BodyS>
-        </>
-      )}
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+        {[
+          [t('p7_keys_earlier'), en ? `${es} of ${en}` : '-'],
+          [t('p7_keys_buying'), rows.length ? `${short} of ${rows.length}` : '-'],
+          [t('p7_keys_inst'), inst ? rmK7(inst) : '-'],
+        ].map(([k, v]) => (
+          <View key={k} style={{ flex: 1, backgroundColor: T7.surface2, borderRadius: 12, padding: 12 }}>
+            <Text style={x.k}>{k}</Text>
+            <Text style={{ fontFamily: G.s, fontSize: 17, color: T7.text, marginTop: 4 }} numberOfLines={1} adjustsFontSizeToFit>{v}</Text>
+          </View>
+        ))}
+      </View>
+      <Btn2 label={t('pv_then')} onPress={() => go('pv_compare')} testID="keys-mbm" />
+      <Pressable onPress={() => { setPurchase(pm); setEditing(true); }} accessibilityRole="button" style={{ alignSelf: 'center', paddingVertical: 10 }}>
+        <Text style={{ fontFamily: G.s, fontSize: 14, color: T7.accentInk }}>{t('p7_keys_change')}</Text>
+      </Pressable>
     </ScreenShell>
   );
 }
+const STRINGS_MONTH_LONG = (monthName: (m: number) => string, ym: string) => (validMonth(ym) ? `${monthName(+ym.slice(5, 7) - 1)} ${ym.slice(0, 4)}` : ym);
+const rmK7 = (v: number) => `RM ${Math.round(v).toLocaleString('en-MY')}`;
 
+/* v7 look for Epic 7's Monthly actuals: the same month choice, recorded income
+   and work costs from the record, the actual home cost I enter, and the cash
+   position, in the Prepare screens' cards and type. Behaviour unchanged. */
 export function PvMonthScreen() {
   const { S, t, monthName, up, refreshWorkCosts, refreshHomeownership, saveHomeownershipMonth, toast } = useApp();
   const selected = S.homeownershipMonth;
@@ -664,51 +845,62 @@ export function PvMonthScreen() {
     try { await saveHomeownershipMonth(selected, amount); toast(t('saved')); }
     catch { toast(t('as_error'), 'error'); }
   };
+  const kvRow = (k: string, v: React.ReactNode, last = false) => (
+    <View style={[pv.kv, last && { borderBottomWidth: 0 }]}>
+      <Text style={{ flex: 1, fontFamily: G.r, fontSize: 14, color: T7.text2 }}>{k}</Text>
+      <View style={{ alignItems: 'flex-end', gap: 2 }}>{v}</View>
+    </View>
+  );
   return (
-    <ScreenShell back title={t('pv_month_title')}>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
-        {months.map(value => (
-          <Pressable key={value} onPress={() => up(s => { s.homeownershipMonth = value; })}
-            style={[pr.monthChip, selected === value && pr.monthChipOn]}>
-            <Text style={{ color: C.ink, fontFamily: selected === value ? DISP_FONT : BODY_FONT }}>{monthLabel(value, monthName)}</Text>
-          </Pressable>
-        ))}
+    <ScreenShell tint={T7.bg} noScene header={<Hdr7 title={t('pv_month_title')} />} contentStyle={PAGE}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+        {months.map(value => {
+          const on = selected === value;
+          return (
+            <Pressable key={value} onPress={() => up(s => { s.homeownershipMonth = value; })} accessibilityRole="button" accessibilityState={{ selected: on }}
+              style={[pv.chip, on && pv.chipOn]}>
+              <Text style={{ fontFamily: on ? G.s : G.m, fontSize: 13.5, color: on ? T7.accentInk : T7.text }}>{monthLabel(value, monthName)}</Text>
+            </Pressable>
+          );
+        })}
       </View>
-      {selected === current ? <NoteC><BodyS>{t('pv_current_note')}</BodyS></NoteC> : null}
+      {selected === current ? (
+        <View style={[x.cardx, { marginTop: 14, paddingVertical: 12 }]}><Text style={x.tiny}>{t('pv_current_note')}</Text></View>
+      ) : null}
       {!summary?.income_recorded ? (
-        <Card gap={8}>
-          <Display cls="h-m">{t('pv_no_income_t')}</Display>
-          <BodyS muted>{t('pv_no_income_b')}</BodyS>
-          <BtnLine label={t('pv_add_income')} onPress={() => up(s => { s.stack.push(s.route); s.route = 'income'; })} />
-        </Card>
+        <View style={[x.cardx, { marginTop: 14 }]}>
+          <Text style={{ fontFamily: G.s, fontSize: 17, color: T7.text }}>{t('pv_no_income_t')}</Text>
+          <Text style={[x.tiny, { marginTop: 4 }]}>{t('pv_no_income_b')}</Text>
+          <Btn2 label={t('pv_add_income')} onPress={() => up(s => { s.stack.push(s.route); s.route = 'income'; })} />
+        </View>
       ) : (
-        <Card gap={10}>
-          <KV k={t('pv_recorded_income')}><View style={{ alignItems: 'flex-end' }}><P>{rm(Number(summary.gross_income))}</P><Prov p="user" /></View></KV>
-          <KV k={t('pv_work_costs')}><View style={{ alignItems: 'flex-end' }}><P>− {rm(Number(summary.work_cost_total))}</P><Prov p="user" /></View></KV>
-          <Divider />
-          <KV k={t('pv_income_after')}><View style={{ alignItems: 'flex-end' }}><Display cls="h-m">{rm(incomeAfter || 0)}</Display><Prov p="calc" /></View></KV>
-        </Card>
+        <View style={[x.card, { marginTop: 14, paddingVertical: 4 }]}>
+          {kvRow(t('pv_recorded_income'), <><Text style={pv.v}>{rm(Number(summary.gross_income))}</Text><Prov p="user" /></>)}
+          {kvRow(t('pv_work_costs'), <><Text style={pv.v}>− {rm(Number(summary.work_cost_total))}</Text><Prov p="user" /></>)}
+          {kvRow(t('pv_income_after'), <><Text style={[pv.v, { fontSize: 20, letterSpacing: -0.4 }]}>{rm(incomeAfter || 0)}</Text><Prov p="calc" /></>, true)}
+        </View>
       )}
-      <View testID="pv-actual-cost-card">
-        <Card gap={10}>
-          <Field label={t('pv_actual_cost')}>
-            <NumInput value={cost} onNum={value => { costRef.current = value; setCost(value); }} decimal accessibilityLabel={t('pv_actual_cost')} />
-          </Field>
-          {savedCost != null ? <Prov p="user" /> : null}
-          <Btn label={S.homeownershipSync === 'saving' ? t('saving') : t('pv_save_month')} onPress={() => { void save(); }} />
-        </Card>
+      <View testID="pv-actual-cost-card" style={[x.card, { marginTop: 12 }]}>
+        <Text style={{ fontFamily: G.s, fontSize: 13, color: T7.text, marginBottom: 6 }}>{t('pv_actual_cost')}</Text>
+        <NumInput value={cost} onNum={value => { costRef.current = value; setCost(value); }} decimal accessibilityLabel={t('pv_actual_cost')} style={pv.inp} />
+        {savedCost != null ? <View style={{ alignItems: 'flex-start', marginTop: 8 }}><Prov p="user" /></View> : null}
+        <View style={{ marginTop: 14 }}>
+          <BtnDeep label={S.homeownershipSync === 'saving' ? t('saving') : t('pv_save_month')} onPress={() => { void save(); }} />
+        </View>
       </View>
       {position != null ? (
-        <Card gap={4}>
-          <Display cls="h-xl">{position < 0 ? `−${rm(Math.abs(position))}` : rm(position)}</Display>
-          <BodyS muted>{position < 0 ? t('pv_shortby') : t('pv_left')}</BodyS>
-          <Prov p="calc" />
-        </Card>
+        <View style={[x.cardx, { marginTop: 12 }]}>
+          <Text style={x.k}>{position < 0 ? t('pv_shortby') : t('pv_left')}</Text>
+          <Text style={[pv.big, { color: position < 0 ? T7.bad : T7.text }]}>{position < 0 ? `−${rm(Math.abs(position))}` : rm(position)}</Text>
+          <View style={{ alignItems: 'flex-start', marginTop: 4 }}><Prov p="calc" /></View>
+        </View>
       ) : null}
     </ScreenShell>
   );
 }
 
+/* v7 look for Epic 7's Earlier test vs what happened: the historical stress test
+   and the completed months since buying, side by side and kept distinct. */
 export function PvCompareScreen() {
   const { S, t, monthName, go, refreshHomeownership } = useApp();
   const result = S.testRan ? getHousingTestResult() : null;
@@ -727,69 +919,89 @@ export function PvCompareScreen() {
     ? rows.filter(row => !testedMonths.has(row.month)).length
     : 0;
   React.useEffect(() => { void refreshHomeownership().catch(() => undefined); }, [refreshHomeownership]);
+  const note = (txt: string) => <View style={[x.cardx, { marginTop: 10, paddingVertical: 12 }]}><Text style={x.tiny}>{txt}</Text></View>;
   return (
-    <ScreenShell back title={t('pv_then')}>
-      <BodyS muted>{t('pv_compare_intro')}</BodyS>
-      <GuideTarget id="pv.cards" style={{ flexDirection: 'row', gap: 10 }}>
-        <View style={pr.pvc}>
-          <Text style={pr.pvcK}>{t('pv_earlier_full')}</Text>
+    <ScreenShell tint={T7.bg} noScene header={<Hdr7 title={t('pv_then')} />} contentStyle={PAGE}>
+      <Text style={[x.tiny, { fontSize: 13.5, lineHeight: 20, marginTop: 4, marginHorizontal: 2 }]}>{t('pv_compare_intro')}</Text>
+      <GuideTarget id="pv.cards" style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+        <View style={[pv.side, { backgroundColor: T7.surface2 }]}>
+          <Text style={pv.sideK}>{t('pv_earlier_full')}</Text>
           {n > 0 ? (
             <>
-              <Text style={pr.pvcB}>{t('pv_short_of', { s, n })}</Text>
-              <Text style={pr.pvcS}>{t('pv_earlier_result')}</Text>
-              <Text style={pr.pvcE}>{t('pv_earlier_note')}</Text>
+              <Text style={pv.sideB}>{t('pv_short_of', { s, n })}</Text>
+              <Text style={pv.sideS}>{t('pv_earlier_result')}</Text>
+              <Text style={pv.sideE}>{t('pv_earlier_note')}</Text>
               <Prov p="calc" />
             </>
           ) : (
             <>
-              <Text style={pr.pvcS}>{t('pv_no_earlier_t')}</Text>
-              <Text style={pr.pvcE}>{t('pv_no_earlier_b')}</Text>
+              <Text style={pv.sideS}>{t('pv_no_earlier_t')}</Text>
+              <Text style={pv.sideE}>{t('pv_no_earlier_b')}</Text>
             </>
           )}
         </View>
-        <View style={pr.pvc}>
-          <Text style={pr.pvcK}>{t('pv_actual_full')}</Text>
+        <View style={[pv.side, { backgroundColor: T7.accentSoft }]}>
+          <Text style={pv.sideK}>{t('pv_actual_full')}</Text>
           {rows.length > 0 ? (
             <>
-              <Text style={pr.pvcB}>{t('pv_short_of', { s: shortCount, n: rows.length })}</Text>
-              <Text style={pr.pvcS}>{t('pv_actual_result')}</Text>
-              <Text style={pr.pvcE}>{t('pv_since_purchase')}</Text>
+              <Text style={pv.sideB}>{t('pv_short_of', { s: shortCount, n: rows.length })}</Text>
+              <Text style={pv.sideS}>{t('pv_actual_result')}</Text>
+              <Text style={pv.sideE}>{t('pv_since_purchase')}</Text>
               <Prov p="user" />
             </>
           ) : (
             <>
-              <Text style={pr.pvcS}>{t('pv_compare_empty_t')}</Text>
+              <Text style={pv.sideS}>{t('pv_compare_empty_t')}</Text>
               {currentIsPostPurchase ? (
-                <Text style={pr.pvcE}>{t('pv_current_progress', { m: monthLabel(current, monthName) })}</Text>
-              ) : <Text style={pr.pvcE}>{t('pv_compare_empty_b')}</Text>}
+                <Text style={pv.sideE}>{t('pv_current_progress', { m: monthLabel(current, monthName) })}</Text>
+              ) : <Text style={pv.sideE}>{t('pv_compare_empty_b')}</Text>}
             </>
           )}
         </View>
       </GuideTarget>
-      {!result ? <BtnLine label={t('hh_test')} onPress={() => go('house')} /> : null}
+      {!result ? <Btn2 label={t('hh_test')} onPress={() => go('house')} /> : null}
       {rows.length === 0 ? (
-        <Btn label={t('pv_record_month')} onPress={() => go('pv_month')} />
+        <View style={{ marginTop: 16 }}><BtnDeep label={t('pv_record_month')} onPress={() => go('pv_month')} /></View>
       ) : (
         <>
-          <Card gap={12}>
-            <Display cls="h-m">{t('pv_month_details')}</Display>
-            {rows.map(row => (
-              <View key={row.month} style={{ borderTopWidth: 1, borderTopColor: C.ink14, paddingTop: 10, gap: 4 }}>
-                <P style={{ fontFamily: DISP_FONT }}>{monthLabel(row.month, monthName)}</P>
-                <KV k={t('pv_income_after')}><P>{row.income_after_work_costs == null ? '—' : rm(Number(row.income_after_work_costs))}</P></KV>
-                <KV k={t('pv_actual_cost')}><P>{rm(Number(row.actual_home_costs))}</P></KV>
-                <KV k={row.short ? t('pv_shortby') : t('pv_left')}><P>{row.cash_position == null ? '—' : rm(Math.abs(Number(row.cash_position)))}</P></KV>
+          <Sec title={t('pv_month_details')} />
+          <View style={[x.card, { paddingVertical: 4 }]}>
+            {rows.map((row, i) => (
+              <View key={row.month} style={[{ paddingVertical: 12 }, i > 0 && { borderTopWidth: 1, borderTopColor: T7.line }]}>
+                <Text style={{ fontFamily: G.s, fontSize: 15, color: T7.text, marginBottom: 4 }}>{monthLabel(row.month, monthName)}</Text>
+                {[
+                  [t('pv_income_after'), row.income_after_work_costs == null ? '—' : rm(Number(row.income_after_work_costs))],
+                  [t('pv_actual_cost'), rm(Number(row.actual_home_costs))],
+                  [row.short ? t('pv_shortby') : t('pv_left'), row.cash_position == null ? '—' : rm(Math.abs(Number(row.cash_position)))],
+                ].map(([k, v]) => (
+                  <View key={k} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
+                    <Text style={{ fontFamily: G.r, fontSize: 13.5, color: T7.text2 }}>{k}</Text>
+                    <Text style={{ fontFamily: G.s, fontSize: 13.5, color: T7.text }}>{v}</Text>
+                  </View>
+                ))}
               </View>
             ))}
-            <Prov p="user" />
-          </Card>
-          <NoteC><BodyS>{t('pv_complete_only')}</BodyS></NoteC>
-          {outsideEarlierHistory > 0 ? (
-            <NoteC><BodyS>{t('pv_then_why_n', { n: outsideEarlierHistory })}</BodyS></NoteC>
-          ) : null}
-          <BtnLine label={t('pv_record_another')} onPress={() => go('pv_month')} />
+            <View style={{ paddingBottom: 10 }}><Prov p="user" /></View>
+          </View>
+          {note(t('pv_complete_only'))}
+          {outsideEarlierHistory > 0 ? note(t('pv_then_why_n', { n: outsideEarlierHistory })) : null}
+          <Btn2 label={t('pv_record_another')} onPress={() => go('pv_month')} />
         </>
       )}
     </ScreenShell>
   );
 }
+
+const pv = StyleSheet.create({
+  chip: { borderWidth: 1, borderColor: T7.line2, borderRadius: 999, paddingHorizontal: 13, height: 36, justifyContent: 'center', backgroundColor: T7.surface },
+  chipOn: { borderColor: T7.accent, backgroundColor: T7.accentSoft },
+  kv: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: T7.line },
+  v: { fontFamily: G.s, fontSize: 15, color: T7.text, fontVariant: ['tabular-nums'] },
+  inp: { borderWidth: 1, borderColor: T7.line2, borderRadius: 12, padding: 12, fontFamily: G.s, fontSize: 15, color: T7.text, backgroundColor: T7.surface },
+  big: { fontFamily: G.s, fontSize: 36, lineHeight: 40, letterSpacing: -1.08, marginTop: 4, fontVariant: ['tabular-nums'] },
+  side: { flex: 1, borderRadius: 16, padding: 14, gap: 2 },
+  sideK: { fontFamily: G.s, fontSize: 11, letterSpacing: 0.66, color: T7.text2 },
+  sideB: { fontFamily: G.s, fontSize: 26, lineHeight: 32, letterSpacing: -0.52, color: T7.text, marginTop: 4 },
+  sideS: { fontFamily: G.r, fontSize: 13, lineHeight: 18, color: T7.text },
+  sideE: { fontFamily: G.r, fontSize: 11.5, lineHeight: 16, color: T7.text2, minHeight: 15, marginBottom: 4 },
+});

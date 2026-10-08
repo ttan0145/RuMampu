@@ -406,6 +406,12 @@ function useSayDraft() {
     }
     setSaving(true);
     const said: string[] = [];
+    /* items already saved in this pass; if the save stops part way, they leave the
+       draft so a second Save cannot record them twice */
+    const doneIdx: number[] = [];
+    const dropSaved = () => {
+      if (doneIdx.length) up(s => { if (s.voice) s.voice.items = s.voice.items.filter((_, j) => !doneIdx.includes(j)); });
+    };
     try {
       /* Income first: an unusually large one stops the save so it can be checked. */
       const order = V.items.map((it, i) => ({ it, i })).sort((a, b) => Number(b.it.kind === 'in') - Number(a.it.kind === 'in'));
@@ -427,10 +433,12 @@ function useSayDraft() {
           }
           const result = await saveIncomeEntry({ amount: a, date: it.d, sourceId, confirmOutlier: !!V.outlier });
           if (result === 'outlier') {
+            dropSaved();
             up(s => { if (s.voice) s.voice.outlier = true; });
             toast(t('as_action_outlier'), 'error');
             return;
           }
+          doneIdx.push(i);
           said.push(t('vo_saved_in', { a: rmx(a) }));
         } else {
           let categoryId = it.c || '';
@@ -440,6 +448,7 @@ function useSayDraft() {
             createdCategories.set(key, categoryId);
           }
           await saveExpenseEntry({ amount: a, date: it.d, categoryId });
+          doneIdx.push(i);
           said.push(t('vo_saved_out', { a: rmx(a) }));
         }
       }
@@ -447,6 +456,7 @@ function useSayDraft() {
       up(s => { s.voice = null; });
       onSaved(t('vo_saved_l', { l: said.join(', ') }));
     } catch {
+      dropSaved();
       toast(t('as_action_save_failed'), 'error');
     } finally {
       setSaving(false);

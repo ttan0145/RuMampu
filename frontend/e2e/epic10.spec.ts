@@ -316,8 +316,26 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
       await expect(page.getByText('Resume the plan', { exact: true })).toBeVisible();
       expect((await localState(page)).village).toEqual(villageBefore);
       await captureEvidence(page, 'epic-10', 'ac10.9.2__paused.png');
+      // Home's Save today saves nothing while paused, and says so instead of "Saved"
+      const doneBefore = (await localState(page)).plan!.done;
+      await page.getByRole('tab', { name: 'Home', exact: true }).click();
+      await page.getByText(/^Save(d ✓| today)$/).first().click();
+      await expect(page.getByText('Plan paused. No day counts as missed, the village stays as it is, and you can resume any time.', { exact: true })).toBeVisible();
+      await expect(page.getByText(/^Saved RM /)).toHaveCount(0);
+      await expect(page.getByText(/^Removed RM /)).toHaveCount(0);
+      expect((await localState(page)).plan!.done).toEqual(doneBefore);
+      await openPlan(page);
+      await showWholeMonth(page);
       await page.getByText('Resume the plan', { exact: true }).click();
       await expect(page.getByText('Pause this month', { exact: true })).toBeVisible();
+      await expect(page.getByText(/counts as missed/)).toHaveCount(0, { timeout: 8000 });
+    });
+
+    await ac('AC10.3.1', 'The plan explains where saved days go', async () => {
+      await page.getByLabel('info', { exact: true }).first().click();
+      await expect(page.getByText(/Savings fill your .+ first, then go toward upfront costs\./)).toBeVisible();
+      await expect(page.getByText(/Total balance/)).toHaveCount(0);
+      await page.getByText('Done', { exact: true }).last().click();
     });
 
     await ac('AC10.9.3', 'No blame', async () => {
@@ -335,6 +353,10 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
       await page.getByText('Tap again to reset. Your record, village and declared savings are kept.', { exact: true }).click();
       await expect(page.getByText('Plan reset. Record, village and savings kept.', { exact: true })).toBeVisible();
       expect((await localState(page)).plan!.done.filter(Boolean)).toHaveLength(0);
+      // the reset month gets its target straight back, not RM 0
+      const reset = (await localState(page)).plan!;
+      expect(reset.target).toBeGreaterThan(0);
+      expect(reset.amounts.reduce((a, b) => a + b, 0)).toBe(reset.target);
     });
 
     await ac('AC10.11.2', 'Reset keeps my record', async () => {

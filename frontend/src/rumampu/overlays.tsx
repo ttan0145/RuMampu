@@ -641,7 +641,7 @@ export function SheetHost() {
       </SheetFrame>
     );
   }
-  if (sheet === 'plinfo') return <PeekSheet pose="steady" title={t('pl_title')} body={t('pl_note')} onClose={close} doneLabel={t('done')} />;
+  if (sheet === 'plinfo') return <PeekSheet pose="steady" title={t('pl_title')} body={t('pl_note2')} onClose={close} doneLabel={t('done')} />;
   if (sheet === 'potadd') return <PeekSheet pose="counting" title={t('sp_add_t')} body={t('sp_add_b')} onClose={close} doneLabel={t('done')} />;
   if (sheet === 'mailhow') return <PeekSheet pose="listening" title={t('mh_title')} body={t('mh_body')} onClose={close} doneLabel={t('done')} />;
   if (sheet === 'cardinfo' && S.cardInfo) {
