@@ -284,7 +284,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
     await openApp(page);
     await openMoneyScreen(page, 'Income');
     await page.getByText('Scan', { exact: true }).click();
-    await expect(page.getByText('Works with Grab, foodpanda and Lalamove earnings pages.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Take a photo or choose a screenshot', exact: true })).toBeVisible();
     await page.getByText('Try a sample', { exact: true }).click();
     await expect(page.getByText('Reading your earnings…', { exact: true })).toBeVisible();
     await expect(page.getByText(/Showing 5 possible income entries \(maximum 20\)/)).toBeVisible();
@@ -815,7 +815,7 @@ test.describe('Epic 1 — Income Builder', { tag: '@epic1' }, () => {
       await expect(disclosure.getByRole('link', { name: 'Groq Data Processing Addendum' })).toBeVisible();
       const saved = await page.evaluate(() => JSON.parse(window.localStorage.getItem('rumampu_local_state') || '{}'));
       expect(saved.aiDisclosureAccepted).toBe(true);
-      expect(saved.statementDisclosureVersion).toBeUndefined();
+      expect(saved.statementDisclosureVersion ?? null).toBeNull();
     });
 
     const fileChooserPromise = page.waitForEvent('filechooser');

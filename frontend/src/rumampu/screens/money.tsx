@@ -623,6 +623,7 @@ function IncomeScanBody() {
               onPress={() => up(s => { const row = s.incScan.rows[i]; if (row) row.on = !row.on; })}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: r.on }}
+              aria-checked={r.on}
               style={{
                 width: 22, height: 22, borderRadius: 5, borderWidth: 1.8,
                 borderColor: r.on ? C.brand : C.ink40,

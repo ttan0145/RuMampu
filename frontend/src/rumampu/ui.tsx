@@ -206,7 +206,7 @@ export function BtnQuiet({
 
 export function BtnLine({ label, onPress, style }: { label: string; onPress: () => void; style?: TextStyle }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }, pressed && { opacity: 0.7 }]}>
+    <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => [{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }, pressed && { opacity: 0.7 }]}>
       <Text style={[st.btnLineTxt, style]}>{label}</Text>
     </Pressable>
   );
