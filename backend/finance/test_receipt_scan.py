@@ -1,10 +1,13 @@
 import datetime
+import json
 from decimal import Decimal
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from django.test import Client, TestCase
 
 from . import receipt_service
+from .models import IncomeEntry
 from .receipt_service import ReceiptScanError, normalise_result
 
 
@@ -144,6 +147,102 @@ class IncomeScanNormaliseTests(TestCase):
         self.assertFalse(out["rows"][0]["low_confidence"])
         self.assertIsNone(out["rows"][1]["date"])
         self.assertTrue(out["rows"][1]["low_confidence"])
+
+    def test_missing_or_incomplete_dates_stay_blank_and_need_review(self):
+        out = receipt_service.normalise_income_result({
+            "is_earnings": True,
+            "rows": [
+                {"date": None, "amount": "82.00", "confident": True},
+                {"date": "2026-10", "amount": "74.00", "confident": True},
+            ],
+        })
+        self.assertEqual([row["date"] for row in out["rows"]], [None, None])
+        self.assertTrue(all(row["low_confidence"] for row in out["rows"]))
+
+    def test_scan_returns_the_twenty_newest_valid_rows_in_order(self):
+        rows = [
+            {"date": f"2026-09-{day:02d}", "amount": str(day), "confident": True}
+            for day in range(1, 26)
+        ]
+        out = receipt_service.normalise_income_result({"is_earnings": True, "rows": rows})
+        self.assertEqual(len(out["rows"]), 20)
+        self.assertEqual(out["rows"][0]["date"], datetime.date(2026, 9, 25))
+        self.assertEqual(out["rows"][-1]["date"], datetime.date(2026, 9, 6))
+
+    def test_controlled_groq_call_uses_income_only_prompt_and_rejects_extra_fields(self):
+        body = {
+            "is_earnings": True,
+            "rows": [{"date": "2026-10-01", "amount": "800.00", "confident": True}],
+        }
+        completion = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(body)))])
+        create = Mock(return_value=completion)
+        client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+        with patch.object(receipt_service, "_client", return_value=client):
+            result = receipt_service.scan_income("c3ludGhldGljLWltYWdl", "image/jpeg")
+        prompt = create.call_args.kwargs["messages"][0]["content"][0]["text"]
+        self.assertIn("at most 20 rows", prompt)
+        self.assertIn("Never guess a date", prompt)
+        self.assertEqual(set(result["rows"][0]), {"date", "amount", "low_confidence"})
+
+        body["rows"][0]["eligibility_score"] = 91
+        completion.choices[0].message.content = json.dumps(body)
+        with patch.object(receipt_service, "_client", return_value=client):
+            with self.assertRaises(ReceiptScanError) as raised:
+                receipt_service.scan_income("c3ludGhldGljLWltYWdl", "image/jpeg")
+        self.assertEqual(raised.exception.code, "income_scan_unreadable")
+
+
+class IncomeScanApiTests(TestCase):
+    url = "/api/v1/income/scan/"
+    client_id = "synthetic-income-scan-client"
+
+    def setUp(self):
+        self.client = Client()
+        self.headers = {"HTTP_X_RUMAMPU_CLIENT_ID": self.client_id}
+
+    def test_scan_response_is_transaction_whitelist_and_does_not_save(self):
+        result = {
+            "is_earnings": True,
+            "rows": [{
+                "date": datetime.date(2026, 10, 1),
+                "amount": Decimal("800.00"),
+                "low_confidence": False,
+                "affordability": "high",
+                "credibility_score": 98,
+                "eligibility": True,
+            }],
+            "lender_assessment": {"eligible": True},
+        }
+        with patch("finance.views.receipt_service.scan_income", return_value=result) as scan:
+            response = self.client.post(
+                self.url,
+                data={"image_base64": "c3ludGhldGljLWltYWdl", "media_type": "image/jpeg"},
+                content_type="application/json",
+                **self.headers,
+            )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(set(body), {"is_earnings", "rows"})
+        self.assertEqual(set(body["rows"][0]), {"date", "amount", "low_confidence"})
+        self.assertNotIn("affordability", json.dumps(body).lower())
+        self.assertNotIn("eligibility", json.dumps(body).lower())
+        scan.assert_called_once_with("c3ludGhldGljLWltYWdl", "image/jpeg")
+        record = self.client.get("/api/v1/income/record/", **self.headers).json()
+        self.assertEqual(record["entries"], [])
+        self.assertEqual(IncomeEntry.objects.count(), 0)
+
+    def test_reader_error_is_returned_without_creating_income(self):
+        error = ReceiptScanError("income_scan_failed", "Unavailable.", 502)
+        with patch("finance.views.receipt_service.scan_income", side_effect=error):
+            response = self.client.post(
+                self.url,
+                data={"image_base64": "c3ludGhldGljLWltYWdl", "media_type": "image/jpeg"},
+                content_type="application/json",
+                **self.headers,
+            )
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.json()["error"]["code"], "income_scan_failed")
+        self.assertEqual(IncomeEntry.objects.count(), 0)
 
     def test_not_earnings_is_empty(self):
         out = receipt_service.normalise_income_result({"is_earnings": False, "rows": []})

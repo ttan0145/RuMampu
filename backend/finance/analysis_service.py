@@ -6,6 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP, localcontext
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Sum
+from django.utils import timezone
 
 from .models import GuestProfile, IncomeCoverage
 
@@ -93,20 +94,28 @@ def build_income_pattern(profile: GuestProfile) -> dict:
     )
 
     rows: list[dict] = []
+    current_month = timezone.localdate().strftime("%Y-%m")
     usable_values: list[Decimal] = []
     for (year, month), gross in sorted(income_by_month.items()):
         work_costs = cost_by_month.get((year, month), Decimal("0.00"))
         usable = gross - work_costs
-        usable_values.append(usable)
+        month_key = f"{year:04d}-{month:02d}"
+        in_progress = month_key == current_month
+        if not in_progress:
+            usable_values.append(usable)
         rows.append(
             {
-                "month": f"{year:04d}-{month:02d}",
+                "month": month_key,
                 "gross_income": gross,
                 "work_costs": work_costs,
                 "usable_income": usable,
+                "is_in_progress": in_progress,
                 "is_lowest_recorded": False,
             }
         )
+
+    completed_rows = [row for row in rows if not row["is_in_progress"]]
+    current_row = next((row for row in rows if row["is_in_progress"]), None)
 
     count = len(usable_values)
     statistics_payload = None
@@ -140,7 +149,7 @@ def build_income_pattern(profile: GuestProfile) -> dict:
         }
 
         if count >= 2:
-            for row in rows:
+            for row in completed_rows:
                 if row["usable_income"] == lowest:
                     row["is_lowest_recorded"] = True
                     lower_months.append(row["month"])
@@ -151,6 +160,8 @@ def build_income_pattern(profile: GuestProfile) -> dict:
         "provenance": "calculated_from_user_record",
         "work_cost_basis": "recorded_entries_by_month",
         "months": rows,
+        "completed_months": completed_rows,
+        "current_month_so_far": current_row,
         "statistics": statistics_payload,
         "lower_income": {
             "basis": "recorded_minimum",
@@ -183,7 +194,7 @@ def build_income_coverage(profile: GuestProfile) -> dict:
             answer = coverage.answer
             slower_months = list(coverage.slower_months)
     recorded_calendar_months = sorted(
-        {int(row["month"][5:7]) for row in pattern["months"]}
+        {int(row["month"][5:7]) for row in pattern["completed_months"]}
     )
 
     represented: list[int] = []
@@ -209,6 +220,7 @@ def build_income_coverage(profile: GuestProfile) -> dict:
         "represented_slower_months": represented,
         "unrepresented_slower_months": unrepresented,
         "recorded_calendar_months": recorded_calendar_months,
+        "current_month_so_far": pattern["current_month_so_far"],
         "observation": observation,
     }
 

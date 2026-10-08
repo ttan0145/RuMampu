@@ -1,6 +1,7 @@
 import json
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -70,6 +71,8 @@ class IncomePatternApiTests(IncomeAnalysisTestMixin, TestCase):
                 "provenance": "calculated_from_user_record",
                 "work_cost_basis": "recorded_entries_by_month",
                 "months": [],
+                "completed_months": [],
+                "current_month_so_far": None,
                 "statistics": None,
                 "lower_income": {"basis": "recorded_minimum", "months": []},
             },
@@ -86,6 +89,45 @@ class IncomePatternApiTests(IncomeAnalysisTestMixin, TestCase):
         self.assertEqual(payload["statistics"]["standard_deviation"], "0.00")
         self.assertFalse(payload["months"][0]["is_lowest_recorded"])
         self.assertEqual(payload["lower_income"]["months"], [])
+
+    @patch("finance.analysis_service.timezone.localdate", return_value=date(2026, 10, 8))
+    def test_unfinished_month_is_separate_and_excluded_from_pattern_statistics(self, _today):
+        profile = self.profile()
+        self.add_income("2026-08", "2000.00", profile=profile)
+        self.add_income("2026-09", "1000.00", profile=profile)
+        self.add_income("2026-10", "100.00", profile=profile, day=8)
+        self.add_work_cost("2026-10", "60.00", profile=profile, day=8)
+
+        payload = self.client.get(self.pattern_url).json()
+
+        self.assertEqual(payload["recorded_month_count"], 2)
+        self.assertEqual([row["month"] for row in payload["completed_months"]], ["2026-08", "2026-09"])
+        self.assertEqual(payload["statistics"]["average"], "1500.00")
+        self.assertEqual(payload["statistics"]["lowest"], "1000.00")
+        self.assertEqual(payload["lower_income"]["months"], ["2026-09"])
+        self.assertEqual(
+            payload["current_month_so_far"],
+            {
+                "month": "2026-10",
+                "gross_income": "100.00",
+                "work_costs": "60.00",
+                "usable_income": "40.00",
+                "is_in_progress": True,
+                "is_lowest_recorded": False,
+            },
+        )
+
+    @patch("finance.analysis_service.timezone.localdate", return_value=date(2026, 10, 8))
+    def test_current_month_only_preserves_separate_facts_without_creating_a_pattern(self, _today):
+        self.add_income("2026-10", "100.00", day=8)
+
+        payload = self.client.get(self.pattern_url).json()
+
+        self.assertEqual(payload["recorded_month_count"], 0)
+        self.assertEqual(payload["history_depth"], "empty")
+        self.assertIsNone(payload["statistics"])
+        self.assertEqual(payload["completed_months"], [])
+        self.assertEqual(payload["current_month_so_far"]["month"], "2026-10")
 
     def test_aggregates_sources_and_subtracts_only_that_months_work_cost_entries(self):
         profile = self.profile()
@@ -275,6 +317,20 @@ class IncomeCoverageApiTests(IncomeAnalysisTestMixin, TestCase):
         self.assertEqual(response.json()["represented_slower_months"], [1, 8])
         self.assertEqual(response.json()["unrepresented_slower_months"], [3])
         self.assertEqual(refreshed.json(), response.json())
+
+    @patch("finance.analysis_service.timezone.localdate", return_value=date(2026, 10, 8))
+    def test_unfinished_month_does_not_cover_a_declared_slower_calendar_month(self, _today):
+        profile = self.profile()
+        self.add_income("2026-08", "1000", profile=profile)
+        self.add_income("2026-10", "200", profile=profile, day=8)
+
+        response = self.put("yes", [8, 10])
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["recorded_calendar_months"], [8])
+        self.assertEqual(response.json()["represented_slower_months"], [8])
+        self.assertEqual(response.json()["unrepresented_slower_months"], [10])
+        self.assertEqual(response.json()["current_month_so_far"]["month"], "2026-10")
 
     def test_no_or_not_sure_clears_months_and_returns_only_recorded_range(self):
         self.add_income("2026-01", "1000")

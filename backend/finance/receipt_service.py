@@ -163,14 +163,18 @@ def normalise_result(data: dict[str, Any]) -> dict[str, Any]:
 
 # ---- Income statement reading (US1.9 real scan) -----------------------------
 
+INCOME_SCAN_ROW_LIMIT = 20
+
 INCOME_RESULT_SCHEMA = {
     "type": "object",
+    "additionalProperties": False,
     "properties": {
         "is_earnings": {"type": "boolean"},
         "rows": {
             "type": "array",
             "items": {
                 "type": "object",
+                "additionalProperties": False,
                 "properties": {
                     "date": {"type": ["string", "null"]},
                     "amount": {"type": ["number", "string", "null"]},
@@ -184,19 +188,18 @@ INCOME_RESULT_SCHEMA = {
 }
 
 INCOME_PROMPT_TEMPLATE = (
-    "You are reading a screenshot or photo of an earnings statement, most "
-    "likely from a Malaysian gig platform (e-hailing or delivery app) or a "
-    "bank statement showing income credits. Amounts are in RM. Today is "
+    "You are reading an image of an earnings statement or a bank statement "
+    "showing income credits. Amounts are in RM. Today is "
     "{today}. Respond with ONLY a JSON object with exactly these keys:\n"
     '  "is_earnings": boolean - false if the image shows no earnings or income amounts.\n'
     '  "rows": an array with one object per distinct earning, each with:\n'
-    '    "date": the day the money was earned as YYYY-MM-DD. When the year or '
-    "month is not printed, infer the most recent past date that matches the "
-    "printed day and weekday relative to today. Use null only when no day is "
-    "printed at all.\n"
+    '    "date": the transaction date as YYYY-MM-DD only when the complete '
+    "date is clearly visible. Use null if any part is missing, ambiguous, or "
+    "inferred. Never guess a date.\n"
     '    "amount": the earned amount as a plain number (no currency symbol).\n'
-    '    "confident": false if the value was hard to read or partly guessed.\n'
-    "List at most 20 rows, newest first. Only include money EARNED (trips, "
+    '    "confident": true only when the date and amount are clearly legible; '
+    "otherwise false.\n"
+    "List at most {row_limit} rows, newest first. Only include income transactions "
     "orders, incentives, salary credits) - never spending, fees, tips paid "
     "out, or balance totals. Never include a summary or total row. "
     "If is_earnings is false, set rows to []."
@@ -216,7 +219,8 @@ def scan_income(image_base64: str, media_type: str) -> dict[str, Any]:
                         {
                             "type": "text",
                             "text": INCOME_PROMPT_TEMPLATE.format(
-                                today=datetime.date.today().isoformat()
+                                today=datetime.date.today().isoformat(),
+                                row_limit=INCOME_SCAN_ROW_LIMIT,
                             ),
                         },
                         {
@@ -258,7 +262,7 @@ def normalise_income_result(data: dict[str, Any]) -> dict[str, Any]:
         return {"is_earnings": False, "rows": []}
 
     rows = []
-    for item in (data.get("rows") or [])[:20]:
+    for item in data.get("rows") or []:
         if not isinstance(item, dict):
             continue
         amount = item.get("amount")
@@ -271,12 +275,15 @@ def normalise_income_result(data: dict[str, Any]) -> dict[str, Any]:
         date = item.get("date")
         if date is not None:
             try:
-                date = datetime.date.fromisoformat(str(date))
+                parsed_date = datetime.date.fromisoformat(str(date))
+                date = parsed_date if parsed_date.isoformat() == str(date) else None
             except ValueError:
                 date = None
         rows.append({
             "date": date,
             "amount": amount,
-            "low_confidence": item.get("confident") is False,
+            "low_confidence": item.get("confident") is not True or date is None,
         })
+    rows.sort(key=lambda row: row["date"] or datetime.date.min, reverse=True)
+    rows = rows[:INCOME_SCAN_ROW_LIMIT]
     return {"is_earnings": bool(rows), "rows": rows}

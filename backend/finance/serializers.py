@@ -43,6 +43,7 @@ class IncomePatternMonthSerializer(serializers.Serializer):
     gross_income = money_output_field()
     work_costs = money_output_field()
     usable_income = money_output_field()
+    is_in_progress = serializers.BooleanField()
     is_lowest_recorded = serializers.BooleanField()
 
 
@@ -70,6 +71,8 @@ class IncomePatternResponseSerializer(serializers.Serializer):
         choices=("recorded_entries_by_month",)
     )
     months = IncomePatternMonthSerializer(many=True)
+    completed_months = IncomePatternMonthSerializer(many=True)
+    current_month_so_far = IncomePatternMonthSerializer(allow_null=True)
     statistics = IncomePatternStatisticsSerializer(allow_null=True)
     lower_income = LowerIncomeSerializer()
 
@@ -94,6 +97,7 @@ class IncomeCoverageResponseSerializer(serializers.Serializer):
     recorded_calendar_months = serializers.ListField(
         child=serializers.IntegerField(min_value=1, max_value=12)
     )
+    current_month_so_far = IncomePatternMonthSerializer(allow_null=True)
     observation = IncomeCoverageObservationSerializer(allow_null=True)
 
 
@@ -323,7 +327,7 @@ class WorkCostEntrySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WorkCostEntry
-        fields = ["id", "category_id", "category_name", "amount", "date", "created_at", "updated_at"]
+        fields = ["id", "category_id", "category_name", "amount", "date", "merchant", "created_at", "updated_at"]
 
 
 class WorkCostEntryWriteSerializer(serializers.Serializer):
@@ -495,6 +499,34 @@ class ExpenseEntryCreateSerializer(serializers.Serializer):
         ):
             attrs["merchant"] = ""
         return attrs
+
+
+class ExpenseEntryUpdateSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
+    date = serializers.DateField(required=False)
+    category_id = serializers.IntegerField(min_value=1, required=False)
+
+    def validate_amount(self, value: Decimal) -> Decimal:
+        if value <= 0:
+            raise serializers.ValidationError("Expense amount must be greater than zero.")
+        return value
+
+    def validate_category_id(self, value: int) -> int:
+        profile = self.context["profile"]
+        if not profile.expense_categories.filter(id=value, is_active=True).exists():
+            raise serializers.ValidationError("Expense category was not found for this profile.")
+        return value
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError("Provide at least one field to update.")
+        return attrs
+
+
+class MoveEntrySerializer(serializers.Serializer):
+    category_id = serializers.IntegerField(min_value=1)
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"), required=False)
+    date = serializers.DateField(required=False)
 
 
 class IncomeImportUploadSerializer(serializers.Serializer):

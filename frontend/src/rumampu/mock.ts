@@ -18,7 +18,7 @@ export interface CostItem {
   ex?: number; stage?: number; sw?: boolean;
 }
 export interface WorkCostCategory { id: string; k?: string; custom?: boolean; name?: string; legacyMonthlyAmount?: number }
-export interface WorkCostEntry { id: string; categoryId: string; categoryName?: string; a: number; d: string }
+export interface WorkCostEntry { id: string; categoryId: string; categoryName?: string; merchant?: string; a: number; d: string }
 export interface Commitments { living: CostItem[]; debts: CostItem[]; savings: CostItem[] }
 export interface House { price: number | null; deposit: number; rate: number; years: number; knownPayment: number | null }
 export interface ExpenseCat { id: string; k?: string; custom?: boolean; name?: string }

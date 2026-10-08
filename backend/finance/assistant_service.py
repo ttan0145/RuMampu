@@ -212,7 +212,12 @@ def build_financial_snapshot(profile: GuestProfile) -> dict[str, Any]:
 
     return {
         "recorded_month_count": pattern["recorded_month_count"],
-        "income_months": months_slim(pattern["months"]),
+        "income_months": months_slim(pattern["completed_months"]),
+        "income_month_so_far": (
+            months_slim([pattern["current_month_so_far"]])[0]
+            if pattern["current_month_so_far"] is not None
+            else None
+        ),
         "income_statistics": {
             key: _money(value) for key, value in (pattern["statistics"] or {}).items()
         } or None,
@@ -239,6 +244,7 @@ For ANY other topic (general knowledge, homework, coding, news, other apps, joke
 
 HONESTY:
 - Use ONLY the figures in the record below. Never invent, estimate, or extrapolate numbers that are not there.
+- The current month's saved amount is partial and is provided separately as month so far. Never count it or compare it as a completed month.
 - If the record does not contain enough information to answer, say so plainly and tell the user what to record and where.
 - Every figure comes from the user's own record; RuMampu only counts what the user entered.
 

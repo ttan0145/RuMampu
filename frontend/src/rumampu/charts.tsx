@@ -1,7 +1,7 @@
 import React from 'react';
 import { Animated, Easing, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { C, CHART_COLS, DISP_FONT } from './theme';
+import { BODY_FONT, C, CHART_COLS, DISP_FONT } from './theme';
 import { Prov } from './ui';
 import { rm } from './calc';
 import { formatApiMoney } from './money';
@@ -64,12 +64,15 @@ function IncomeBar({
  * 中文：US2.1 可视化服务端计算的可用收入；柱高保留零值和负值差异。
  */
 export function IncomePatternChart({
-  months, monthName, accessibilityLabel,
+  months, monthName, accessibilityLabel, scrollHint,
 }: {
   months: ApiIncomePatternMonth[];
   monthName: (month: number) => string;
   accessibilityLabel: string;
+  scrollHint: string;
 }) {
+  const [viewportWidth, setViewportWidth] = React.useState(0);
+  const [contentWidth, setContentWidth] = React.useState(0);
   const values = months.map(row => Number(row.usable_income));
   const maximum = Math.max(0, ...values);
   const minimum = Math.min(0, ...values);
@@ -77,33 +80,40 @@ export function IncomePatternChart({
   const range = Math.max(0.01, rawRange);
   const plotHeight = 164;
   const zeroTop = rawRange === 0 ? plotHeight : maximum / range * plotHeight;
+  const canScroll = contentWidth > viewportWidth + 1;
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator
-      contentContainerStyle={ip.scroll}
-      accessibilityLabel={accessibilityLabel}
-    >
-      <View style={[ip.chart, { minWidth: Math.max(320, months.length * 94) }]}>
-        <View style={[ip.zero, { top: zeroTop }]} />
-        <View style={ip.columns}>
-          {months.map(row => {
-            const month = Number(row.month.slice(5, 7)) - 1;
-            const year = row.month.slice(2, 4);
-            return (
-              <IncomeBar
-                key={row.month}
-                row={row}
-                plotHeight={plotHeight}
-                zeroTop={zeroTop}
-                range={range}
-                label={`${monthName(month)} ${year}`}
-              />
-            );
-          })}
+    <View>
+      <ScrollView
+        testID="income-pattern-chart-scroller"
+        horizontal
+        showsHorizontalScrollIndicator
+        contentContainerStyle={ip.scroll}
+        accessibilityLabel={accessibilityLabel}
+        onLayout={event => setViewportWidth(event.nativeEvent.layout.width)}
+        onContentSizeChange={width => setContentWidth(width)}
+      >
+        <View style={[ip.chart, { minWidth: Math.max(320, months.length * 94) }]}>
+          <View style={[ip.zero, { top: zeroTop }]} />
+          <View style={ip.columns}>
+            {months.map(row => {
+              const month = Number(row.month.slice(5, 7)) - 1;
+              const year = row.month.slice(2, 4);
+              return (
+                <IncomeBar
+                  key={row.month}
+                  row={row}
+                  plotHeight={plotHeight}
+                  zeroTop={zeroTop}
+                  range={range}
+                  label={`${monthName(month)} ${year}`}
+                />
+              );
+            })}
+          </View>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+      {canScroll ? <Text testID="income-pattern-scroll-hint" style={ip.scrollHint}>{scrollHint}</Text> : null}
+    </View>
   );
 }
 
@@ -318,6 +328,7 @@ const wl = StyleSheet.create({
 
 const ip = StyleSheet.create({
   scroll: { paddingBottom: 4 },
+  scrollHint: { marginTop: 2, fontFamily: BODY_FONT, fontSize: 12, lineHeight: 16, color: C.ink64 },
   chart: { height: 226, position: 'relative' },
   zero: { position: 'absolute', left: 0, right: 0, borderTopWidth: 1.5, borderTopColor: C.ink40 },
   columns: { flexDirection: 'row', height: 226, gap: 8 },

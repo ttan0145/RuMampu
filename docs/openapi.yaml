@@ -403,6 +403,52 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/expenses/{entry_id}/:
+    patch:
+      operationId: expense_entries_update
+      description: Edit the dated facts on a daily-spending entry.
+      summary: Update one daily expense entry
+      parameters:
+      - in: path
+        name: entry_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseEntryUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseEntryUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedExpenseEntryUpdateRequest'
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseEntry'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/expenses/{entry_id}/coverage/:
     patch:
       operationId: expenses_coverage_partial_update
@@ -421,6 +467,52 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/expenses/{entry_id}/move/:
+    patch:
+      operationId: expense_entry_move_to_work_cost
+      description: Move a daily expense to work costs while preserving its merchant. Optionally include an edited amount and/or date from the entry editor.
+      summary: Move a daily expense to work costs
+      parameters:
+      - in: path
+        name: entry_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Expenses
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMoveEntryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMoveEntryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMoveEntryRequest'
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkCostEntry'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/expenses/receipt-scan/:
     post:
       operationId: expense_receipt_scan
@@ -1777,6 +1869,52 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: ''
+  /api/v1/work-costs/entries/{entry_id}/move/:
+    patch:
+      operationId: work_cost_entry_move_to_expense
+      description: Move one work cost to daily spending without counting it twice. Optionally include an edited amount and/or date from the entry editor.
+      summary: Move a work-cost entry to daily expenses
+      parameters:
+      - in: path
+        name: entry_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Work costs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMoveEntryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMoveEntryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMoveEntryRequest'
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseEntry'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/work-costs/summary/:
     get:
       operationId: work_cost_month_summary
@@ -2675,12 +2813,17 @@ components:
             type: integer
             maximum: 12
             minimum: 1
+        current_month_so_far:
+          allOf:
+          - $ref: '#/components/schemas/IncomePatternMonth'
+          nullable: true
         observation:
           allOf:
           - $ref: '#/components/schemas/IncomeCoverageObservation'
           nullable: true
       required:
       - answer
+      - current_month_so_far
       - observation
       - recorded_calendar_months
       - represented_slower_months
@@ -2888,10 +3031,13 @@ components:
         usable_income:
           type: string
           format: decimal
+        is_in_progress:
+          type: boolean
         is_lowest_recorded:
           type: boolean
       required:
       - gross_income
+      - is_in_progress
       - is_lowest_recorded
       - month
       - usable_income
@@ -2912,6 +3058,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/IncomePatternMonth'
+        completed_months:
+          type: array
+          items:
+            $ref: '#/components/schemas/IncomePatternMonth'
+        current_month_so_far:
+          allOf:
+          - $ref: '#/components/schemas/IncomePatternMonth'
+          nullable: true
         statistics:
           allOf:
           - $ref: '#/components/schemas/IncomePatternStatistics'
@@ -2919,6 +3073,8 @@ components:
         lower_income:
           $ref: '#/components/schemas/LowerIncome'
       required:
+      - completed_months
+      - current_month_so_far
       - history_depth
       - lower_income
       - months
@@ -3079,6 +3235,19 @@ components:
           type: string
           format: decimal
           pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+    PatchedExpenseEntryUpdateRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        date:
+          type: string
+          format: date
+        category_id:
+          type: integer
+          minimum: 1
     PatchedHousingScenarioRequest:
       type: object
       properties:
@@ -3133,6 +3302,19 @@ components:
         source:
           type: string
           maxLength: 160
+    PatchedMoveEntryRequest:
+      type: object
+      properties:
+        category_id:
+          type: integer
+          minimum: 1
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        date:
+          type: string
+          format: date
     PatchedWorkCostEntryWriteRequest:
       type: object
       properties:
@@ -3502,6 +3684,9 @@ components:
         date:
           type: string
           format: date
+        merchant:
+          type: string
+          maxLength: 160
         created_at:
           type: string
           format: date-time

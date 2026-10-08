@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useMemo, useRef, useStat
 import { AppData, MOCK } from './mock';
 import { sampleData } from './demo';
 import { Lang, STRINGS } from './strings';
+import { STATEMENT_SCAN_DISCLOSURE_VERSION } from './ai-disclosure';
 import {
   ApiCoverageAnswer,
   ApiAuthState,
@@ -13,6 +14,9 @@ import {
   ApiRetentionStatus,
   ApiWorkCostMonthSummary,
   ApiWorkCostEntry,
+  moveExpenseToWorkCost as moveExpenseToWorkCostRequest,
+  moveWorkCostToExpense as moveWorkCostToExpenseRequest,
+  updateExpenseEntry as updateExpenseEntryRequest,
   createExpense as createExpenseRequest,
   updateExpenseCoverage as updateExpenseCoverageRequest,
   createExpenseCategory as createExpenseCategoryRequest,
@@ -383,6 +387,8 @@ export interface AppState {
   /* One product-wide disclosure gates the first hosted-AI use. */
   aiDisclosureAccepted: boolean;
   aiDisclosureOpen: boolean;
+  statementDisclosureVersion: string | null;
+  statementDisclosureOpen: boolean;
 }
 
 /* v27b Sample months: the person's own record, kept aside while sample months
@@ -494,6 +500,8 @@ function initialState(): AppState {
     assistantMsgs: [],
     aiDisclosureAccepted: false,
     aiDisclosureOpen: false,
+    statementDisclosureVersion: null,
+    statementDisclosureOpen: false,
   };
 }
 
@@ -621,6 +629,9 @@ export interface Ctx {
   saveWorkCostCategory: (name: string) => Promise<string>;
   saveWorkCostEntry: (input: { categoryId: string; amount: number; date: string }) => Promise<void>;
   updateWorkCostEntry: (id: string, input: { categoryId?: string; amount?: number; date?: string }) => Promise<void>;
+  moveExpenseToWorkCost: (id: string, categoryId: string, input?: { amount?: number; date?: string }) => Promise<void>;
+  moveWorkCostToExpense: (id: string, categoryId: string, input?: { amount?: number; date?: string }) => Promise<void>;
+  updateExpenseEntry: (id: string, input: { categoryId: string; amount: number; date: string }) => Promise<void>;
   saveCommitmentAmount: (id: string, amount: number) => Promise<void>;
   saveExpenseCategory: (name: string) => Promise<string>;
   saveExpenseEntry: (input: {
@@ -638,6 +649,8 @@ export interface Ctx {
   setNotificationKind: (kind: 'bill_reminders' | 'record_warnings', enabled: boolean) => Promise<void>;
   ensureAiDisclosure: () => Promise<boolean>;
   answerAiDisclosure: (accepted: boolean) => void;
+  ensureStatementDisclosure: () => Promise<boolean>;
+  answerStatementDisclosure: (accepted: boolean) => void;
   loadHouseCosts: () => Promise<void>;
   toast: (msg: string, tone?: 'success' | 'error') => void;
   toastMsg: { msg: string; key: number; tone: 'success' | 'error' } | null;
@@ -726,7 +739,7 @@ function applyConfirmedWorkCost(state: AppState, entry: ApiWorkCostEntry): void 
   state.data.workCostEntries = state.data.workCostEntries.filter(item => item.id !== String(entry.id));
   state.data.workCostEntries.push({
     id: String(entry.id), categoryId: String(entry.category_id), categoryName: entry.category_name,
-    a: Number(entry.amount), d: entry.date,
+    merchant: entry.merchant || '', a: Number(entry.amount), d: entry.date,
   });
   state.data.workCostEntries.sort((a, b) => b.d.localeCompare(a.d) || Number(b.id) - Number(a.id));
 }
@@ -761,6 +774,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
      ordinary reads past their timeout. */
   const lastPersistedSnapshot = useRef<string | null>(null);
   const aiDisclosureWaiters = useRef<Array<(accepted: boolean) => void>>([]);
+  const statementDisclosureWaiters = useRef<Array<(accepted: boolean) => void>>([]);
 
   const ensureGuest = useCallback(() => {
     if (!guestBootstrap.current) {
@@ -1195,6 +1209,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             id: String(entry.id),
             categoryId: String(entry.category_id),
             categoryName: entry.category_name,
+            merchant: entry.merchant || '',
             a: Number(entry.amount),
             d: entry.date,
           }));
@@ -1566,6 +1581,68 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     refreshAfterMoneyWrite();
   }, [refreshAfterMoneyWrite, up]);
 
+  const moveExpenseToWorkCost = useCallback(async (
+    id: string,
+    categoryId: string,
+    input?: { amount?: number; date?: string },
+  ): Promise<void> => {
+    if (!INCOME_API_ENABLED) {
+      up(s => {
+        const index = id.startsWith('local-index-') ? Number(id.slice('local-index-'.length)) : -1;
+        const entry = index >= 0 ? s.data.expenses[index] : s.data.expenses.find(item => item.id === id);
+        if (!entry) throw new Error('Expense entry was not found.');
+        s.data.expenses = s.data.expenses.filter((item, itemIndex) => item !== entry && itemIndex !== index);
+        const category = s.data.workCostCategories.find(item => item.id === categoryId);
+        s.data.workCostEntries.unshift({
+          id: `local-${Date.now()}`, categoryId,
+          categoryName: category?.custom ? category.name : undefined,
+          merchant: entry.merchant || '', a: input?.amount ?? entry.a, d: input?.date ?? entry.d,
+        });
+        s.workCostSummary = localWorkCostSummary(s.data, s.workCostSelectedMonth);
+        logIt(s, 'lg_wc_move_in', { a: rm(input?.amount ?? entry.a) });
+      });
+      return;
+    }
+    const moved = await moveExpenseToWorkCostRequest(id, categoryId, input);
+    up(s => {
+      s.data.expenses = s.data.expenses.filter(item => item.id !== String(id));
+      applyConfirmedWorkCost(s, moved);
+      logIt(s, 'lg_wc_move_in', { a: rm(Number(moved.amount)) });
+    });
+    refreshAfterMoneyWrite();
+  }, [refreshAfterMoneyWrite, up]);
+
+  const moveWorkCostToExpense = useCallback(async (
+    id: string,
+    categoryId: string,
+    input?: { amount?: number; date?: string },
+  ): Promise<void> => {
+    if (!INCOME_API_ENABLED) {
+      up(s => {
+        const entry = s.data.workCostEntries.find(item => item.id === id);
+        if (!entry) throw new Error('Work-cost entry was not found.');
+        s.data.workCostEntries = s.data.workCostEntries.filter(item => item.id !== id);
+        s.data.expenses.push({
+          id: `local-${Date.now()}`, a: input?.amount ?? entry.a, d: input?.date ?? entry.d, c: categoryId,
+          method: 'manual', merchant: entry.merchant || '',
+        });
+        s.workCostSummary = localWorkCostSummary(s.data, s.workCostSelectedMonth);
+        logIt(s, 'lg_wc_move_out', { a: rmx(input?.amount ?? entry.a) });
+      });
+      return;
+    }
+    const moved = await moveWorkCostToExpenseRequest(id, categoryId, input);
+    up(s => {
+      s.data.workCostEntries = s.data.workCostEntries.filter(item => item.id !== String(id));
+      s.data.expenses.push({
+        id: String(moved.id), a: Number(moved.amount), d: moved.date,
+        c: String(moved.category_id), method: moved.entry_method, merchant: moved.merchant,
+      });
+      logIt(s, 'lg_wc_move_out', { a: rmx(Number(moved.amount)) });
+    });
+    refreshAfterMoneyWrite();
+  }, [refreshAfterMoneyWrite, up]);
+
   // EN: US1.4 updates only the matching commitment after Django confirms the write.
   // 中文：US1.4 只在 Django 确认写入后更新对应承诺项。
   const saveCommitmentAmount = useCallback(async (id: string, amount: number): Promise<void> => {
@@ -1661,6 +1738,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     up(s => {
       const saved = s.data.expenses.find(item => item.id === String(entry.id));
       if (saved) saved.method = entry.entry_method;
+    });
+  }, [up]);
+
+  const ensureStatementDisclosure = useCallback((): Promise<boolean> => {
+    if (S.statementDisclosureVersion === STATEMENT_SCAN_DISCLOSURE_VERSION) return Promise.resolve(true);
+    up(s => { s.statementDisclosureOpen = true; });
+    return new Promise(resolve => { statementDisclosureWaiters.current.push(resolve); });
+  }, [S.statementDisclosureVersion, up]);
+
+  const answerStatementDisclosure = useCallback((accepted: boolean) => {
+    up(s => {
+      s.statementDisclosureOpen = false;
+      if (accepted) s.statementDisclosureVersion = STATEMENT_SCAN_DISCLOSURE_VERSION;
+    });
+    const waiters = statementDisclosureWaiters.current.splice(0);
+    for (const resolve of waiters) resolve(accepted);
+  }, [up]);
+
+  const updateExpenseEntry = useCallback(async (
+    id: string,
+    input: { categoryId: string; amount: number; date: string },
+  ): Promise<void> => {
+    if (!INCOME_API_ENABLED) {
+      up(s => {
+        const index = id.startsWith('local-index-') ? Number(id.slice('local-index-'.length)) : -1;
+        const entry = index >= 0 ? s.data.expenses[index] : s.data.expenses.find(item => item.id === id);
+        if (!entry) throw new Error('Expense entry was not found.');
+        entry.c = input.categoryId;
+        entry.a = input.amount;
+        entry.d = input.date;
+      });
+      return;
+    }
+    const updated = await updateExpenseEntryRequest(id, input);
+    up(s => {
+      const existing = s.data.expenses.find(item => item.id === String(updated.id));
+      if (existing) {
+        existing.a = Number(updated.amount);
+        existing.d = updated.date;
+        existing.c = String(updated.category_id);
+        existing.merchant = updated.merchant;
+      }
     });
   }, [up]);
 
@@ -2044,18 +2163,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     S, authReady, up, t, monthName, go, goTab, backNav,
     saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, savePreferredIncomeSource, refreshIncomeRecord, refreshAccountData, applyAccountState, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, enterSampleMonths, leaveSampleMonths, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
+    moveExpenseToWorkCost, moveWorkCostToExpense, updateExpenseEntry,
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry, setExpenseMonthlyTotal,
     refreshHomeownership, saveHomeownershipMonth, setBillReminder, setNotificationKind,
-    ensureAiDisclosure, answerAiDisclosure,
+    ensureAiDisclosure, answerAiDisclosure, ensureStatementDisclosure, answerStatementDisclosure,
   }), [
     S, authReady, up, t, monthName, go, goTab, backNav,
     saveIncomeEntry, refreshAfterMoneyWrite, updateIncomeEntry, deleteIncomeEntry, saveIncomeSource, savePreferredIncomeSource, refreshIncomeRecord, refreshAccountData, applyAccountState, refreshSavedHousingTests, signOut, deleteCurrentRecord, enterGuestMode, enterSampleMonths, leaveSampleMonths, refreshIncomePattern,
     refreshIncomeCoverage, saveIncomeCoverage, refreshWorkCosts, saveWorkCostCategory, saveWorkCostEntry, updateWorkCostEntry,
+    moveExpenseToWorkCost, moveWorkCostToExpense, updateExpenseEntry,
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry, setExpenseMonthlyTotal,
     refreshHomeownership, saveHomeownershipMonth, setBillReminder, setNotificationKind,
-    ensureAiDisclosure, answerAiDisclosure,
+    ensureAiDisclosure, answerAiDisclosure, ensureStatementDisclosure, answerStatementDisclosure,
   ]);
 
   if (!localStateReady) return null;

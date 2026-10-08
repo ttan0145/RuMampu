@@ -5,7 +5,7 @@ import { AppProvider, Route, useApp } from './state';
 import { C } from './theme';
 import { SheetHost, Splash, TabBar, ToastView } from './overlays';
 import { EntryFlow, GetToKnow } from './entry';
-import { AiDisclosure, AssistantFab, AssistantSheet } from './assistant';
+import { AiDisclosure, AssistantFab, AssistantSheet, StatementScanDisclosure } from './assistant';
 import { TourHost, registerRoot } from './tour';
 import { HomeScreen } from './screens/home';
 import { PlanScreen } from './screens/plan';
@@ -87,6 +87,7 @@ function Root() {
       <TourHost tabBarHeight={76 + insets.bottom} />
       {/* Product-wide AI disclosure must sit above tours, sheets and the edge bubble. */}
       <AiDisclosure />
+      <StatementScanDisclosure />
     </View>
   );
 }

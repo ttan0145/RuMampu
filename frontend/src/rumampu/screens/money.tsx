@@ -53,7 +53,7 @@ export function MoneyScreen() {
   const inSum = S.data.income.filter(e => monthKeyOf(e.d) === mk).reduce((a, e) => a + (+e.a || 0), 0);
   const outSum = S.data.expenses.filter(e => monthKeyOf(e.d) === mk).reduce((a, e) => a + (+e.a || 0), 0);
 
-  const rows = monthsAgg(S.data);
+  const rows = monthsAgg(S.data).filter(r => r.y * 12 + r.m !== thisKey);
 
   /* quiet vs usual: min and median surplus across recorded months */
   let quiet: React.ReactNode = null;
@@ -451,10 +451,10 @@ export function RecordScreen() {
   );
 }
 
-/* v22 income scan (preview): a simulated earnings-screen read that fills a
-   reviewable checklist; every kept row is saved through the real API. */
+/* Income statement scan: Groq returns an unconfirmed draft. Each selected
+   row must have a user-checked date, amount, and income source before saving. */
 function IncomeScanBody() {
-  const { S, t, up, monthName, saveIncomeEntry, refreshAfterMoneyWrite, toast, ensureAiDisclosure } = useApp();
+  const { S, t, up, saveIncomeEntry, refreshAfterMoneyWrite, toast, ensureStatementDisclosure } = useApp();
   const sc = S.incScan;
   const [amts, setAmts] = React.useState<Record<number, string>>({});
   const [adding, setAdding] = React.useState(false);
@@ -462,6 +462,7 @@ function IncomeScanBody() {
   /* Sample rows keep the demo path; a real photo goes through the Groq
      statement reader on the backend and nothing is saved until confirmed. */
   const sampleScan = () => {
+    setAmts({});
     up(s => { s.incScan = { stage: 'reading', rows: [] }; });
     setTimeout(() => {
       up(s => {
@@ -481,7 +482,7 @@ function IncomeScanBody() {
           rows: [
             { on: true, d: d(1), s: src('grab'), a: 96, low: false },
             { on: true, d: d(2), s: src('grab'), a: 112, low: false },
-            { on: true, d: d(3), s: src('foodpanda'), a: 64, low: true },
+            { on: false, d: d(3), s: src('foodpanda'), a: 64, low: true },
             { on: true, d: d(4), s: src('grab'), a: 88, low: false },
             { on: true, d: d(6), s: src('grab'), a: 130, low: false },
           ],
@@ -502,7 +503,7 @@ function IncomeScanBody() {
 
   const realScan = async (source: 'camera' | 'library') => {
     try {
-      if (!await ensureAiDisclosure()) return;
+      if (!await ensureStatementDisclosure()) return;
       if (source === 'camera' && Platform.OS !== 'web') {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
         if (!permission.granted) { toast(t('ex_image_failed'), 'error'); return; }
@@ -518,24 +519,21 @@ function IncomeScanBody() {
         { compress: 0.7, format: SaveFormat.JPEG, base64: true },
       );
       if (!resized.base64) { toast(t('ex_image_failed'), 'error'); return; }
+      setAmts({});
       up(s => { s.incScan = { stage: 'reading', rows: [] }; });
       const result = await scanIncomeStatement(resized.base64, 'image/jpeg');
-      const today = new Date();
-      const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       up(s => {
         if (s.incMode !== 'scan') return;
         if (!result.is_earnings || !result.rows.length) {
           s.incScan = { stage: 'pick', rows: [] };
           return;
         }
-        const fallback = s.data.sources.find(x => x.k === 'src_ehail' || x.id === 'ehail')?.id
-          || s.incomeDraft.s || s.data.sources[0]?.id || '';
         s.incScan = {
           stage: 'confirm',
           rows: result.rows.map(r => ({
-            on: true,
-            d: r.date || todayIso,
-            s: fallback,
+            on: Boolean(r.date) && !r.low_confidence,
+            d: r.date || '',
+            s: '',
             a: Number(r.amount) || 0,
             low: r.low_confidence || !r.date,
           })),
@@ -544,13 +542,8 @@ function IncomeScanBody() {
       if (!result.is_earnings || !result.rows.length) toast(t('sc_notearn'), 'error');
     } catch {
       up(s => { s.incScan = { stage: 'pick', rows: [] }; });
-      toast(t('ex_scan_failed'), 'error');
+      toast(t('sc_failed'), 'error');
     }
-  };
-
-  const srcName = (id: string) => {
-    const x = S.data.sources.find(z => z.id === id);
-    return x ? (x.custom ? x.name || '' : t(x.k || '')) : id;
   };
 
   if (sc.stage === 'reading') {
@@ -567,6 +560,12 @@ function IncomeScanBody() {
 
   if (sc.stage === 'confirm') {
     const n = sc.rows.filter(r => r.on).length;
+    const canAdd = n > 0 && sc.rows.every((r, i) => {
+      if (!r.on) return true;
+      const amountText = amts[i] != null ? amts[i] : String(r.a);
+      return isValidIsoDate(r.d) && isValidMoneyText(amountText)
+        && Number(amountText) > 0 && Boolean(r.s);
+    });
     const addAll = async () => {
       if (adding) return;
       setAdding(true);
@@ -574,8 +573,8 @@ function IncomeScanBody() {
       try {
         for (let i = 0; i < sc.rows.length; i++) {
           const r = sc.rows[i];
-          const a = amts[i] != null ? (parseFloat(amts[i]) || 0) : r.a;
-          if (!r.on || !(a > 0)) continue;
+          if (!r.on) continue;
+          const a = Number(amts[i] != null ? amts[i] : r.a);
           /* One refresh cycle for the whole batch, not one per row — a five-row
              confirm used to fire ~30 requests over the remote database. */
           await saveIncomeEntry({ amount: a, date: r.d, sourceId: r.s, confirmOutlier: true }, { deferRefresh: true });
@@ -595,9 +594,9 @@ function IncomeScanBody() {
         <BodyS muted>{t('sc_found', { n: sc.rows.length })}</BodyS>
         {sc.rows.map((r, i) => (
           <View key={i} style={{
-            flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48,
-            borderTopWidth: i ? 1 : 0, borderTopColor: C.ink14, paddingVertical: 4,
-          }}>
+            flexDirection: 'row', alignItems: 'flex-start', gap: 10, minHeight: 64,
+            borderTopWidth: i ? 1 : 0, borderTopColor: C.ink14, paddingVertical: 8,
+          }} testID={`income-scan-row-${i + 1}`}>
             <Pressable
               onPress={() => up(s => { const row = s.incScan.rows[i]; if (row) row.on = !row.on; })}
               accessibilityRole="checkbox"
@@ -610,19 +609,41 @@ function IncomeScanBody() {
               }}>
               {r.on ? <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>✓</Text> : null}
             </Pressable>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ fontFamily: BODY_FONT, fontSize: 14, color: C.ink }} numberOfLines={1}>{srcName(r.s)}</Text>
-              <Text style={{ fontFamily: BODY_FONT, fontSize: 12, lineHeight: 15, color: r.low ? '#B7791F' : C.ink64 }}>
-                {+r.d.slice(8, 10)} {monthName(+r.d.slice(5, 7) - 1)}{r.low ? ' · ' + t('sc_low') : ''}
-              </Text>
+            <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+              <TextInput
+                value={r.d}
+                onChangeText={value => up(s => { const row = s.incScan.rows[i]; if (row) row.d = value; })}
+                accessibilityLabel={t('sc_date', { n: i + 1 })}
+                placeholder={t('sc_date_placeholder')}
+                maxLength={10}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={{
+                  minHeight: 38, backgroundColor: C.paper, borderWidth: 1.5,
+                  borderColor: r.d && !isValidIsoDate(r.d) ? '#B7791F' : C.ink40,
+                  borderRadius: 10, paddingHorizontal: 8, fontSize: 13, color: C.ink,
+                  fontVariant: ['tabular-nums'],
+                }}
+              />
+              {!r.d ? <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 15, color: '#9B5B13' }}>{t('sc_missing_date')}</Text> : null}
+              {r.low && r.d ? <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 15, color: '#9B5B13' }}>{t('sc_low')}</Text> : null}
+              <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, color: C.ink64 }}>{t('sc_source')}</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {S.data.sources.map(x => (
+                  <InChip key={x.id}
+                    label={x.custom ? x.name || '' : t(x.k || '')}
+                    on={r.s === x.id}
+                    selectionRole="radio"
+                    onPress={() => up(s => { const row = s.incScan.rows[i]; if (row) row.s = x.id; })} />
+                ))}
+              </View>
             </View>
-            {/* .scrow input — fixed 96px, right-aligned, so the label keeps its room. */}
             <TextInput
               value={amts[i] != null ? amts[i] : String(r.a)}
               onChangeText={v => setAmts(prev => ({ ...prev, [i]: v }))}
-              keyboardType="number-pad"
-              inputMode="numeric"
-              accessibilityLabel={t('inc_amount')}
+              keyboardType="decimal-pad"
+              inputMode="decimal"
+              accessibilityLabel={`${t('inc_amount')} ${i + 1}`}
               placeholderTextColor={C.ink40}
               style={{
                 width: 96, minHeight: 40, backgroundColor: C.paper,
@@ -634,7 +655,8 @@ function IncomeScanBody() {
           </View>
         ))}
         <View style={{ marginTop: 12 }}>
-          <Btn disabled={adding} label={adding ? t('inc_saving') : t('sc_add', { n })} onPress={() => { void addAll(); }} />
+          <Btn disabled={adding || !canAdd} label={adding ? t('inc_saving') : t('sc_add', { n })} onPress={() => { void addAll(); }} />
+          {!canAdd && n > 0 ? <BodyS muted style={{ marginTop: 6 }}>{t('sc_row_invalid')}</BodyS> : null}
         </View>
         <View style={{ alignItems: 'center', marginTop: 4 }}>
           <BtnLine label={t('cancel')} style={{ fontSize: 13.5 }}
@@ -652,6 +674,8 @@ function IncomeScanBody() {
       </View>
       <View style={{ alignItems: 'center', marginTop: 8 }}>
         <BtnLine label={t('sc_sample')} style={{ fontSize: 13.5 }} onPress={sampleScan} />
+        <BodyS muted style={{ textAlign: 'center', marginTop: 4 }}>{t('sc_sample_note')}</BodyS>
+        <BtnLine label={t('sc_manual')} style={{ fontSize: 13.5 }} onPress={() => up(s => { s.incMode = 'type'; s.incScan = { stage: 'pick', rows: [] }; })} />
       </View>
     </InSec>
   );
@@ -1223,10 +1247,10 @@ export function CommitScreen() {
           })}
         </Chips>
       ) : null}
-      {/* v24: two sections only — living and debts; savings feeds totals but has no card. */}
-      {(['living', 'debts'] as const).map(sec => (
+      {/* US1.4 keeps living, debt repayments, and savings as separate groups. */}
+      {(['living', 'debts', 'savings'] as const).map(sec => (
         <Card key={sec} gap={8}>
-          <BodyS muted>{t(sec === 'living' ? 'cm_living' : 'cm_debts')}</BodyS>
+          <BodyS muted>{t(sec === 'living' ? 'cm_living' : sec === 'debts' ? 'cm_debts' : 'cm_savings')}</BodyS>
           <EditList
             decimal
             list={c[sec]}
@@ -1238,7 +1262,7 @@ export function CommitScreen() {
               if (!id) return;
               void saveCommitmentAmount(id, n).catch(() => toast(t('cm_save_failed')));
             }}
-            renderAccessory={item => Number(item.a) > 0 ? (() => {
+            renderAccessory={sec !== 'savings' ? item => Number(item.a) > 0 ? (() => {
               const enabled = Boolean(S.notificationPreferences.reminders[item.id]?.enabled);
               return (
                 <Pressable
@@ -1257,7 +1281,7 @@ export function CommitScreen() {
                   </Text>
                 </Pressable>
               );
-            })() : null}
+            })() : null : undefined}
           />
           <FigRow p="user" />
         </Card>
@@ -1363,12 +1387,25 @@ export function PatternScreen() {
     );
   }
 
+  const currentMonthSoFar = pattern.current_month_so_far;
+  const monthSoFar = currentMonthSoFar ? (
+    <NoteC>
+      <View testID="pattern-month-so-far">
+        <BodyS>{t('pt_month_so_far', {
+          m: `${monthName(Number(currentMonthSoFar.month.slice(5, 7)) - 1)} ${currentMonthSoFar.month.slice(0, 4)}`,
+          v: formatApiMoney(currentMonthSoFar.usable_income),
+        })}</BodyS>
+      </View>
+    </NoteC>
+  ) : null;
+
   if (pattern.history_depth === 'empty' || !pattern.statistics) {
     return (
       <ScreenShell back title={t('money_pattern')}>
         {S.incomePatternSync === 'error' ? <NoteC><BodyS>{t('pt_error')}</BodyS></NoteC> : null}
         <Display cls="h-l">{t('pt_empty')}</Display>
         <BodyS muted>{t('pt_empty_note')}</BodyS>
+        {monthSoFar}
         <Btn label={t('pt_add_income')} onPress={() => go('income')} />
       </ScreenShell>
     );
@@ -1390,12 +1427,14 @@ export function PatternScreen() {
         <Fig value={formatApiMoney(stats.average)} p="calc" cls="h-xl" />
         <BodyS muted>{t('pt_avgn', { n: pattern.recorded_month_count })}</BodyS>
       </View>
+      {monthSoFar}
       {limited ? <NoteC><BodyS>{limited}</BodyS></NoteC> : null}
       <BodyS muted>{t('pt_bymonth')}</BodyS>
       <IncomePatternChart
-        months={pattern.months}
+        months={pattern.completed_months}
         monthName={monthName}
         accessibilityLabel={t('pt_chart_accessibility')}
+        scrollHint={t('pt_scroll')}
       />
       <StackS>
         <KV k={t('pt_med')}><Fig value={formatApiMoney(stats.median)} p="calc" /></KV>
@@ -1408,7 +1447,7 @@ export function PatternScreen() {
       </StackS>
       {(() => {
         /* v24 pt_quietx: the quietest recorded month, after work costs. */
-        const qm = [...pattern.months].reduce<typeof pattern.months[number] | null>(
+        const qm = [...pattern.completed_months].reduce<typeof pattern.completed_months[number] | null>(
           (acc, m) => (acc == null || +m.usable_income < +acc.usable_income ? m : acc), null);
         /* AC2.3.2: the rule behind "quietest" (from this record, not a financial standard)
            sits behind the (i), like the other v24 explanations. */
@@ -1509,17 +1548,23 @@ export function CoverageScreen() {
   );
 
   /* the recorded span for the callout wording, like v24's recSpan */
-  const span = monthsAgg(S.data);
+  const currentKey = new Date().getFullYear() * 12 + new Date().getMonth();
+  const span = monthsAgg(S.data).filter(r => r.y * 12 + r.m !== currentKey);
   const spanA = span.length ? monthName(span[0].m) : '';
   const spanB = span.length ? monthName(span[span.length - 1].m) : '';
 
   let result: React.ReactNode = null;
-  if (showConfirmed && confirmed?.answer === 'yes' && span.length) {
+  if (showConfirmed && confirmed?.answer === 'yes') {
     const unseen = confirmed.unrepresented_slower_months;
-    result = unseen.length ? (
+    result = unseen.length ? span.length ? (
       <Cvr kind="gap"
         title={t('cvr_gap_t', { m: monthList(unseen) })}
         body={t('cvr_gap', { m: monthList(unseen), a: spanA, b: spanB })}
+        doLine={t('cvr_gap_do', { m: monthList(unseen) })} />
+    ) : (
+      <Cvr kind="gap"
+        title={t('cvr_gap_t', { m: monthList(unseen) })}
+        body={t('cv_no_history')}
         doLine={t('cvr_gap_do', { m: monthList(unseen) })} />
     ) : (
       <Cvr kind="ok"
@@ -1557,6 +1602,16 @@ export function CoverageScreen() {
           {!confirmed ? (
             <BtnLine label={t('retry')} onPress={() => { void refreshIncomeCoverage().catch(() => undefined); }} />
           ) : null}
+        </NoteC>
+      ) : null}
+      {confirmed?.current_month_so_far ? (
+        <NoteC>
+          <View testID="coverage-month-so-far">
+            <BodyS>{t('pt_month_so_far', {
+              m: `${monthName(Number(confirmed.current_month_so_far.month.slice(5, 7)) - 1)} ${confirmed.current_month_so_far.month.slice(0, 4)}`,
+              v: formatApiMoney(confirmed.current_month_so_far.usable_income),
+            })}</BodyS>
+          </View>
         </NoteC>
       ) : null}
       {/* v24 R8f: how the answer is used lives behind the (i) on the question. */}

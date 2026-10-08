@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  AccessibilityInfo, ActivityIndicator, Animated, AppState as NativeAppState, Easing, Keyboard, KeyboardAvoidingView, Modal,
+  AccessibilityInfo, ActivityIndicator, Animated, AppState as NativeAppState, Easing, Keyboard, KeyboardAvoidingView, Linking, Modal,
   PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +16,7 @@ import { BODY_FONT, C, DISP_FONT } from './theme';
 import { RumaHeadset, RumaHelpAvatar } from './ruma-view';
 import { getSpeechOwner, setSpeechOwner } from './speech';
 import { GuideTarget, onScrollSettle } from './tour';
+import { GROQ_DPA_URL, GROQ_YOUR_DATA_URL } from './ai-disclosure';
 
 /* Flip to false to hide the whole Ask RuMampu UI (bubble, header
    button, popover), e.g. while the AI backend is unavailable. */
@@ -39,6 +40,43 @@ export function AiDisclosure() {
           </Pressable>
           <Pressable accessibilityRole="button" onPress={() => answerAiDisclosure(false)}
             style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 14, color: C.ink64 }}>{t('cancel')}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+/** A separate, versioned notice is required for statement images. The older
+ * product-wide AI consent does not cover Groq's location and retention terms. */
+export function StatementScanDisclosure() {
+  const { S, t, answerStatementDisclosure } = useApp();
+  const openPolicy = (url: string) => { void Linking.openURL(url).catch(() => undefined); };
+  return (
+    <Modal transparent animationType="fade" visible={S.statementDisclosureOpen}
+      onRequestClose={() => answerStatementDisclosure(false)}>
+      <View style={{ flex: 1, zIndex: 1001, backgroundColor: 'rgba(15,32,33,0.48)', alignItems: 'center', justifyContent: 'center', padding: 18 }}>
+        <View accessibilityRole="alert" testID="statement-scan-disclosure" style={{ width: '100%', maxWidth: 410, maxHeight: '92%', borderRadius: 18, backgroundColor: '#fff', padding: 20, gap: 12 }}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 20, color: C.ink }}>{t('statement_disclosure_title')}</Text>
+          <ScrollView style={{ flexGrow: 0, maxHeight: 470 }} contentContainerStyle={{ gap: 10 }}>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 14, lineHeight: 20, color: C.ink64 }}>{t('statement_disclosure_data')}</Text>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 14, lineHeight: 20, color: C.ink64 }}>{t('statement_disclosure_location')}</Text>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 14, lineHeight: 20, color: C.ink64 }}>{t('statement_disclosure_retention')}</Text>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 14, lineHeight: 20, color: C.ink64 }}>{t('statement_disclosure_saved')}</Text>
+            <Pressable accessibilityRole="link" onPress={() => openPolicy(GROQ_YOUR_DATA_URL)}>
+              <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 19, color: C.brand, textDecorationLine: 'underline' }}>{t('statement_disclosure_policy_link')}</Text>
+            </Pressable>
+            <Pressable accessibilityRole="link" onPress={() => openPolicy(GROQ_DPA_URL)}>
+              <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 19, color: C.brand, textDecorationLine: 'underline' }}>{t('statement_disclosure_dpa_link')}</Text>
+            </Pressable>
+          </ScrollView>
+          <Pressable accessibilityRole="button" onPress={() => answerStatementDisclosure(true)}
+            style={{ minHeight: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: C.brand }}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: '#fff' }}>{t('statement_disclosure_continue')}</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={() => answerStatementDisclosure(false)}
+            style={{ minHeight: 42, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontFamily: BODY_FONT, fontSize: 14, color: C.ink64 }}>{t('cancel')}</Text>
           </Pressable>
         </View>

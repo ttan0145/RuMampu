@@ -49,6 +49,12 @@ function coveredCallout(page: Page) {
   return page.getByText('Your record covers your quiet months', { exact: true });
 }
 
+function barsForChart(page: Page) {
+  return page.locator(
+    '[aria-label*="calculated usable income"]:not([aria-label="Month-by-month calculated usable income"])',
+  );
+}
+
 /* Adds a whole past month from the quiet link on Income (v24 R7). */
 async function addPastMonth(page: Page, monthLabel: string, amount: string): Promise<void> {
   await page.getByText('Add a month I did not record', { exact: true }).click();
@@ -103,11 +109,9 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
 
   test('US2.1 — View income month by month', { tag: '@us2.1' }, async ({ page }) => {
     await openTwelveMonthPattern(page);
-    const bars = page.locator(
-      '[aria-label*="calculated usable income"]:not([aria-label="Month-by-month calculated usable income"])',
-    );
+    const bars = barsForChart(page);
 
-    await ac('AC2.1.1', 'Display monthly income chart', async () => {
+    await ac('AC2.1.1', 'View income month by month', async () => {
       await expect(page.getByLabel('Month-by-month calculated usable income')).toBeVisible();
       await expect(bars).toHaveCount(12);
     });
@@ -148,20 +152,29 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
     await ac('AC2.2.6', 'Explain variation', async () => {
       await expect(page.getByText('Recorded range', { exact: true }).locator('xpath=..')).toContainText('RM 2,710.00');
     });
+    await ac('AC2.2.7', 'Show the recorded range', async () => {
+      const rangeLabel = page.getByText('Recorded range', { exact: true });
+      await expect(rangeLabel).toBeVisible();
+      await expect(rangeLabel.locator('xpath=..')).toContainText('RM 2,710.00');
+    });
+    await ac('AC2.2.8', 'Show every recorded month', async () => {
+      await expect(page.getByTestId('income-pattern-scroll-hint')).toBeVisible();
+      await expect(barsForChart(page)).toHaveCount(12);
+    });
     await assertForbiddenConclusionsAbsent(page);
     await page.getByText('Recorded range', { exact: true }).scrollIntoViewIfNeeded();
-    await captureEvidence(page, 'epic-2', 'ac2.2.1-6__income-statistics.png');
+    await captureEvidence(page, 'epic-2', 'ac2.2.1-8__income-statistics.png');
   });
 
   test('US2.3 — Identify lower-income months', { tag: '@us2.3' }, async ({ page }) => {
     await openTwelveMonthPattern(page);
 
     const quietest = page.getByText('Your quietest recorded month is Feb: RM 3,160.00 after work costs.', { exact: true });
-    await ac('AC2.3.1', 'Use the recorded-history rule', async () => {
+    await ac('AC2.3.1', 'Use the RuMampu low income rule', async () => {
       await expect(page.getByLabel(/Feb 26: RM 3,160.00 calculated usable income, lowest recorded month/)).toBeVisible();
       await expect(quietest).toBeVisible();
     });
-    await ac('AC2.3.2', 'Explain the identification', async () => {
+    await ac('AC2.3.2', 'Explain how lower income months are identified', async () => {
       await page.getByTestId('pattern-quietest').getByLabel('What this is').click();
       await expect(page.getByText(
         'A lower-income month here means the lowest usable-income month in your current record. It is not a financial standard or a prediction.',
@@ -172,6 +185,52 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
     });
     await quietest.scrollIntoViewIfNeeded();
     await captureEvidence(page, 'epic-2', 'ac2.3.1-2__lower-income-month.png', { resetScroll: false });
+  });
+
+  test('AC2.3.3 — Leave the unfinished month out of the count', { tag: '@us2.3' }, async ({ page }) => {
+    const today = new Date();
+    const currentMonthDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const previousMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 5);
+    const earlierMonthDate = new Date(today.getFullYear(), today.getMonth() - 2, 5);
+    const isoDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const isoMonth = (date: Date) => isoDate(date).slice(0, 7);
+    const monthName = currentMonthDate.toLocaleString('en', { month: 'short' });
+    const currentMonthNumber = currentMonthDate.getMonth() + 1;
+
+    await addIncomeMonth(page, isoDate(earlierMonthDate), '2000.00');
+    await addIncomeMonth(page, isoDate(previousMonthDate), '1000.00');
+    await addIncomeMonth(page, isoDate(currentMonthDate), '100.00');
+    await addPetrolWorkCost(page, isoDate(currentMonthDate), '25.00');
+
+    const coverageSaved = await e2ePut(page, `${API}/income-coverage/`, {
+      data: { answer: 'yes', slower_months: [currentMonthNumber] },
+    });
+    expect(coverageSaved.ok()).toBeTruthy();
+    const coverage = await e2eGet(page, `${API}/income-coverage/`);
+    const coveragePayload = await coverage.json();
+    expect(coveragePayload.recorded_calendar_months).not.toContain(currentMonthNumber);
+    expect(coveragePayload.unrepresented_slower_months).toContain(currentMonthNumber);
+    expect(coveragePayload.current_month_so_far.month).toBe(isoMonth(currentMonthDate));
+
+    const houseCheck = await e2ePost(page, `${API}/housing/pre-check/`, { data: {} });
+    expect(houseCheck.ok()).toBeTruthy();
+    const housePayload = await houseCheck.json();
+    expect(housePayload.tested_months).toBe(2);
+    expect(housePayload.months.map((row: { month: number }) => row.month)).not.toContain(currentMonthNumber);
+
+    await openApp(page);
+    await openMoneyScreen(page, 'Income pattern');
+    await ac('AC2.3.3', 'Leave the unfinished month out of the count', async () => {
+      await expect(page.getByText('RM 1,500.00', { exact: true }).first()).toBeVisible();
+      await expect(page.getByTestId('pattern-month-so-far')).toContainText('Month so far');
+      await expect(page.getByTestId('pattern-month-so-far')).toContainText(`${monthName} ${today.getFullYear()}`);
+      await expect(page.getByTestId(`income-bar-${isoMonth(currentMonthDate)}`)).toHaveCount(0);
+      await expect(barsForChart(page)).toHaveCount(2);
+    });
+    await openMoneyScreen(page, 'Coverage check');
+    await expect(gapCallout(page, monthName)).toBeVisible();
+    await expect(page.getByTestId('coverage-month-so-far')).toContainText('Month so far');
+    await expect(page.getByTestId('coverage-month-so-far')).toContainText('RM 75.00');
   });
 
   test('US2.4 — Check whether history covers slower periods', { tag: '@us2.4' }, async ({ page }) => {
@@ -188,10 +247,8 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
       await expect(page.getByRole('radio', { name: 'No', exact: true })).toBeVisible();
       await expect(page.getByRole('radio', { name: 'Not sure' })).toBeVisible();
     });
-    await ac('AC2.4.3', 'Select slower months', async () => {
-      await page.getByRole('radio', { name: 'Yes' }).click();
-      await expect(page.getByRole('checkbox')).toHaveCount(12);
-    });
+    await page.getByRole('radio', { name: 'Yes' }).click();
+    await expect(page.getByRole('checkbox')).toHaveCount(12);
     await ac('AC2.4.4', 'Select multiple slower months', async () => {
       await page.getByRole('checkbox', { name: 'Jan' }).click();
       await page.getByRole('checkbox', { name: 'Mar' }).click();
@@ -199,6 +256,11 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
       await expect(page.getByRole('checkbox', { name: 'Jan' })).toBeChecked();
       await expect(page.getByRole('checkbox', { name: 'Mar' })).toBeChecked();
       await expect(page.getByRole('checkbox', { name: 'Aug' })).toBeChecked();
+    });
+    await ac('AC2.4.3', 'Report only the quiet months that are genuinely missing', async () => {
+      await expect(gapCallout(page, 'Mar')).toBeVisible();
+      await expect(gapCallout(page, 'Jan')).toHaveCount(0);
+      await expect(gapCallout(page, 'Aug')).toHaveCount(0);
     });
     await ac('AC2.4.5', 'Warn about uncovered slower months', async () => {
       // The record runs Jan to Aug 2026, so March has not been recorded yet.
@@ -325,7 +387,7 @@ test.describe('Epic 2 — Income Pattern Analysis', { tag: '@epic2' }, () => {
     await expect(page.getByText(/calculated income pattern could not be reached/i)).toBeVisible();
     await page.unroute('**/api/v1/income-pattern/');
     await page.getByText('Retry', { exact: true }).click();
-    await expect(page.getByText('Your income pattern starts with a recorded month.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Your income pattern starts with a completed month.', { exact: true })).toBeVisible();
     await expect(page.getByText('Add income', { exact: true })).toBeVisible();
     await assertForbiddenConclusionsAbsent(page);
     await captureEvidence(page, 'epic-2', 'tech-e2-04__empty-pattern-after-retry.png');

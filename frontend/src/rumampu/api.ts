@@ -92,6 +92,7 @@ export interface ApiWorkCostEntry {
   category_name: string;
   amount: string;
   date: string;
+  merchant: string;
   created_at: string;
   updated_at: string;
 }
@@ -873,6 +874,26 @@ export function updateWorkCostEntry(
   });
 }
 
+export function moveWorkCostToExpense(
+  id: string,
+  categoryId: string,
+  input?: { amount?: number; date?: string },
+): Promise<ApiExpenseEntry> {
+  const entryId = Number.parseInt(id, 10);
+  const destinationCategoryId = Number.parseInt(categoryId, 10);
+  if (!Number.isFinite(entryId) || !Number.isFinite(destinationCategoryId)) {
+    return Promise.reject(new Error('The selected record or expense category is not available in the API record.'));
+  }
+  return request<ApiExpenseEntry>(`/work-costs/entries/${entryId}/move/`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      category_id: destinationCategoryId,
+      ...(input?.amount == null ? {} : { amount: input.amount.toFixed(2) }),
+      ...(input?.date == null ? {} : { date: input.date }),
+    }),
+  });
+}
+
 export function fetchCommitments(): Promise<ApiCommitmentItem[]> {
   return request<ApiCommitmentItem[]>('/commitments/');
 }
@@ -1034,6 +1055,45 @@ export function updateExpenseCoverage(entryId: string, monthlyTotal: boolean): P
   return request<ApiExpenseEntry>(`/expenses/${encodeURIComponent(entryId)}/coverage/`, {
     method: 'PATCH',
     body: JSON.stringify({ entry_method: monthlyTotal ? 'monthly_total' : 'manual' }),
+  });
+}
+
+export function updateExpenseEntry(
+  id: string,
+  input: { amount?: number; date?: string; categoryId?: string },
+): Promise<ApiExpenseEntry> {
+  const entryId = Number.parseInt(id, 10);
+  if (!Number.isFinite(entryId)) {
+    return Promise.reject(new Error('The selected expense is not available in the API record.'));
+  }
+  const categoryId = input.categoryId == null ? undefined : Number.parseInt(input.categoryId, 10);
+  return request<ApiExpenseEntry>(`/expenses/${entryId}/`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      ...(Number.isFinite(categoryId) ? { category_id: categoryId } : {}),
+      ...(input.amount == null ? {} : { amount: input.amount.toFixed(2) }),
+      ...(input.date == null ? {} : { date: input.date }),
+    }),
+  });
+}
+
+export function moveExpenseToWorkCost(
+  id: string,
+  categoryId: string,
+  input?: { amount?: number; date?: string },
+): Promise<ApiWorkCostEntry> {
+  const entryId = Number.parseInt(id, 10);
+  const destinationCategoryId = Number.parseInt(categoryId, 10);
+  if (!Number.isFinite(entryId) || !Number.isFinite(destinationCategoryId)) {
+    return Promise.reject(new Error('The selected record or work-cost category is not available in the API record.'));
+  }
+  return request<ApiWorkCostEntry>(`/expenses/${entryId}/move/`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      category_id: destinationCategoryId,
+      ...(input?.amount == null ? {} : { amount: input.amount.toFixed(2) }),
+      ...(input?.date == null ? {} : { date: input.date }),
+    }),
   });
 }
 

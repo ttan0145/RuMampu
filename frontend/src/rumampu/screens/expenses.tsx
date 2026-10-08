@@ -196,7 +196,10 @@ function ExpenseCsvBody() {
  * 中文：US1.5/US1.6 记录并汇总日常支出。v22 将其重构为暖色记录卡片。
  */
 export function ExpensesScreen() {
-  const { S, t, monthName, go, up, toast, saveExpenseEntry, saveWorkCostEntry } = useApp();
+  const {
+    S, t, monthName, go, up, toast, saveExpenseEntry, saveWorkCostEntry,
+    updateWorkCostEntry, updateExpenseEntry, moveExpenseToWorkCost, moveWorkCostToExpense,
+  } = useApp();
   const cats = useCatLabel();
   /* Figma B6: a work expense records into Work costs, not daily spending. */
   const [forWork, setForWork] = React.useState(false);
@@ -205,6 +208,10 @@ export function ExpensesScreen() {
   const per = d.per || 'day';
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<'amount' | 'date' | 'save' | null>(null);
+  const [entryEdit, setEntryEdit] = React.useState<{
+    id: string; kind: 'expense' | 'work'; forWork: boolean; categoryId: string; amount: string; date: string;
+  } | null>(null);
+  const [savingEdit, setSavingEdit] = React.useState(false);
   const now = new Date();
   /* v24 R7g: one month drives the whole screen, chosen at the top and defaulting
      to the newest month that holds anything at all. */
@@ -296,7 +303,7 @@ export function ExpensesScreen() {
       <InSec>
         {/* v24 R8b: the switch comes before the categories; the explanation is behind the (i). */}
         <Pressable onPress={() => setForWork(w => !w)}
-          accessibilityRole="switch" accessibilityState={{ checked: forWork }}
+          accessibilityRole="switch" accessibilityState={{ checked: forWork }} aria-checked={forWork}
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, gap: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
             <InLbl>{t('ex_forwork')}</InLbl>
@@ -374,6 +381,90 @@ export function ExpensesScreen() {
   const wlist = [...wmonth].sort((a, b) => (a.d < b.d ? 1 : -1)).slice(0, 8);
   const wcSum = wmonth.reduce((a, e) => a + (+e.a || 0), 0);
 
+  const beginExpenseEdit = (entry: (typeof S.data.expenses)[number], index: number) => {
+    setEntryEdit({
+      id: entry.id || `local-index-${S.data.expenses.indexOf(entry) >= 0 ? S.data.expenses.indexOf(entry) : index}`,
+      kind: 'expense', forWork: false, categoryId: entry.c, amount: String(entry.a), date: entry.d,
+    });
+  };
+  const beginWorkCostEdit = (entry: (typeof S.data.workCostEntries)[number]) => {
+    setEntryEdit({
+      id: entry.id, kind: 'work', forWork: true, categoryId: entry.categoryId,
+      amount: String(entry.a), date: entry.d,
+    });
+  };
+  const saveEntryEdit = async () => {
+    if (!entryEdit || savingEdit) return;
+    const amount = Number(entryEdit.amount);
+    if (!Number.isFinite(amount) || amount <= 0 || !isValidIsoDate(entryEdit.date) || !entryEdit.categoryId) {
+      toast(t('wc_entry_invalid'), 'error');
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      if (entryEdit.kind === 'work' && entryEdit.forWork) {
+        await updateWorkCostEntry(entryEdit.id, { categoryId: entryEdit.categoryId, amount, date: entryEdit.date });
+      } else if (entryEdit.kind === 'expense' && !entryEdit.forWork) {
+        await updateExpenseEntry(entryEdit.id, { categoryId: entryEdit.categoryId, amount, date: entryEdit.date });
+      } else if (entryEdit.kind === 'expense') {
+        await moveExpenseToWorkCost(entryEdit.id, entryEdit.categoryId, { amount, date: entryEdit.date });
+      } else {
+        await moveWorkCostToExpense(entryEdit.id, entryEdit.categoryId, { amount, date: entryEdit.date });
+      }
+      setEntryEdit(null);
+      toast(t('saved'));
+    } catch {
+      toast(entryEdit.forWork ? t('wc_save_failed') : t('ex_save_failed'), 'error');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const editor = entryEdit ? (
+    <View testID="entry-editor" style={[exSt.cardTint, { gap: 10, padding: 14, marginTop: 8 }]}>
+      <Pressable
+        onPress={() => setEntryEdit(current => {
+          if (!current) return current;
+          const forWork = !current.forWork;
+          const categories = forWork ? S.data.workCostCategories : S.data.expenseCats;
+          return { ...current, forWork, categoryId: categories[0]?.id || '' };
+        })}
+        accessibilityRole="switch" accessibilityLabel={t('ex_forwork')}
+        accessibilityState={{ checked: entryEdit.forWork }} aria-checked={entryEdit.forWork}
+        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, gap: 10 }}>
+        <InLbl>{t('ex_forwork')}</InLbl>
+        <View style={{ width: 46, height: 28, borderRadius: 14, padding: 3, backgroundColor: entryEdit.forWork ? C.brand : C.ink14, alignItems: entryEdit.forWork ? 'flex-end' : 'flex-start', justifyContent: 'center' }}>
+          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' }} />
+        </View>
+      </Pressable>
+      <InLbl>{t('ex_q_cat')}</InLbl>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {entryEdit.forWork ? S.data.workCostCategories.map(category => (
+          <InChip key={category.id} tint="out" label={category.custom ? category.name || '' : t(category.k || '')}
+            on={entryEdit.categoryId === category.id}
+            onPress={() => setEntryEdit(current => current ? { ...current, categoryId: category.id } : current)} />
+        )) : S.data.expenseCats.map(category => (
+          <InChip key={category.id} tint="out" label={category.custom ? category.name || '' : t(category.k || '')}
+            on={entryEdit.categoryId === category.id}
+            onPress={() => setEntryEdit(current => current ? { ...current, categoryId: category.id } : current)} />
+        ))}
+      </View>
+      <InLbl>{t('inc_amount')}</InLbl>
+      <TextField accessibilityLabel={t('wc_edit_amount')} value={entryEdit.amount}
+        onChangeText={amount => setEntryEdit(current => current ? { ...current, amount } : current)}
+        keyboardType="decimal-pad" inputMode="decimal" />
+      <InLbl>{t('inc_date')}</InLbl>
+      <DatePickerField value={entryEdit.date} mode="date"
+        monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
+        maximumDate={new Date()}
+        onChange={date => setEntryEdit(current => current ? { ...current, date } : current)} />
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <Btn disabled={savingEdit} label={savingEdit ? t('inc_saving') : t('save')} onPress={() => { void saveEntryEdit(); }} />
+        <BtnLine label={t('cancel')} onPress={() => setEntryEdit(null)} />
+      </View>
+    </View>
+  ) : null;
+
   let bycat: React.ReactNode = null;
   {
     const totals = expCatTotals(S.data, curKey);
@@ -420,20 +511,27 @@ export function ExpensesScreen() {
       </InCard>
       {S.data.expenses.length ? (
         <>
-        <MonthBtn act="exmonth" monthKey={mpk.key} />
-        <View style={[exSt.cardTint, { paddingVertical: 4 }]}>
+        <View testID="expense-month-control"><MonthBtn act="exmonth" monthKey={mpk.key} /></View>
+        <View testID="recent-expense-table" style={[exSt.cardTint, { paddingVertical: 4 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 40 }}>
             <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink }}>{t('ex_recent')}</Text>
             <Prov p="user" />
           </View>
-          {recent.map((e, idx) => (
-            <InRow key={`${e.d}-${idx}`} first={idx === 0} tint="out"
-              icon={<CatIcon id={e.c} data={S.data} size={18} color="#B54F2B" />}
-              title={e.method === 'monthly_total' ? t('ex_month_total') : cats(e.c)}
-              sub={`${+e.d.slice(8, 10)} ${monthName(+e.d.slice(5, 7) - 1)}${e.merchant ? ' · ' + e.merchant : ''}`}
-              subTag={e.method === 'receipt' ? t('sc_tag') : undefined}
-              amount={rmx(e.a)} />
-          ))}
+          {recent.map((e, idx) => {
+            const key = e.id || `local-index-${Math.max(0, S.data.expenses.indexOf(e))}`;
+            return (
+              <View key={`${e.d}-${idx}`} testID={`expense-entry-${key}`}>
+                <InRow first={idx === 0} tint="out"
+                  icon={<CatIcon id={e.c} data={S.data} size={18} color="#B54F2B" />}
+                  title={e.method === 'monthly_total' ? t('ex_month_total') : cats(e.c)}
+                  sub={`${+e.d.slice(8, 10)} ${monthName(+e.d.slice(5, 7) - 1)}${e.merchant ? ' · ' + e.merchant : ''}`}
+                  subTag={e.method === 'receipt' ? t('sc_tag') : undefined}
+                  amount={rmx(e.a)}
+                  onEdit={e.method === 'monthly_total' ? undefined : () => beginExpenseEdit(e, idx)} />
+                {entryEdit?.id === key ? editor : null}
+              </View>
+            );
+          })}
         </View>
         </>
       ) : null}
@@ -443,11 +541,14 @@ export function ExpensesScreen() {
           <Prov p="user" />
         </View>
         {wlist.length ? wlist.map((e, idx) => (
-          <InRow key={e.id} first={idx === 0} tint="out"
-            icon={<Ico name="wrench" size={18} color="#B54F2B" />}
-            title={wcName(e)}
-            sub={`${+e.d.slice(8, 10)} ${monthName(+e.d.slice(5, 7) - 1)}`}
-            amount={rmx(e.a)} />
+          <View key={e.id} testID={`work-cost-entry-${e.id}`}>
+            <InRow first={idx === 0} tint="out"
+              icon={<Ico name="wrench" size={18} color="#B54F2B" />}
+              title={wcName(e)}
+              sub={`${+e.d.slice(8, 10)} ${monthName(+e.d.slice(5, 7) - 1)}${e.merchant ? ' · ' + e.merchant : ''}`}
+              amount={rmx(e.a)} onEdit={() => beginWorkCostEdit(e)} />
+            {entryEdit?.id === e.id ? editor : null}
+          </View>
         )) : (
           <BodyS muted style={{ paddingBottom: 12 }}>{t('wc_tbl_none')}</BodyS>
         )}

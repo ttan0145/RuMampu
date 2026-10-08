@@ -1,11 +1,13 @@
 import json
+from datetime import date
+from decimal import Decimal
 from unittest.mock import patch
 
 from django.core.cache import cache
 from django.test import Client, TestCase
 
 from .assistant_service import DAILY_MESSAGE_LIMIT, AssistantError, build_financial_snapshot
-from .models import GuestProfile
+from .models import FinancialPeriod, GuestProfile, IncomeEntry, WorkCostEntry
 from .services import profile_for_request
 
 
@@ -359,3 +361,45 @@ class SnapshotTests(TestCase):
         self.assertEqual(months, ["2026-06", "2026-07"])
         self.assertIsNotNone(snapshot["income_statistics"])
         self.assertTrue(json.dumps(snapshot, default=str))
+
+    @patch("finance.analysis_service.timezone.localdate", return_value=date(2026, 10, 8))
+    def test_snapshot_keeps_the_unfinished_month_separate(self, _today):
+        profile = _make_profile("snapshot-current-month")
+        Client().get(
+            "/api/v1/income/record/",
+            headers={"X-RuMampu-Client-ID": "snapshot-current-month"},
+        )
+        for month, amount in ((8, "2000.00"), (9, "1000.00"), (10, "100.00")):
+            period, _ = FinancialPeriod.objects.get_or_create(
+                profile=profile,
+                period_month=date(2026, month, 1),
+            )
+            IncomeEntry.objects.create(
+                profile=profile,
+                period=period,
+                source=profile.income_sources.get(slug="ehail"),
+                income_date=date(2026, month, 8),
+                gross_amount=Decimal(amount),
+                entry_method=IncomeEntry.EntryMethod.MANUAL,
+            )
+        WorkCostEntry.objects.create(
+            profile=profile,
+            category=profile.work_cost_items.get(slug="petrol"),
+            cost_date=date(2026, 10, 8),
+            amount=Decimal("25.00"),
+        )
+
+        snapshot = build_financial_snapshot(profile)
+
+        self.assertEqual(snapshot["recorded_month_count"], 2)
+        self.assertEqual([row["month"] for row in snapshot["income_months"]], ["2026-08", "2026-09"])
+        self.assertEqual(snapshot["income_statistics"]["average"], "1500.00")
+        self.assertEqual(
+            snapshot["income_month_so_far"],
+            {
+                "month": "2026-10",
+                "gross_income": "100",
+                "work_costs": "25",
+                "usable_income": "75",
+            },
+        )

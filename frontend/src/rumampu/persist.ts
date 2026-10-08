@@ -1,4 +1,5 @@
 import type { AppState, BufferState, KeptTest, PlanState, VillageState } from './state';
+import { STATEMENT_SCAN_DISCLOSURE_VERSION } from './ai-disclosure';
 import { getHousingScenario, getHousingTestResult, hydrateHousingSession } from '../../services/housingSession';
 import { isValidIsoDate } from './validation';
 
@@ -7,7 +8,7 @@ const VERSION = 1;
 export const BUFFER_NAME_MAX = 30;
 const PERSISTED = ['plan', 'buffer', 'village', 'planHorizon',
   'potMovedMonths', 'potMoved', 'docsChecked', 'keptTests', 'tipsOff', 'seenG', 'lnProg',
-  'bought', 'purchaseMonth', 'notificationPreferences', 'aiDisclosureAccepted',
+  'bought', 'purchaseMonth', 'notificationPreferences', 'aiDisclosureAccepted', 'statementDisclosureVersion',
   'voiceDisclosureAccepted'] as const;
 
 type JsonRecord = Record<string, unknown>;
@@ -162,6 +163,9 @@ export function hydrate(s: AppState, raw: string | null): void {
     }
     if (typeof payload.aiDisclosureAccepted === 'boolean') {
       s.aiDisclosureAccepted = payload.aiDisclosureAccepted;
+    }
+    if (payload.statementDisclosureVersion === STATEMENT_SCAN_DISCLOSURE_VERSION) {
+      s.statementDisclosureVersion = STATEMENT_SCAN_DISCLOSURE_VERSION;
     }
     if (typeof payload.voiceDisclosureAccepted === 'boolean') {
       s.voiceDisclosureAccepted = payload.voiceDisclosureAccepted;

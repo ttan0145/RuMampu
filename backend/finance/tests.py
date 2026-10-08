@@ -354,6 +354,9 @@ class IncomeApiTests(TestCase):
         self.assertIn("/api/v1/commitments/", paths)
         self.assertIn("/api/v1/expense-categories/", paths)
         self.assertIn("/api/v1/expenses/", paths)
+        self.assertIn("/api/v1/expenses/{entry_id}/", paths)
+        self.assertIn("/api/v1/expenses/{entry_id}/move/", paths)
+        self.assertIn("/api/v1/work-costs/entries/{entry_id}/move/", paths)
         self.assertIn("/api/v1/health/", paths)
         self.assertNotIn("/api/income/entries/", paths)
 
@@ -475,6 +478,47 @@ class WorkCostApiTests(TestCase):
         self.assertEqual(updated.status_code, 200)
         self.assertEqual(updated.json()["amount"], "80.50")
         self.assertEqual(updated.json()["date"], "2026-09-01")
+
+    def test_moves_work_cost_to_daily_spending_once_and_preserves_merchant(self):
+        category_id = self.list_items().json()[0]["id"]
+        entry = self.client.post(
+            self.entries_url,
+            data={"category_id": category_id, "amount": "45.00", "date": "2026-08-21"},
+            content_type="application/json",
+        ).json()
+        WorkCostEntry.objects.filter(id=entry["id"]).update(merchant="Petrol station")
+        expense_category = self.client.get("/api/v1/expense-categories/").json()[1]["id"]
+
+        moved = self.client.patch(
+            f"{self.entries_url}{entry['id']}/move/",
+            data={"category_id": expense_category, "amount": "48.75", "date": "2026-08-23"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(moved.status_code, 200)
+        self.assertEqual(moved.json()["amount"], "48.75")
+        self.assertEqual(moved.json()["date"], "2026-08-23")
+        self.assertEqual(moved.json()["category_id"], expense_category)
+        self.assertEqual(moved.json()["merchant"], "Petrol station")
+        self.assertEqual(self.client.get(self.entries_url).json(), [])
+        self.assertEqual(len(self.client.get("/api/v1/expenses/").json()), 1)
+
+    def test_move_to_daily_spending_rejects_invalid_destination_without_deleting_source(self):
+        category_id = self.list_items().json()[0]["id"]
+        entry = self.client.post(
+            self.entries_url,
+            data={"category_id": category_id, "amount": "45.00", "date": "2026-08-21"},
+            content_type="application/json",
+        ).json()
+        response = self.client.patch(
+            f"{self.entries_url}{entry['id']}/move/",
+            data={"category_id": 999999},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(WorkCostEntry.objects.count(), 1)
+        self.assertEqual(self.client.get("/api/v1/expenses/").json(), [])
 
     def test_rejects_invalid_entry_amount_category_date_and_month_filter(self):
         petrol_id = self.list_items().json()[0]["id"]
@@ -762,6 +806,78 @@ class ExpenseApiTests(TestCase):
             [item["category_id"] for item in self.client.get(self.expense_root).json()],
             [meals, groceries],
         )
+
+    def test_updates_only_the_selected_expense_and_rejects_other_guests_entry(self):
+        other = Client()
+        foreign = self.create_expense("12.00", client=other).json()
+        forbidden = self.client.patch(
+            f"{self.expense_root}{foreign['id']}/",
+            data={"amount": "13.00"},
+            content_type="application/json",
+        )
+        self.assertEqual(forbidden.status_code, 404)
+
+        entry = self.create_expense("20.00").json()
+        category_id = self.category_id("meals")
+        updated = self.client.patch(
+            f"{self.expense_root}{entry['id']}/",
+            data={"amount": "25.50", "date": "2026-08-24", "category_id": category_id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.json()["amount"], "25.50")
+        self.assertEqual(updated.json()["date"], "2026-08-24")
+        self.assertEqual(updated.json()["category_id"], category_id)
+        self.assertEqual(ExpenseEntry.objects.get(id=entry["id"]).amount, Decimal("25.50"))
+
+    def test_moves_daily_expense_to_work_cost_once_preserving_merchant(self):
+        category_id = self.category_id("meals")
+        source = self.client.post(
+            self.expense_root,
+            data={
+                "amount": "34.20", "date": "2026-08-22", "category_id": category_id,
+                "entry_method": "receipt", "merchant": "Ride share", "confirm_receipt": True,
+            },
+            content_type="application/json",
+        ).json()
+        work_category = self.client.get("/api/v1/work-costs/").json()[0]["id"]
+
+        moved = self.client.patch(
+            f"{self.expense_root}{source['id']}/move/",
+            data={"category_id": work_category, "amount": "39.20", "date": "2026-08-24"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(moved.status_code, 200)
+        self.assertEqual(moved.json()["amount"], "39.20")
+        self.assertEqual(moved.json()["date"], "2026-08-24")
+        self.assertEqual(moved.json()["category_id"], work_category)
+        self.assertEqual(moved.json()["merchant"], "Ride share")
+        self.assertEqual(self.client.get(self.expense_root).json(), [])
+        self.assertEqual(len(self.client.get("/api/v1/work-costs/entries/").json()), 1)
+
+    def test_monthly_total_cannot_be_moved_as_one_work_cost(self):
+        response = self.client.post(
+            self.expense_root,
+            data={
+                "amount": "200.00", "date": "2025-01-15", "category_id": self.category_id(),
+                "entry_method": "monthly_total",
+            },
+            content_type="application/json",
+        )
+        entry_id = response.json()["id"]
+        work_category = self.client.get("/api/v1/work-costs/").json()[0]["id"]
+
+        moved = self.client.patch(
+            f"{self.expense_root}{entry_id}/move/",
+            data={"category_id": work_category},
+            content_type="application/json",
+        )
+
+        self.assertEqual(moved.status_code, 400)
+        self.assertEqual(len(self.client.get(self.expense_root).json()), 1)
+        self.assertEqual(self.client.get("/api/v1/work-costs/entries/").json(), [])
 
     def test_lists_expenses_in_calendar_order(self):
         self.assertEqual(self.create_expense("20.00", date="2026-08-25").status_code, 201)

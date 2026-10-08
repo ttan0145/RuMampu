@@ -1,4 +1,5 @@
 from drf_spectacular.utils import OpenApiResponse, extend_schema
+from django.db import transaction
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -26,6 +27,7 @@ from .serializers import (
     ExpenseCategoryCreateSerializer,
     ExpenseCategorySerializer,
     ExpenseEntryCreateSerializer,
+    ExpenseEntryUpdateSerializer,
     ExpenseEntrySerializer,
     IncomeEntryCreateSerializer,
     IncomeEntrySerializer,
@@ -45,6 +47,7 @@ from .serializers import (
     WorkCostEntryWriteSerializer,
     WorkCostMonthSummarySerializer,
     WorkCostMonthQuerySerializer,
+    MoveEntrySerializer,
 )
 from .analysis_service import build_work_cost_month_summary
 from .services import create_income_entry, is_unusually_high, profile_for_request, update_income_entry
@@ -343,6 +346,50 @@ class WorkCostEntryDetailView(APIView):
         return Response(WorkCostEntrySerializer(entry).data)
 
 
+class WorkCostEntryMoveView(APIView):
+    """Move one work cost to daily spending without counting it twice."""
+
+    @extend_schema(
+        operation_id="work_cost_entry_move_to_expense",
+        summary="Move a work-cost entry to daily expenses",
+        tags=["Work costs"],
+        request=MoveEntrySerializer,
+        responses={200: ExpenseEntrySerializer, 400: ApiErrorSerializer, 404: ApiErrorSerializer},
+    )
+    def patch(self, request, entry_id: int):
+        profile = profile_for_request(request)
+        entry = profile.work_cost_entries.filter(id=entry_id).first()
+        if entry is None:
+            from rest_framework.exceptions import NotFound
+
+            raise NotFound("Work-cost entry was not found for this profile.")
+        move = MoveEntrySerializer(data=request.data)
+        move.is_valid(raise_exception=True)
+        payload = {
+            "amount": move.validated_data.get("amount", entry.amount),
+            "date": move.validated_data.get("date", entry.cost_date),
+            "category_id": move.validated_data["category_id"],
+            "entry_method": ExpenseEntry.EntryMethod.MANUAL,
+            "merchant": entry.merchant,
+            "confirm_receipt": False,
+        }
+        create = ExpenseEntryCreateSerializer(data=payload, context={"profile": profile})
+        create.is_valid(raise_exception=True)
+        data = create.validated_data
+        with transaction.atomic():
+            entry.delete()
+            expense = ExpenseEntry.objects.create(
+                profile=profile,
+                category=profile.expense_categories.get(id=data["category_id"], is_active=True),
+                expense_date=data["date"],
+                amount=data["amount"],
+                merchant=entry.merchant,
+                entry_method=data["entry_method"],
+                user_confirmed=True,
+            )
+        return Response(ExpenseEntrySerializer(expense).data)
+
+
 class WorkCostMonthSummaryView(APIView):
     @extend_schema(
         operation_id="work_cost_month_summary",
@@ -494,6 +541,83 @@ class ExpenseEntryListCreateView(APIView):
             user_confirmed=True,
         )
         return Response(ExpenseEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+
+class ExpenseEntryDetailView(APIView):
+    """Edit the dated facts on a daily-spending entry."""
+
+    @extend_schema(
+        operation_id="expense_entries_update",
+        summary="Update one daily expense entry",
+        tags=["Expenses"],
+        request=ExpenseEntryUpdateSerializer,
+        responses={200: ExpenseEntrySerializer, 400: ApiErrorSerializer, 404: ApiErrorSerializer},
+    )
+    def patch(self, request, entry_id: int):
+        profile = profile_for_request(request)
+        entry = profile.expense_entries.filter(id=entry_id).first()
+        if entry is None:
+            from rest_framework.exceptions import NotFound
+
+            raise NotFound("Expense entry was not found for this profile.")
+        serializer = ExpenseEntryUpdateSerializer(
+            data=request.data,
+            partial=True,
+            context={"profile": profile},
+        )
+        serializer.is_valid(raise_exception=True)
+        values = serializer.validated_data
+        if "amount" in values:
+            entry.amount = values["amount"]
+        if "date" in values:
+            entry.expense_date = values["date"]
+        if "category_id" in values:
+            entry.category = profile.expense_categories.get(id=values["category_id"], is_active=True)
+        entry.save()
+        return Response(ExpenseEntrySerializer(entry).data)
+
+
+class ExpenseEntryMoveView(APIView):
+    """Move a daily expense to work costs while preserving its merchant."""
+
+    @extend_schema(
+        operation_id="expense_entry_move_to_work_cost",
+        summary="Move a daily expense to work costs",
+        tags=["Expenses"],
+        request=MoveEntrySerializer,
+        responses={200: WorkCostEntrySerializer, 400: ApiErrorSerializer, 404: ApiErrorSerializer},
+    )
+    def patch(self, request, entry_id: int):
+        profile = profile_for_request(request)
+        entry = profile.expense_entries.filter(id=entry_id).first()
+        if entry is None:
+            from rest_framework.exceptions import NotFound
+
+            raise NotFound("Expense entry was not found for this profile.")
+        if entry.entry_method == ExpenseEntry.EntryMethod.MONTHLY_TOTAL:
+            return Response({"detail": "A whole-month total cannot be moved as one work cost."}, status=status.HTTP_400_BAD_REQUEST)
+        move = MoveEntrySerializer(data=request.data)
+        move.is_valid(raise_exception=True)
+        create = WorkCostEntryWriteSerializer(
+            data={
+                "category_id": move.validated_data["category_id"],
+                "amount": move.validated_data.get("amount", entry.amount),
+                "date": move.validated_data.get("date", entry.expense_date),
+            },
+            context={"profile": profile},
+        )
+        create.is_valid(raise_exception=True)
+        data = create.validated_data
+        with transaction.atomic():
+            work_cost = WorkCostEntry.objects.create(
+                profile=profile,
+                category=profile.work_cost_items.get(id=data["category_id"], is_active=True),
+                cost_date=data["date"],
+                amount=data["amount"],
+                merchant=entry.merchant,
+            )
+            entry.delete()
+        return Response(WorkCostEntrySerializer(work_cost).data)
 
 
 class ExpenseEntryCoverageView(APIView):
