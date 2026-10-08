@@ -73,13 +73,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install --yes postgresql-client unzip
 
           # GitHub-hosted runners normally include AWS CLI v2. Install it from
-          # Amazon only when the image does not already provide it; Ubuntu
-          # 24.04 does not expose a usable `awscli` APT package here.
+          # Amazon only when the image does not already provide it.
           if ! command -v aws >/dev/null 2>&1; then
+            if ! command -v unzip >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install --yes unzip
+            fi
             installer_zip="${RUNNER_TEMP}/awscliv2.zip"
             installer_dir="${RUNNER_TEMP}/aws-cli-installer"
             curl --fail --silent --show-error --location \
@@ -89,8 +90,10 @@ jobs:
             sudo "$installer_dir/aws/install"
           fi
 
-          pg_dump --version
           aws --version
+          docker --version
+          docker pull postgres:18
+          docker run --rm postgres:18 pg_dump --version
 
       - name: Create database backup
         id: dump
@@ -100,19 +103,27 @@ jobs:
 
           timestamp="$(TZ=Asia/Kuala_Lumpur date +'%Y-%m-%d-%H%M%S')"
           backup_file="${RUNNER_TEMP}/rumampu-${timestamp}.dump"
+          backup_name="$(basename "$backup_file")"
 
-          pg_dump "$DATABASE_URL" \
-            --format=custom \
-            --no-owner \
-            --no-acl \
-            --file="$backup_file"
+          # Neon currently runs PostgreSQL 18, while Ubuntu 24.04 packages an
+          # older client. Use the matching official client so pg_dump never
+          # aborts because the server major version is newer.
+          docker run --rm \
+            --env DATABASE_URL \
+            --env BACKUP_NAME="$backup_name" \
+            --volume "${RUNNER_TEMP}:/backup" \
+            postgres:18 \
+            sh -ceu 'pg_dump "$DATABASE_URL" \
+              --format=custom \
+              --no-owner \
+              --no-acl \
+              --file="/backup/$BACKUP_NAME"'
 
           if [[ ! -s "$backup_file" ]]; then
             echo "::error::pg_dump completed without producing a non-empty backup."
             exit 1
           fi
 
-          backup_name="$(basename "$backup_file")"
           object_key="database/${backup_name}"
           echo "file=$backup_file" >> "$GITHUB_OUTPUT"
           echo "name=$backup_name" >> "$GITHUB_OUTPUT"
