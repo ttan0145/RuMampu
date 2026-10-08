@@ -338,6 +338,17 @@ export function AssistantSheet() {
   const scrollRef = React.useRef<ScrollView>(null);
   const speechText = React.useMemo(() => speechUiText(S.lang), [S.lang]);
 
+  /* Do not scroll directly from ScrollView's onContentSizeChange. On web,
+     scrollToEnd can itself change the measured content area (notably when a
+     multi-action review card introduces a scrollbar), which fires the callback
+     again and eventually crashes React with maximum update depth exceeded.
+     Scroll once for each logical chat change, after layout has settled. */
+  React.useEffect(() => {
+    if (!S.assistantOpen) return undefined;
+    const timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 0);
+    return () => clearTimeout(timer);
+  }, [S.assistantOpen, S.assistantMsgs.length, sending, pendingActions]);
+
   React.useEffect(() => {
     if (!S.assistantOpen || !S.assistantDraft) return;
     setDraft(S.assistantDraft);
@@ -681,7 +692,6 @@ export function AssistantSheet() {
               ref={scrollRef}
               style={st.messages}
               contentContainerStyle={{ gap: 8, paddingVertical: 10 }}
-              onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
             >
               {S.assistantMsgs.length === 0 ? (
                 <View style={[st.bubble, st.bubbleBot]}>
