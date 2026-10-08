@@ -792,7 +792,13 @@ export function AssistantSheet() {
               </View>
               <View style={st.inputRow}>
                 <TextInput
-                  style={[st.input, { height: inputHeight }]}
+                  /* react-native-web's content-size observer can oscillate when
+                     the action review card changes the popover's scrollbar and
+                     available width. A controlled height update from that
+                     observer then recurses until React throws error #185. Keep
+                     the web composer fixed and scrollable; native retains the
+                     measured auto-grow behaviour. */
+                  style={[st.input, { height: Platform.OS === 'web' ? 48 : inputHeight }]}
                   value={draft}
                   onChangeText={setDraft}
                   onFocus={() => {
@@ -806,10 +812,10 @@ export function AssistantSheet() {
                   editable={pendingActions.length === 0}
                   multiline
                   submitBehavior="submit"
-                  scrollEnabled={inputHeight >= 112}
-                  onContentSizeChange={event => {
+                  scrollEnabled={Platform.OS === 'web' || inputHeight >= 112}
+                  onContentSizeChange={Platform.OS === 'web' ? undefined : event => {
                     const nextHeight = Math.max(48, Math.min(112, event.nativeEvent.contentSize.height + 2));
-                    setInputHeight(nextHeight);
+                    setInputHeight(current => current === nextHeight ? current : nextHeight);
                   }}
                   placeholder={listening ? speechText.listening : t('ai_ph')}
                   placeholderTextColor={C.ink40}
