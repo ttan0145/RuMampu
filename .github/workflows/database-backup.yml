@@ -74,7 +74,21 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes postgresql-client awscli
+          sudo apt-get install --yes postgresql-client unzip
+
+          # GitHub-hosted runners normally include AWS CLI v2. Install it from
+          # Amazon only when the image does not already provide it; Ubuntu
+          # 24.04 does not expose a usable `awscli` APT package here.
+          if ! command -v aws >/dev/null 2>&1; then
+            installer_zip="${RUNNER_TEMP}/awscliv2.zip"
+            installer_dir="${RUNNER_TEMP}/aws-cli-installer"
+            curl --fail --silent --show-error --location \
+              "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" \
+              --output "$installer_zip"
+            unzip -q "$installer_zip" -d "$installer_dir"
+            sudo "$installer_dir/aws/install"
+          fi
+
           pg_dump --version
           aws --version
 
