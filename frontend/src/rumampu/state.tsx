@@ -60,7 +60,7 @@ import {
   schedulePrivateBillReminder,
 } from './notifications';
 import { isValidReminderDay } from './reminder-date';
-import { fetchHouseCosts as fetchHouseCostsRequest, fetchSavedHousingTests as fetchSavedHousingTestsRequest } from '../../services/housingService';
+import { fetchHouseCosts as fetchHouseCostsRequest, fetchSavedHousingTests as fetchSavedHousingTestsRequest, setSampleHousingData } from '../../services/housingService';
 import { clearHousingSession, getHousingScenario, getHousingTestResult, hydrateHousingSession, setHousingScenario, setHousingTestResult, subscribeHousingSession } from '../../services/housingSession';
 import type { HousingScenarioResponse, HousingTestResult } from '../../types/housing';
 import { HouseCostType, HouseCostsResponse, PxKind, PxSize, PxType, SavedHousingTestRecord } from '../../types/housing';
@@ -2101,6 +2101,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (wasDemo.current && !S.demo) toast(t('demo_cleared'));
     wasDemo.current = S.demo;
   }, [S.demo, t, toast]);
+
+  /* AC8.26.4: a house test on sample months runs against these months, never the server's record. */
+  React.useEffect(() => {
+    setSampleHousingData(S.demo ? S.data : null);
+  }, [S.demo, S.data]);
 
   const value = useMemo<Ctx>(() => ({
     S, authReady, up, t, monthName, go, goTab, backNav,

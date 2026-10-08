@@ -965,7 +965,7 @@ export function PvCompareScreen() {
       ) : (
         <>
           <Sec title={t('pv_month_details')} />
-          <View style={[x.card, { paddingVertical: 4 }]}>
+          <GuideTarget id="pv.months" style={[x.card, { paddingVertical: 4 }]}>
             {rows.map((row, i) => (
               <View key={row.month} style={[{ paddingVertical: 12 }, i > 0 && { borderTopWidth: 1, borderTopColor: T7.line }]}>
                 <Text style={{ fontFamily: G.s, fontSize: 15, color: T7.text, marginBottom: 4 }}>{monthLabel(row.month, monthName)}</Text>
@@ -982,7 +982,7 @@ export function PvCompareScreen() {
               </View>
             ))}
             <View style={{ paddingBottom: 10 }}><Prov p="user" /></View>
-          </View>
+          </GuideTarget>
           {note(t('pv_complete_only'))}
           {outsideEarlierHistory > 0 ? note(t('pv_then_why_n', { n: outsideEarlierHistory })) : null}
           <Btn2 label={t('pv_record_another')} onPress={() => go('pv_month')} />

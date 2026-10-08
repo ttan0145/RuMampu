@@ -5,6 +5,8 @@ import {
   fetchSavedHousingTest,
   runHousingTest,
   runPreHousingCheck,
+  sampleHousingScenario,
+  samplePreHousingCheck,
   updateSavedHousingTest,
   updateHousingScenario,
 } from '../../../services/housingService';
@@ -79,6 +81,26 @@ function useRunTest() {
     setRunning(true);
     void (async () => {
       try {
+        /* AC8.26.4: on sample months nothing is created on the server; the
+           test runs on a throwaway scenario against the sample months. */
+        if (S.demo) {
+          const scenario = sampleHousingScenario(S.data);
+          setHousingScenario(scenario);
+          const housingTest = await runHousingTest(scenario.id);
+          const preHousing = samplePreHousingCheck(S.data);
+          setPreHousingResult(preHousing);
+          setHousingTestResult(housingTest);
+          up(state => {
+            state.testRan = true;
+            state.viewTestName = null;
+            state.tryPay = null;
+            state.shock = 0;
+            state.howOpen = false;
+            state.rgHowOpen = false;
+          });
+          go(preHousing.has_existing_shortfall ? 'precheck' : 'result');
+          return;
+        }
         const currentScenario = getHousingScenario();
         const scenarioRequest = currentScenario
           ? updateHousingScenario(currentScenario.id, S.data).catch(error => {

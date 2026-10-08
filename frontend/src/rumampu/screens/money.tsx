@@ -13,6 +13,7 @@ import {
   CardI, FigRow, MonthBtn,
 } from '../ui';
 import { isValidReminderDay } from '../reminder-date';
+import { notificationSchedulingSupported } from '../notifications';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { SvgXml } from 'react-native-svg';
 import { LOG_META, logClock, logRecent, logWhen } from '../log';
@@ -1365,6 +1366,10 @@ export function CommitScreen() {
             <BodyS muted>{t('br_short_month')}</BodyS>
             <BodyS muted>{t('br_time')}</BodyS>
             <TextField value={reminderTime} onChangeText={setReminderTime} placeholder="09:00" accessibilityLabel={t('br_time')} />
+            {/* AC8.22.1: before the phone's one permission prompt, one line on what RuMampu will send. */}
+            {reminderEnabled && notificationSchedulingSupported() && !S.notificationPreferences.permission_asked ? (
+              <BodyS muted>{t('br_permission_why')}</BodyS>
+            ) : null}
             <Btn disabled={savingReminder} label={savingReminder ? t('saving') : t('save')} onPress={() => {
               const parsedDay = Number(reminderDay.trim());
               if (!reminderItem) return;

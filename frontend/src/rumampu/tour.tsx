@@ -36,8 +36,9 @@ export const GUIDES: Partial<Record<Route, { id: string; k: string }[]>> = {
   expenses: [{ id: 'ex.sum', k: 'g_ex1' }, { id: 'ex.wm', k: 'g_ex3' }],
   plan: [{ id: 'pl.setup', k: 'g_pl0' }, { id: 'pl.grid', k: 'g_pl3' }, { id: 'pl.phase', k: 'g_pl1' }, { id: 'pl.chips', k: 'g_pl2' }],
   learn: [{ id: 'ln.hero', k: 'g_ln0' }, { id: 'ln.badges', k: 'g_ln3' }, { id: 'ln.secs', k: 'g_ln1' }],
-  pv_compare: [{ id: 'pv.cards', k: 'g_pv1' }, { id: 'pv.chart', k: 'g_pv2' }],
+  pv_compare: [{ id: 'pv.cards', k: 'g_pv1' }, { id: 'pv.months', k: 'g_pv2' }],
   priceexplorer: [{ id: 'px.price', k: 'g_px1' }, { id: 'px.map', k: 'g_px2' }, { id: 'px.home', k: 'g_px3' }],
+  profile: [{ id: 'pf.hero', k: 'g_pf1' }, { id: 'pf.tips', k: 'g_pf2' }, { id: 'pf.sample', k: 'g_pf3' }, { id: 'pf.notif', k: 'g_pf4' }, { id: 'pf.record', k: 'g_pf5' }, { id: 'pf.recordg', k: 'g_pf5g' }],
 };
 
 /* Screens that explain themselves at the top: no first-visit banner, the ? still runs the tour. */
@@ -47,7 +48,7 @@ const QUIET: Route[] = ['priceexplorer'];
 const GNAME: Partial<Record<Route, string>> = {
   money: 'tab_money', househome: 'tab_test', result: 'rs_title', homecosts: 'fh_title', upfront: 'pr_upfront',
   income: 'money_income', expenses: 'money_expenses', plan: 'pl_title', learn: 'hh_learn', pv_compare: 'pv_then',
-  priceexplorer: 'px_title',
+  priceexplorer: 'px_title', profile: 'pf_title',
 };
 
 /* ---------- marking the parts tips point at ---------- */
@@ -204,7 +205,8 @@ function Hint({ bottom }: { bottom: number }) {
   React.useEffect(() => {
     bar.setValue(1);
     Animated.timing(enter, { toValue: 1, duration: reduce ? 0 : 450, easing: Easing.bezier(0.2, 0.9, 0.3, 1.1), useNativeDriver: true }).start();
-    Animated.timing(bar, { toValue: 0, duration: HINT_MS, easing: Easing.linear, useNativeDriver: false }).start();
+    /* AC8.21.9: with reduced motion the countdown bar is not shown, so nothing moves. */
+    if (!reduce) Animated.timing(bar, { toValue: 0, duration: HINT_MS, easing: Easing.linear, useNativeDriver: false }).start();
     const timer = setTimeout(() => up(s => { if (s.tourHint === k) s.tourHint = null; }), HINT_MS);
     return () => clearTimeout(timer);
   }, [k, bar, enter, reduce, up]);
@@ -225,9 +227,11 @@ function Hint({ bottom }: { bottom: number }) {
         accessibilityLabel={t('g_hint_x')} style={st.hx}>
         <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 14 }}>{'✕'}</Text>
       </Pressable>
-      <Animated.View pointerEvents="none" style={[st.hintBar, {
-        width: bar.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
-      }]} />
+      {reduce ? null : (
+        <Animated.View pointerEvents="none" style={[st.hintBar, {
+          width: bar.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+        }]} />
+      )}
     </Animated.View>
   );
 }

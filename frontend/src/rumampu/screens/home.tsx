@@ -683,13 +683,22 @@ function HomePurposeControl() {
   );
 }
 
+/* AC8.25.3: the removal date reads as a date in the person's language, not 2026-10-08. */
+function readableDate(iso: string, lang: string, monthName: (m: number) => string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+  if (lang === 'zh') return `${y}年${mo}月${d}日`;
+  return `${d} ${monthName(mo - 1)} ${y}`;
+}
+
 export function HomeScreen() {
-  const { S, t, go, up } = useApp();
+  const { S, t, go, up, monthName } = useApp();
   const sp = recSpan(S.data);
   const retention = S.retentionNotice?.warning_due ? (
     <View style={st.retentionNotice}>
       <Text style={st.retentionTitle}>{t('rt_title')}</Text>
-      <BodyS>{t('rt_guest_body', { d: S.retentionNotice.removal_date || '' })}</BodyS>
+      <BodyS>{t('rt_guest_body', { d: readableDate(S.retentionNotice.removal_date || '', S.lang, monthName) })}</BodyS>
       <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
         <Pressable onPress={() => go('profile')}><Text style={st.retentionAction}>{t('rt_keep')}</Text></Pressable>
         <Pressable onPress={() => up(s => { s.retentionNotice = null; })}><Text style={st.retentionDismiss}>{t('done')}</Text></Pressable>
