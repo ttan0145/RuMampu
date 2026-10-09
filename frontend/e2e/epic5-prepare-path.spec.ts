@@ -375,7 +375,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
       await expect(page.getByTestId('prov-lends')).toContainText('CALCULATED');
       await page.getByLabel('Your age').fill('40');
       await expect(page.locator('body')).toContainText('Banks commonly end the loan by age 70, so up to 30 years for you.');
-      await expect(page.getByTestId('fact-age')).toContainText('Common practice, not a legal rule. CIMB lends up to 35 years or to age 70, whichever is earlier; other banks set their own limit. Source: CIMB: Home loan. Checked 9 October 2026.');
+      await expect(page.getByTestId('fact-age')).toContainText('Common practice, not a legal rule. CIMB, RHB Islamic and Bank Islam finance up to 35 years or to age 70, whichever is earlier; other banks set their own limit. Source: CIMB: Home loan. Checked 9 October 2026.');
       await page.getByLabel('Your age').fill('');
       // what if rates go up: the higher rates are what-ifs
       await page.getByTestId('lesson-next').click();
@@ -450,7 +450,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
       // subsale: each timing carries its status, its source and the checked date, or is marked unverified
       await page.getByText('Subsale', { exact: true }).click();
       await expect(page.getByTestId('fact-book')).toContainText('Common practice, not a legal rule. Source: Agent and lawyer guides (iProperty, DNH, HBA). Checked 9 October 2026.');
-      await expect(page.getByTestId('fact-spa')).toContainText('Common practice, not a legal rule. Your offer letter sets the date. Source: Agent and lawyer guides (iProperty, DNH, HBA). Checked 9 October 2026.');
+      await expect(page.getByTestId('fact-spa')).toContainText('Unverified. Your offer letter sets the date.');
       await expect(page.getByTestId('fact-comp')).toContainText('Many agreements give 3 months, plus 1 month with interest.');
       await expect(page.getByTestId('fact-keys')).toContainText('Unverified. The bank sets when the first instalment is due.');
       // every amount carries its provenance label: the 2% earnest deposit is RuMampu's assumption, the rest is calculated

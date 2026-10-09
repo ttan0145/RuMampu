@@ -112,7 +112,7 @@
 | AC5.11.1 Subsale or project | 通过 | 时间线随选择切换，离开 Prepare 再回来选择仍在 |
 | AC5.11.2 A subsale in five steps | 通过 | 五个步骤，“You pay” 四次、“Bank pays” 一次 |
 | AC5.11.3 A project as it is built | 通过 | 签约、建造期（只付利息的说明）、钥匙、产权与保留金，以及 Schedule H 折叠表 |
-| AC5.11.4 Timings and shares name their source | 通过 | 二手房：定金 2–3%、14 天、3–4 个月各写 “Common practice, not a legal rule.”，来源为中介与律师指南，核对于 2026-10-09；首期供款时间标为未经核实。新盘：各阶段比例注明 1989 年房屋发展（管制与执照）条例附表 H（附表 G 自 2015 年起比例相同），标明尚未对照宪报原文、二手来源 2026-10-09 查阅，时间线下方和完整表格下各一次。每个金额带 `ASSUMPTION`（2% 定金估算）、`YOUR DATA`（自己填的定金）或 `CALCULATED` |
+| AC5.11.4 Timings and shares name their source | 通过 | 二手房：定金 2–3% 和 3–4 个月写 "Common practice, not a legal rule." 并带来源（中介与律师指南；HBA 关于 SPA 的文章），核对于 2026-10-09；14 天和首期供款时间标为未经核实。新盘：各阶段比例注明 1989 年房屋发展（管制与执照）条例附表 H（附表 G 自 2015 年起比例相同），标明尚未对照宪报原文、二手来源 2026-10-09 查阅，时间线下方和完整表格下各一次。每个金额带 `ASSUMPTION`（2% 定金估算）、`YOUR DATA`（自己填的定金）或 `CALCULATED` |
 
 ## 证据索引
 
