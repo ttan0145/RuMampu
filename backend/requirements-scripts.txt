@@ -1,0 +1,8 @@
+# Extra packages for the one-off data loaders (load_neon.py, load_transactions.py).
+# The deployed API does not import them, so they stay out of requirements.txt to
+# keep the Vercel function small.
+#   pip install -r requirements-scripts.txt
+-r requirements.txt
+numpy==2.5.3
+pandas==2.3.2
+psycopg2-binary==2.9.10

@@ -18,12 +18,9 @@ idna==3.20
 inflection==0.5.1
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
-numpy==2.5.3
 openpyxl==3.1.5
-pandas==2.3.2
 psycopg==3.3.4
 psycopg-binary==3.3.4
-psycopg2-binary==2.9.10
 pydantic==2.13.5
 pydantic_core==2.46.5
 python-dateutil==2.9.0.post0
