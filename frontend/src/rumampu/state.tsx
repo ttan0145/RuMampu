@@ -657,7 +657,7 @@ export interface Ctx {
   refreshIncomeRecord: () => Promise<void>;
   refreshAccountData: (
     onProgress?: (progress: number, stage: string) => void,
-    options?: { includeSavedTests?: boolean },
+    options?: { includeSavedTests?: boolean; keepLocalTests?: boolean },
   ) => Promise<void>;
   applyAccountState: (auth: ApiAuthState) => void;
   refreshSavedHousingTests: () => Promise<void>;
@@ -805,7 +805,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const patternRequestVersion = useRef(0);
   const patternRefreshInFlight = useRef<Promise<void> | null>(null);
-  const refreshAccountDataRef = useRef<((onProgress?: (progress: number, stage: string) => void, options?: { includeSavedTests?: boolean }) => Promise<void>) | null>(null);
+  const refreshAccountDataRef = useRef<((onProgress?: (progress: number, stage: string) => void, options?: { includeSavedTests?: boolean; keepLocalTests?: boolean }) => Promise<void>) | null>(null);
   const coverageRequestVersion = useRef(0);
   const coverageRefreshInFlight = useRef<Promise<void> | null>(null);
   const workCostRequestVersion = useRef(0);
@@ -906,6 +906,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!hasLogin) {
         // A guest who only reloaded the page (the tab is still the same one) goes straight back to
         // the app with the local record, without a new client id and without clearing anything.
+        // The kept house tests came back from the local snapshot above; a guest has none on the server, so they are kept.
         if (active && hasGuestSession()) {
           setS(prev => {
             const next: AppState = JSON.parse(JSON.stringify(prev));
@@ -917,7 +918,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             next.splash = false;
             return next;
           });
-          try { await refreshAccountDataRef.current?.(undefined, { includeSavedTests: false }); } catch { /* the local record is still usable */ }
+          try { await refreshAccountDataRef.current?.(undefined, { includeSavedTests: false, keepLocalTests: true }); } catch { /* the local record is still usable */ }
         }
         if (active) setAuthReady(true);
         return;
@@ -1983,7 +1984,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const refreshAccountData = useCallback(async (
     onProgress?: (progress: number, stage: string) => void,
-    options?: { includeSavedTests?: boolean },
+    options?: { includeSavedTests?: boolean; keepLocalTests?: boolean },
   ): Promise<void> => {
     if (!INCOME_API_ENABLED) {
       onProgress?.(100, 'Ready');
@@ -2068,7 +2069,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     ];
     if (includeSavedTests) {
       finalTasks.push(trackedFinal(refreshSavedHousingTests(), 'Saved tests loaded'));
-    } else {
+    } else if (!options?.keepLocalTests) {
       up(s => { s.keptTests = []; });
     }
     await Promise.all(finalTasks);
