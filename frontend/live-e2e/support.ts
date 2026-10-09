@@ -1,8 +1,8 @@
 import { expect, test as base, type Locator, type Page, type TestInfo } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 
-export const LIVE_APP = 'https://rumampu-frontend.vercel.app/';
-export const LIVE_API = 'https://rumampu.vercel.app/api/v1';
+export const LIVE_APP = 'https://rumampu-frontend-five.vercel.app/';
+export const LIVE_API = 'https://rumampu-five.vercel.app/api/v1';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 type ApiEvent = { method: string; path: string; status: number };

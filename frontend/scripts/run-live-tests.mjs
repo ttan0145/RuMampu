@@ -27,7 +27,7 @@ Reports: output/playwright/live/report and output/playwright/live/test-results.
 }
 
 const writes = args.includes('--allow-writes');
-console.log(`Target: https://rumampu-frontend.vercel.app/`);
+console.log(`Target: https://rumampu-frontend-five.vercel.app/`);
 console.log(writes
   ? 'Mode: full UI flow. Synthetic financial records will remain in a new isolated guest.'
   : 'Mode: read-only financial checks. No income, costs or housing scenarios will be saved.');

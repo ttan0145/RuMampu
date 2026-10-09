@@ -141,7 +141,7 @@ CORS_ALLOWED_ORIGINS = [
             "http://127.0.0.1:8081,"
             "http://localhost:19006,"
             "http://127.0.0.1:19006,"
-            "https://rumampu-frontend.vercel.app"
+            "https://rumampu-frontend-five.vercel.app"
         ),
     ).split(",")
     if origin.strip()
@@ -161,7 +161,7 @@ SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = "None"
 CSRF_COOKIE_SECURE = not DEBUG
 CSRF_TRUSTED_ORIGINS = [
-    "https://rumampu-frontend.vercel.app",
+    "https://rumampu-frontend-five.vercel.app",
 ]
 
 
@@ -179,7 +179,7 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "RuMampu <no-reply@rumampu.app>")
 
 # Native production builds can use `rumampu://reset-password`. For web /
-# Vercel testing, set this to e.g. https://rumampu.vercel.app/reset-password.
+# Vercel testing, set this to e.g. https://rumampu-frontend-five.vercel.app/reset-password.
 PASSWORD_RESET_URL_BASE = os.getenv("PASSWORD_RESET_URL_BASE", "rumampu://reset-password")
 # Django's default token timeout is one day. Keep it explicit for this app.
 PASSWORD_RESET_TIMEOUT = int(os.getenv("PASSWORD_RESET_TIMEOUT", "86400"))
