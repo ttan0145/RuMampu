@@ -1,0 +1,34 @@
+# Vercel deploys the backend from this repository root (see vercel.json).
+# The legacy @vercel/python build packs every file it can see into the
+# serverless function, so anything the API does not need at runtime is
+# listed here. The frontend is a separate Vercel project rooted in frontend/,
+# which has its own vercel.json and is not affected by this file.
+
+# Other projects and documents
+frontend/
+docs/
+output/
+ml/
+ml_price_model/
+monitoring/
+Claude outputs/
+.github/
+README.md
+README.cn.md
+service.py
+
+# One-off data loaders and their inputs (run locally, never by the API)
+backend/data/
+backend/load_neon.py
+backend/load_transactions.py
+backend/requirements-scripts.txt
+
+# Local files that should never ship
+**/__pycache__/
+**/*.pyc
+**/*.sqlite3
+**/.env
+**/.env.*
+backend/venv/
+backend/.venv/
+.DS_Store
