@@ -70,6 +70,53 @@ test('Iteration 3 Epic 7 saves an actual homeowner month and shows the cash posi
   });
 });
 
+test('Epic 7 names unrecorded months after the purchase month moves earlier, and every month since buying can be recorded', async ({ page }) => {
+  await openGuestApp(page);
+  await syncClientIdFromBrowser(page);
+  const SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthsAgo = (n: number) => {
+    const d = new Date();
+    const m = new Date(d.getFullYear(), d.getMonth() - n, 1);
+    return { key: `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`, label: `${SHORT[m.getMonth()]} ${m.getFullYear()}` };
+  };
+  const lastMonth = monthsAgo(1);
+  const earlier = monthsAgo(4);
+
+  // Bought last month, with that month's home costs recorded.
+  await page.getByRole('tab', { name: 'House', exact: true }).click();
+  await page.getByText('I’ve bought a home', { exact: true }).click();
+  await page.getByLabel('Month you bought').fill(lastMonth.key);
+  await page.getByTestId('keys-bought').click();
+  await page.getByTestId('keys-record').click();
+  await page.getByRole('button', { name: lastMonth.label, exact: true }).click();
+  const homeCosts = page.getByLabel('Actual home costs');
+  await homeCosts.click();
+  await homeCosts.pressSequentially('1500');
+  await homeCosts.blur();
+  const savedResponse = page.waitForResponse(response =>
+    response.request().method() === 'PUT' && response.url().endsWith('/api/v1/homeownership/months/')
+  );
+  await page.getByRole('button', { name: 'Save this month', exact: true }).click();
+  expect((await savedResponse).status()).toBe(200);
+  await page.getByRole('button', { name: 'Back' }).first().click();
+  await expect(page.getByTestId('keys-summary')).toBeVisible();
+  await expect(page.getByTestId('pv-unrecorded')).toHaveCount(0);
+
+  // Moving the purchase month three months earlier names the months still to record.
+  await page.getByText('Change the month', { exact: true }).click();
+  await page.getByLabel('Month you bought').fill(earlier.key);
+  await page.getByTestId('keys-bought').click();
+  await expect(page.getByText('3 month(s) since you bought have no home costs yet. Record them to complete the comparison.', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('pv-coverage')).toHaveText('1 of 4 completed months since buying recorded');
+
+  // The button opens Record a month on the oldest of them, which has no income yet.
+  await page.getByText(`Record ${earlier.label}`, { exact: true }).click();
+  await expect(page.getByText('No income recorded for this month', { exact: true })).toBeVisible();
+  for (const n of [1, 2, 3, 4]) {
+    await expect(page.getByRole('button', { name: monthsAgo(n).label, exact: true })).toBeVisible();
+  }
+});
+
 test('Epic 7 comparison distinguishes a missing earlier test from missing actual months', async ({ page }) => {
   await openGuestApp(page);
   await page.getByRole('tab', { name: 'House', exact: true }).click();
@@ -125,7 +172,7 @@ test('Iteration 3 Epic 8 offers income and expense reminders and keeps retention
   await openGuestApp(page);
   await page.getByRole('tab', { name: 'Profile', exact: true }).click();
 
-  await expect(page.getByText('Notifications', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^notifications$/i)).toBeVisible();
   const incomeSwitch = page.getByRole('switch', { name: 'Income reminder' });
   const expenseSwitch = page.getByRole('switch', { name: 'Expenses reminder' });
   await expect(incomeSwitch).not.toBeChecked();

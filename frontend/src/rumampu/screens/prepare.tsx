@@ -24,6 +24,9 @@ import { goalFromKept, prepLoan } from '../prep7';
 import {
   ActBar, b1, Btn2, BtnDeep, Chip7, Fold, G, Group, Hdr7, PAGE, Ph, Rich, RumaImg, Sec, Seg, SHADOW, T7, Toggle, x,
 } from './p7ui';
+import {
+  completedMonthsSincePurchase, postPurchaseMonths, testedMonthsAfterPurchase, unrecordedCompletedMonths,
+} from '../homeownership-months';
 
 /* v22: prepare rows live inside the House tab's "Get ready" segment. */
 export function PrepareBody() {
@@ -772,6 +775,7 @@ export function PvSwitchScreen() {
   const pm = S.purchaseMonth as string;
   const since = `${STRINGS_MONTH_LONG(monthName, pm)}`;
   const inst = prepLoan(S).mo || (result ? Number(result.tested_home_cost) : 0);
+  const completedSince = completedMonthsSincePurchase(pm, new Date());
   return (
     <ScreenShell tint={T7.bg} noScene header={<Hdr7 title={t('pr_pv')} />} contentStyle={PAGE}
       footer={<ActBar><View style={{ flex: 1 }}><BtnDeep label={t('pv_month')} onPress={() => go('pv_month')} testID="keys-record" /></View></ActBar>}>
@@ -780,6 +784,11 @@ export function PvSwitchScreen() {
         <Text style={{ fontFamily: G.s, fontSize: 28, lineHeight: 32, letterSpacing: -0.84, color: T7.text, marginTop: 4 }}>
           {rows.length ? t('p7_keys_short', { s: short, n: rows.length }) : t('pv_compare_empty_t')}
         </Text>
+        {/* Moving the purchase month changes how many months have ended since buying;
+            say how many of them are recorded so the change is visible at once. */}
+        {completedSince > 0 ? (
+          <Text style={[x.tiny, { marginTop: 4 }]} testID="pv-coverage">{t('pv_recorded_of', { r: rows.length, n: completedSince })}</Text>
+        ) : null}
         {rows.length ? (
           <View style={{ flexDirection: 'row', gap: 2, height: 8, marginTop: 12 }}>
             {rows.map(r => <View key={r.month} style={{ flex: 1, borderRadius: 2, backgroundColor: r.short ? T7.short : T7.accent }} />)}
@@ -798,6 +807,7 @@ export function PvSwitchScreen() {
           </View>
         ))}
       </View>
+      <UnrecordedMonths />
       <Btn2 label={t('pv_then')} onPress={() => go('pv_compare')} testID="keys-mbm" />
       <Pressable onPress={() => { setPurchase(pm); setEditing(true); }} accessibilityRole="button" style={{ alignSelf: 'center', paddingVertical: 10 }}>
         <Text style={{ fontFamily: G.s, fontSize: 14, color: T7.accentInk }}>{t('p7_keys_change')}</Text>
@@ -807,6 +817,26 @@ export function PvSwitchScreen() {
 }
 const STRINGS_MONTH_LONG = (monthName: (m: number) => string, ym: string) => (validMonth(ym) ? `${monthName(+ym.slice(5, 7) - 1)} ${ym.slice(0, 4)}` : ym);
 const rmK7 = (v: number) => `RM ${Math.round(v).toLocaleString('en-MY')}`;
+
+/* AC 7.3.5: completed months since buying with no home costs yet are named, so
+   moving the purchase month earlier never looks as if nothing happened. The
+   button opens Record a month on the oldest of them. */
+function UnrecordedMonths() {
+  const { S, t, monthName, up, go } = useApp();
+  if (!S.purchaseMonth) return null;
+  const recorded = S.homeownershipMonths.map(row => row.month);
+  const missing = unrecordedCompletedMonths(S.purchaseMonth, recorded, new Date());
+  if (!missing.length) return null;
+  return (
+    <View style={[x.cardx, { marginTop: 10, paddingVertical: 12 }]} testID="pv-unrecorded">
+      <Text style={x.tiny}>{t('pv_unrecorded_n', { n: missing.length })}</Text>
+      <Btn2 label={t('pv_record_first', { m: monthLabel(missing[0], monthName) })} onPress={() => {
+        up(s => { s.homeownershipMonth = missing[0]; });
+        go('pv_month');
+      }} />
+    </View>
+  );
+}
 
 /* v7 look for Epic 7's Monthly actuals: the same month choice, recorded income
    and work costs from the record, the actual home cost I enter, and the cash
@@ -819,11 +849,15 @@ export function PvMonthScreen() {
   const savedCost = saved?.actual_home_costs;
   const [cost, setCost] = React.useState<number | string>(savedCost == null ? '' : Number(savedCost));
   const costRef = React.useRef<number | string>(savedCost == null ? '' : Number(savedCost));
-  const months = [...new Set([
-    current,
-    ...S.data.income.map(entry => entry.d.slice(0, 7)),
-    ...S.homeownershipMonths.map(row => row.month),
-  ].filter(value => validMonth(value) && (!S.purchaseMonth || value >= S.purchaseMonth)))].sort().reverse();
+  /* AC 7.1.7 and 7.2.1: every month from the purchase month to this one can be
+     recorded, including months with no income yet (they say so below). */
+  const months = S.purchaseMonth && validMonth(S.purchaseMonth)
+    ? postPurchaseMonths(S.purchaseMonth, new Date())
+    : [...new Set([
+      current,
+      ...S.data.income.map(entry => entry.d.slice(0, 7)),
+      ...S.homeownershipMonths.map(row => row.month),
+    ].filter(validMonth))].sort().reverse();
 
   React.useEffect(() => {
     void refreshHomeownership().catch(() => undefined);
@@ -916,12 +950,16 @@ export function PvCompareScreen() {
   const shortCount = rows.filter(row => row.short).length;
   const current = monthKey();
   const currentIsPostPurchase = !S.purchaseMonth || current >= S.purchaseMonth;
+  const completedSince = S.purchaseMonth ? completedMonthsSincePurchase(S.purchaseMonth, new Date()) : rows.length;
   const testedMonths = new Set((result?.months || []).map(row => (
     `${row.year}-${String(row.month).padStart(2, '0')}`
   )));
   const outsideEarlierHistory = result
     ? rows.filter(row => !testedMonths.has(row.month)).length
     : 0;
+  /* The earlier test reads every recorded month, so months after a purchase
+     month moved earlier can sit inside it; say how many. */
+  const earlierAfterPurchase = S.purchaseMonth ? testedMonthsAfterPurchase([...testedMonths], S.purchaseMonth) : 0;
   React.useEffect(() => { void refreshHomeownership().catch(() => undefined); }, [refreshHomeownership]);
   const note = (txt: string) => <View style={[x.cardx, { marginTop: 10, paddingVertical: 12 }]}><Text style={x.tiny}>{txt}</Text></View>;
   return (
@@ -950,7 +988,7 @@ export function PvCompareScreen() {
             <>
               <Text style={pv.sideB}>{t('pv_short_of', { s: shortCount, n: rows.length })}</Text>
               <Text style={pv.sideS}>{t('pv_actual_result')}</Text>
-              <Text style={pv.sideE}>{t('pv_since_purchase')}</Text>
+              <Text style={pv.sideE}>{t('pv_recorded_of', { r: rows.length, n: completedSince })}</Text>
               <Prov p="user" />
             </>
           ) : (
@@ -963,6 +1001,8 @@ export function PvCompareScreen() {
           )}
         </View>
       </GuideTarget>
+      {earlierAfterPurchase > 0 ? note(t('pv_earlier_after_n', { n: earlierAfterPurchase })) : null}
+      <UnrecordedMonths />
       {!result ? <Btn2 label={t('hh_test')} onPress={() => go('house')} /> : null}
       {rows.length === 0 ? (
         <View style={{ marginTop: 16 }}><BtnDeep label={t('pv_record_month')} onPress={() => go('pv_month')} /></View>

@@ -357,7 +357,7 @@ async function loginThroughUi(page: Page, email: string, password: string): Prom
 
 async function openProfile(page: Page): Promise<void> {
   await page.getByRole('tab', { name: 'Profile', exact: true }).click();
-  await expect(page.getByText('Notifications', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^notifications$/i)).toBeVisible();
 }
 
 /* Profile reminders: switching one on opens the sheet; the words of a reminder
