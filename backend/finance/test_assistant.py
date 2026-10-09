@@ -512,8 +512,8 @@ class SnapshotTests(TestCase):
             snapshot["income_month_so_far"],
             {
                 "month": "2026-10",
-                "gross_income": "100",
-                "work_costs": "25",
-                "usable_income": "75",
+                "gross_income": "100.00",
+                "work_costs": "25.00",
+                "usable_income": "75.00",
             },
         )

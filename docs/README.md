@@ -6,9 +6,9 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 - [Architecture baseline](ARCHITECTURE.md): module boundaries, data flow, privacy boundaries, and definition of done.
 - [API contract](API_CONTRACT.md): versioning, data types, errors, endpoints, and compatibility policy.
 - [OpenAPI schema](openapi.yaml): machine-readable contract generated from and validated against the backend.
-- [Complete US/AC Markdown](requirements/USER_STORIES_AND_ACCEPTANCE_CRITERIA.md): 8 Epics, 35 user stories, and 219 acceptance criteria extracted from the formal DOCX.
-- [Epic 1 US/AC Markdown](requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md): the 8 active user stories and 62 acceptance criteria in the v3 delivery scope; AC1.1.8 is deferred for the current UI adaptation.
-- [Epic 2 US/AC Markdown](requirements/EPIC_2_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md): the reconciled 4 user stories, 18 acceptance criteria, and calculation boundaries.
+- [Complete US/AC Markdown](requirements/USER_STORIES_AND_ACCEPTANCE_CRITERIA.md): for Epics other than 1, 2 and 5, the August DOCX summary (8 Epics, 35 user stories, 219 acceptance criteria) applies; the current repository snapshots are Epic 1 with 72, Epic 2 with 21 and Epic 5 with 88 acceptance criteria.
+- [Epic 1 US/AC Markdown](requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md): the 9 active user stories and 72 acceptance criteria in the v7 scope, reconciled 2026-10-08; all 72 run through `ac()` in `epic1.spec.ts`.
+- [Epic 2 US/AC Markdown](requirements/EPIC_2_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md): the reconciled 4 user stories, 21 acceptance criteria, and calculation boundaries.
 - [Epic 1 implementation and acceptance index](epic-1/README.md): acceptance status and evidence by user story.
 - [US1.1 acceptance record](epic-1/US1.1_RECORD_INCOME.md): evidence for the 10 criteria covering income from different sources.
 - [US1.2 acceptance record](epic-1/US1.2_HISTORICAL_INCOME.md): evidence for 4 criteria and the historical-month convention.
@@ -18,9 +18,10 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 - [US1.6 acceptance record](epic-1/US1.6_EXPENSE_REVIEW.md): evidence for 6 criteria covering latest-month review and monthly summaries.
 - [US1.7 acceptance record](epic-1/US1.7_RECEIPT_STARTING_POINT.md): evidence for 10 criteria covering receipt selection, preview, human confirmation, and saving.
 - [US1.8 acceptance record](epic-1/US1.8_HISTORICAL_IMPORT.md): evidence for 8 criteria covering CSV preview, invalid rows, confirmation, and analysis integration.
+- [US1.9 acceptance record](epic-1/US1.9_BANK_STATEMENT_SCAN.md): evidence for 5 criteria covering statement upload, transaction-only results, review before save, processor disclosure, and failure handling.
 - [Epic 1 completion report](epic-1/EPIC_1_COMPLETION_REPORT.md): overview of all 56 criteria, migrations, automation, and real-browser acceptance.
-- [Epic 2 implementation and acceptance index](epic-2/README.md): all 18 criteria, per-US evidence, API boundaries, and browser acceptance.
-- [Epic 5 US/AC baseline](requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md): 8 user stories and 68 criteria from v5 and Iteration 3, reconciled with LeanKit on 2026-10-08.
+- [Epic 2 implementation and acceptance index](epic-2/README.md): all 21 criteria, per-US evidence, API boundaries, and browser acceptance.
+- [Epic 5 US/AC baseline](requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md): 11 user stories and 88 criteria (V9); 83 executable and 5 recorded as deferred in the Epic 5 acceptance index.
 - [Epic 5 implementation and acceptance index](epic-5/README.md): preparation tools, Learn, account reading progress and savings allocation, with executable evidence.
 - [Learn content sources](epic-5/LEARN_SOURCES.md): public references, verification dates and corrections for all 19 explanations.
 - [Playwright acceptance-test standard](testing/PLAYWRIGHT_ACCEPTANCE_STANDARD.md): Epic/US/AC naming, exact traceability gate, evidence policy, commands, and completion rules.

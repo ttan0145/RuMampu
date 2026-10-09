@@ -2,8 +2,8 @@
 
 语言：**中文（CN）** | [English](US1.3_WORK_COSTS.md)
 
-- 验收日期：2026-09-03
-- 状态：本地实现与验收通过（10/10 AC）；不代表 LeanKit 关闭、IT2 排期或生产发布。
+- 验收日期：2026-10-08
+- 状态：v7 下 13 条 AC 均已实现并通过本轮浏览器验收，包含修改金额/日期后再双向迁移。
 - 需求来源：[US1.3 - Record direct work-related costs](../requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md#us13---record-direct-work-related-costs)
 
 ## 验收矩阵
@@ -12,23 +12,26 @@
 |---|---|---|
 | AC1.3.1 Select a work-cost category | 通过 | 页面加载当前 profile 的默认与自定义类别；保存前必须选定一个类别。 |
 | AC1.3.2 Enter a work-cost amount | 通过 | 表单和 API 都要求金额大于 0。 |
-| AC1.3.3 Enter a work-cost date | 通过 | 表单提供日期选择器；API 保存 `date` 并拒绝未来日期。 |
-| AC1.3.4 Add a custom category | 通过 | `POST /api/v1/work-costs/` 新建唯一的自定义类别，不为它设置重复月金额。 |
+| AC1.3.3 Enter the work-cost date | 通过 | 表单提供日期选择器；API 保存 `date` 并拒绝未来日期。 |
+| AC1.3.4 Add my own work-cost category | 通过 | `POST /api/v1/work-costs/` 新建唯一的自定义类别，不为它设置重复月金额。 |
 | AC1.3.5 Save a work-cost entry | 通过 | `POST /api/v1/work-costs/entries/` 追加一笔独立的类别、金额和日期记录。 |
-| AC1.3.6 Display recorded entries | 通过 | 页面列出每笔已保存记录的业务日期、类别和金额；记录行不重复显示 YOUR DATA，净收入仍以 CALCULATED 标明计算来源。窄屏下金额和编辑入口可整体换行。 |
-| AC1.3.7 Edit a work-cost record | 通过 | `PATCH /api/v1/work-costs/entries/{id}/` 只修改被选中的记录，并刷新受影响月份的结果。 |
+| AC1.3.6 Display recorded work costs | 通过 | 页面列出每笔已保存记录的业务日期、类别和金额；记录行不重复显示 YOUR DATA，净收入仍以 CALCULATED 标明计算来源。窄屏下金额和编辑入口可整体换行。 |
+| AC1.3.7 Edit a recorded work cost | 通过 | `PATCH /api/v1/work-costs/entries/{id}/` 只修改被选中的记录，并刷新受影响月份的结果。 |
 | AC1.3.8 Apply work costs to the correct month | 通过 | 财务服务按 `cost_date` 的年月分组，不会把一笔成本扣到其他月份。 |
 | AC1.3.9 Show income after work costs | 通过 | 所选月汇总为该月总收入减该月成本；无收入月份保留成本并明确净收入不可计算。 |
 | AC1.3.10 Identify calculated income | 通过 | 月净收入显示 `CALCULATED` 来源标记，并明确它使用所选月记录而非平均值。 |
+| AC1.3.11 Record different work costs separately | 通过 | 两笔不同日期的工作成本作为独立记录显示，不合并覆盖。 |
+| AC1.3.12 Mark a daily expense as a work cost | 通过 | 添加表单先切换工作开销，再显示工作成本类别；保存后记录进入工作成本表且不计入日常支出。 |
+| AC1.3.13 Move an entry between spending and work costs | 通过 | 行内编辑切换类别；后端在事务中删除来源行并创建目标行，保留金额、日期和商户，Your record 记录移动。 |
 
-## 自动化与浏览器验收
+## 自动化与浏览器验收（v7，2026-10-08）
 
-- 后端整套 `manage.py test`：106 项通过，新增 7 项工作成本边界回归，覆盖跨年编辑、空月份、日期/精度、访客隔离、零值/负值、旧金额保留。
-- 前端 TypeScript 与验收可追溯性检查通过；Epic 1 的 61 条可执行 AC 与明确暂缓的 AC1.1.8 均唯一映射。
-- `npm run test:e2e -- --reporter=line`：2026-09-03 在当前代码上完整运行，32 项全部通过（2.3 分钟），包含 Epic 1/2、既有住房/记录页回归和 4 项新增工作成本故障测试。
-- `e2e/epic1.spec.ts` 的 US1.3 流程按服务端当前月份生成相对日期，不再锁死 2026 年 9 月；验证保存后重新加载、单条编辑、同月扣除、仅成本月份以及 calculated 标记。
+- 后端 `finance.tests`：60/60 通过，含两种账目迁移、商户保留、修改后的金额/日期、非法目标和月度总额保护。
+- 当时的 Epic 1 浏览器套件为 13/13；本轮补入 US1.9 后，追踪映射为 72 条可执行、0 条延期。US1.9 浏览器验收未运行，见 [US1.9 记录](US1.9_BANK_STATEMENT_SCAN.cn.md)。
+- Epic 1 完整 Playwright 浏览器套件：13/13 通过。US1.3 验证不同成本分别保存、编辑工作成本、修改金额和日期后迁移到日常支出、再修改后迁回工作成本，以及 Your record 日志和月份净收入。日志见[完整运行记录](../../output/playwright/epic1-supervised/full-final/run.log)。
+- 迁移漂移检查通过；新增 `WorkCostEntry.merchant` 字段由 `0023_workcostentry_merchant` 提供。
 
-验收技能将“编号唯一映射”与“实际验收通过”分开；本次完整浏览器回归才是新的运行证据。工程回归映射及剩余发布门槛见[批判性核查记录](US1.3_AUDIT_2026-09-03.cn.md)。
+验收技能将“编号唯一映射”与“实际验收通过”分开；本轮 13/13 浏览器测试才是当前通过证据。工程回归映射及其他发布门槛见[批判性核查记录](US1.3_AUDIT_2026-09-03.cn.md)。
 
 ## 计算口径
 
@@ -53,7 +56,7 @@
 | AC1.3.9、AC1.3.10 | TECH-WC-05/06/07 及既有 US1.3 验收流程 | 本地通过；不可用结果不会被显示为已确认的零值或净收入。 |
 
 - 红绿验证：TECH-WC-05 先在原应用上因找不到 `Petrol` 而失败，修复后通过。
-- 2026-09-11 当前验证：finance 90/90 通过；前端 TypeScript 通过；Epic 1 的 61 条可执行 AC 与明确暂缓的 AC1.1.8、Epic 2 的 18/18 AC 均唯一映射。
+- 2026-09-11 当前验证：finance 90/90 通过；前端 TypeScript 通过；Epic 1 的 61 条可执行 AC 与 AC1.1.8（已改为 `ac()` 执行）、Epic 2 的 18/18 AC 均唯一映射。
 - 完整本地浏览器回归：**35/35 通过（2.4 分钟）**，使用 Chromium 和 SQLite，包含既有 Epic 3/4 住房流程及三项新增加载失败回归；不宣称新完成 PostgreSQL CI 或真机验收。
 - 范围仅限故障恢复：未修改字体、颜色、布局、编辑流程、删除操作或需求。住房受影响行为已由 AC3.2.5、AC3.3.1 描述；移交迁移执行人不等于新增 Epic 3 AC。
 - 随后在 `https://rumampu-frontend.vercel.app/` 完成真实浏览器核查：使用初始为空的新访客，没有模拟请求；验证类别加载、零金额拒绝、同类成本新增两笔、单笔编辑、跨月改日期及刷新持久化。RM 3,000 收入减去当月剩余 RM 25 成本后，Work costs 和 Income pattern 均显示 RM 2,975；只有成本的上月没有被虚构出收入。

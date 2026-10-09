@@ -17,6 +17,9 @@
 | US5.6 — 无固定工资者的信息 | 3/3 | No payslip、SJKP 担保上限与材料清单入口 |
 | US5.7 — 阅读进度 | 6/6 | 已读数、续读、Prepare 总进度、账号跨设备保存；无阅读奖励 |
 | US5.8 — 现金缓冲和首付共用的储蓄只算一次（团队修订） | 10/10 | 罐子先填缓冲；Upfront cash、House、储蓄计划和首页读同一套拆分；Cash buffer 写明已覆盖多少，并能打开储蓄计划 |
+| US5.9 — 一步步为一套房做准备（V9） | 5/7，2 项延期 | 每一步围绕同一套房、选择或填写房源表单、四步均不锁定、月供与文件两步的勾选、PDF 页面。延期：AC5.9.5（界面写“You’re ready to buy!”）、AC5.9.7（访客重新打开页面后路径清空）。测试：`epic5-prepare-path.spec.ts` |
+| US5.10 — 看看每月还款是什么感觉（V9） | 7/9，2 项延期 | 六个引导屏和总结页。延期：AC5.10.2（界面把占比评为 Comfortable / Tight / Heavy）、AC5.10.9（没有来源标签）。测试：`epic5-prepare-path.spec.ts` |
+| US5.11 — 了解我这类房子怎么买（V9） | 3/4，1 项延期 | 二手房与新盘时间线、选择被保留、Schedule H 折叠表。延期：AC5.11.4（时间点和比例没有来源或核对日期）。测试：`epic5-prepare-path.spec.ts` |
 
 ## 验收记录
 
@@ -90,6 +93,26 @@
 | AC5.8.8 Go on to the saving plan | 通过 | Cash buffer 上的 "Open the saving plan" 打开储蓄计划，拆分同样是 RM 500 |
 | AC5.8.9 Using the buffer takes it off the pot | 通过 | 在 Cash buffer 页点 “I used some of my safety money” 记下 RM 500（超过缓冲里的 RM 905 会被拒绝）；弹出 Epic 10 的温和提示，缓冲仍满，罐子从 RM 10,000 变 RM 9,500，*You have* 从 RM 9,095 变 RM 8,595。入口位置由开发者暂定（v27b4 没有设计），已发群里征求意见 |
 | AC5.8.10 Name my safety money | 通过 | Cash buffer 页名字旁的铅笔打开弹窗；起名 “Rainy day fund”（多余空格清掉，最多 30 字）后，Cash buffer、Upfront cash、罐子明细和首页都显示这个名字；名字随计划保存；“Use the default name” 改回 “safety money” |
+| AC5.9.1 One home for every step | 通过 | 横幅写明房名、价格和二手/新盘；Change home 列出两条已保存测试和 “Test a new house first”；选一条后整条路径改为该房（`epic5-prepare-path.spec.ts`） |
+| AC5.9.2 Choose or type a home first | 通过 | 没有测试时只显示 “Which home are you preparing for?” 和填写表单，不显示路径；点 “Use this home” 后出现横幅和各步骤 |
+| AC5.9.3 Four steps, none locked | 通过 | 四步按顺序出现且各带数字；可以先打开文件这一步 |
+| AC5.9.4 What counts as done | 部分通过 | 已检查：五份文件全勾后文件步骤打勾、月供检查保存后月供步骤打勾、钥匙一步不带进度。现金一步（罐子覆盖前期现金）在此场景中没有走到 |
+| AC5.9.5 Say what is left without a verdict | 延期 | “还剩 1 件事”一行正常，但三步全完成时界面写 “You’re ready to buy!”，与验收标准冲突（V9 构建说明） |
+| AC5.9.6 Keep a copy of my plan | 通过 | 打印页标题为 “RuMampu buying plan, for my own reference”，列出价格、贷款、前期现金、现金缓冲、已备文件和免责声明；手机分享面板未测 |
+| AC5.9.7 Kept on this device | 延期 | App 保持打开时保留；访客重新打开页面后从空白开始（访客入口文案写明完全关闭后不保留）；账号情形未验证 |
+| AC5.10.1 The monthly payment first | 通过 | 月供、“90% loan at 4.30%, over 35 years” 和 “Your typical month” |
+| AC5.10.2 Compare with my month, without a rating | 延期 | 界面显示 Comfortable / Tight / Heavy，并按没有公开来源的界线给行着色 |
+| AC5.10.3 Where the payment goes | 通过 | 第 1 年、中间一年和最后一年的利息占比与图例 |
+| AC5.10.4 Pick how long and how much the bank lends | 通过 | 25、30、35 年各带月供和总利息；80%/90% 与 “You put down … The bank lends …” |
+| AC5.10.5 If rates go up | 通过 | Now、+1%、+2% 的利率与月供，问题，回答不改变其他数字 |
+| AC5.10.6 My full monthly bill | 通过 | 公寓：月供、地租与门牌税、火险和维护费，起始金额均标 “Our guess”，改动后去掉，并显示每月总额 |
+| AC5.10.7 A cushion from my own months | 通过 | 缓冲、“Your pot covers …”、逐月累计余额、最大跌幅，点 Add RM x 打开储蓄计划 |
+| AC5.10.8 Three numbers to keep | 通过 | 月供、利率升 1% 的月供、缓冲、贷款摘要、免责声明，Save 后该步骤打勾 |
+| AC5.10.9 Say where every figure comes from | 延期 | 除 “Our guess” 外，没有你的数据 / 计算 / 假设标签 |
+| AC5.11.1 Subsale or project | 通过 | 时间线随选择切换，离开 Prepare 再回来选择仍在 |
+| AC5.11.2 A subsale in five steps | 通过 | 五个步骤，“You pay” 四次、“Bank pays” 一次 |
+| AC5.11.3 A project as it is built | 通过 | 签约、建造期（只付利息的说明）、钥匙、产权与保留金，以及 Schedule H 折叠表 |
+| AC5.11.4 Timings and shares name their source | 延期 | 时间点与比例没有来源或日期；金额没有来源标签 |
 
 ## 证据索引
 

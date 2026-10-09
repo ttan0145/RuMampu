@@ -2,6 +2,8 @@
 
 更新：2026-09-11。Epic 1、2 已完成新版 UI 适配与本地验收。
 
+> 历史记录提示：本文记录的是 v3/旧 UI 适配轮次，Epic 1 的 62 条 AC 与“US1.9 不在范围内”已不再代表当前需求。当前 Epic 1 基线为 v7，共 72 条 AC；验收现状见 [Epic 1 完成报告](../epic-1/EPIC_1_COMPLETION_REPORT.cn.md)。
+
 ## 范围与依据
 
 已同步至 `origin/main` 的 `7feea84`，在最新版前端上适配 Epic 1、2并保留现有界面设计。依据为网盘 v3 US/AC（2026-09-06）及迭代 2 Epics/Pain Points 补充说明（2026-09-07）。Epic 1 共 62 条、Epic 2 共 18 条唯一 AC。AC1.1.8 Your Data 按用户要求暂缓；US1.9 银行电子账单处理不在本轮范围。

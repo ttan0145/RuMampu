@@ -9,6 +9,7 @@ these rules.
 from __future__ import annotations
 
 import datetime
+from decimal import ROUND_HALF_UP, Decimal
 import json
 import os
 import re
@@ -130,7 +131,12 @@ class AssistantError(Exception):
 
 
 def _money(value: Any) -> str:
-    return str(value)
+    # Two decimals on every database, so SQLite and PostgreSQL give the same text.
+    if value is None:
+        return str(value)
+    if not isinstance(value, Decimal):
+        value = Decimal(str(value))
+    return str(value.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
 
 
 def build_financial_snapshot(profile: GuestProfile) -> dict[str, Any]:

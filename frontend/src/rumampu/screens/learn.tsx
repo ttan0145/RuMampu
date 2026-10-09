@@ -100,7 +100,7 @@ export function LearnScreen() {
               style={({ pressed }) => [ls.sc, pressed && { opacity: 0.9 }]}>
               <View style={[ls.scArt, { backgroundColor: m.bg }]}>
                 {LN_TOPIC[x.id] ? (
-                  <Image source={LN_TOPIC[x.id]} resizeMode="cover" style={[{ width: '100%', height: '100%' }, done && { opacity: 0.85 }]} />
+                  <Image source={LN_TOPIC[x.id]} resizeMode="cover" style={[ls.scImage, done && { opacity: 0.85 }]} />
                 ) : null}
               </View>
               <View style={{ flex: 1, minWidth: 0, paddingVertical: 12, paddingLeft: 14, paddingRight: 10, justifyContent: 'center', gap: 6 }}>
@@ -454,10 +454,18 @@ const ls = StyleSheet.create({
   sc: {
     width: '100%', alignSelf: 'stretch', flexDirection: 'row', alignItems: 'stretch',
     backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: C.ink14,
-    borderRadius: 18, overflow: 'hidden', minHeight: 106,
+    borderRadius: 18, height: 106,
     shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 1,
   },
-  scArt: { width: 112, borderTopRightRadius: 56, borderBottomRightRadius: 56, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  scArt: {
+    width: 112, height: 104, borderTopLeftRadius: 17, borderBottomLeftRadius: 17,
+    borderTopRightRadius: 56, borderBottomRightRadius: 56,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  scImage: {
+    width: '100%', height: '100%', borderTopLeftRadius: 17, borderBottomLeftRadius: 17,
+    borderTopRightRadius: 56, borderBottomRightRadius: 56,
+  },
   scT: { fontFamily: DISP_FONT, fontSize: 15.5, lineHeight: 20, color: '#1F6E73' },
   scGo: { alignSelf: 'center', paddingRight: 12, color: C.brand, fontSize: 22, fontWeight: '700' },
   mini: { height: 8, borderRadius: 5, backgroundColor: 'rgba(60,81,82,0.12)', overflow: 'hidden' },

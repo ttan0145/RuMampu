@@ -10,7 +10,7 @@ import { NumInput } from '../ui';
 import { SheetFrame } from '../overlays';
 import { ScreenShell } from './shell';
 import {
-  amort, cushion, DOC_KEYS, fitOf, goalFromKept, monthlyBills, prepChecks, prepLoan, savePlan, schedRows, stageCash, typicalMonth,
+  amort, cushion, depositAssumed, DOC_KEYS, fitOf, goalFromKept, monthlyBills, prepChecks, prepLoan, savePlan, schedRows, stageCash, typicalMonth,
   type Fit, type Loan,
 } from '../prep7';
 import {
@@ -640,6 +640,7 @@ export function MonthlyLessonScreen() {
         <View style={l.ans} testID="lesson-answer">
           <Text style={l.big}>{rm(c.mo)}<Text style={l.bigU}>{` ${t('p7_permonth')}`}</Text></Text>
           <Text style={l.sub}>{t('p7_loan_sub', { m: c.m, r: c.rate.toFixed(2), y: c.yrs })}</Text>
+          {depositAssumed(S) ? <Text style={[x.tiny, { marginTop: 4 }]} testID="lesson-deposit-note">{t('p7_dep_assumed')}</Text> : null}
           <View style={l.fitm}>
             {month && fit && share != null ? (
               <>
@@ -647,6 +648,7 @@ export function MonthlyLessonScreen() {
                   <Text style={{ fontFamily: G.r, fontSize: 13.5, color: T7.text, flex: 1 }}>{t('p7_typical')} <Text style={{ fontFamily: G.s }}>{rm(month)}</Text></Text>
                   <Chip7 label={t(`p7_fit_${fit}`)} tone={fit} />
                 </View>
+                <Text style={[x.tiny, { marginBottom: 6 }]} testID="lesson-fit-fact">{t('p7_fit_fact', { w: t(`p7_fit_${fit}`), a: rm(c.mo), p: Math.round(share * 100) })}</Text>
                 <View style={l.fb2}>
                   <View style={[l.fb2I, { width: `${Math.min(100, share * 100)}%` }]}>
                     <Text style={l.fb2T} numberOfLines={1}>{t('p7_bar_loan', { p: Math.round(share * 100) })}</Text>
