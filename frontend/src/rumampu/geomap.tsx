@@ -1,6 +1,8 @@
 import React from 'react';
 import Constants from 'expo-constants';
-import { Image, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Image, ImageSourcePropType, PanResponder, Platform, Pressable, StyleSheet, Text, View,
+} from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { DISP_FONT } from './theme';
 import { PX_GEO } from './pxgeo';
@@ -16,9 +18,14 @@ const TILE = 256;
    Browsers must set their own User-Agent and Referer, so do not add headers there. */
 const TILE_USER_AGENT = `RuMampu/${Constants.expoConfig?.version ?? '1.0'} (+https://github.com/ttan0145/RuMampu)`;
 const TILE_URL = (z: number, x: number, y: number) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
-const tileSource = (z: number, x: number, y: number) => {
+const tileSource = (z: number, x: number, y: number): ImageSourcePropType => {
   const uri = TILE_URL(z, x, y);
-  return Platform.OS === 'web' ? { uri } : { uri, headers: { 'User-Agent': TILE_USER_AGENT } };
+  /* RN Android 0.86 only promotes per-source headers to the native ImageView
+     when `source` is an array. `force-cache` also avoids its otherwise
+     policy-breaking `Cache-Control: no-store` default for remote images. */
+  return Platform.OS === 'web'
+    ? { uri }
+    : [{ uri, headers: { 'User-Agent': TILE_USER_AGENT }, cache: 'force-cache' }];
 };
 
 type Bounds = [[number, number], [number, number]];          // [[south, west], [north, east]]

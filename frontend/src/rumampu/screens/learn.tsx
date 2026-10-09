@@ -72,7 +72,7 @@ export function LearnScreen() {
           const d = lnDoneIn(S.lnProg, x), n = x.articles.length, m = LN_META[x.id] || { bg: '#E3F3F1' };
           const done = d === n;
           return (
-            <Pressable key={x.id} accessibilityRole="button"
+            <Pressable key={x.id} testID={`learn-section-${x.id}`} accessibilityRole="button"
               onPress={() => { up(s => { s.lnTab = x.id; }); go('learnsec'); }}
               style={({ pressed }) => [ls.sc, pressed && { opacity: 0.9 }]}>
               <View style={[ls.scArt, { backgroundColor: m.bg }]}>
@@ -422,7 +422,8 @@ const ls = StyleSheet.create({
   big: { height: 12, borderRadius: 8, backgroundColor: 'rgba(60,81,82,0.12)', overflow: 'hidden', marginTop: 12 },
   bigFill: { height: '100%', borderRadius: 8, backgroundColor: '#3FA06A' },
   sc: {
-    flexDirection: 'row', alignItems: 'stretch', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: C.ink14,
+    width: '100%', alignSelf: 'stretch', flexDirection: 'row', alignItems: 'stretch',
+    backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: C.ink14,
     borderRadius: 18, overflow: 'hidden', minHeight: 106,
     shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 1,
   },
