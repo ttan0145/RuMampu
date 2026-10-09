@@ -501,11 +501,10 @@ async function saveGuestHousingTestThroughUi(page: Page, name: string): Promise<
   await page.getByPlaceholder('e.g. 250,000').fill('250000');
   await page.getByRole('button', { name: 'Run the test', exact: true }).click();
   await answerNoCommitments(page);
-  await expect(page.getByRole('button', { name: 'Save test', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Save test', exact: true }).click();
-  await page.locator('input:visible').last().fill(name);
-  await page.getByRole('button', { name: 'Save test', exact: true }).last().click();
-  await expect(page.getByText(name, { exact: true })).toBeVisible();
+  // The result is kept automatically under its price (no name dialog any more).
+  await expect(page.getByText('Test saved. Find it in Saved tests.', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'House', exact: true }).click();
+  await expect(page.getByText('Saved tests', { exact: true }).first()).toBeVisible();
 }
 
 async function openSignupFromProfile(page: Page, guestChoice: 'keep' | 'fresh' = 'fresh'): Promise<void> {
@@ -528,7 +527,7 @@ async function loginExistingAccountFromGuest(page: Page, email: string, password
    flows have none, so they answer "I have no commitments". */
 async function answerNoCommitments(page: Page): Promise<void> {
   const none = page.getByText('I have no commitments', { exact: true });
-  const saved = page.getByRole('button', { name: 'Save test', exact: true });
+  const saved = page.getByText('Test saved. Find it in Saved tests.', { exact: true });
   await expect(none.or(saved).first()).toBeVisible();
   if (await none.isVisible()) await none.click();
 }
@@ -915,7 +914,7 @@ test('US8.12 transfers guest saved housing tests to a new account on Keep', asyn
   await seedHousingReadyIncome(page);
   await openApp(page);
 
-  const savedName = `Guest transfer ${Date.now()}`;
+  const savedName = 'RM 250,000'; // the automatic name of a 250,000 price test
   await saveGuestHousingTestThroughUi(page, savedName);
 
   await openSignupFromProfile(page, 'keep');
@@ -982,7 +981,7 @@ test('US8.12 login to existing account does not show retired guest-transfer prom
   const password = 'Passw0rd123';
   const email = `epic8-existing-${Date.now()}@example.com`;
   const accountName = `Account test ${Date.now()}`;
-  const guestName = `Guest existing ${Date.now()}`;
+  const guestName = 'RM 250,000'; // the automatic name of a 250,000 price test
   const token = await registerAccountForTest(page, email, password);
   await createAccountSavedTest(page, token, accountName);
 
@@ -1005,7 +1004,7 @@ test('US8.12 existing-account login leaves guest saved test out of the account',
   const password = 'Passw0rd123';
   const email = `epic8-decline-existing-${Date.now()}@example.com`;
   const accountName = `Account decline ${Date.now()}`;
-  const guestName = `Guest declined ${Date.now()}`;
+  const guestName = 'RM 250,000'; // the automatic name of a 250,000 price test
   const token = await registerAccountForTest(page, email, password);
   await createAccountSavedTest(page, token, accountName);
 
@@ -1237,13 +1236,10 @@ test('US8.2 keeps a completed housing test only once in the current frontend ses
   await page.getByRole('button', { name: 'Run the test', exact: true }).click();
   await answerNoCommitments(page);
 
-  await expect(page.getByRole('button', { name: 'Save test', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Save test', exact: true }).click();
-  await expect(page.getByText('Name this test', { exact: true })).toBeVisible();
-  await page.locator('input:visible').last().fill('Epic 8 session check');
-  await page.getByRole('button', { name: 'Save test', exact: true }).last().click();
-  await expect(page.getByText('Saved for this session in House › Saved tests.', { exact: true })).toBeVisible();
-  await expect(page.getByText('Epic 8 session check', { exact: true })).toBeVisible();
+  // The result is kept automatically under its price; the toast confirms it.
+  await expect(page.getByText('Test saved. Find it in Saved tests.', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'House', exact: true }).click();
+  await expect(page.getByText('Saved tests', { exact: true }).first()).toBeVisible();
 
   await openRecord(page);
   // EN: The kept card checks compact fields shown in the record, not the whole

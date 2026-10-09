@@ -212,9 +212,8 @@ async function keepAffordableTest(page: Page): Promise<void> {
   await page.getByText('The house', { exact: true }).click();
   await page.getByText('Run the test', { exact: true }).last().click();
   await expect(page.getByText(/All 12 months would carry it/)).toBeVisible();
-  await page.getByText('Save test', { exact: true }).click();
-  await expect(page.getByText('Name this test', { exact: true })).toBeVisible();
-  await page.getByRole('dialog').getByRole('button', { name: 'Save test', exact: true }).click();
+  // The result is kept automatically once the test has run.
+  await page.getByRole('tab', { name: 'House', exact: true }).click();
   await expect(page.getByText('Saved tests', { exact: true }).first()).toBeVisible();
   await page.getByRole('tab', { name: 'Home', exact: true }).click();
   await expect(page.getByText('Save today', { exact: true })).toBeVisible();
@@ -223,9 +222,8 @@ async function keepAffordableTest(page: Page): Promise<void> {
 /* Runs a price test and keeps it, which opens the saving plan on Home. */
 async function keepPriceTest(page: Page, price: number): Promise<void> {
   await runPriceTest(page, price);
-  await page.getByText('Save test', { exact: true }).click();
-  await expect(page.getByText('Name this test', { exact: true })).toBeVisible();
-  await page.getByRole('dialog').getByRole('button', { name: 'Save test', exact: true }).click();
+  // The result is kept automatically once the test has run.
+  await page.getByRole('tab', { name: 'House', exact: true }).click();
   await expect(page.getByText('Saved tests', { exact: true }).first()).toBeVisible();
   await page.getByRole('tab', { name: 'Home', exact: true }).click();
   await expect(page.getByText('Save today', { exact: true })).toBeVisible();
