@@ -1,6 +1,6 @@
 import type { AppState, BufferState, KeptTest, PlanState, VillageState } from './state';
 import { STATEMENT_SCAN_DISCLOSURE_VERSION } from './ai-disclosure';
-import type { ApiAccountNotificationPreferences } from './api';
+import type { ApiAccountNotificationPreferences, ApiExperiencePreferences } from './api';
 import { getHousingScenario, getHousingTestResult, hydrateHousingSession } from '../../services/housingSession';
 import { isValidIsoDate } from './validation';
 import { PREP_DEFAULT, validPrep } from './prep7state';
@@ -241,6 +241,7 @@ export function accountSnapshot(s: AppState): {
   bought_home: boolean;
   homeownership_purchase_month: string | null;
   notification_preferences: ApiAccountNotificationPreferences;
+  experience_preferences: ApiExperiencePreferences;
 } {
   const local = JSON.parse(snapshot(s)) as JsonRecord;
   return {
@@ -259,6 +260,11 @@ export function accountSnapshot(s: AppState): {
     bought_home: s.bought,
     homeownership_purchase_month: s.purchaseMonth,
     notification_preferences: accountNotificationPreferences(s),
+    experience_preferences: {
+      ai_disclosure_accepted: s.aiDisclosureAccepted,
+      tips_off: s.tipsOff,
+      seen_guides: s.seenG,
+    },
   };
 }
 
@@ -267,6 +273,7 @@ export function hydrateAccountState(s: AppState, remote: Record<string, unknown>
   const cash = typeof remote.cash_on_hand === 'number'
     ? remote.cash_on_hand
     : Number(remote.cash_on_hand);
+  const experience = record(remote.experience_preferences) ? remote.experience_preferences : {};
   const payload = {
     version: VERSION,
     plan: remote.saving_plan,
@@ -281,6 +288,9 @@ export function hydrateAccountState(s: AppState, remote: Record<string, unknown>
     keptTests: remote.kept_tests,
     bought: remote.bought_home,
     purchaseMonth: remote.homeownership_purchase_month ?? null,
+    aiDisclosureAccepted: experience.ai_disclosure_accepted ?? false,
+    tipsOff: experience.tips_off ?? false,
+    seenG: experience.seen_guides ?? [],
     data: { cashOnHand: cash, cashOnHandDate: remote.cash_on_hand_date ?? null },
   };
   hydrate(s, JSON.stringify(payload));

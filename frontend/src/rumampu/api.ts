@@ -243,6 +243,12 @@ export interface ApiAccountNotificationPreferences {
   reminders: Record<string, ApiAccountReminderPreference>;
 }
 
+export interface ApiExperiencePreferences {
+  ai_disclosure_accepted: boolean;
+  tips_off: boolean;
+  seen_guides: string[];
+}
+
 export interface ApiAuthState {
   user: ApiUser;
   cash_on_hand: number | string;
@@ -268,6 +274,7 @@ export interface ApiAuthState {
   preferred_income_source_id: number | null;
   last_record_exported_at: string | null;
   notification_preferences: ApiAccountNotificationPreferences | Record<string, never>;
+  experience_preferences?: ApiExperiencePreferences | Record<string, never>;
 }
 
 export interface ApiReminderPreference {
@@ -308,6 +315,7 @@ export interface AccountStatePatch {
   learning_progress: Record<string, number>;
   kept_tests: unknown[];
   notification_preferences: ApiAccountNotificationPreferences;
+  experience_preferences: ApiExperiencePreferences;
 }
 
 export interface ApiHomeownershipMonth {

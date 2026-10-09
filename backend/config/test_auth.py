@@ -50,6 +50,75 @@ def workbook_values(workbook):
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class AuthApiRegressionTests(TestCase):
+    def test_ai_disclosure_and_tour_progress_survive_logout_and_login(self):
+        user = User.objects.create_user(
+            username="returning@example.com",
+            email="returning@example.com",
+            password="Passw0rd123",
+        )
+        token = Token.objects.create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+        preferences = {
+            "ai_disclosure_accepted": True,
+            "tips_off": False,
+            "seen_guides": ["home", "money"],
+        }
+
+        saved = client.patch(
+            "/api/v1/auth/me/",
+            {"experience_preferences": preferences},
+            content_type="application/json",
+        )
+
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json()["experience_preferences"], preferences)
+        self.assertEqual(UserAppState.objects.get(user=user).experience_preferences, preferences)
+        self.assertEqual(client.post("/api/v1/auth/logout/").status_code, 204)
+
+        login = Client().post(
+            "/api/v1/auth/login/",
+            data={"username": "returning@example.com", "password": "Passw0rd123"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(login.status_code, 200)
+        self.assertEqual(login.json()["experience_preferences"], preferences)
+
+    def test_invalid_experience_preferences_are_rejected(self):
+        user = User.objects.create_user(username="experience-validation@example.com")
+        token = Token.objects.create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+        valid = {
+            "ai_disclosure_accepted": True,
+            "tips_off": False,
+            "seen_guides": ["home"],
+        }
+        self.assertEqual(client.patch(
+            "/api/v1/auth/me/", {"experience_preferences": valid}, content_type="application/json"
+        ).status_code, 200)
+
+        invalid_values = [
+            None,
+            {},
+            {**valid, "ai_disclosure_accepted": "yes"},
+            {**valid, "tips_off": 1},
+            {**valid, "seen_guides": [{}]},
+            {**valid, "seen_guides": ["home", "home"]},
+            {**valid, "seen_guides": ["bad route"]},
+            {**valid, "extra": True},
+        ]
+        for invalid in invalid_values:
+            with self.subTest(invalid=invalid):
+                response = client.patch(
+                    "/api/v1/auth/me/",
+                    {"experience_preferences": invalid},
+                    content_type="application/json",
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(
+                    client.get("/api/v1/auth/me/").json()["experience_preferences"], valid
+                )
+
     def test_learning_progress_persists_for_the_account_on_another_device(self):
         user = User.objects.create_user(username="reader@example.com", password="Passw0rd123")
         token = Token.objects.create(user=user)

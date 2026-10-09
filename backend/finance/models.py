@@ -492,6 +492,9 @@ class UserAppState(models.Model):
     # Account-owned bill reminder choices live here. Device permission state and
     # notification scheduling identifiers stay in encrypted/local device storage.
     notification_preferences = models.JSONField(default=dict, blank=True)
+    # One-time product guidance belongs to the account, not to a browser's
+    # local storage, so logout/login and a second device do not look new again.
+    experience_preferences = models.JSONField(default=dict, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

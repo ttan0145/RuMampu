@@ -93,6 +93,11 @@ def _auth_payload(user, token=None):
             if _valid_notification_preferences(state.notification_preferences)
             else {}
         ),
+        "experience_preferences": (
+            state.experience_preferences
+            if _valid_experience_preferences(state.experience_preferences)
+            else {}
+        ),
     }
     if token is not None:
         payload["token"] = token.key
@@ -104,7 +109,8 @@ _APP_STATE_FIELDS = {
     "homeownership_purchase_month",
     "expense_limits", "compare_payments", "saving_plan", "buffer_state",
     "village_state", "plan_horizon", "pot_moved_months", "pot_moved", "kept_tests",
-    "notification_preferences", "onboarding_completed", "preferred_language", "preferred_income_source_id",}
+    "notification_preferences", "experience_preferences", "onboarding_completed", "preferred_language",
+    "preferred_income_source_id",}
 
 # Fields whose explicit null is a valid value (it clears them).
 _NULLABLE_APP_STATE_FIELDS = {"plan_horizon", "cash_on_hand_date", "homeownership_purchase_month"}
@@ -246,6 +252,25 @@ def _valid_notification_preferences(value):
     return True
 
 
+def _valid_experience_preferences(value):
+    """Only account-owned, non-transient guidance choices may cross devices."""
+    if not isinstance(value, dict) or set(value) != {
+        "ai_disclosure_accepted", "tips_off", "seen_guides"
+    }:
+        return False
+    if not isinstance(value["ai_disclosure_accepted"], bool) or not isinstance(value["tips_off"], bool):
+        return False
+    seen = value["seen_guides"]
+    if not isinstance(seen, list) or len(seen) > 100:
+        return False
+    if not all(
+        isinstance(route, str) and re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", route)
+        for route in seen
+    ):
+        return False
+    return len(set(seen)) == len(seen)
+
+
 _REMINDER_KEYS = {"enabled", "day", "time", "repeat", "weekday", "date"}
 _REMINDER_REPEATS = {"daily", "weekly", "monthly", "once"}
 
@@ -330,6 +355,8 @@ def _validate_app_state_field(field, value):
         return value if _valid_village_state(value) else None
     if field == "notification_preferences":
         return value if _valid_notification_preferences(value) else None
+    if field == "experience_preferences":
+        return value if _valid_experience_preferences(value) else None
     if field in {"onboarding_completed", "preferred_language"}:
         return value
     return None
