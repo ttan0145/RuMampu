@@ -21,6 +21,7 @@ import { GROQ_DPA_URL, GROQ_YOUR_DATA_URL } from './ai-disclosure';
 /* Flip to false to hide the whole Ask RuMampu UI (bubble, header
    button, popover), e.g. while the AI backend is unavailable. */
 export const ASSISTANT_UI_ENABLED = true;
+const ASSISTANT_SPEECH_SILENCE_MS = 3000;
 
 /** One disclosure is shared by every hosted-AI feature. Declining only cancels
  * the attempted AI operation; the rest of RuMampu remains available. */
@@ -365,6 +366,7 @@ export function AssistantSheet() {
   const [inputHeight, setInputHeight] = React.useState(48);
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
   const [webInputFocused, setWebInputFocused] = React.useState(false);
+  const inputRef = React.useRef<TextInput>(null);
   const webInputFocusedRef = React.useRef(false);
   const webLayoutBottomRef = React.useRef(0);
   const [webViewport, setWebViewport] = React.useState<{
@@ -374,7 +376,38 @@ export function AssistantSheet() {
     occludedHeight: number;
   } | null>(null);
   const scrollRef = React.useRef<ScrollView>(null);
+  const speechWantedRef = React.useRef(false);
+  const speechFinalTextRef = React.useRef('');
+  const speechSilenceTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const speechRestartTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const speechText = React.useMemo(() => speechUiText(S.lang), [S.lang]);
+
+  const updateInputHeight = React.useCallback((contentHeight: number) => {
+    const paddingAllowance = Platform.OS === 'web' ? 0 : 2;
+    const nextHeight = Math.max(48, Math.min(112, Math.ceil(contentHeight + paddingAllowance)));
+    setInputHeight(current => current === nextHeight ? current : nextHeight);
+  }, []);
+  const handleInputContentSizeChange = React.useCallback(
+    (event: { nativeEvent: { contentSize: { height: number } } }) => {
+      updateInputHeight(event.nativeEvent.contentSize.height);
+    },
+    [updateInputHeight],
+  );
+
+  /* react-native-web only reports content-size changes for DOM input events,
+     while speech recognition updates this controlled value programmatically.
+     Re-measure the underlying textarea for both paths. Temporarily returning
+     it to its minimum height also lets it shrink after text is removed. */
+  React.useLayoutEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const node = inputRef.current as unknown as HTMLTextAreaElement | null;
+    if (!node || typeof node.scrollHeight !== 'number') return;
+    const previousHeight = node.style.height;
+    node.style.height = '48px';
+    const contentHeight = node.scrollHeight;
+    node.style.height = previousHeight;
+    updateInputHeight(contentHeight);
+  }, [draft, updateInputHeight]);
 
   /* Do not scroll directly from ScrollView's onContentSizeChange. On web,
      scrollToEnd can itself change the measured content area (notably when a
@@ -393,32 +426,16 @@ export function AssistantSheet() {
     up(s => { s.assistantDraft = ''; });
   }, [S.assistantOpen, S.assistantDraft, up]);
 
-  /* The Say an entry card shares the microphone; only react to speech this
-     chat started. */
-  const mine = () => getSpeechOwner() === 'assistant';
-  useSpeechRecognitionEvent('start', () => { if (mine()) setListening(true); });
-  useSpeechRecognitionEvent('end', () => {
-    if (!mine()) return;
-    setListening(false);
-    releaseSpeechOwner('assistant');
-  });
-  useSpeechRecognitionEvent('result', event => {
-    if (!mine()) return;
-    const transcript = event.results?.[0]?.transcript?.trim();
-    if (transcript) {
-      setDraft(transcript);
-    }
-  });
-  useSpeechRecognitionEvent('error', event => {
-    if (!mine()) return;
-    setListening(false);
-    releaseSpeechOwner('assistant');
-    if (event.error === 'aborted' || event.error === 'no-speech') return;
-    const message = event.error === 'not-allowed' ? speechText.denied : speechText.failed;
-    toast(message, 'error');
-  });
+  const clearSpeechTimers = React.useCallback(() => {
+    if (speechSilenceTimerRef.current) clearTimeout(speechSilenceTimerRef.current);
+    if (speechRestartTimerRef.current) clearTimeout(speechRestartTimerRef.current);
+    speechSilenceTimerRef.current = null;
+    speechRestartTimerRef.current = null;
+  }, []);
 
   const stopSpeech = React.useCallback(() => {
+    speechWantedRef.current = false;
+    clearSpeechTimers();
     // Abort unconditionally: the browser may have opened the microphone before
     // the async `start` event has updated `listening` in React state.
     // The Say an entry card shares the microphone; leave its recording alone.
@@ -426,7 +443,70 @@ export function AssistantSheet() {
     try { ExpoSpeechRecognitionModule.abort(); } catch { /* already stopped */ }
     releaseSpeechOwner('assistant');
     setListening(false);
-  }, []);
+  }, [clearSpeechTimers]);
+
+  const armSpeechSilenceTimer = React.useCallback(() => {
+    if (speechSilenceTimerRef.current) clearTimeout(speechSilenceTimerRef.current);
+    speechSilenceTimerRef.current = setTimeout(stopSpeech, ASSISTANT_SPEECH_SILENCE_MS);
+  }, [stopSpeech]);
+
+  const startSpeechRecognition = React.useCallback(() => {
+    ExpoSpeechRecognitionModule.start({
+      lang: speechLocaleFromApp(S.lang),
+      interimResults: true,
+      continuous: true,
+      maxAlternatives: 1,
+      androidIntentOptions: {
+        EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: ASSISTANT_SPEECH_SILENCE_MS,
+        EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: ASSISTANT_SPEECH_SILENCE_MS,
+        EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: ASSISTANT_SPEECH_SILENCE_MS,
+      },
+    });
+  }, [S.lang]);
+
+  /* The Say an entry card shares the microphone; only react to speech this
+     chat started. */
+  const mine = () => getSpeechOwner() === 'assistant';
+  useSpeechRecognitionEvent('start', () => { if (mine()) setListening(true); });
+  useSpeechRecognitionEvent('end', () => {
+    if (!mine()) return;
+    /* Some browser recognisers end after a very short quiet interval even in
+       continuous mode. Keep reopening the recogniser until our own three-second
+       silence timer expires. */
+    if (speechWantedRef.current) {
+      if (!speechRestartTimerRef.current) {
+        speechRestartTimerRef.current = setTimeout(() => {
+          speechRestartTimerRef.current = null;
+          if (!speechWantedRef.current || !mine()) return;
+          try { startSpeechRecognition(); } catch { stopSpeech(); }
+        }, 50);
+      }
+      return;
+    }
+    setListening(false);
+    releaseSpeechOwner('assistant');
+  });
+  useSpeechRecognitionEvent('result', event => {
+    if (!mine()) return;
+    const transcript = event.results?.[0]?.transcript?.trim();
+    if (transcript) {
+      const combined = [speechFinalTextRef.current, transcript].filter(Boolean).join(' ');
+      setDraft(combined);
+      if (event.isFinal) speechFinalTextRef.current = combined;
+      armSpeechSilenceTimer();
+    }
+  });
+  useSpeechRecognitionEvent('error', event => {
+    if (!mine()) return;
+    if (event.error === 'no-speech' && speechWantedRef.current) return;
+    speechWantedRef.current = false;
+    clearSpeechTimers();
+    setListening(false);
+    releaseSpeechOwner('assistant');
+    if (event.error === 'aborted' || event.error === 'no-speech') return;
+    const message = event.error === 'not-allowed' ? speechText.denied : speechText.failed;
+    toast(message, 'error');
+  });
 
   React.useEffect(() => {
     if (!S.assistantOpen) stopSpeech();
@@ -491,8 +571,8 @@ export function AssistantSheet() {
   };
 
   const toggleSpeech = async () => {
-    if (listening) {
-      ExpoSpeechRecognitionModule.stop();
+    if (listening || speechWantedRef.current) {
+      stopSpeech();
       return;
     }
 
@@ -509,13 +589,13 @@ export function AssistantSheet() {
       }
 
       claimSpeechOwner('assistant', () => ExpoSpeechRecognitionModule.abort());
-      ExpoSpeechRecognitionModule.start({
-        lang: speechLocaleFromApp(S.lang),
-        interimResults: true,
-        continuous: false,
-        maxAlternatives: 1,
-      });
+      speechWantedRef.current = true;
+      speechFinalTextRef.current = '';
+      armSpeechSilenceTimer();
+      startSpeechRecognition();
     } catch {
+      speechWantedRef.current = false;
+      clearSpeechTimers();
       releaseSpeechOwner('assistant');
       setListening(false);
       toast(speechText.failed, 'error');
@@ -567,10 +647,15 @@ export function AssistantSheet() {
   const send = async (text?: string) => {
     const content = (text ?? draft).trim();
     if (!content || sending) return;
+    /* A final/interim result can arrive after the user presses Send. Release
+       ownership first so that queued recognition events cannot restore the
+       message after the controlled draft has been cleared. */
+    if (getSpeechOwner() === 'assistant' || listening) stopSpeech();
     setPendingActions([]);
     setConfirmingOutlier(false);
     const history = [...S.assistantMsgs, { role: 'user' as const, content }];
     setDraft('');
+    setInputHeight(48);
     setSending(true);
     up(s => { s.assistantMsgs.push({ role: 'user', content }); });
     try {
@@ -830,13 +915,8 @@ export function AssistantSheet() {
               </View>
               <View style={st.inputRow}>
                 <TextInput
-                  /* react-native-web's content-size observer can oscillate when
-                     the action review card changes the popover's scrollbar and
-                     available width. A controlled height update from that
-                     observer then recurses until React throws error #185. Keep
-                     the web composer fixed and scrollable; native retains the
-                     measured auto-grow behaviour. */
-                  style={[st.input, { height: Platform.OS === 'web' ? 48 : inputHeight }]}
+                  ref={inputRef}
+                  style={[st.input, { height: inputHeight }]}
                   value={draft}
                   onChangeText={setDraft}
                   onFocus={() => {
@@ -850,11 +930,8 @@ export function AssistantSheet() {
                   editable={pendingActions.length === 0}
                   multiline
                   submitBehavior="submit"
-                  scrollEnabled={Platform.OS === 'web' || inputHeight >= 112}
-                  onContentSizeChange={Platform.OS === 'web' ? undefined : event => {
-                    const nextHeight = Math.max(48, Math.min(112, event.nativeEvent.contentSize.height + 2));
-                    setInputHeight(current => current === nextHeight ? current : nextHeight);
-                  }}
+                  scrollEnabled={inputHeight >= 112}
+                  onContentSizeChange={handleInputContentSizeChange}
                   placeholder={listening ? speechText.listening : t('ai_ph')}
                   placeholderTextColor={C.ink40}
                   onSubmitEditing={() => { void send(); }}
