@@ -1,18 +1,19 @@
 import React from 'react';
 import {
-  AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  AccessibilityInfo, Animated, Easing, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextStyle,
 } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useApp } from '../state';
 import { rm as rmSen } from '../calc';
 import { upfrontFees } from '../fees';
-import { NumInput } from '../ui';
+import { CardI, NumInput, Prov } from '../ui';
 import { SheetFrame } from '../overlays';
 import { ScreenShell } from './shell';
 import {
-  amort, cushion, depositAssumed, DOC_KEYS, fitOf, goalFromKept, monthlyBills, prepChecks, prepLoan, savePlan, schedRows, stageCash, typicalMonth,
+  amort, cushion, depositAssumed, DOC_KEYS, fitOf, goalFromKept, monthlyBills, prepChecks, prepLoan, savePlan, schedRows, stageCash, termsProv, typicalMonth,
   type Fit, type Loan,
 } from '../prep7';
+import { BUY_FACTS, BUY_SRC } from '../buying-facts';
 import {
   ActBar, b1, Btn2, BtnDeep, BtnGo, Chip7, Coach, Fold, G, Group, Hdr7, IconBtn, PAGE, Ph, Rich, RumaImg, Sec, Seg,
   SHADOW, T7, x,
@@ -474,15 +475,55 @@ function HomePicker({ tests, onClose }: { tests: { k: { name?: string; propertyP
   );
 }
 
+/* AC5.10.9, AC5.11.4: the product's provenance tag (ui.tsx Prov), pressable here so
+   a tap opens the short explanation of what the label means. */
+function P7Prov({ p, id }: { p: 'user' | 'calc' | 'assume'; id: string }) {
+  const { t, up } = useApp();
+  return (
+    <Pressable onPress={() => up(s => { s.sheet = `prov:${p}`; })} accessibilityRole="button" accessibilityLabel={t('prov_' + p)}
+      hitSlop={6} testID={`prov-${id}`}>
+      <Prov p={p} />
+    </Pressable>
+  );
+}
+
+/* AC5.11.4: one line under a timing, a share or a rule: its status, a note, the
+   source as a link and the date it was checked. An unverified fact says so
+   instead of carrying a date. */
+function FactLine({ id, style }: { id: keyof typeof BUY_FACTS; style?: TextStyle }) {
+  const { t } = useApp();
+  const f = BUY_FACTS[id], src = f.src ? BUY_SRC[f.src] : null;
+  return (
+    <Text style={[h.tlSrc, style]} testID={`fact-${id}`}>
+      {t(f.status === 'practice' ? 'p7_src_practice' : 'p7_src_unverified')}
+      {f.note ? ` ${t(f.note)}` : ''}
+      {src ? (
+        <>
+          {' '}{t('ln_src')}:{' '}
+          <Text accessibilityRole="link" accessibilityLabel={src.n} onPress={() => { void Linking.openURL(src.h); }} style={{ textDecorationLine: 'underline' }}>{src.n}</Text>
+          .{f.status === 'practice' ? ` ${t('ln_checked', { d: src.d })}.` : ''}
+        </>
+      ) : null}
+    </Text>
+  );
+}
+
 /* .tl / .tli / .who */
-function TlItem({ title, amt, mo, d, who, keys, last }: { title: string; amt: string; mo?: boolean; d: string; who: string[]; keys?: boolean; last?: boolean }) {
+function TlItem({ id, title, amt, mo, d, who, keys, last, p, fact }: {
+  id: string; title: string; amt: string; mo?: boolean; d: string; who: string[]; keys?: boolean; last?: boolean;
+  /* the amount's provenance, and the timing or share the step states */
+  p: 'user' | 'calc' | 'assume'; fact?: keyof typeof BUY_FACTS;
+}) {
   const { t } = useApp();
   return (
     <View style={{ paddingLeft: 26, paddingBottom: last ? 4 : 18 }}>
       <View style={[h.tlDot, keys && { backgroundColor: T7.accent }]} />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}>
         <Text style={[h.tlH, { flex: 1 }]}>{title}</Text>
-        <Text style={h.tlH}>{amt}{mo ? <Text style={{ fontFamily: G.m, color: T7.text2 }}>{t('p7_permo')}</Text> : null}</Text>
+        <View style={{ alignItems: 'flex-end', gap: 2 }}>
+          <Text style={h.tlH}>{amt}{mo ? <Text style={{ fontFamily: G.m, color: T7.text2 }}>{t('p7_permo')}</Text> : null}</Text>
+          <P7Prov p={p} id={`tl-${id}`} />
+        </View>
       </View>
       <Text style={h.tlD}>{d}</Text>
       <View style={{ flexDirection: 'row', gap: 6, marginTop: 7, flexWrap: 'wrap' }}>
@@ -495,6 +536,7 @@ function TlItem({ title, amt, mo, d, who, keys, last }: { title: string; amt: st
           );
         })}
       </View>
+      {fact ? <FactLine id={fact} /> : null}
     </View>
   );
 }
@@ -511,11 +553,12 @@ function SubsaleTimeline({ c }: { c: Loan }) {
   const g = stageCash(S, c);
   return (
     <TlLine>
-      <TlItem title={t('p7_tl_book')} amt={rm(g.book)} d={t('p7_tl_book_d')} who={['you']} />
-      <TlItem title={t('p7_tl_spa')} amt={rm(g.spa)} d={t('p7_tl_spa_d')} who={['you']} />
-      <TlItem title={t('p7_tl_loan')} amt={rm(g.loan)} d={t('p7_tl_loan_d')} who={['you']} />
-      <TlItem title={t('p7_tl_comp')} amt={rm(c.L)} d={t('p7_tl_comp_d', { a: rm(c.L) })} who={['bank']} />
-      <TlItem title={t('p7_tl_keys')} amt={rm(c.mo)} mo d={t('p7_tl_keys_d')} who={['you']} keys last />
+      {/* the earnest deposit is 2% unless it was typed on Upfront cash; the other amounts are worked out from the price and the fee scales */}
+      <TlItem id="book" title={t('p7_tl_book')} amt={rm(g.book)} d={t('p7_tl_book_d')} who={['you']} p={g.bookTyped ? 'user' : 'assume'} fact="book" />
+      <TlItem id="spa" title={t('p7_tl_spa')} amt={rm(g.spa)} d={t('p7_tl_spa_d')} who={['you']} p="calc" fact="spa" />
+      <TlItem id="loan" title={t('p7_tl_loan')} amt={rm(g.loan)} d={t('p7_tl_loan_d')} who={['you']} p="calc" />
+      <TlItem id="comp" title={t('p7_tl_comp')} amt={rm(c.L)} d={t('p7_tl_comp_d', { a: rm(c.L) })} who={['bank']} p="calc" fact="comp" />
+      <TlItem id="keys" title={t('p7_tl_keys')} amt={rm(c.mo)} mo d={t('p7_tl_keys_d')} who={['you']} p="calc" fact="keys" keys last />
     </TlLine>
   );
 }
@@ -526,12 +569,14 @@ function ProjectTimeline({ c }: { c: Loan }) {
   return (
     <>
       <TlLine>
-        <TlItem title={t('p7_uc_spa')} amt={rm(c.price - c.L)} d={t('p7_uc_spa_d', { p: 100 - c.m })} who={['you']} />
-        <TlItem title={t('p7_uc_build')} amt={t('p7_uc_to', { a: rm(rows[1].int), b: rm(rows[8].int) })} mo
-          d={t('p7_uc_build_d', { p: build })} who={['p7_uc_bankst', 'p7_uc_int']} />
-        <TlItem title={t('p7_uc_keys')} amt={rm(c.mo)} mo d={t('p7_uc_keys_d')} who={['bank', 'p7_uc_full']} keys />
-        <TlItem title={t('p7_uc_title')} amt={rm(rows[10].billed + rows[11].billed)} d={t('p7_uc_title_d')} who={['bank']} last />
+        <TlItem id="uc_spa" title={t('p7_uc_spa')} amt={rm(c.price - c.L)} d={t('p7_uc_spa_d', { p: 100 - c.m })} who={['you']} p="calc" />
+        <TlItem id="uc_build" title={t('p7_uc_build')} amt={t('p7_uc_to', { a: rm(rows[1].int), b: rm(rows[8].int) })} mo
+          d={t('p7_uc_build_d', { p: build })} who={['p7_uc_bankst', 'p7_uc_int']} p="calc" />
+        <TlItem id="uc_keys" title={t('p7_uc_keys')} amt={rm(c.mo)} mo d={t('p7_uc_keys_d')} who={['bank', 'p7_uc_full']} p="calc" keys />
+        <TlItem id="uc_title" title={t('p7_uc_title')} amt={rm(rows[10].billed + rows[11].billed)} d={t('p7_uc_title_d')} who={['bank']} p="calc" last />
       </TlLine>
+      {/* every share above comes from the same schedule, so its source is given once here and again under the table */}
+      <FactLine id="sched" style={{ marginTop: 10, marginHorizontal: 2 }} />
       <View style={{ marginTop: 6, marginHorizontal: -16, marginBottom: -16, borderTopWidth: 1, borderTopColor: T7.line }}>
         <Fold title={t('p7_sched')}>
           <View style={[h.schR, { borderBottomColor: T7.line2 }]}>
@@ -557,6 +602,7 @@ function ProjectTimeline({ c }: { c: Loan }) {
             ))}
           </View>
           <Text style={{ fontFamily: G.r, fontSize: 12, lineHeight: 17, color: T7.text2, marginTop: 10, marginHorizontal: 2 }}>{t('p7_sch_note', { r: c.rate })}</Text>
+          <FactLine id="sched" style={{ marginTop: 6, marginHorizontal: 2 }} />
         </Fold>
       </View>
     </>
@@ -618,6 +664,8 @@ export function MonthlyLessonScreen() {
   const month = typicalMonth(S);
   const share = month ? c.mo / month : null;
   const name = c.name || S.prep.name || t('p7_this_home');
+  /* AC5.10.9: the loan terms are the test's own, or RuMampu's starting point */
+  const terms = termsProv(S);
   const setStep = (n: number) => {
     up(s => { s.prep.step = n; if (n >= LS.length) s.prep.done = true; });
     scroll.current?.scrollTo({ y: 0, animated: false });
@@ -638,8 +686,16 @@ export function MonthlyLessonScreen() {
         <Lt>{t('p7_a_t')}</Lt>
         <Coach pose="wave" s={t('p7_a_say', { h: b1(name) })} />
         <View style={l.ans} testID="lesson-answer">
-          <Text style={l.big}>{rm(c.mo)}<Text style={l.bigU}>{` ${t('p7_permonth')}`}</Text></Text>
-          <Text style={l.sub}>{t('p7_loan_sub', { m: c.m, r: c.rate.toFixed(2), y: c.yrs })}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+            <Text style={l.big}>{rm(c.mo)}<Text style={l.bigU}>{` ${t('p7_permonth')}`}</Text></Text>
+            <View style={{ paddingBottom: 10 }}><P7Prov p="calc" id="answer" /></View>
+          </View>
+          {/* AC5.10.9: the terms are the test's own or RuMampu's starting point; (i) says where each figure comes from */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+            <Text style={[l.sub, { marginTop: 0 }]}>{t('p7_loan_sub', { m: c.m, r: c.rate.toFixed(2), y: c.yrs })}</Text>
+            <P7Prov p={terms} id="terms" />
+            <View testID="lesson-prov-info"><CardI t="p7_pv_t" b={['p7_pv_inst', 'p7_pv_typ', terms === 'user' ? 'p7_pv_terms_user' : 'p7_pv_terms_assume']} p="calc" /></View>
+          </View>
           {depositAssumed(S) ? <Text style={[x.tiny, { marginTop: 4 }]} testID="lesson-deposit-note">{t('p7_dep_assumed')}</Text> : null}
           <View style={l.fitm}>
             {month && fit && share != null ? (
@@ -701,7 +757,7 @@ export function MonthlyLessonScreen() {
               </View>
             );
           })}
-          <View style={l.lg2}><Lg col={T7.accent} label={t('p7_lg_prin')} /><Lg col={T7.interest} label={t('p7_lg_int')} /></View>
+          <View style={l.lg2}><Lg col={T7.accent} label={t('p7_lg_prin')} /><Lg col={T7.interest} label={t('p7_lg_int')} /><P7Prov p="calc" id="split" /></View>
         </View>
         <View style={l.memo}>
           <Ph name="bulb" size={17} color={T7.memoInk} />
@@ -744,14 +800,21 @@ export function MonthlyLessonScreen() {
             <Text style={l.arowT}>{t('p7_lends')}</Text>
             <Seg items={margins.map(v => ({ v, l: `${v}%` }))} on={c.m} onPick={v => up(s => { s.prep.margin = v; })} />
           </View>
-          <Rich s={t('p7_lends_d', { a: b1(rm(c.dep)), b: b1(rm(c.L)) })} style={[x.tiny, { marginTop: 2, marginBottom: 6 }]} bold={{ color: T7.text }} />
+          <Rich s={t('p7_lends_d', { a: b1(rm(c.dep)), b: b1(rm(c.L)) })} style={[x.tiny, { marginTop: 2, marginBottom: 4 }]} bold={{ color: T7.text }} />
+          <View style={{ marginBottom: 8 }}><P7Prov p="calc" id="lends" /></View>
           <View style={[l.arow, { borderBottomWidth: 0, borderTopWidth: 1, borderTopColor: T7.line }]}>
             <Text style={l.arowT}>{t('p7_age')} <Text style={{ fontFamily: G.r, color: T7.text2 }}>{t('p7_optional')}</Text></Text>
             <TextInput value={S.prep.age} placeholder={t('p7_age_ph')} placeholderTextColor={T7.text2} inputMode="numeric" keyboardType="number-pad"
               maxLength={2} accessibilityLabel={t('p7_age')} style={l.agein}
               onChangeText={v => up(s => { s.prep.age = v.replace(/[^0-9]/g, '').slice(0, 2); })} />
           </View>
-          {S.prep.age ? <Rich s={t('p7_age_d', { n: b1(c.maxYrs) })} style={x.tiny} bold={{ color: T7.text }} /> : null}
+          {S.prep.age ? (
+            <>
+              <Rich s={t('p7_age_d', { n: b1(c.maxYrs) })} style={x.tiny} bold={{ color: T7.text }} />
+              {/* AC5.10.9: the rule names its source */}
+              <FactLine id="age" style={{ marginTop: 4 }} />
+            </>
+          ) : null}
         </View>
       </>
     );
@@ -782,6 +845,12 @@ export function MonthlyLessonScreen() {
               </View>
             );
           })}
+          {/* AC5.10.9: today's payment is calculated; the higher rates are what-ifs */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+            <P7Prov p="calc" id="rates" />
+            <P7Prov p="assume" id="whatif" />
+            <Text style={[x.tiny, { flexShrink: 1 }]}>{t('p7_pv_whatif')}</Text>
+          </View>
         </View>
         <View style={{ marginTop: 16 }}>
           <Rich s={t('p7_quiz', { a: b1(rm(rr[1].c.mo)) })} style={l.quizP} />
@@ -822,7 +891,10 @@ export function MonthlyLessonScreen() {
             <View key={r.k} style={l.rl2}>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{ fontFamily: G.r, fontSize: 14, color: T7.text }}>{t(label[r.k])}</Text>
-                {r.guess ? <Text style={{ fontFamily: G.r, fontSize: 11.5, color: T7.text2 }}>{t('p7_guess')}</Text> : null}
+                {/* AC5.10.9: the instalment is calculated; a starting amount is our guess until it is changed, then it is the person's own */}
+                {r.k === 'inst' ? <P7Prov p="calc" id="inst" />
+                  : r.guess ? <Text style={{ fontFamily: G.r, fontSize: 11.5, color: T7.text2 }}>{t('p7_guess')}</Text>
+                  : <P7Prov p="user" id={r.k} />}
               </View>
               {r.k === 'inst' ? <Text style={{ fontFamily: G.s, fontSize: 14, color: T7.text }}>{rm(r.a)}</Text> : (
                 <View style={l.pin}>
@@ -885,6 +957,11 @@ export function MonthlyLessonScreen() {
               {cu.months.map((m, i) => <Text key={i} style={l.mlab}>{monthName(m.month - 1).toUpperCase()}</Text>)}
             </View>
             {fa && fb ? <Text style={[x.tiny, { fontSize: 13, marginTop: 10 }]}>{t('p7_c_drop', { a: fa, b: fb, c: rm(cu.required_amount) })}</Text> : null}
+            {/* AC5.10.9: the cushion is worked out from the recorded months; the pot is the person's own money */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+              <P7Prov p="calc" id="cushion" />
+              <Text style={[x.tiny, { flexShrink: 1 }]}>{t('p7_pv_cushion')}</Text>
+            </View>
           </View>
           {cu.still > 0 ? <Btn2 label={t('p7_c_add', { a: rm(cu.still) })} icon="plus" onPress={() => go('plan')} style={{ marginTop: 12 }} /> : null}
         </>
@@ -918,6 +995,7 @@ export function MonthlyLessonScreen() {
             </View>
           ))}
         </View>
+        <View style={{ alignItems: 'center', marginTop: 8 }}><P7Prov p="calc" id="remember" /></View>
         <Sec title={t('p7_f_redo')} />
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {LS.slice(1).map((s, i) => (
@@ -929,6 +1007,11 @@ export function MonthlyLessonScreen() {
         </View>
         <Group style={{ marginTop: 12 }}>
           <Fold title={t('p7_f_sum')}>
+            {/* AC5.10.9: which rows are the test's own or RuMampu's starting point, and which are worked out */}
+            <View style={{ gap: 4, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: T7.line }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><P7Prov p={terms} id="sum-terms" /><Text style={x.tiny}>{t('p7_pv_sum_terms')}</Text></View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><P7Prov p="calc" id="sum-calc" /><Text style={x.tiny}>{t('p7_pv_sum_calc')}</Text></View>
+            </View>
             {[
               [t('p7_k_price'), rm(c.price)],
               [t('p7_k_loan'), rm(c.L), t('p7_k_loan_d', { m: c.m })],
@@ -1078,6 +1161,7 @@ const h = StyleSheet.create({
   tlDot: { position: 'absolute', left: 3, top: 3, width: 12, height: 12, borderRadius: 6, backgroundColor: T7.surface, borderWidth: 2.5, borderColor: T7.accent },
   tlH: { fontFamily: G.s, fontSize: 14.5, color: T7.text, fontVariant: ['tabular-nums'] },
   tlD: { fontFamily: G.r, fontSize: 13, lineHeight: 19, color: T7.text2, marginTop: 3 },
+  tlSrc: { fontFamily: G.r, fontSize: 11.5, lineHeight: 16, color: T7.text2, marginTop: 7 },
   who: { borderRadius: 999, paddingVertical: 2, paddingHorizontal: 9 },
   schR: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 8, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: T7.line, gap: 4 },
   schC: { flex: 1, fontFamily: G.r, fontSize: 12, color: T7.text, textAlign: 'right', fontVariant: ['tabular-nums'] },

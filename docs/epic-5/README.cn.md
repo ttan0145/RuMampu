@@ -3,7 +3,7 @@
 语言：**中文（CN）** | [English](README.md)
 
 - 状态：已实现并有可执行检查覆盖，等待负责人验收
-- 范围：8 个 User Story，68 条验收标准：v5 的 36 条、迭代 3 Learn 的 20 条，加上 2026-10-05 和 2026-10-06 的团队修订（US5.8 含 AC5.8.9 和 AC5.8.10、AC5.3.8、AC5.3.9）（[基线](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)，云盘 `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v5.docx`）
+- 范围：11 个 User Story，88 条验收标准：v5 的 36 条、迭代 3 Learn 的 20 条、2026-10-05 和 2026-10-06 的团队修订（US5.8 含 AC5.8.9 和 AC5.8.10、AC5.3.8、AC5.3.9），以及 V9 新增的 US5.9–5.11 共 20 条（[基线](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)，云盘 `US and AC V9.docx`）
 - 入口：House → **Prepare for a house**，以及 Money → **Cash buffer**
 - 决策：[ADR 0004](../adr/0004-backend-authoritative-housing-calculations.cn.md)，见实现边界 3；现金缓冲的计算方法见 [ADR 0005](../adr/0005-cash-buffer-deepest-fall.cn.md)
 
@@ -17,9 +17,9 @@
 | US5.6 — 无固定工资者的信息 | 3/3 | No payslip、SJKP 担保上限与材料清单入口 |
 | US5.7 — 阅读进度 | 6/6 | 已读数、续读、Prepare 总进度、账号跨设备保存；无阅读奖励 |
 | US5.8 — 现金缓冲和首付共用的储蓄只算一次（团队修订） | 10/10 | 罐子先填缓冲；Upfront cash、House、储蓄计划和首页读同一套拆分；Cash buffer 写明已覆盖多少，并能打开储蓄计划 |
-| US5.9 — 一步步为一套房做准备（V9） | 5/7，2 项延期 | 每一步围绕同一套房、选择或填写房源表单、四步均不锁定、月供与文件两步的勾选、PDF 页面。延期：AC5.9.5（界面写“You’re ready to buy!”）、AC5.9.7（访客重新打开页面后路径清空）。测试：`epic5-prepare-path.spec.ts` |
-| US5.10 — 看看每月还款是什么感觉（V9） | 7/9，2 项延期 | 六个引导屏和总结页。延期：AC5.10.2（界面把占比评为 Comfortable / Tight / Heavy）、AC5.10.9（没有来源标签）。测试：`epic5-prepare-path.spec.ts` |
-| US5.11 — 了解我这类房子怎么买（V9） | 3/4，1 项延期 | 二手房与新盘时间线、选择被保留、Schedule H 折叠表。延期：AC5.11.4（时间点和比例没有来源或核对日期）。测试：`epic5-prepare-path.spec.ts` |
+| US5.9 — 一步步为一套房做准备（V9） | 6/7，1 项延期 | 每一步围绕同一套房、选择或填写房源表单、四步均不锁定、月供、现金与文件三步的勾选、全部完成时不下结论的提示、PDF 页面。延期：AC5.9.7（访客重新打开页面会走一遍游客入口，入口会新建一份空记录；等负责人决定）。测试：`epic5-prepare-path.spec.ts` |
+| US5.10 — 看看每月还款是什么感觉（V9） | 9/9 | 六个引导屏和总结页；占典型月份的比例用数字和文字写出（Comfortable / Tight / Heavy 一词按负责人 2026-10-09 的决定保留）；每一屏都有来源标签，70 岁规则写明来源。测试：`epic5-prepare-path.spec.ts` |
+| US5.11 — 了解我这类房子怎么买（V9） | 4/4 | 二手房与新盘时间线、选择被保留、Schedule H 折叠表，以及每个时间点和比例的状态、来源与核对日期（或“未经核实”标注）。测试：`epic5-prepare-path.spec.ts` |
 
 ## 验收记录
 
@@ -96,23 +96,23 @@
 | AC5.9.1 One home for every step | 通过 | 横幅写明房名、价格和二手/新盘；Change home 列出两条已保存测试和 “Test a new house first”；选一条后整条路径改为该房（`epic5-prepare-path.spec.ts`） |
 | AC5.9.2 Choose or type a home first | 通过 | 没有测试时只显示 “Which home are you preparing for?” 和填写表单，不显示路径；点 “Use this home” 后出现横幅和各步骤 |
 | AC5.9.3 Four steps, none locked | 通过 | 四步按顺序出现且各带数字；可以先打开文件这一步 |
-| AC5.9.4 What counts as done | 部分通过 | 已检查：五份文件全勾后文件步骤打勾、月供检查保存后月供步骤打勾、钥匙一步不带进度。现金一步（罐子覆盖前期现金）在此场景中没有走到 |
-| AC5.9.5 Say what is left without a verdict | 延期 | “还剩 1 件事”一行正常，但三步全完成时界面写 “You’re ready to buy!”，与验收标准冲突（V9 构建说明） |
+| AC5.9.4 What counts as done | 通过 | 五份文件全勾后文件步骤打勾、月供检查保存后月供步骤打勾、手头现金填到 RM 100,000 覆盖所需后现金步骤打勾（在 AC5.9.5 里走到）、钥匙一步不带进度 |
+| AC5.9.5 Say what is left without a verdict | 通过 | 完成两步时写 “1 thing left before you buy. You have 0% of the cash. RM … to go.”；三步全完成时写 “All three steps are done. Save your plan for your own reference.”，不出现 ready 或 approved（文案 2026-10-09 改） |
 | AC5.9.6 Keep a copy of my plan | 通过 | 打印页标题为 “RuMampu buying plan, for my own reference”，列出价格、贷款、前期现金、现金缓冲、已备文件和免责声明；手机分享面板未测 |
-| AC5.9.7 Kept on this device | 延期 | App 保持打开时保留；访客重新打开页面后从空白开始（访客入口文案写明完全关闭后不保留）；账号情形未验证 |
+| AC5.9.7 Kept on this device | 延期 | App 保持打开时保留。路径在网页和手机 App 上都已写进本地存储，但访客重新打开页面会走一遍游客入口，入口会新建一份空记录（和游客入口文案一致）；登录账号不经过这一步，可直接恢复，尚未验证。负责人在三个方案里选：访客也保留在本机、只对登录账号承诺、或把路径同步到账号（2026-10-09） |
 | AC5.10.1 The monthly payment first | 通过 | 月供、“90% loan at 4.30%, over 35 years” 和 “Your typical month” |
-| AC5.10.2 Compare with my month, without a rating | 延期 | 界面显示 Comfortable / Tight / Heavy，并按没有公开来源的界线给行着色 |
+| AC5.10.2 Compare with my month, without a rating | 通过（负责人决定） | “Comfortable — the instalment is RM 1,245, about 31% of your typical month.” 用数字和文字写出占比；旁边的 Comfortable / Tight / Heavy 一词按负责人 2026-10-09 的决定保留，不删 |
 | AC5.10.3 Where the payment goes | 通过 | 第 1 年、中间一年和最后一年的利息占比与图例 |
 | AC5.10.4 Pick how long and how much the bank lends | 通过 | 25、30、35 年各带月供和总利息；80%/90% 与 “You put down … The bank lends …” |
 | AC5.10.5 If rates go up | 通过 | Now、+1%、+2% 的利率与月供，问题，回答不改变其他数字 |
 | AC5.10.6 My full monthly bill | 通过 | 公寓：月供、地租与门牌税、火险和维护费，起始金额均标 “Our guess”，改动后去掉，并显示每月总额 |
 | AC5.10.7 A cushion from my own months | 通过 | 缓冲、“Your pot covers …”、逐月累计余额、最大跌幅，点 Add RM x 打开储蓄计划 |
 | AC5.10.8 Three numbers to keep | 通过 | 月供、利率升 1% 的月供、缓冲、贷款摘要、免责声明，Save 后该步骤打勾 |
-| AC5.10.9 Say where every figure comes from | 延期 | 除 “Our guess” 外，没有你的数据 / 计算 / 假设标签 |
+| AC5.10.9 Say where every figure comes from | 通过 | 每一屏都带产品统一的来源标签：月供、利息拆分、年限对比、备用金和总结页三个数字为 `CALCULATED`；贷款比例、利率、年限来自测试或本次选择时为 `YOUR DATA`，用到 RuMampu 起点值时为 `ASSUMPTION`；+1%、+2% 为 `ASSUMPTION`；改过的月费为 `YOUR DATA`，没改的仍是 “Our guess”；首屏 (i) 打开 “Where these figures come from”；70 岁规则注明来源 CIMB 房贷页，核对于 2026-10-09 |
 | AC5.11.1 Subsale or project | 通过 | 时间线随选择切换，离开 Prepare 再回来选择仍在 |
 | AC5.11.2 A subsale in five steps | 通过 | 五个步骤，“You pay” 四次、“Bank pays” 一次 |
 | AC5.11.3 A project as it is built | 通过 | 签约、建造期（只付利息的说明）、钥匙、产权与保留金，以及 Schedule H 折叠表 |
-| AC5.11.4 Timings and shares name their source | 延期 | 时间点与比例没有来源或日期；金额没有来源标签 |
+| AC5.11.4 Timings and shares name their source | 通过 | 二手房：定金 2–3%、14 天、3–4 个月各写 “Common practice, not a legal rule.”，来源为中介与律师指南，核对于 2026-10-09；首期供款时间标为未经核实。新盘：各阶段比例注明 1989 年房屋发展（管制与执照）条例附表 H（附表 G 自 2015 年起比例相同），标明尚未对照宪报原文、二手来源 2026-10-09 查阅，时间线下方和完整表格下各一次。每个金额带 `ASSUMPTION`（2% 定金估算）、`YOUR DATA`（自己填的定金）或 `CALCULATED` |
 
 ## 证据索引
 
@@ -126,7 +126,8 @@
 - 真实浏览器验收：[`epic5.spec.ts`](../../frontend/e2e/epic5.spec.ts)（核心 48 条验收标准各登记一次，另有工程回归：TECH-5.1 Money 入口、TECH-5.2 修改与需要已满足、TECH-5.3 余额从未跌破零也可能需要缓冲、TECH-5.4 安全缓冲占用的钱不重复计算、TECH-5.5 转入的钱刷新后还在）
 - Learn 浏览器验收：[`epic5-learn.spec.ts`](../../frontend/e2e/epic5-learn.spec.ts)，覆盖 US5.5–5.7 的 20 条 AC、全部 51 页与跨设备阅读进度。
 - 费用标准和 pot 算术在分档边界上的回归：[`epic5-upfront-fees.spec.ts`](../../frontend/e2e/epic5-upfront-fees.spec.ts)
-- 追溯闸门：`npm run test:e2e:traceability` 对照[基线](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)检查 Epic 5 为 68/68 条验收标准
+- Prepare 路径、月供检查与 How buying works（US5.9–5.11）：[`epic5-prepare-path.spec.ts`](../../frontend/e2e/epic5-prepare-path.spec.ts)；时间点、比例和 70 岁规则的来源：[`buying-facts.ts`](../../frontend/src/rumampu/buying-facts.ts)，Schedule H 的加总在 [`unit/buying-facts.test.ts`](../../frontend/unit/buying-facts.test.ts) 中检查
+- 追溯闸门：`npm run test:e2e:traceability` 对照[基线](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)检查 Epic 5 的 88 条验收标准：87 条可执行，AC5.9.7 明确延期
 - 截图：[`output/playwright/epic-5/evidence/`](../../output/playwright/epic-5/evidence/)，用 `UPDATE_EVIDENCE=1` 刷新
 - 运行 Epic 5 检查：在 `frontend/` 下执行 `npm run test:e2e:epic5`
 
@@ -172,3 +173,9 @@ AC5.7.6 按现行文字实现，阅读徽章与庆祝已移除；完成文章仅
 - OpenAPI 重新生成后与已提交文件一致。生成器仍输出既有的未声明 serializer 和 operationId 冲突信息，不把这项说成无警告。
 
 逐条 AC、部署步骤与证据见 [修复报告](REPAIR_REPORT.cn.md)。
+
+## 迭代 3 收尾（2026-10-09）
+
+- US5.9–5.11（V9 的 20 条，2026-10-08 构建的 Prepare 路径）纳入基线，Epic 5 增至 88 条。
+- V9 构建说明点名的四条于 10 月 9 日关闭：AC5.9.5（全部完成的提示不再说 “ready to buy”）、AC5.10.2（负责人按现状接受：占比用数字和文字写出，评级词保留）、AC5.10.9（月供检查每一屏加来源标签，70 岁规则注明来源）、AC5.11.4（How buying works 每个时间点和比例写明状态、来源与核对日期或标未经核实，每个金额带来源标签）。AC5.9.7 等负责人对访客的决定。
+- Expo SDK 57 升级后，开发包会把 React 的 `ariaHidden` 警告显示成盖住整页的浮层，所以本次收尾的浏览器检查改用生产网页导出运行（`frontend/playwright.static.config.ts`）；开发服务器的配置没有改。

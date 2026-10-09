@@ -3,7 +3,7 @@
 Language: **English** | [Chinese (CN)](README.cn.md)
 
 - Status: Built and covered by executable checks; awaiting owner acceptance
-- Scope: 8 user stories, 68 acceptance criteria: the 36 of v5, the 20 Learn criteria for Iteration 3, plus the team amendments of 2026-10-05 and 2026-10-06 (US5.8 with AC5.8.9 and AC5.8.10, AC5.3.8, AC5.3.9) ([baseline](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md), Drive `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v5.docx`)
+- Scope: 11 user stories, 88 acceptance criteria: the 36 of v5, the 20 Learn criteria for Iteration 3, the team amendments of 2026-10-05 and 2026-10-06 (US5.8 with AC5.8.9 and AC5.8.10, AC5.3.8, AC5.3.9), and the 20 V9 criteria for US5.9–5.11 ([baseline](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md), Drive `US and AC V9.docx`)
 - Entry points: House → **Prepare for a house**, and Money → **Cash buffer**
 - Decisions: [ADR 0004](../adr/0004-backend-authoritative-housing-calculations.md), see implementation boundary 3; [ADR 0005](../adr/0005-cash-buffer-deepest-fall.md) for how the cash buffer is measured
 
@@ -17,9 +17,9 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 | US5.6 — Find what applies to someone without a payslip | 3/3 | No payslip, SJKP limits and checklist navigation |
 | US5.7 — See what I've already read | 6/6 | Read counts, resume, Prepare total and account progress on another device, without rewards |
 | US5.8 — Count my savings once across the cash buffer and the upfront costs (team amendment) | 10/10 | The buffer is held from the pot first; Upfront cash, House, the Saving plan and Home read the same split; Cash buffer says how much is covered and links to the plan |
-| US5.9 — Prepare for one home, step by step (V9) | 5/7, 2 deferred | One home for every step, the choose-or-type form, four steps none locked, ticks for the monthly and paperwork steps, the PDF page. Deferred: AC5.9.5 (the build says "You’re ready to buy!") and AC5.9.7 (a guest loses the path after reopening the page). Spec: `epic5-prepare-path.spec.ts` |
-| US5.10 — Check what paying each month would be like (V9) | 7/9, 2 deferred | Six lesson screens and the summary. Deferred: AC5.10.2 (the build rates the share Comfortable / Tight / Heavy) and AC5.10.9 (no provenance labels). Spec: `epic5-prepare-path.spec.ts` |
-| US5.11 — See how buying works for my kind of home (V9) | 3/4, 1 deferred | Subsale and project timelines, the choice kept, the Schedule H fold. Deferred: AC5.11.4 (no source or checked date on timings and shares). Spec: `epic5-prepare-path.spec.ts` |
+| US5.9 — Prepare for one home, step by step (V9) | 6/7, 1 deferred | One home for every step, the choose-or-type form, four steps none locked, ticks for the monthly, cash and paperwork steps, the all-done line without a verdict, the PDF page. Deferred: AC5.9.7 (a guest who reopens the page goes through the guest entry, which starts a clean record; owner decision pending). Spec: `epic5-prepare-path.spec.ts` |
+| US5.10 — Check what paying each month would be like (V9) | 9/9 | Six lesson screens and the summary; the share of the typical month in figures and words (the Comfortable / Tight / Heavy word kept by owner decision, 2026-10-09); provenance tags on every screen and the age-70 rule with its source. Spec: `epic5-prepare-path.spec.ts` |
+| US5.11 — See how buying works for my kind of home (V9) | 4/4 | Subsale and project timelines, the choice kept, the Schedule H fold, and every timing and share with its status, source and checked date or an unverified mark. Spec: `epic5-prepare-path.spec.ts` |
 
 ## Acceptance record
 
@@ -96,23 +96,23 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 | AC5.9.1 One home for every step | Passed | The banner names the home, its price and subsale/project; Change home lists both kept tests and "Test a new house first"; choosing one re-points the path (`epic5-prepare-path.spec.ts`) |
 | AC5.9.2 Choose or type a home first | Passed | With no test, "Which home are you preparing for?" and the type-in form show no path; after "Use this home" the banner and steps appear |
 | AC5.9.3 Four steps, none locked | Passed | The four steps in order, each with its figure; the paperwork step opens first |
-| AC5.9.4 What counts as done | Passed (partly) | The paperwork tick after all five documents and the monthly tick after Save to my plan are checked; the keys step carries no progress. The cash tick (pot covers the upfront need) is not reached in this scenario |
-| AC5.9.5 Say what is left without a verdict | Deferred | The "1 thing left" line works, but with all steps done the build says "You’re ready to buy!", which the AC forbids (V9 build note) |
+| AC5.9.4 What counts as done | Passed | The paperwork tick after all five documents, the monthly tick after Save to my plan, and the cash tick once RM 100,000 on hand covers the need (reached under AC5.9.5); the keys step carries no progress |
+| AC5.9.5 Say what is left without a verdict | Passed | With two steps done the line reads "1 thing left before you buy. You have 0% of the cash. RM … to go."; with all three done it reads "All three steps are done. Save your plan for your own reference." and never says ready or approved (copy changed 2026-10-09) |
 | AC5.9.6 Keep a copy of my plan | Passed | The print page is headed "RuMampu buying plan, for my own reference" and lists the price, loan, upfront cash, cash buffer, ready documents and the disclaimer; the phone share sheet is not tested |
-| AC5.9.7 Kept on this device | Deferred | Kept while the app stays open; a guest who reopens the page starts empty (guest-entry copy says records are not kept after the app is fully closed); account behaviour not verified |
+| AC5.9.7 Kept on this device | Deferred | Kept while the app stays open. The path is already written to local storage on the web and in the phone apps, but a guest who reopens the page goes through the guest entry, which starts a clean record (as the guest-entry copy says); a signed-in account resumes without that step, not yet verified. Owner to choose between keeping the guest record on the device, accepting the criterion for signed-in users only, or syncing the path to the account (2026-10-09) |
 | AC5.10.1 The monthly payment first | Passed | The instalment, "90% loan at 4.30%, over 35 years" and "Your typical month" |
-| AC5.10.2 Compare with my month, without a rating | Deferred | The build shows Comfortable / Tight / Heavy and colours rows by cut-offs with no published source |
+| AC5.10.2 Compare with my month, without a rating | Passed (owner decision) | "Comfortable — the instalment is RM 1,245, about 31% of your typical month." states the share in figures and words; the Comfortable / Tight / Heavy word beside it is kept by the owner's decision of 2026-10-09 rather than removed |
 | AC5.10.3 Where the payment goes | Passed | Year 1, a middle year and the final year with interest shares and the legend |
 | AC5.10.4 Pick how long and how much the bank lends | Passed | 25, 30, 35 years with monthly and total interest; 80%/90% with "You put down … The bank lends …" |
 | AC5.10.5 If rates go up | Passed | Now, +1% and +2% with rates and payments, the question, and the answer changes no other figure |
 | AC5.10.6 My full monthly bill | Passed | Condo: instalment, quit rent, fire insurance and maintenance, each "Our guess" until changed, with the monthly total |
 | AC5.10.7 A cushion from my own months | Passed | The cushion, "Your pot covers …", the running balance months, the biggest drop, and Add RM x opens the saving plan |
 | AC5.10.8 Three numbers to keep | Passed | Monthly payment, payment if rates rise 1%, cushion, the loan summary, the disclaimer, and Save marks the step done |
-| AC5.10.9 Say where every figure comes from | Deferred | No your-data / calculated / assumption labels apart from "Our guess" |
+| AC5.10.9 Say where every figure comes from | Passed | Every screen carries the product's provenance tags: the instalment, the split, the tenure figures, the cushion and the three summary numbers are `CALCULATED`; the loan share, rate and years are `YOUR DATA` when they come from the test or a choice in the check and `ASSUMPTION` while a RuMampu starting point is in use; +1% and +2% are `ASSUMPTION`; a changed bill is `YOUR DATA` and an unchanged one stays "Our guess"; (i) on the first screen opens "Where these figures come from"; the age-70 rule cites the CIMB home loan page, checked 9 October 2026 |
 | AC5.11.1 Subsale or project | Passed | The timeline switches and the choice is still there after leaving and returning to Prepare |
 | AC5.11.2 A subsale in five steps | Passed | The five steps with "You pay" ×4 and "Bank pays" ×1 |
 | AC5.11.3 A project as it is built | Passed | Signing, the build with interest-only wording, keys, title and retention, and the Schedule H fold |
-| AC5.11.4 Timings and shares name their source | Deferred | No timing or share carries a source or date; amounts carry no provenance label |
+| AC5.11.4 Timings and shares name their source | Passed | Subsale: the 2 to 3% deposit, the 14 days and the 3 to 4 months each read "Common practice, not a legal rule." with the agent and lawyer guides as source, checked 9 October 2026; the first-instalment timing is marked unverified. Project: the shares name Schedule H of the Housing Development (Control and Licensing) Regulations 1989 (the same shares as Schedule G since 2015), marked unverified against the gazette text with secondary sources read 9 October 2026, under the timeline and again under the full schedule. Every amount carries `ASSUMPTION` (the 2% earnest deposit), `YOUR DATA` (a typed earnest deposit) or `CALCULATED` |
 
 ## Evidence map
 
@@ -126,7 +126,8 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 - Real-browser acceptance: [`epic5.spec.ts`](../../frontend/e2e/epic5.spec.ts) (48 core acceptance criteria registered once each, plus engineering regressions: TECH-5.1 the Money shortcut, TECH-5.2 edits and a covered need, TECH-5.3 a record that never goes below zero can still need a buffer, TECH-5.4 what the safety buffer holds is not counted again, TECH-5.5 money moved in survives a reload)
 - Learn browser acceptance: [`epic5-learn.spec.ts`](../../frontend/e2e/epic5-learn.spec.ts), covering all 20 criteria for US5.5–5.7, all 51 pages and account progress across devices.
 - Fee-scale and pot arithmetic at the band edges: [`epic5-upfront-fees.spec.ts`](../../frontend/e2e/epic5-upfront-fees.spec.ts)
-- Traceability gate: `npm run test:e2e:traceability` checks Epic 5 at 68/68 acceptance criteria against the [baseline](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)
+- Prepare path, monthly check and How buying works (US5.9–5.11): [`epic5-prepare-path.spec.ts`](../../frontend/e2e/epic5-prepare-path.spec.ts); the sources behind the timings, shares and the age rule: [`buying-facts.ts`](../../frontend/src/rumampu/buying-facts.ts), with the Schedule H arithmetic checked in [`unit/buying-facts.test.ts`](../../frontend/unit/buying-facts.test.ts)
+- Traceability gate: `npm run test:e2e:traceability` checks Epic 5 at 88 acceptance criteria against the [baseline](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md): 87 executable, AC5.9.7 explicitly deferred
 - Screenshots: [`output/playwright/epic-5/evidence/`](../../output/playwright/epic-5/evidence/), refreshed with `UPDATE_EVIDENCE=1`
 - Run the Epic 5 checks: `npm run test:e2e:epic5` in `frontend/`
 
@@ -172,3 +173,9 @@ Public content sources and corrections are in [LEARN_SOURCES.md](LEARN_SOURCES.m
 - Regenerated OpenAPI matches the committed file. Existing serializer-inference and operationId-collision diagnostics remain; generation is not claimed to be warning-free.
 
 Per-criterion evidence and deployment steps are in the [repair report (Chinese)](REPAIR_REPORT.cn.md).
+
+## Iteration 3 close-out — 9 October 2026
+
+- US5.9–5.11 (20 V9 criteria, the Prepare path built on 8 October 2026) joined the baseline, taking Epic 5 to 88 criteria.
+- Four criteria the V9 build notes had flagged were closed on 9 October: AC5.9.5 (the all-done line no longer says "ready to buy"), AC5.10.2 (accepted as built by the owner: the share is stated in figures and words, the rating word stays), AC5.10.9 (provenance tags on every screen of the monthly check and a source for the age-70 rule) and AC5.11.4 (status, source and checked date, or an unverified mark, on every timing and share of How buying works, and a provenance tag on every amount). AC5.9.7 waits for the owner's decision on guests.
+- Since the Expo SDK 57 upgrade the development bundle shows React's `ariaHidden` warning in a toast that covers the page, so the browser checks for this close-out were run against a production web export (`frontend/playwright.static.config.ts`); the dev-server configuration is unchanged.
