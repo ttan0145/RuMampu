@@ -3,6 +3,7 @@ Load transactions_clean.csv into property_transaction.
 
 Run after load_neon.py (it needs the district table to resolve IDs).
 
+    pip install -r requirements-scripts.txt
     python load_transactions.py
 
 Uses COPY FROM STDIN, which is what psql's \\copy uses underneath and is far

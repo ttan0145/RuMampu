@@ -1,7 +1,7 @@
 """
 Load cleaned NAPIC + DOSM data into Neon Postgres.
 
-    pip install psycopg2-binary pandas python-dotenv
+    pip install -r requirements-scripts.txt
     python load_neon.py
 
 Idempotent: re-running upserts rather than duplicating.
