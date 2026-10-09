@@ -44,7 +44,7 @@ Epic 2 的 18 条验收、计算边界与浏览器证据见 [Epic 2 实施与验
 
 本轮正式开发记录见 [项目开发日志](docs/CHANGELOG.cn.md)。
 
-Epic 1 完成报告见 [Epic 1 完成报告](docs/epic-1/EPIC_1_COMPLETION_REPORT.cn.md)。生产级 OCR、用户账户、跨设备同步、收入预测、风险评分与 Epic 5 正式化仍不在当前范围；完整边界见 [Epic 1/2/5 实现矩阵](docs/EPIC_1_2_5_IMPLEMENTATION_MATRIX.cn.md)。
+Epic 1 完成报告见 [Epic 1 完成报告](docs/epic-1/EPIC_1_COMPLETION_REPORT.cn.md)。生产级 OCR、用户账户、跨设备同步、收入预测与风险评分仍不在当前范围。Epic 5 已交付：11 个用户故事、88 条验收标准全部映射，其中 83 条可执行，5 条（AC5.9.5、AC5.9.7、AC5.10.2、AC5.10.9、AC5.11.4）截至 2026-10-09 记入验收索引为延期；完整边界见 [Epic 1/2/5 实现矩阵](docs/EPIC_1_2_5_IMPLEMENTATION_MATRIX.cn.md)。
 
 正式需求已经转换为便于检索的 Markdown：[全部 US/AC](docs/requirements/USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)、[Epic 1 US/AC](docs/requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md) 和 [Epic 2 US/AC](docs/requirements/EPIC_2_USER_STORIES_AND_ACCEPTANCE_CRITERIA.cn.md)。实现时以 US 为交付单元、以 AC 为验收单元。
 

@@ -16,10 +16,10 @@
 
 | User Story | 当前状态 | 代码/证据 | 下一步 |
 |---|---|---|---|
-| US1.1 Record income from different sources | 11/12 AC；AC1.1.8 延期 | 一个金额加一个日期选择器（v24）；来源和自定义来源；金额校验；高额提醒；编辑时改日期需确认；[验收记录](epic-1/US1.1_RECORD_INCOME.cn.md) | AC1.1.8（每条记录标 `Your Data`）照旧延期。 |
+| US1.1 Record income from different sources | 12/12 AC；AC1.1.8 不再延期（`ac()`，`epic1.spec.ts:213`，2026-10-09 全量运行通过） | 一个金额加一个日期选择器（v24）；来源和自定义来源；金额校验；高额提醒；编辑时改日期需确认；[验收记录](epic-1/US1.1_RECORD_INCOME.cn.md) | AC1.1.8（每条记录标 `Your Data`）照旧延期。 |
 | US1.2 Add historical income | 完成（4/4 AC） | “Add a month I did not record” 打开过去月份弹层；当前月份不可选；记录月数；[验收记录](epic-1/US1.2_HISTORICAL_INCOME.cn.md) | 无 |
-| US1.3 Record direct work-related costs | 9/10 AC；AC1.3.7 延期 | 工作成本在日常支出里打开 “This was for work” 记录（v24，v5 修订 2、3），并列在单独的表里；2026-10-03 补回 “+ Your own cost”；每月扣除工作成本后的收入在收入规律页显示；[验收记录](epic-1/US1.3_WORK_COSTS.cn.md) | AC1.3.7（编辑工作成本）：v24 的表没有编辑操作，旧的工作成本页已无入口，需要决定并改应用。 |
-| US1.4 Record regular commitments | 4/6 AC；AC1.4.3、AC1.4.4 延期 | 账单页有生活开销和还债两组；总额标 `CALCULATED`；每组一个来源标签；[验收记录](epic-1/US1.4_COMMITMENTS.cn.md) | v24 账单页只保留生活开销和还债（提交 a1e6fbf），而 AC1.4.3、AC1.4.4 要求储蓄分组。由产品负责人决定加回分组还是修订标准。 |
+| US1.3 Record direct work-related costs | AC1.3.7 不再延期（`ac()`，`epic1.spec.ts:407`，2026-10-09 全量运行通过） | 工作成本在日常支出里打开 “This was for work” 记录（v24，v5 修订 2、3），并列在单独的表里；2026-10-03 补回 “+ Your own cost”；每月扣除工作成本后的收入在收入规律页显示；[验收记录](epic-1/US1.3_WORK_COSTS.cn.md) | AC1.3.7（编辑工作成本）：v24 的表没有编辑操作，旧的工作成本页已无入口，需要决定并改应用。 |
+| US1.4 Record regular commitments | AC1.4.3、AC1.4.4 不再延期（`ac()`，`epic1.spec.ts:517` 与 `:521`，2026-10-09 全量运行通过） | 账单页有生活开销和还债两组；总额标 `CALCULATED`；每组一个来源标签；[验收记录](epic-1/US1.4_COMMITMENTS.cn.md) | v24 账单页只保留生活开销和还债（提交 a1e6fbf），而 AC1.4.3、AC1.4.4 要求储蓄分组。由产品负责人决定加回分组还是修订标准。 |
 | US1.5 Record daily expenses | 完成（6/6 AC） | 一个金额加一个日期选择器；默认和自定义类别；[验收记录](epic-1/US1.5_MANUAL_EXPENSES.cn.md) | 无 |
 | US1.6 Review daily expenses | 完成（6/6 AC） | 当月总额、记录天数和条目；Manual / Scan / Import 三个标签；月度汇总；[验收记录](epic-1/US1.6_EXPENSE_REVIEW.cn.md) | 无 |
 | US1.7 Receipt starting point | 完成（10/10 AC） | 日常支出里的收据标签：选图区域、相机、示例、读取中状态、标 “from receipt” 的可编辑确认、重拍；[验收记录](epic-1/US1.7_RECEIPT_STARTING_POINT.cn.md) | 生产级 OCR 与原图存储应在隐私政策明确后另立工作包 |
@@ -61,10 +61,10 @@ Epic 2 以后端权威方式实现，2026-10-03 重新核验 18/18 AC，只返�
 ## 推荐实施顺序
 
 1. Foundation 框架与 API 契约 - 已完成。
-2. E1.1 收入来源与收入记录 - 11/12 AC，AC1.1.8 延期。
+2. E1.1 收入来源与收入记录 - 12/12 AC；AC1.1.8 已执行并通过（2026-10-09）。
 3. E1.2 历史月收入 - 已完成，4/4 AC。
-4. E1.3 工作成本 - 9/10 AC；需补回编辑工作成本（AC1.3.7）。
-5. E1.4 固定承诺 - 4/6 AC；储蓄分组（AC1.4.3、AC1.4.4）待产品负责人决定。
+4. E1.3 工作成本 - 编辑工作成本（AC1.3.7）已执行并通过（2026-10-09）。
+5. E1.4 固定承诺 - 储蓄分组（AC1.4.3、AC1.4.4）已执行并通过（2026-10-09）。
 6. E1.5/E1.6 日常支出录入与回顾 - 已分别按 6/6 AC 完成。
 7. E1.7 收据起点流程 - 已按 10/10 AC 完成，真实 OCR 与人工确认边界分离。
 8. E1.8 历史 CSV 导入 - 已按 8/8 AC 完成。

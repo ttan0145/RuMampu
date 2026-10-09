@@ -2,8 +2,8 @@
 
 Language: **English** | [Chinese (CN)](US1.3_WORK_COSTS.cn.md)
 
-- Acceptance date: 2026-09-03
-- Status: local implementation and acceptance passed (10/10 AC); not a LeanKit closure, IT2 scheduling decision, or production release.
+- Acceptance date: 2026-10-08
+- Status: all 13 v7 criteria are implemented and passed browser acceptance, including bidirectional moves after editing amount/date.
 - Requirement: [US1.3 — Record direct work-related costs](../requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md#us13---record-direct-work-related-costs)
 
 ## Acceptance matrix
@@ -12,23 +12,26 @@ Language: **English** | [Chinese (CN)](US1.3_WORK_COSTS.cn.md)
 |---|---|---|
 | AC1.3.1 Select a work-cost category | Passed | The screen loads the profile-owned default and custom categories; a category must be selected before saving. |
 | AC1.3.2 Enter a work-cost amount | Passed | The form and API require a monetary amount greater than zero. |
-| AC1.3.3 Enter a work-cost date | Passed | The form uses a date picker; the API stores `date` and rejects future dates. |
-| AC1.3.4 Add a custom category | Passed | `POST /api/v1/work-costs/` adds a unique custom category without assigning a recurring amount. |
+| AC1.3.3 Enter the work-cost date | Passed | The form uses a date picker; the API stores `date` and rejects future dates. |
+| AC1.3.4 Add my own work-cost category | Passed | `POST /api/v1/work-costs/` adds a unique custom category without assigning a recurring amount. |
 | AC1.3.5 Save a work-cost entry | Passed | `POST /api/v1/work-costs/entries/` appends one separate category, amount, and date record. |
-| AC1.3.6 Display recorded entries | Passed | The screen lists every saved record with business date, category, and amount. Rows omit repeated YOUR DATA labels; the net-income result retains CALCULATED. Amount and edit controls can wrap together on narrow screens. |
-| AC1.3.7 Edit a work-cost record | Passed | `PATCH /api/v1/work-costs/entries/{id}/` changes only the selected entry and refreshes affected monthly results. |
+| AC1.3.6 Display recorded work costs | Passed | The screen lists every saved record with business date, category, and amount. Rows omit repeated YOUR DATA labels; the net-income result retains CALCULATED. Amount and edit controls can wrap together on narrow screens. |
+| AC1.3.7 Edit a recorded work cost | Passed | `PATCH /api/v1/work-costs/entries/{id}/` changes only the selected entry and refreshes affected monthly results. |
 | AC1.3.8 Apply work costs to the correct month | Passed | The finance service groups costs by `cost_date` month/year and never applies an entry to another month. |
 | AC1.3.9 Show income after work costs | Passed | The selected-month summary calculates gross income minus that month's costs; a no-income month keeps costs visible and marks the net figure unavailable. |
 | AC1.3.10 Identify calculated income | Passed | The displayed monthly net uses the `CALCULATED` provenance label and explicitly states it uses the selected month's records, not an average. |
+| AC1.3.11 Record different work costs separately | Passed | Two work costs on different dates remain separate rows rather than overwriting one another. |
+| AC1.3.12 Mark a daily expense as a work cost | Passed | The add-expense form switches to work-cost categories before save; the saved row appears in Work costs and stays out of daily spending. |
+| AC1.3.13 Move an entry between spending and work costs | Passed | Inline edit changes the ledger classification. A database transaction replaces the source row with one target row, preserves amount, date, and merchant, and writes a Your record event. |
 
-## Automated and browser acceptance
+## Automated and browser acceptance (v7, 2026-10-08)
 
-- Full backend `manage.py test`: 106 tests passed, including 7 new work-cost boundary tests for cross-year edits, strict months, date/precision validation, guest isolation, zero/negative values, and legacy preservation.
-- Frontend TypeScript and acceptance traceability checks passed; all 60 Epic 1 AC identifiers are mapped exactly once.
-- Full `npm run test:e2e -- --reporter=line` on 2026-09-03: 32 tests passed (2.3 minutes), including Epic 1/2, existing housing/record flows, and 4 new work-cost failure regressions.
-- US1.3 in `e2e/epic1.spec.ts` derives relative dates from the server's current month. It checks reload persistence, one-entry editing, same-month deductions, a cost-only month, and calculated provenance.
+- Backend `finance.tests`: 60/60 passed, including both ledger moves, merchant preservation, edited amount/date values, invalid destinations, and whole-month-total protection.
+- The earlier Epic 1 browser suite passed 13/13. After adding US1.9, current traceability is 72 executable criteria and none deferred. US1.9 browser acceptance was not run; see the [US1.9 record](US1.9_BANK_STATEMENT_SCAN.md).
+- Full Epic 1 Playwright suite: 13/13 passed. US1.3 checks separate entries, editing, moving an edited amount/date to daily spending and back to work costs, the Your record event, and monthly net income. See the [full run log](../../output/playwright/epic1-supervised/full-final/run.log).
+- Migration drift check passed; `WorkCostEntry.merchant` is supplied by migration `0023_workcostentry_merchant`.
 
-The acceptance skill separates identifier coverage from actual acceptance. The full regression supplies fresh execution evidence; engineering mappings and release gates are in the [critical audit (Chinese)](US1.3_AUDIT_2026-09-03.cn.md).
+Identifier mapping and actual acceptance are separate; the 13/13 browser run is the current acceptance evidence. Additional engineering mappings and release gates are in the [critical audit (Chinese)](US1.3_AUDIT_2026-09-03.cn.md).
 
 ## Calculation convention
 
@@ -53,7 +56,7 @@ The separate local bug fix now publishes successful category and entry reads ind
 | AC1.3.9, AC1.3.10 | TECH-WC-05/06/07 plus the existing US1.3 acceptance flow | Passed locally; no unavailable result is presented as a confirmed zero or net figure. |
 
 - Red/green evidence: TECH-WC-05 first failed on the unchanged application because `Petrol` was absent, then passed after the fix.
-- Current validation on 2026-09-11: finance 90/90 passed; frontend TypeScript passed; Epic 1 maps 61 executable criteria plus the explicitly deferred AC1.1.8, and Epic 2 maps 18/18 criteria exactly once.
+- Current validation on 2026-09-11: finance 90/90 passed; frontend TypeScript passed; Epic 1 maps 61 executable criteria plus AC1.1.8, which now runs through `ac()`, and Epic 2 maps 18/18 criteria exactly once.
 - Full local browser suite: **35/35 passed (2.4 minutes)** using Chromium and SQLite, including existing Epic 3/4 housing flows and three new partial-load regressions. No new PostgreSQL CI or real-device acceptance is claimed.
 - Scope: bug recovery only. No font, colour, layout, editing-flow, delete-action, or requirement changes. Existing AC3.2.5 and AC3.3.1 describe the affected housing behaviour; handing over migration execution does not create new Epic 3 ACs.
 - A subsequent real-browser check on `https://rumampu-frontend.vercel.app/` used a new, initially empty guest without request mocks. It verified category loading, zero-amount rejection, adding two costs in one category, editing one record, moving it to the previous month, and reload persistence. With RM 3,000 income, the remaining current-month cost of RM 25 produced RM 2,975 net income in both Work costs and Income pattern. A cost-only prior month did not fabricate income.

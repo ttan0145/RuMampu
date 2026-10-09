@@ -84,6 +84,7 @@ After confirmation, the client retries the same data with `confirm_outlier: true
 | POST | `/api/v1/work-costs/` | Create a custom work-cost category |
 | GET, POST | `/api/v1/work-costs/entries/` | List or create dated work-cost entries |
 | PATCH | `/api/v1/work-costs/entries/{id}/` | Update one dated work-cost entry |
+| PATCH | `/api/v1/work-costs/entries/{id}/move/` | Move one work cost to daily expenses |
 | GET | `/api/v1/work-costs/summary/?month=YYYY-MM` | Calculate the selected month's factual work-cost summary |
 | GET | `/api/v1/commitments/` | Current guest's active financial commitments |
 | PATCH | `/api/v1/commitments/{id}/` | Update one commitment's monthly amount |
@@ -91,6 +92,8 @@ After confirmation, the client retries the same data with `confirm_outlier: true
 | POST | `/api/v1/expense-categories/` | Create a custom expense category |
 | GET | `/api/v1/expenses/` | Current guest's daily expenses |
 | POST | `/api/v1/expenses/` | Create a daily expense manually or from confirmed receipt values |
+| PATCH | `/api/v1/expenses/{id}/` | Update one daily expense |
+| PATCH | `/api/v1/expenses/{id}/move/` | Move one daily expense to work costs |
 | GET | `/api/v1/income-pattern/` | Recalculate the current guest's month-by-month income pattern |
 | GET | `/api/v1/income-coverage/` | Read the current guest's confirmed slower-period coverage answer |
 | PUT | `/api/v1/income-coverage/` | Confirm and evaluate a slower-period coverage answer |
@@ -177,6 +180,8 @@ Create a dated entry:
 ```
 
 `amount` must be greater than zero and `date` cannot be in the future. Multiple entries with the same category and month remain separate facts. `PATCH /api/v1/work-costs/entries/{id}/` may change `category_id`, `amount`, or `date`; it updates only that entry. Guest isolation applies to categories and entries.
+
+`PATCH /api/v1/work-costs/entries/{id}/move/` accepts a daily-expense `category_id`; `PATCH /api/v1/expenses/{id}/move/` accepts a work-cost `category_id`. Either move may also include an edited `amount` and/or `date` from the open entry editor. Each move runs in one database transaction, creates one destination entry, deletes its source entry, and preserves the merchant. A whole-month expense total cannot be moved as one work cost. `PATCH /api/v1/expenses/{id}/` updates only the selected expense's `category_id`, `amount`, or `date`. Work-cost entries expose an optional `merchant` string so a moved expense does not lose that detail.
 
 `GET /api/v1/work-costs/summary/?month=2026-09` returns the selected month, its recorded gross income, its recorded work-cost total, and `income_after_work_costs` only when income exists for that month. It also returns `available_months`, containing the current month and months that have income or work-cost records. The calculation is `gross income for YYYY-MM − work-cost entries dated in the same YYYY-MM`; no entry becomes a recurring monthly deduction, and no cross-month average is substituted.
 
@@ -303,7 +308,7 @@ After confirmation, an imported income entry can be edited through the income-en
 
 ## 9. Income-pattern analysis
 
-`GET /api/v1/income-pattern/` recalculates analysis from source records; no derived snapshot is stored. Monthly rows use `YYYY-MM`, and every monetary field is a two-decimal string.
+`GET /api/v1/income-pattern/` recalculates analysis from source records; no derived snapshot is stored. Monthly rows use `YYYY-MM`, and every monetary field is a two-decimal string. `months` retains all rows for compatibility; `completed_months` contains only finished months, while `current_month_so_far` is the unfinished month or `null`.
 
 ```json
 {
@@ -312,12 +317,29 @@ After confirmation, an imported income entry can be edited through the income-en
   "provenance": "calculated_from_user_record",
   "work_cost_basis": "recorded_entries_by_month",
   "months": [{
-    "month": "2026-01",
+    "month": "2026-08",
     "gross_income": "4380.00",
     "work_costs": "750.00",
     "usable_income": "3630.00",
+    "is_in_progress": false,
+    "is_lowest_recorded": true
+  }, {
+    "month": "2026-09",
+    "gross_income": "4500.00",
+    "work_costs": "0.00",
+    "usable_income": "4500.00",
+    "is_in_progress": false,
+    "is_lowest_recorded": false
+  }, {
+    "month": "2026-10",
+    "gross_income": "200.00",
+    "work_costs": "50.00",
+    "usable_income": "150.00",
+    "is_in_progress": true,
     "is_lowest_recorded": false
   }],
+  "completed_months": [{"month": "2026-08", "gross_income": "4380.00", "work_costs": "750.00", "usable_income": "3630.00", "is_in_progress": false, "is_lowest_recorded": true}, {"month": "2026-09", "gross_income": "4500.00", "work_costs": "0.00", "usable_income": "4500.00", "is_in_progress": false, "is_lowest_recorded": false}],
+  "current_month_so_far": {"month": "2026-10", "gross_income": "200.00", "work_costs": "50.00", "usable_income": "150.00", "is_in_progress": true, "is_lowest_recorded": false},
   "statistics": {
     "average": "4065.00",
     "median": "4065.00",
@@ -326,11 +348,11 @@ After confirmation, an imported income entry can be edited through the income-en
     "range": "870.00",
     "standard_deviation": "435.00"
   },
-  "lower_income": {"basis": "recorded_minimum", "months": ["2026-01"]}
+  "lower_income": {"basis": "recorded_minimum", "months": ["2026-08"]}
 }
 ```
 
-`history_depth` is `empty`, `one_month`, `two_months`, or `three_or_more`. Empty records return `statistics: null`. With one month the factual statistics remain available, but `lower_income.months` stays empty because no comparison exists. With two or more months, all tied recorded minima are marked. Population standard deviation is calculated with `Decimal` and rounded `ROUND_HALF_UP` to two decimals.
+`recorded_month_count`, `history_depth`, statistics, and lower-income classification use completed months only. The running month is kept out and shown separately as month so far. `history_depth` is `empty`, `one_month`, `two_months`, or `three_or_more`. With one completed month, factual statistics remain available, but `lower_income.months` stays empty because no comparison exists. With two or more completed months, all tied recorded minima are marked. Population standard deviation is calculated with `Decimal` and rounded `ROUND_HALF_UP` to two decimals.
 
 Coverage uses explicit confirmation:
 
@@ -344,7 +366,7 @@ Coverage uses explicit confirmation:
 - `answer` is `yes`, `no`, or `not_sure`.
 - `yes` requires at least one unique month from 1 through 12; the server sorts the list.
 - `no` and `not_sure` clear `slower_months` regardless of submitted values.
-- The response separates `represented_slower_months` and `unrepresented_slower_months` by comparing calendar month numbers across all recorded years.
+- The response separates `represented_slower_months` and `unrepresented_slower_months` by comparing calendar month numbers across completed years only; the running month is also returned separately as `current_month_so_far`.
 - For `no` and `not_sure`, `observation` is either `null` or a factual `recorded_range` containing only month count, lowest, highest, and range.
 - Coverage is isolated and persisted one-to-one per guest profile. Analysis results are not persisted.
 - Transport validation, model validation, and the application service all enforce canonical slower months: integer values 1–12, unique, sorted, required for `yes`, and empty for `no`/`not_sure`. A malformed legacy row is returned fail-safe as an unknown answer rather than escaping the response contract.

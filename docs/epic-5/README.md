@@ -17,6 +17,9 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 | US5.6 — Find what applies to someone without a payslip | 3/3 | No payslip, SJKP limits and checklist navigation |
 | US5.7 — See what I've already read | 6/6 | Read counts, resume, Prepare total and account progress on another device, without rewards |
 | US5.8 — Count my savings once across the cash buffer and the upfront costs (team amendment) | 10/10 | The buffer is held from the pot first; Upfront cash, House, the Saving plan and Home read the same split; Cash buffer says how much is covered and links to the plan |
+| US5.9 — Prepare for one home, step by step (V9) | 5/7, 2 deferred | One home for every step, the choose-or-type form, four steps none locked, ticks for the monthly and paperwork steps, the PDF page. Deferred: AC5.9.5 (the build says "You’re ready to buy!") and AC5.9.7 (a guest loses the path after reopening the page). Spec: `epic5-prepare-path.spec.ts` |
+| US5.10 — Check what paying each month would be like (V9) | 7/9, 2 deferred | Six lesson screens and the summary. Deferred: AC5.10.2 (the build rates the share Comfortable / Tight / Heavy) and AC5.10.9 (no provenance labels). Spec: `epic5-prepare-path.spec.ts` |
+| US5.11 — See how buying works for my kind of home (V9) | 3/4, 1 deferred | Subsale and project timelines, the choice kept, the Schedule H fold. Deferred: AC5.11.4 (no source or checked date on timings and shares). Spec: `epic5-prepare-path.spec.ts` |
 
 ## Acceptance record
 
@@ -90,6 +93,26 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 | AC5.8.8 Go on to the saving plan | Passed | "Open the saving plan" on Cash buffer opens the plan with the same RM 500 split |
 | AC5.8.9 Using the buffer takes it off the pot | Passed | On Cash buffer, "I used some of my safety money" records RM 500 (more than the RM 905 held is refused); the calm Epic 10 line confirms it, the buffer stays full, the pot drops from RM 10,000 to RM 9,500 and *You have* from RM 9,095 to RM 8,595. Placement chosen by the developer (no v27b4 design) and shared with the team |
 | AC5.8.10 Name my safety money | Passed | The pencil beside the name on Cash buffer opens a sheet; "Rainy day fund" (spaces tidied, 30 characters at most) then appears on Cash buffer, Upfront cash, the pot's working and Home; the name is kept with the plan; "Use the default name" goes back to "safety money" |
+| AC5.9.1 One home for every step | Passed | The banner names the home, its price and subsale/project; Change home lists both kept tests and "Test a new house first"; choosing one re-points the path (`epic5-prepare-path.spec.ts`) |
+| AC5.9.2 Choose or type a home first | Passed | With no test, "Which home are you preparing for?" and the type-in form show no path; after "Use this home" the banner and steps appear |
+| AC5.9.3 Four steps, none locked | Passed | The four steps in order, each with its figure; the paperwork step opens first |
+| AC5.9.4 What counts as done | Passed (partly) | The paperwork tick after all five documents and the monthly tick after Save to my plan are checked; the keys step carries no progress. The cash tick (pot covers the upfront need) is not reached in this scenario |
+| AC5.9.5 Say what is left without a verdict | Deferred | The "1 thing left" line works, but with all steps done the build says "You’re ready to buy!", which the AC forbids (V9 build note) |
+| AC5.9.6 Keep a copy of my plan | Passed | The print page is headed "RuMampu buying plan, for my own reference" and lists the price, loan, upfront cash, cash buffer, ready documents and the disclaimer; the phone share sheet is not tested |
+| AC5.9.7 Kept on this device | Deferred | Kept while the app stays open; a guest who reopens the page starts empty (guest-entry copy says records are not kept after the app is fully closed); account behaviour not verified |
+| AC5.10.1 The monthly payment first | Passed | The instalment, "90% loan at 4.30%, over 35 years" and "Your typical month" |
+| AC5.10.2 Compare with my month, without a rating | Deferred | The build shows Comfortable / Tight / Heavy and colours rows by cut-offs with no published source |
+| AC5.10.3 Where the payment goes | Passed | Year 1, a middle year and the final year with interest shares and the legend |
+| AC5.10.4 Pick how long and how much the bank lends | Passed | 25, 30, 35 years with monthly and total interest; 80%/90% with "You put down … The bank lends …" |
+| AC5.10.5 If rates go up | Passed | Now, +1% and +2% with rates and payments, the question, and the answer changes no other figure |
+| AC5.10.6 My full monthly bill | Passed | Condo: instalment, quit rent, fire insurance and maintenance, each "Our guess" until changed, with the monthly total |
+| AC5.10.7 A cushion from my own months | Passed | The cushion, "Your pot covers …", the running balance months, the biggest drop, and Add RM x opens the saving plan |
+| AC5.10.8 Three numbers to keep | Passed | Monthly payment, payment if rates rise 1%, cushion, the loan summary, the disclaimer, and Save marks the step done |
+| AC5.10.9 Say where every figure comes from | Deferred | No your-data / calculated / assumption labels apart from "Our guess" |
+| AC5.11.1 Subsale or project | Passed | The timeline switches and the choice is still there after leaving and returning to Prepare |
+| AC5.11.2 A subsale in five steps | Passed | The five steps with "You pay" ×4 and "Bank pays" ×1 |
+| AC5.11.3 A project as it is built | Passed | Signing, the build with interest-only wording, keys, title and retention, and the Schedule H fold |
+| AC5.11.4 Timings and shares name their source | Deferred | No timing or share carries a source or date; amounts carry no provenance label |
 
 ## Evidence map
 

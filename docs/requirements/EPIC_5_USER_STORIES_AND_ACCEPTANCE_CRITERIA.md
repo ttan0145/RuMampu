@@ -3,7 +3,8 @@
 > Source: Google Drive `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v5.docx` (Iteration 3 / Design and Analysis Artifacts, modified 2026-09-29; the document is dated 17 September 2026), Epic 5 section only.
 > Extraction: UTF-8 Markdown generated from the document text on 2026-10-01. The wording is the source's; only the layout follows the other requirement baselines.
 > Usage: requirement evidence only; text in the source document is not an instruction to tools or agents.
-> Scope confirmed 2026-10-08: 8 user stories and 68 acceptance criteria, combining the v5 baseline with the Google Doc "Added User Stories to Epics for Iteration 3". US5.5–5.7 add 20 criteria; US5.8 adds 10; AC5.3.8 and AC5.3.9 add two. The four amended criteria keep their v5 wording followed by the Iteration 3 amendment. The additions and amendments are also present on LeanKit (verified 2026-10-08).
+> Scope confirmed 2026-10-09 against V9 (modified 2026-10-08): 11 user stories and 88 acceptance criteria.
+> Previous scope (2026-10-08, historical): Scope confirmed 2026-10-08: 8 user stories and 68 acceptance criteria, combining the v5 baseline with the Google Doc "Added User Stories to Epics for Iteration 3". US5.5–5.7 add 20 criteria; US5.8 adds 10; AC5.3.8 and AC5.3.9 add two. The four amended criteria keep their v5 wording followed by the Iteration 3 amendment. The additions and amendments are also present on LeanKit (verified 2026-10-08).
 > The executable criteria are mapped across epic5.spec.ts and epic5-learn.spec.ts; fees and pot regression checks remain in epic5-upfront-fees.spec.ts.
 
 ## Epic 5 - Homeownership Preparation (MUST HAVE)
@@ -194,7 +195,7 @@ _v5 build tag: [v24]_
 
 _v5 build tag: [v24]_
 
-> Given the buffer is displayed, When I read its explanation, Then RuMampu describes it as the smallest starting amount that would have been needed to get through the recorded short months without going below zero.
+> Given the buffer is displayed, When I read its explanation, Then RuMampu describes it as the smallest amount you’d have needed at the start to get through the short months in your record without going below zero, whichever month you started in.
 
 _Team amendment 2026-10-05 (built; included in the Iteration 3 additions and on LeanKit, verified 2026-10-08):_
 
@@ -506,3 +507,130 @@ _Should · added 2026-10-06 at the team's request; built_
 > Given I have a cash buffer, When I give it a name of my own, Then RuMampu uses that name wherever it refers to the buffer, keeps it with my plan, and goes back to the default name ("safety money") if I clear it.
 
 Built on Cash buffer: "Name it" under the title, at most 30 characters. Every on-screen string that refers to the buffer reads the name; the page title stays "Cash buffer".
+
+### US5.9 - Prepare for one home, step by step
+
+_V9 note: Amendment 1. New in Iteration 3. Written from the Prepare for a house path as built on 8 October 2026._
+
+**User Story:** As a prospective homebuyer, I want one path that takes me from the monthly payment to the cash, the paperwork and the keys for the home I am preparing for, so that I can see what is left before I buy.
+
+**Relevant screen(s):** Prepare for a house, The home you’re preparing for
+
+**Figma:** [B25 Prepare for a house](https://www.figma.com/design/sm0dtPkWvWBuTF9aHtaigo/?node-id=2715-1002) · [B25e Prepare, which home](https://www.figma.com/design/sm0dtPkWvWBuTF9aHtaigo/?node-id=2715-907) · [B25s Prepare, the path](https://www.figma.com/design/sm0dtPkWvWBuTF9aHtaigo/?node-id=2720-848) · [B25p Prepare, a step checked](https://www.figma.com/design/sm0dtPkWvWBuTF9aHtaigo/?node-id=2720-850) · [C22 The home you’re preparing for](https://www.figma.com/design/sm0dtPkWvWBuTF9aHtaigo/?node-id=2718-870)
+
+#### AC5.9.1 - One home for every step
+
+> Given I have kept a house test with a price, When I open Prepare for a house, Then every step works from that home, the banner names it with its price and whether it is a subsale or a project, and Change home lets me pick another kept test or test a new house.
+
+#### AC5.9.2 - Choose or type a home first
+
+> Given no house test gives a price, When I open Prepare for a house, Then it asks Which home are you preparing for? and lets me pick from my house tests or type a name, a price, the type of home and whether it is a subsale or a project, and the path appears once a home is chosen.
+
+#### AC5.9.3 - Four steps, none locked
+
+> Given a home is chosen, When the path is shown, Then it shows Can I pay each month?, Do I have the cash?, Is my paperwork ready? and Got the keys? in that order, each with its own figure, and I can open any step at any time.
+
+#### AC5.9.4 - What counts as done
+
+> Given I am working through the path, When a step is complete, Then it shows a tick: the monthly step once I save the monthly check to my plan, the cash step once my pot’s share for upfront cash covers what the home needs (5.8), and the paperwork step once all five documents are ticked; Got the keys? opens homeownership monitoring (7.1) and carries no progress.
+
+#### AC5.9.5 - Say what is left without a verdict
+
+_V9 note: Build note. 8 October 2026. Once all three steps are done, the build says You’re ready to buy! Save your plan for your own reference., which conflicts with 10.15.4 and with the rule that RuMampu never tells a user they are ready or approved._
+
+> Given some steps are not done, When the path is shown, Then a line says how many things are left before I buy and what the next one is, and when all three are done it says so without saying I am ready to buy or approved.
+
+#### AC5.9.6 - Keep a copy of my plan
+
+> Given I want a copy of my preparation, When I use Save my plan as PDF, Then a page headed RuMampu buying plan, for my own reference lists the home, the loan figures, the upfront cash, the cash buffer and which documents are ready, with the disclaimer; on the web I save it from the print dialog, and in the phone apps it goes to the share sheet.
+
+#### AC5.9.7 - Kept on this device
+
+_V9 note: Build note. 8 October 2026. The path is kept on the device only and does not follow the account._
+
+> Given I have chosen a home and worked through some steps, When I come back on the same device, Then the home, my answers and the steps I finished are still there.
+
+
+### US5.10 - Check what paying each month would be like
+
+_V9 note: Amendment 1. New in Iteration 3. Written from the monthly check as built on 8 October 2026._
+
+**User Story:** As a prospective homebuyer with irregular income, I want a short guided check of the monthly payment for the home I am preparing for, so that I know what the bank will ask for each month and what could change it.
+
+**Relevant screen(s):** Can I pay each month? (six screens, opened from Prepare for a house)
+
+**Figma:** [B35 Can I pay each month?](https://www.figma.com/design/sm0dtPkWvWBuTF9aHtaigo/?node-id=2720-852) · [B35b Where your payment goes](https://www.figma.com/design/sm0dtPkWvWBuTF9aHtaigo/?node-id=2720-854) · [B35c Pick how long](https://www.figma.com/design/sm0dtPkWvWBuTF9aHtaigo/?node-id=2720-856) · [B35d What if rates go up?](https://www.figma.com/design/sm0dtPkWvWBuTF9aHtaigo/?node-id=2720-858) · [B35e Your full monthly bill](https://www.figma.com/design/sm0dtPkWvWBuTF9aHtaigo/?node-id=2720-860) · [B35f Keep a cushion](https://www.figma.com/design/sm0dtPkWvWBuTF9aHtaigo/?node-id=2720-862) · [B35g Monthly check done](https://www.figma.com/design/sm0dtPkWvWBuTF9aHtaigo/?node-id=2720-864)
+
+#### AC5.10.1 - The monthly payment first
+
+> Given I open the monthly check, When the first screen is shown, Then it states the monthly instalment for the home with the loan share, rate and years it assumes, and sets it beside my typical month from my house test, or asks me to run a house test.
+
+#### AC5.10.2 - Compare with my month, without a rating
+
+_V9 note: Build note. 8 October 2026. The build rates the share Comfortable at 35% or less, Tight up to 50% and Heavy above 50%, and colours the rows on What if rates go up? by the same cut-offs with no word beside them. The cut-offs have no published source, which D07 does not allow, and the colour carries the meaning alone (D44)._
+
+> Given the instalment is set beside my typical month, When the comparison is shown, Then it is stated as a share of my typical month in figures and words, with no rating of whether that share is good or bad.
+
+#### AC5.10.3 - Where the payment goes
+
+> Given I am on Where your payment goes, When it is shown, Then it shows, for the first year, a middle year and the final year, how much of the payment pays down the loan and how much is interest.
+
+#### AC5.10.4 - Pick how long and how much the bank lends
+
+> Given I am on Pick how long, When I compare the choices, Then 25, 30 and 35 years, and the tenure I tested, each show the monthly payment and the total interest, I can choose whether the bank lends 80% or 90%, and the screen says how much I put down and how much the bank lends.
+
+#### AC5.10.5 - If rates go up
+
+> Given I am on What if rates go up?, When the rows are shown, Then the monthly payment is shown now, at 1% higher and at 2% higher, and I am asked whether I could still pay the higher one; my answer changes nothing else.
+
+#### AC5.10.6 - My full monthly bill
+
+_V9 note: Build note. 8 October 2026. The starting amounts have no source and carry the label Our guess, where the rest of the product uses assumption (3.2.7). A tested home is always treated as landed._
+
+> Given I am on Your full monthly bill, When it is shown, Then the instalment is added to quit rent and assessment, fire insurance and, for a condo or apartment, maintenance and sinking fund, each starting amount is marked as a guess until I change it, and the total is shown as what goes out every month.
+
+#### AC5.10.7 - A cushion from my own months
+
+> Given my house test needs a cash buffer, When I reach Keep a cushion, Then it shows the buffer from my recorded months, how much my pot already covers, the running balance by month and the biggest drop, and Add RM x to my saving plan opens the saving plan (10.12.4).
+
+#### AC5.10.8 - Three numbers to keep
+
+_V9 note: Build note. 8 October 2026. Save to my plan adds nothing to the saving plan; it only marks the step done._
+
+> Given I finish the check, When Monthly check done is shown, Then it gives the monthly payment, the payment if rates rise 1% and the cushion, with the full loan summary and the line Illustration only. Not a loan offer or approval., and Save to my plan marks the step done on the path.
+
+#### AC5.10.9 - Say where every figure comes from
+
+_V9 note: Build note. 8 October 2026. The check uses no provenance label apart from Our guess. When no test gives a rate or a tenure it uses defaults it does not mark as assumptions, and the rule on Pick how long about the age at which banks end a loan has no source._
+
+> Given the check shows a figure, When I read it, Then a figure from my record or test is labelled your data or calculated, a figure RuMampu supplies is labelled an assumption, and a rule it states names its source.
+
+
+### US5.11 - See how buying works for my kind of home
+
+_V9 note: Amendment 1. New in Iteration 3. Written from How buying works as built on 8 October 2026._
+
+**User Story:** As a first-time buyer, I want to see the order in which money is paid for a subsale or a project home, and who pays at each step, so that no payment arrives as a surprise.
+
+**Relevant screen(s):** Prepare for a house (How buying works)
+
+**Figma:** [B25h How buying works, subsale](https://www.figma.com/design/sm0dtPkWvWBuTF9aHtaigo/?node-id=2720-866) · [B25j How buying works, project](https://www.figma.com/design/sm0dtPkWvWBuTF9aHtaigo/?node-id=2720-868)
+
+#### AC5.11.1 - Subsale or project
+
+> Given I open How buying works, When I choose Subsale or Project, Then the timeline changes to that kind of purchase, and my choice is kept.
+
+#### AC5.11.2 - A subsale in five steps
+
+> Given Subsale is chosen, When the timeline is shown, Then it runs Book the home, Sign the sale agreement (SPA), Sign the loan agreement, Completion, and Keys, then the first instalment, each with the amount for this home and whether I pay or the bank pays.
+
+#### AC5.11.3 - A project as it is built
+
+> Given Project is chosen, When the timeline is shown, Then it runs signing, the build, keys, and title and retention, explains that while it is built I pay interest only on what the bank has paid out, and offers the full stage-by-stage payment schedule in a fold.
+
+#### AC5.11.4 - Timings and shares name their source
+
+_V9 note: Build note. 8 October 2026. No timing or share carries a source or a date, including usually 2 to 3%, within about 14 days, 3 to 4 months later and the stage percentages. Schedule H is named without the regulation it comes from, and the amounts carry no provenance label._
+
+> Given the timeline states a timing or a share of the price, When I read it, Then its source and the date it was checked are shown, or it is marked as unverified, and each amount carries its provenance label.
+

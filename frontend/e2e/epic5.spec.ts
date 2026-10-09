@@ -808,9 +808,9 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
     await ac('AC5.4.4', 'Display SJKP published criteria', async () => {
       await expect(page.getByText('SJKP guarantee scheme', { exact: true })).toBeVisible();
       for (const criterion of [
-        'Malaysian citizen, age 18 to 70',
-        'Gross income within SJKP’s published limit',
-        'First home',
+        'Malaysian citizen, age 18 or above',
+        'Total loan repayments within 65% of gross monthly income',
+        'First home, for own occupation',
       ]) {
         await expect(page.getByText(criterion, { exact: true })).toBeVisible();
       }

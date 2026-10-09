@@ -84,6 +84,7 @@
 | POST | `/api/v1/work-costs/` | 新建自定义工作成本类别 |
 | GET、POST | `/api/v1/work-costs/entries/` | 读取或新建带日期的工作成本记录 |
 | PATCH | `/api/v1/work-costs/entries/{id}/` | 更新一笔带日期工作成本记录 |
+| PATCH | `/api/v1/work-costs/entries/{id}/move/` | 将一笔工作成本移到日常支出 |
 | GET | `/api/v1/work-costs/summary/?month=YYYY-MM` | 计算所选月份的工作成本事实汇总 |
 | GET | `/api/v1/commitments/` | 当前访客的有效财务承诺项目 |
 | PATCH | `/api/v1/commitments/{id}/` | 更新一个财务承诺项目的月金额 |
@@ -91,6 +92,8 @@
 | POST | `/api/v1/expense-categories/` | 新建自定义支出分类 |
 | GET | `/api/v1/expenses/` | 当前访客的日常支出记录 |
 | POST | `/api/v1/expenses/` | 手动新建一笔日常支出 |
+| PATCH | `/api/v1/expenses/{id}/` | 更新一笔日常支出 |
+| PATCH | `/api/v1/expenses/{id}/move/` | 将一笔日常支出移到工作成本 |
 | GET | `/api/v1/income-pattern/` | 重新计算当前访客的逐月收入形态 |
 | GET | `/api/v1/income-coverage/` | 读取当前访客已确认的慢时期覆盖回答 |
 | PUT | `/api/v1/income-coverage/` | 确认并评估慢时期覆盖回答 |
@@ -174,6 +177,8 @@
 ```
 
 `amount` 必须大于 0，`date` 不能是未来日期。即使类别和月份相同，多笔记录也会独立保留。`PATCH /api/v1/work-costs/entries/{id}/` 只更新目标记录的 `category_id`、`amount` 或 `date`。
+
+`PATCH /api/v1/work-costs/entries/{id}/move/` 接收目标日常支出的 `category_id`；`PATCH /api/v1/expenses/{id}/move/` 接收目标工作成本的 `category_id`。迁移请求也可携带编辑器中修改后的 `amount` 和/或 `date`。每次迁移在一个数据库事务中创建一条目标记录并删除来源记录，同时保留商户；整月总额不能作为一笔工作成本迁移。`PATCH /api/v1/expenses/{id}/` 仅修改指定支出的 `category_id`、`amount` 或 `date`。工作成本记录提供可为空的 `merchant` 字段，避免迁移时丢失商户信息。
 
 `GET /api/v1/work-costs/summary/?month=2026-09` 返回所选月、该月已记录总收入、该月工作成本总额，以及仅在该月有收入时返回的 `income_after_work_costs`。`available_months` 包含当前月以及有收入或工作成本记录的月份。计算为 `YYYY-MM` 的总收入减去 `cost_date` 同属该 `YYYY-MM` 的成本记录；不会把一笔记录变成重复月扣除，也不会跨月使用平均值。
 
@@ -300,7 +305,7 @@ POST/PATCH 已返回确认记录，即代表写入成功，后续 GET 失败不�
 
 ## 9. 收入形态分析
 
-`GET /api/v1/income-pattern/` 从源记录实时重算，不存储派生快照。月度行使用 `YYYY-MM`，全部金额字段均为两位小数字符串。
+`GET /api/v1/income-pattern/` 从源记录实时重算，不存储派生快照。月度行使用 `YYYY-MM`，全部金额字段均为两位小数字符串。`months` 为兼容性保留全部月份；`completed_months` 只包含已结束月份，`current_month_so_far` 为未结束月份或 `null`。
 
 ```json
 {
@@ -309,12 +314,29 @@ POST/PATCH 已返回确认记录，即代表写入成功，后续 GET 失败不�
   "provenance": "calculated_from_user_record",
   "work_cost_basis": "recorded_entries_by_month",
   "months": [{
-    "month": "2026-01",
+    "month": "2026-08",
     "gross_income": "4380.00",
     "work_costs": "750.00",
     "usable_income": "3630.00",
+    "is_in_progress": false,
+    "is_lowest_recorded": true
+  }, {
+    "month": "2026-09",
+    "gross_income": "4500.00",
+    "work_costs": "0.00",
+    "usable_income": "4500.00",
+    "is_in_progress": false,
+    "is_lowest_recorded": false
+  }, {
+    "month": "2026-10",
+    "gross_income": "200.00",
+    "work_costs": "50.00",
+    "usable_income": "150.00",
+    "is_in_progress": true,
     "is_lowest_recorded": false
   }],
+  "completed_months": [{"month": "2026-08", "gross_income": "4380.00", "work_costs": "750.00", "usable_income": "3630.00", "is_in_progress": false, "is_lowest_recorded": true}, {"month": "2026-09", "gross_income": "4500.00", "work_costs": "0.00", "usable_income": "4500.00", "is_in_progress": false, "is_lowest_recorded": false}],
+  "current_month_so_far": {"month": "2026-10", "gross_income": "200.00", "work_costs": "50.00", "usable_income": "150.00", "is_in_progress": true, "is_lowest_recorded": false},
   "statistics": {
     "average": "4065.00",
     "median": "4065.00",
@@ -323,11 +345,11 @@ POST/PATCH 已返回确认记录，即代表写入成功，后续 GET 失败不�
     "range": "870.00",
     "standard_deviation": "435.00"
   },
-  "lower_income": {"basis": "recorded_minimum", "months": ["2026-01"]}
+  "lower_income": {"basis": "recorded_minimum", "months": ["2026-08"]}
 }
 ```
 
-`history_depth` 为 `empty`、`one_month`、`two_months` 或 `three_or_more`。空记录返回 `statistics: null`。单月仍返回事实统计，但由于无法比较，`lower_income.months` 为空。两个及以上记录月会标记所有并列最低月。总体标准差以 `Decimal` 计算，并按 `ROUND_HALF_UP` 保留两位。
+`recorded_month_count`、`history_depth`、统计与低收入分类只依据已结束月份。当前月份不参与计算，并作为“本月至今”单独返回。`history_depth` 为 `empty`、`one_month`、`two_months` 或 `three_or_more`。一个已结束月仍返回事实统计，但由于无法比较，`lower_income.months` 为空。两个及以上已结束月会标记所有并列最低月。总体标准差以 `Decimal` 计算，并按 `ROUND_HALF_UP` 保留两位。
 
 Coverage 采用显式确认：
 
@@ -341,7 +363,7 @@ Coverage 采用显式确认：
 - `answer` 为 `yes`、`no` 或 `not_sure`。
 - `yes` 至少需要一个 1–12 的唯一月份，服务端统一排序。
 - `no` 与 `not_sure` 无论收到什么值都会清空 `slower_months`。
-- 响应通过比较所有记录年份的日历月份编号，分别返回 `represented_slower_months` 和 `unrepresented_slower_months`。
+- 响应只比较已结束年份的日历月份编号，分别返回 `represented_slower_months` 和 `unrepresented_slower_months`；当前月份另由 `current_month_so_far` 返回。
 - 对 `no` 与 `not_sure`，`observation` 为 `null`，或只包含记录月数、最低、最高和范围的事实性 `recorded_range`。
 - Coverage 按访客一对一隔离持久化；分析结果不持久化。
 - 传输校验、模型校验与应用服务共同保证慢月份的规范形态：仅限 1–12 的整数、不得重复、升序保存、`yes` 必须非空，`no`/`not_sure` 必须为空。若遇到不合规的旧数据，响应会安全降级为未知回答，不让非法状态越过契约边界。
