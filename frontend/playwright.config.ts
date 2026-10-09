@@ -27,6 +27,21 @@ const useNeon = process.env.PLAYWRIGHT_USE_NEON === '1';
 const backendPort = process.env.PLAYWRIGHT_BACKEND_PORT || '8000';
 const frontendPort = process.env.PLAYWRIGHT_FRONTEND_PORT || '8081';
 
+/* Local speed switches (all off by default, so CI behaves as before):
+   PLAYWRIGHT_REUSE=1             reuse servers that are already listening. Start the backend and
+                                  the frontend yourself with the commands in webServer below
+                                  (or the static export server in playwright.static.config.ts),
+                                  then run playwright with PLAYWRIGHT_REUSE=1 to skip the restart.
+   PLAYWRIGHT_TRACE=1             keep traces of failures locally (CI always keeps them).
+   PLAYWRIGHT_SKIP_PRICE_MODEL=1  skip load_price_model; it is idempotent, so only skip it when
+                                  the database already holds the active price model. */
+const reuseServers = process.env.PLAYWRIGHT_REUSE === '1';
+const keepTrace = Boolean(process.env.CI) || process.env.PLAYWRIGHT_TRACE === '1';
+const skipPriceModel = process.env.PLAYWRIGHT_SKIP_PRICE_MODEL === '1';
+const priceModelStep = skipPriceModel
+  ? ''
+  : `${python} manage.py load_price_model ../ml/app_export --activate && `;
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: Number(process.env.PLAYWRIGHT_WORKERS || 1) > 1,
@@ -42,14 +57,14 @@ export default defineConfig({
     baseURL: `http://localhost:${frontendPort}`,
     ...(browserChannel ? { channel: browserChannel } : {}),
     viewport: { width: 390, height: 844 },
-    trace: 'retain-on-failure',
+    trace: keepTrace ? 'retain-on-failure' : 'off',
     screenshot: 'only-on-failure',
   },
   webServer: [
     {
       command: useNeon
         ? `${python} manage.py runserver localhost:${backendPort} --noreload`
-        : `${python} manage.py migrate --noinput && ${python} manage.py load_price_model ../ml/app_export --activate && ${python} manage.py runserver localhost:${backendPort} --noreload`,
+        : `${python} manage.py migrate --noinput && ${priceModelStep}${python} manage.py runserver localhost:${backendPort} --noreload`,
       cwd: '../backend',
       env: {
         ...process.env,
@@ -78,7 +93,7 @@ export default defineConfig({
         } : {}),
       },
       url: `http://localhost:${backendPort}/api/v1/health/`,
-      reuseExistingServer: false,
+      reuseExistingServer: reuseServers,
       timeout: 120_000,
     },
 
@@ -95,7 +110,7 @@ export default defineConfig({
         EXPO_PUBLIC_PLAYWRIGHT_API_URL: `http://localhost:${backendPort}/api/v1`,
       },
       url: `http://localhost:${frontendPort}`,
-      reuseExistingServer: false,
+      reuseExistingServer: reuseServers,
       timeout: 120_000,
     },
   ],

@@ -48,3 +48,11 @@ src/rumampu/
 - 运行 `npm run test:e2e:epic2` 执行接入后端的 Epic 2 浏览器验收；配置会自动应用 migration 并启动本地 Django 与 Expo Web。
 
 历史收入导入通过 `expo-document-picker` 选择 UTF-8 CSV，并严格经过预览与确认两阶段。收入形态与 coverage 使用 typed 后端权威响应，并包含明确的重试和确认状态。完整接口规则见 [`../docs/API_CONTRACT.cn.md`](../docs/API_CONTRACT.cn.md)。收据 OCR 与 Epic 5 页面目前仍是原型行为。
+
+## Expo SDK 57 期间本地怎么跑 e2e
+
+Metro 开发包会弹出挡住点击的 React ARIA 警告，所以用生产导出来跑：
+
+1. 导出（PowerShell）：`$env:EXPO_PUBLIC_E2E='1'; $env:EXPO_PUBLIC_PLAYWRIGHT_API_URL='http://localhost:8004/api/v1'; $env:EXPO_NO_DOTENV='1'; $env:CI='1'; npx expo export --platform web --output-dir dist --clear`（API 端口要和下面的 `PLAYWRIGHT_BACKEND_PORT` 一致）。
+2. 运行：`$env:PLAYWRIGHT_BACKEND_PORT='8004'; $env:PLAYWRIGHT_FRONTEND_PORT='8085'; $env:PLAYWRIGHT_STATIC_DIR='dist'; npm run test:e2e:static -- e2e/epic5-upfront-fees.spec.ts`。`playwright.static.config.ts` 复用 `playwright.config.ts` 的后端服务，并用 `http.server` 托管导出目录。默认端口 8000/8081，目录 `dist`。
+3. 可选开关：`PLAYWRIGHT_REUSE=1` 复用已按配置命令手动起好的前后端（连跑不用重启）；`PLAYWRIGHT_TRACE=1` 本地保留失败 trace（默认关，CI 始终开）；`PLAYWRIGHT_SKIP_PRICE_MODEL=1` 数据库里已有生效价格模型时跳过 `load_price_model`；`PLAYWRIGHT_WORKERS=N` 设置并行数（默认 1，每个 worker 需要独立数据库/端口）。

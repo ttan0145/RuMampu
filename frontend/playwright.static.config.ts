@@ -45,7 +45,7 @@ export default defineConfig({
       command: `"${python}" -m http.server ${frontendPort} --bind 127.0.0.1 --directory ${exportDirectory}`,
       cwd: '.',
       url: `http://localhost:${frontendPort}`,
-      reuseExistingServer: false,
+      reuseExistingServer: process.env.PLAYWRIGHT_REUSE === '1',
       timeout: 60_000,
     },
   ],
