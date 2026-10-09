@@ -1,7 +1,7 @@
 import React from 'react';
 import { AccessibilityInfo, Animated, Easing, Image, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
-import { getHousingTestResult } from '../../services/housingSession';
+import { getHousingScenario, getHousingTestResult } from '../../services/housingSession';
 import { AppState, useApp } from './state';
 import { HousingTestResult } from '../../types/housing';
 import { housingResultStale, recSpan, recordedOutFor, rm } from './calc';
@@ -80,8 +80,27 @@ export function Chip({ label, kind }: { label: string; kind: 'ok' | 'warn' | 'ba
 const SKYLINE = '<svg viewBox="0 0 170 46" xmlns="http://www.w3.org/2000/svg"><g fill="#fff"><path d="M4 46V26l12-10 12 10v20z"/><path d="M30 46V20l16-13 16 13v26z"/><path d="M64 46V30l9-8 9 8v16z"/><path d="M84 46V14l20-14 20 14v32z"/><path d="M126 46V28l11-9 11 9v18z"/><path d="M150 46V32l8-7 8 7v14z"/></g></svg>';
 const HERO_BG = '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" preserveAspectRatio="none"><defs><linearGradient id="h2" x1="0.1" y1="0" x2="0.9" y2="1"><stop offset="0" stop-color="#13A8A2"/><stop offset="1" stop-color="#0B807C"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#h2)"/></svg>';
 
+/* The dream house that was tested: its price (or the monthly payment, when that is
+   what was tested), the monthly home cost, and how it fits. Null before a test. */
+export function dreamOf(S: AppState, result: HousingTestResult | null, t: (k: string, v?: Record<string, string | number>) => string) {
+  const { tested, phase } = pathSteps(S, result);
+  if (!tested || !result) return null;
+  const sc = getHousingScenario();
+  const pay = sc?.known_monthly_payment ?? null;
+  const price = pay == null ? +(sc?.property_price || S.data.house.price || result.indicative_tested_property_price || 0) : 0;
+  const month = Math.round(Number(result.tested_home_cost) || 0);
+  const amount = pay != null ? t('hh_dream_pay', { a: rm(pay) }) : price ? rm(price) : month ? t('hh_dream_pay', { a: rm(month) }) : null;
+  if (!amount) return null;
+  const short = Number(result.short_month_count) || 0;
+  const chip: [string, 'ok' | 'warn' | 'bad'] = phase === 'explain' ? [t('hx_nofit'), 'bad'] : short ? [t('hx_tight'), 'warn'] : [t('hx_fits'), 'ok'];
+  return { amount, chip };
+}
+
 export function HomeHero({ panel }: { panel?: React.ReactNode }) {
-  const { S, t, monthName } = useApp();
+  const { S, t, go, monthName } = useApp();
+  const result = getHousingTestResult();
+  const dream = dreamOf(S, result, t);
+  const canTest = !dream && (recSpan(S.data)?.list.length ?? 0) > 0;
   const [open, setOpen] = React.useState(false);
   const keyOf = (d: string) => (+d.slice(0, 4)) * 12 + (+d.slice(5, 7) - 1);
   const now = new Date();
@@ -129,6 +148,23 @@ export function HomeHero({ panel }: { panel?: React.ReactNode }) {
             </View>
           ))}
         </View>
+        {/* the goal: the dream house that was tested, or an invitation to test one */}
+        {dream || canTest ? (
+          <Pressable onPress={() => go(dream ? 'result' : 'house')} accessibilityRole="button" testID="home-dream"
+            style={({ pressed }) => [hp.dreamRow, pressed && { opacity: 0.85 }]}>
+            <View style={hp.dreamIc}><Ph n="house-line" c="#3D2A99" size={16} /></View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, color: 'rgba(255,255,255,0.85)' }}>{t('hx_dream_t')}</Text>
+              <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: '#fff', fontVariant: ['tabular-nums'] }} numberOfLines={1}>
+                {dream ? dream.amount : t('hx_dream_none')}
+              </Text>
+            </View>
+            {dream ? <Chip label={dream.chip[0]} kind={dream.chip[1]} /> : (
+              <Text style={{ fontFamily: SEMI_FONT, fontSize: 12.5, color: '#fff' }}>{t('hx_test_t')}</Text>
+            )}
+            <Ph n="caret-right" c="#fff" size={15} />
+          </Pressable>
+        ) : null}
         {open ? panel : null}
       </View>
     </View>
@@ -755,6 +791,11 @@ const hp = StyleSheet.create({
   },
   btnT: { fontFamily: DISP_FONT, fontSize: 15.5, color: '#fff' },
   chip: { height: 22, paddingHorizontal: 9, borderRadius: 999, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 },
+  dreamRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, paddingTop: 10,
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)',
+  },
+  dreamIc: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#C9BCFF', alignItems: 'center', justifyContent: 'center' },
   heroEdge: { borderRadius: 22, backgroundColor: '#08605D', paddingBottom: 5 },
   hero: { borderRadius: 22, overflow: 'hidden', paddingHorizontal: 14, paddingTop: 14, paddingBottom: 12 },
   heroTop: { fontFamily: SEMI_FONT, fontSize: 13, color: 'rgba(255,255,255,0.95)' },

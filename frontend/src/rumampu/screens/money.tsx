@@ -102,6 +102,15 @@ export function MoneyScreen() {
     );
   }
 
+  /* this month against a usual one: usual = the middle month's income across finished months */
+  const inThis = S.data.income.filter(e => monthKeyOf(e.d) === thisKey).reduce((a, e) => a + (+e.a || 0), 0);
+  const grossSorted = rows.map(r => r.gross).sort((a, b) => a - b);
+  const usual = grossSorted.length ? Math.round(grossSorted[Math.floor(grossSorted.length / 2)]) : 0;
+  const dayNow = now.getDate();
+  const dimNow = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const lastRow = rows.find(r => r.y * 12 + r.m === thisKey - 1) || null;
+  const prevRow = rows.find(r => r.y * 12 + r.m === thisKey - 2) || null;
+
   /* six-month trend, quietest two tinted */
   const last6 = rows.slice(-6);
   const mx = Math.max(1, ...last6.map(r => r.net));
@@ -220,6 +229,8 @@ export function MoneyScreen() {
   return (
     <ScreenShell greet title={t('tab_money')} tint="#EEF6F3">
       <GuideTarget id="money.hero">
+      {/* Home already says what is left this month; Money says how the month is tracking
+          against a usual one, and how last month ended. */}
       <View style={mo.hero}>
         <SvgXml
           xml={'<svg width="100%" height="100%" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mh" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14A8A2"/><stop offset="1" stop-color="#0B7A76"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#mh)"/></svg>'}
@@ -228,27 +239,48 @@ export function MoneyScreen() {
         />
         <View pointerEvents="none" style={mo.heroSun} />
         <View pointerEvents="none" style={mo.heroBlob} />
+        <Image source={{ uri: RUMA_IMG.count }} resizeMode="contain" style={mo.heroRuma} />
         <View style={mo.rowBetween}>
-          {/* v27b: a finished month is named as a whole month, the running one as "so far". */}
-          <Text style={[mo.ttl3, { color: '#fff' }]}>
-            {t(mk === new Date().getFullYear() * 12 + new Date().getMonth() ? 'mo_sofar' : 'mo_whole', { m: monthName(mk % 12) })}
-          </Text>
-          <CardI t="mo_sofar_t" b={['mo_fixed']} p="user" light />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
+            <Text style={[mo.ttl3, { color: '#fff' }]}>{t('mo_sofar', { m: monthName(thisKey % 12) })}</Text>
+            <View style={mo.dayPill}><Text style={mo.dayPillT}>{t('mo_day', { d: dayNow, n: dimNow })}</Text></View>
+          </View>
+          <CardI t="mo_sofar_t" b={['mo_usual_note']} p="calc" light />
         </View>
-        {/* the same build as Home's card, so the two read as one family and stand the same height */}
-        <Image source={{ uri: inSum - outSum >= 0 ? RUMA_IMG.count : RUMA_IMG.oops }} resizeMode="contain" style={mo.heroRuma} />
-        <Text style={mo.heroSub}>{t('mo_left')}</Text>
-        <Text style={[mo.heroBig, inSum - outSum < 0 && { color: '#FFC2CF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.45}>{rm(inSum - outSum)}</Text>
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-          {([['arrow-up', t('hm_income'), inSum, '#7BE0B8'], ['arrow-down', t('hm_exp'), outSum, '#FFB3C7']] as [string, string, number, string][]).map(([ic, lbl, v, col]) => (
-            <View key={lbl} style={mo.heroPill}>
-              <View style={[mo.heroPillIc, { backgroundColor: col }]}><Ph n={ic} c="#0B4F4C" size={14} /></View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, color: 'rgba(255,255,255,0.85)' }}>{lbl}</Text>
-                <Text style={[mo.heroVal, { color: '#fff', fontSize: 16, lineHeight: 20, marginTop: 0 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{rm(v)}</Text>
+        <Text style={mo.heroSub}>{t('mo_in_sofar')}</Text>
+        <Text style={mo.heroBig} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.45}>{rm(inThis)}</Text>
+        {usual > 0 ? (
+          <>
+            <Text style={mo.heroOf} numberOfLines={1}>{t(inThis > usual ? 'mo_above_usual' : 'mo_of_usual', { u: rm(usual) })}</Text>
+            <View style={{ marginTop: 10, marginRight: 70 }}>
+              <View style={mo.usualTrack}>
+                <View style={[mo.usualFill, { width: `${Math.max(inThis > 0 ? 3 : 0, Math.min(100, Math.round(inThis / usual * 100)))}%` }]} />
               </View>
+              <View pointerEvents="none" style={[mo.usualTick, { left: `${Math.round(dayNow / dimNow * 100)}%` }]} />
             </View>
-          ))}
+            <Text style={mo.heroNote2}>{t('mo_by_today', { a: rm(Math.round(usual * dayNow / dimNow)) })}</Text>
+          </>
+        ) : (
+          <Text style={mo.heroNote2}>{t('mo_no_usual')}</Text>
+        )}
+        <View style={mo.lastRow}>
+          <View style={mo.lastIc}><Ph n="calendar-check" c="#0B4F4C" size={15} /></View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            {lastRow ? (
+              <>
+                <Text style={mo.lastT} numberOfLines={1}>{t('mo_last', { m: monthName(lastRow.m), a: rm(lastRow.surplus) })}</Text>
+                {prevRow ? (
+                  <Text style={[mo.lastD, { color: lastRow.surplus >= prevRow.surplus ? '#9CF0CD' : '#FFC2CF' }]} numberOfLines={1}>
+                    {lastRow.surplus === prevRow.surplus
+                      ? t('mo_last_same', { m: monthName(prevRow.m) })
+                      : `${lastRow.surplus > prevRow.surplus ? '▲' : '▼'} ${t(lastRow.surplus > prevRow.surplus ? 'mo_last_up' : 'mo_last_down', { a: rm(Math.abs(lastRow.surplus - prevRow.surplus)), m: monthName(prevRow.m) })}`}
+                  </Text>
+                ) : null}
+              </>
+            ) : (
+              <Text style={mo.lastT} numberOfLines={2}>{t('mo_last_none', { m: monthName((thisKey - 1) % 12) })}</Text>
+            )}
+          </View>
         </View>
       </View>
       </GuideTarget>
@@ -287,6 +319,17 @@ const mo = StyleSheet.create({
   heroSmall: { fontFamily: BODY_FONT, fontSize: 11, letterSpacing: 0.66, color: 'rgba(255,255,255,0.82)' },
   heroBig: { fontFamily: XBOLD_FONT, fontSize: 36, lineHeight: 40, letterSpacing: -1, color: '#FFE08A', fontVariant: ['tabular-nums'], marginRight: 70 },
   heroSub: { fontFamily: BODY_FONT, fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 8 },
+  heroOf: { fontFamily: SEMI_FONT, fontSize: 13, color: 'rgba(255,255,255,0.92)', marginTop: 2, marginRight: 70 },
+  heroNote2: { fontFamily: BODY_FONT, fontSize: 12, color: 'rgba(255,255,255,0.85)', marginTop: 6 },
+  dayPill: { backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  dayPillT: { fontFamily: SEMI_FONT, fontSize: 11.5, color: '#fff' },
+  usualTrack: { height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.22)', overflow: 'hidden' },
+  usualFill: { height: '100%', borderRadius: 5, backgroundColor: '#FFE08A' },
+  usualTick: { position: 'absolute', top: -4, width: 3, height: 18, marginLeft: -1.5, borderRadius: 2, backgroundColor: '#fff' },
+  lastRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)' },
+  lastIc: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#7BE0B8', alignItems: 'center', justifyContent: 'center' },
+  lastT: { fontFamily: SEMI_FONT, fontSize: 13.5, color: '#fff' },
+  lastD: { fontFamily: SEMI_FONT, fontSize: 12.5, marginTop: 1 },
   heroRuma: { position: 'absolute', right: 6, top: 34, width: 72, height: 72 },
   heroSun: { position: 'absolute', right: -24, top: -30, width: 110, height: 110, borderRadius: 55, backgroundColor: 'rgba(255,216,102,0.28)' },
   heroBlob: { position: 'absolute', left: -40, bottom: -50, width: 150, height: 110, borderRadius: 75, backgroundColor: 'rgba(255,255,255,0.08)' },
