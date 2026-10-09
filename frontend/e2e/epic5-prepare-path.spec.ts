@@ -27,8 +27,8 @@ async function keepPriceTest(page: Page, price: number): Promise<void> {
   await expect(result.or(noCommitments).first()).toBeVisible();
   if (await noCommitments.isVisible()) await noCommitments.click();
   await expect(result).toBeVisible();
-  await page.getByText('Save test', { exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Save test', exact: true }).click();
+  // Home and Saving v2 (d992fa4): every test that runs is kept straight away under its price; the House tab lists it under Saved tests.
+  await page.getByRole('tab', { name: 'House', exact: true }).click();
   await expect(page.getByText('Saved tests', { exact: true }).first()).toBeVisible();
 }
 
