@@ -22,7 +22,19 @@ export async function openApp(page: Page): Promise<void> {
  * and lands on Home. Uses normal clicks and waits for an actionable tab so every spec
  * starts from a clean Home; openApp() adds the pinned client id on top.
  */
+/**
+ * A guest keeps the record across a reload for as long as the tab is open (a marker in sessionStorage);
+ * closing the tab ends it. A spec that wants a fresh visitor clears the marker before it opens the app.
+ */
+export async function endGuestSession(page: Page): Promise<void> {
+  if (page.url() === 'about:blank') return;
+  await page.evaluate(() => {
+    try { window.sessionStorage.removeItem('rumampu_guest_session'); } catch { /* storage may be unavailable */ }
+  });
+}
+
 export async function openGuestApp(page: Page): Promise<void> {
+  await endGuestSession(page);
   await page.goto('/');
   // Normal clicks wait for the splash and bootstrap instead of bypassing them.
   await page.getByText('Continue as guest', { exact: true }).last().click({ timeout: 30000 });

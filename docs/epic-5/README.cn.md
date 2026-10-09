@@ -99,7 +99,7 @@
 | AC5.9.4 What counts as done | 通过 | 五份文件全勾后文件步骤打勾、月供检查保存后月供步骤打勾、手头现金填到 RM 100,000 覆盖所需后现金步骤打勾（在 AC5.9.5 里走到）、钥匙一步不带进度 |
 | AC5.9.5 Say what is left without a verdict | 通过 | 完成两步时写 “1 thing left before you buy. You have 0% of the cash. RM … to go.”；三步全完成时写 “All three steps are done. Save your plan for your own reference.”，不出现 ready 或 approved（文案 2026-10-09 改） |
 | AC5.9.6 Keep a copy of my plan | 通过 | 打印页标题为 “RuMampu buying plan, for my own reference”，列出价格、贷款、前期现金、现金缓冲、已备文件和免责声明；手机分享面板未测 |
-| AC5.9.7 Kept on this device | 延期 | App 保持打开时保留。路径在网页和手机 App 上都已写进本地存储，但访客重新打开页面会走一遍游客入口，入口会新建一份空记录（和游客入口文案一致）；登录账号不经过这一步，可直接恢复，尚未验证。负责人在三个方案里选：访客也保留在本机、只对登录账号承诺、或把路径同步到账号（2026-10-09） |
+| AC5.9.7 Kept on this device | 延期 | App 保持打开时保留。路径在网页和手机 App 上都已写进本地存储，但访客重新打开页面会走一遍游客入口，入口会新建一份空记录（和游客入口文案一致）；登录账号不经过这一步，刷新后路径仍在（已在 `epic5-prepare-path.spec.ts` 测过）。负责人在三个方案里选：访客也保留在本机、只对登录账号承诺、或把路径同步到账号（2026-10-09） |
 | AC5.10.1 The monthly payment first | 通过 | 月供、“90% loan at 4.30%, over 35 years” 和 “Your typical month” |
 | AC5.10.2 Compare with my month, without a rating | 通过（负责人决定） | “Comfortable — the instalment is RM 1,245, about 31% of your typical month.” 用数字和文字写出占比；旁边的 Comfortable / Tight / Heavy 一词按负责人 2026-10-09 的决定保留，不删 |
 | AC5.10.3 Where the payment goes | 通过 | 第 1 年、中间一年和最后一年的利息占比与图例 |

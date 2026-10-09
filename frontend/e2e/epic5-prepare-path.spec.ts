@@ -1,7 +1,7 @@
 import { expect, Page } from '@playwright/test';
 import { e2ePost, test } from './support/fixtures';
 import { ac, deferredAc } from './support/acceptance';
-import { API, openGuestApp, pinGuestClientId } from './support/app';
+import { API, endGuestSession, openGuestApp, pinGuestClientId, reloadApp } from './support/app';
 
 /* Epic 5, Iteration 3 — US5.9 Prepare for one home, US5.10 the monthly check, US5.11 How buying works.
    Written from the Prepare path as built on 8 October 2026 (commit 1c037a7) against the V9 requirement text.
@@ -22,7 +22,11 @@ async function keepPriceTest(page: Page, price: number): Promise<void> {
   await page.getByPlaceholder('e.g. 250,000').fill(String(price));
   await page.getByText('The house', { exact: true }).click();
   await page.getByText('Run the test', { exact: true }).last().click();
-  await expect(page.getByText(/months would run short|All \d+ months would carry it/)).toBeVisible();
+  const result = page.getByText(/months would run short|All \d+ months would carry it/);
+  const noCommitments = page.getByText('I have no commitments', { exact: true });
+  await expect(result.or(noCommitments).first()).toBeVisible();
+  if (await noCommitments.isVisible()) await noCommitments.click();
+  await expect(result).toBeVisible();
   await page.getByText('Save test', { exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Save test', exact: true }).click();
   await expect(page.getByText('Saved tests', { exact: true }).first()).toBeVisible();
@@ -49,6 +53,50 @@ async function runLessonToSummary(page: Page): Promise<void> {
 const bodyText = (page: Page) => page.locator('body').innerText();
 
 test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iteration 3)', { tag: '@epic5' }, () => {
+  let accountToken: string | undefined;
+  test.afterEach(async ({ page }) => {
+    if (!accountToken) return;
+    const cleanup = await page.request.delete(`${API}/auth/record/`, { headers: { Authorization: `Token ${accountToken}` } });
+    accountToken = undefined;
+    expect([200, 204]).toContain(cleanup.status());
+  });
+
+  test('US5.9 — Kept on this device for a signed-in account', { tag: '@us5.9' }, async ({ page }) => {
+    const email = `epic5-prepare-${Date.now()}@example.com`, password = 'Passw0rd123';
+    const registered = await page.request.post(`${API}/auth/register/`, { data: { email, password } });
+    expect(registered.status()).toBe(201);
+    const { token } = await registered.json();
+    accountToken = token;
+    const seeded = await page.request.patch(`${API}/auth/me/`, { headers: { Authorization: `Token ${token}` }, data: { preferred_language: 'en', onboarding_completed: true } });
+    expect(seeded.status()).toBe(200);
+    await endGuestSession(page);
+    await page.goto('/');
+    await page.getByPlaceholder('name@example.com').fill(email);
+    await page.getByPlaceholder('Your password').fill(password);
+    const response = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/auth/login/'));
+    await page.getByText('Log in', { exact: true }).last().click();
+    expect((await response).status()).toBe(200);
+    await page.getByRole('tab', { name: 'Home', exact: true }).click({ trial: true, timeout: 90_000 });
+
+    await test.step('AC5.9.7 for a signed-in account', async () => {
+      await keepPriceTest(page, 300000);
+      await openPrepare(page);
+      await page.getByTestId('prep-node-2').click();
+      // the account keeps the ticks on the server; wait for the save that carries all five before reloading
+      const saved = page.waitForResponse(r => r.request().method() === 'PATCH' && r.url().endsWith('/auth/me/')
+        && (r.request().postDataJSON()?.docs_checked?.length ?? 0) === 5);
+      for (const key of ['dc_bank', 'dc_ehail', 'dc_statdec', 'dc_epf', 'dc_commitlist']) {
+        await page.getByTestId(`doc-${key}`).click();
+      }
+      expect((await saved).status()).toBe(200);
+      await page.getByLabel('Back').click();
+      await reloadApp(page);
+      await openPrepare(page);
+      await expect(page.getByTestId('prep-banner')).toContainText('RM 300,000');
+      await expect(page.getByTestId('prep-node-2')).toHaveAccessibleName(/All ready/);
+    });
+  });
+
   test('US5.9 — Choose or type a home first', { tag: '@us5.9' }, async ({ page }) => {
     await openGuestApp(page);
     await ac('AC5.9.2', 'Choose or type a home first', async () => {
