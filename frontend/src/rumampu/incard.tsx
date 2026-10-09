@@ -309,7 +309,7 @@ export function MockStmt() {
         <View key={i} style={{ height: 10, borderRadius: 5, backgroundColor: C.ink14, marginVertical: 8, width: w as ViewStyle['width'] }} />
       ))}
       <Animated.View pointerEvents="none" style={{
-        ...StyleSheet.absoluteFillObject,
+        ...StyleSheet.absoluteFill,
         backgroundColor: 'rgba(255,255,255,0.55)',
         opacity: shine.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0.9, 0] }),
       }} />

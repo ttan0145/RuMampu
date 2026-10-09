@@ -61,7 +61,9 @@
           "color": "#5F9EA0",
           "defaultChannel": "bill-reminders"
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true

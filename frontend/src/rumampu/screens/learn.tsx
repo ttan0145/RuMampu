@@ -64,7 +64,10 @@ export function LearnScreen() {
           </View>
         </View>
       </GuideTarget>
-      <GuideTarget id="ln.secs" style={{ gap: 8 }}>
+      {/* Android does not give this otherwise intrinsic-width wrapper the web
+          block layout's automatic full width. The rows then keep their height
+          but their flex content can collapse to zero width in a release build. */}
+      <GuideTarget id="ln.secs" style={ls.sectionList}>
         {LEARN.map(x => {
           const d = lnDoneIn(S.lnProg, x), n = x.articles.length, m = LN_META[x.id] || { bg: '#E3F3F1' };
           const done = d === n;
@@ -411,6 +414,7 @@ export function LearnStrip() {
 }
 
 const ls = StyleSheet.create({
+  sectionList: { width: '100%', alignSelf: 'stretch', gap: 8 },
   hero: {
     borderRadius: 22, backgroundColor: '#EAF5F4', borderWidth: 1, borderColor: C.ink14,
     paddingTop: 14, paddingHorizontal: 16, paddingBottom: 12, overflow: 'hidden',

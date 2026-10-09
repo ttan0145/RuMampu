@@ -856,7 +856,7 @@ export function SayCard() {
         accessibilityState={{ expanded: false }}
         style={({ pressed }) => [sy.mosay, pressed && { opacity: 0.9 }]}
       >
-        <SvgXml pointerEvents="none" style={StyleSheet.absoluteFillObject as object} width="100%" height="100%"
+        <SvgXml pointerEvents="none" style={StyleSheet.absoluteFill as object} width="100%" height="100%"
           xml={'<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><defs><linearGradient id="sc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E3F1F0"/><stop offset="1" stop-color="#FFFFFF"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#sc)"/></svg>'} />
         <View style={sy.mosayIc}><SvgXml xml={MIC_XML('#FFFFFF', 22)} width={22} height={22} /></View>
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -869,7 +869,7 @@ export function SayCard() {
   return (
     <View style={[sy.saybox, sy.sayboxOpen]} accessibilityLabel={t('mo_say_t')}>
       {/* the open card's soft teal wash, fading to white below the microphone */}
-      <SvgXml pointerEvents="none" style={StyleSheet.absoluteFillObject as object} width="100%" height="100%"
+      <SvgXml pointerEvents="none" style={StyleSheet.absoluteFill as object} width="100%" height="100%"
         xml={'<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><defs><linearGradient id="sw" x1="0" y1="0" x2="0" y2="210" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#E6F2F1"/><stop offset="1" stop-color="#FFFFFF"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#sw)"/></svg>'} />
       <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16 }}>
         <SayBody title={t('mo_say_t')} onSaved={msg => { up(s => { s.sayOpen = false; }); toast(msg); }} />

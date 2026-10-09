@@ -261,7 +261,7 @@ export function AssistantFab() {
     <View
       ref={frameRef}
       pointerEvents="box-none"
-      style={[StyleSheet.absoluteFillObject, { zIndex: 20 }]}
+      style={[StyleSheet.absoluteFill, { zIndex: 20 }]}
       onLayout={e => setFrameH(e.nativeEvent.layout.height)}
     >
       <Animated.View

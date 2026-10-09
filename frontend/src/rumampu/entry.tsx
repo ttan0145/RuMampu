@@ -572,7 +572,7 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
   };
 
   return (
-    <View style={[StyleSheet.absoluteFillObject, { zIndex: 50, backgroundColor: '#4C8388' }]}>
+    <View style={[StyleSheet.absoluteFill, { zIndex: 50, backgroundColor: '#4C8388' }]}>
       <View style={{ paddingHorizontal: 20, paddingTop: 16 + insets.top }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           {!login ? (
@@ -1032,11 +1032,11 @@ export function GetToKnow() {
 
 const st = StyleSheet.create({
   wpage: {
-    ...StyleSheet.absoluteFillObject, zIndex: 50, backgroundColor: '#F7FAF9',
+    ...StyleSheet.absoluteFill, zIndex: 50, backgroundColor: '#F7FAF9',
     paddingHorizontal: 22, flexDirection: 'column',
   },
   accountLoadingPage: {
-    ...StyleSheet.absoluteFillObject, zIndex: 80, backgroundColor: '#F7FAF9',
+    ...StyleSheet.absoluteFill, zIndex: 80, backgroundColor: '#F7FAF9',
     paddingHorizontal: 24,
   },
   accountLoadingTitle: {
@@ -1077,7 +1077,7 @@ const st = StyleSheet.create({
     fontFamily: DISP_FONT, fontSize: 12.5, color: '#fff',
   },
   kpage: {
-    ...StyleSheet.absoluteFillObject, zIndex: 50, backgroundColor: '#FBFCFC',
+    ...StyleSheet.absoluteFill, zIndex: 50, backgroundColor: '#FBFCFC',
     paddingHorizontal: 22, flexDirection: 'column',
   },
   hL: { fontFamily: DISP_FONT, fontSize: 22, lineHeight: 28, color: C.ink },

@@ -1,5 +1,6 @@
 import React from 'react';
-import { Image, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import Constants from 'expo-constants';
+import { Image, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { DISP_FONT } from './theme';
 import { PX_GEO } from './pxgeo';
@@ -10,8 +11,15 @@ import { PX_GEO } from './pxgeo';
    No native map module, so it runs the same on web, iOS and Android. */
 
 const TILE = 256;
-/* CARTO's tiles now need a key; OpenStreetMap's do not (keep usage light, credit them) */
+/* Native image loaders otherwise identify as a generic HTTP library. OSM blocks
+   those clients, so name this app and give the project URL as contact details.
+   Browsers must set their own User-Agent and Referer, so do not add headers there. */
+const TILE_USER_AGENT = `RuMampu/${Constants.expoConfig?.version ?? '1.0'} (+https://github.com/ttan0145/RuMampu)`;
 const TILE_URL = (z: number, x: number, y: number) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+const tileSource = (z: number, x: number, y: number) => {
+  const uri = TILE_URL(z, x, y);
+  return Platform.OS === 'web' ? { uri } : { uri, headers: { 'User-Agent': TILE_USER_AGENT } };
+};
 
 type Bounds = [[number, number], [number, number]];          // [[south, west], [north, east]]
 export type Pad = { top: number; bottom: number; left: number; right: number };
@@ -94,7 +102,7 @@ export function GeoMap({ group, fitTo, pad, maxZoom = 12, styleOf, pins, onPick,
       for (let iy = Math.max(0, Math.floor(top / ts)); iy <= Math.min(n - 1, Math.floor((top + size.h) / ts)); iy += 1) {
         const wx = ((ix % n) + n) % n;
         tiles.push(
-          <Image key={`${z}/${ix}/${iy}`} source={{ uri: TILE_URL(z, wx, iy) }} fadeDuration={0}
+          <Image key={`${z}/${ix}/${iy}`} source={tileSource(z, wx, iy)} fadeDuration={0}
             style={{ position: 'absolute', left: ix * ts - left, top: iy * ts - top, width: ts + 0.5, height: ts + 0.5 }} />,
         );
       }
