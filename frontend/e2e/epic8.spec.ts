@@ -590,12 +590,14 @@ test('US8.16 Home How it works opens purpose content without replaying onboardin
     await expect(assistantIntro).toHaveCount(0);
   }
 
-  await page.getByRole('button', { name: /How it works/i }).click();
-  await expect(page.getByText('What RuMampu does', { exact: true })).toBeVisible();
-  await expect(page.getByText('RuMampu tests homes against the months you have recorded.', { exact: true })).toBeVisible();
-  await expect(page.getByText('It shows how a housing payment would have behaved across those months.', { exact: true })).toBeVisible();
-  await expect(page.getByText('It does not approve a loan or a home.')).toBeVisible();
-  await expect(page.getByText('It does not predict whether a bank or lender will approve financing.', { exact: true })).toBeVisible();
+  // Home redesign (d992fa4): the "How it works" fold on Home became the four-step path to a home.
+  // The purpose content now reads as Record, Test a house, Save with a plan and Home, and never replays onboarding.
+  await expect(page.getByText('Hi! Let’s start here', { exact: true })).toBeVisible();
+  await expect(page.getByText('Four steps to a home, one at a time.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Tell Ruma what you earn and spend. Last week is enough to start.', { exact: true })).toBeVisible();
+  await expect(page.getByText('See whether your months could carry a home payment.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Plan complete: your own numbers can carry it.', { exact: true })).toBeVisible();
+  await expect(page.getByText('What RuMampu does', { exact: true })).toHaveCount(0);
   await expect(page.getByText('What do you do?', { exact: true })).toHaveCount(0);
   await expect(page.getByText('How much did you earn last month?', { exact: true })).toHaveCount(0);
 
