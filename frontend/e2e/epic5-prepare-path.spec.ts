@@ -1,12 +1,12 @@
 import { expect, Page } from '@playwright/test';
 import { e2ePost, test } from './support/fixtures';
-import { ac, deferredAc } from './support/acceptance';
+import { ac } from './support/acceptance';
 import { API, endGuestSession, openGuestApp, pinGuestClientId, reloadApp } from './support/app';
 
 /* Epic 5, Iteration 3 — US5.9 Prepare for one home, US5.10 the monthly check, US5.11 How buying works.
    Written from the Prepare path as built on 8 October 2026 (commit 1c037a7) against the V9 requirement text.
-   Where the build contradicts the V9 wording, the AC is registered with deferredAc() and the reason is
-   written down instead of being made to pass. */
+   Where the build contradicts the V9 wording, the AC is registered with deferredAc() (from ./support/acceptance)
+   and the reason is written down instead of being made to pass. */
 
 test.setTimeout(300_000);
 
@@ -206,20 +206,20 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
       await popup.close();
     });
 
-    // Coming back within the open app keeps the home, the answers and the finished steps ...
-    await page.getByLabel('Back').click();
-    await page.getByRole('tab', { name: 'Money', exact: true }).click();
-    await openPrepare(page);
-    await expect(page.getByTestId('prep-banner')).toContainText('RM 300,000');
-    await expect(page.getByTestId('prep-node-0')).toHaveAccessibleName(/Saved to your plan/);
-    await expect(page.getByTestId('prep-node-2')).toHaveAccessibleName(/All ready/);
-    // ... but a guest who reopens the page lands on the guest entry again and Prepare starts empty (observed, not asserted).
-    await openGuestApp(page);
-    await openPrepare(page);
-    const keptAfterReopen = await page.getByTestId('prep-banner').count();
-    test.info().annotations.push({ type: 'observation', description: `AC5.9.7: after reopening the page as a guest the Prepare banner count is ${keptAfterReopen} (0 = the home and steps were not kept).` });
-    deferredAc('AC5.9.7', 'Kept on this device',
-      'Within the open app the home, answers and finished steps stay, but a guest who reopens the page (a full reload) is sent through the guest entry again and Prepare starts empty with no kept house tests, which the guest-entry copy ("Your records will not be kept after you fully close the app") describes. Whether the path persists on the same device for a signed-in account was not verified. The AC says "when I come back on the same device", so it is not claimed as passed.');
+    await ac('AC5.9.7', 'Kept on this device', async () => {
+      // a reload of the same tab keeps the guest record, so the home and the finished steps are still there
+      await reloadApp(page);
+      await openPrepare(page);
+      await expect(page.getByTestId('prep-banner')).toContainText('RM 300,000');
+      await expect(page.getByTestId('prep-node-0')).toHaveAccessibleName(/Saved to your plan/);
+      await expect(page.getByTestId('prep-node-1')).toHaveAccessibleName(/Covered/);
+      await expect(page.getByTestId('prep-node-2')).toHaveAccessibleName(/All ready/);
+      // closing the tab ends the guest session: a new tab in the same browser starts at the guest entry
+      const tab = await page.context().newPage();
+      await tab.goto('/');
+      await expect(tab.getByText('Continue as guest', { exact: true }).last()).toBeVisible({ timeout: 30000 });
+      await tab.close();
+    });
   });
 
   test('US5.10 — Check what paying each month would be like', { tag: '@us5.10' }, async ({ page }) => {

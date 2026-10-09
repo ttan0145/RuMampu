@@ -2,7 +2,7 @@ import { expect, Page } from '@playwright/test';
 import path from 'node:path';
 import { e2eGet, test } from './support/fixtures';
 import { ac, deferredAc } from './support/acceptance';
-import { API, captureEvidence, openGuestApp, openMoneyScreen, syncClientIdFromBrowser } from './support/app';
+import { API, captureEvidence, endGuestSession, openGuestApp, openMoneyScreen, syncClientIdFromBrowser } from './support/app';
 
 /* Epic 6 — AI Insights & Alerts (US/AC v5, 17 September 2026).
    Both stories call a Groq model through the backend. The model is not part
@@ -218,6 +218,7 @@ test.describe('Epic 6 — AI Insights & Alerts', { tag: '@epic6' }, () => {
     });
 
     await ac('AC6.2.10', 'Do not display the assistant before login', async () => {
+      await endGuestSession(page);
       await page.goto('/');
       const splash = page.getByLabel('RuMampu');
       if (await splash.isVisible().catch(() => false)) await splash.click();

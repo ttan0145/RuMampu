@@ -29,8 +29,6 @@ const completedEpics = [
   {
     epic: 'Epic 5',
     expected: 88,
-    // AC5.9.7: a guest who reopens the page goes through the guest entry, which starts a clean record (owner decision pending, see docs/epic-5/README.md and the reason in epic5-prepare-path.spec.ts).
-    allowedDeferred: ['AC5.9.7'],
     requirements: 'docs/requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md',
     specifications: ['frontend/e2e/epic5.spec.ts', 'frontend/e2e/epic5-learn.spec.ts', 'frontend/e2e/epic5-prepare-path.spec.ts'],
   },

@@ -342,6 +342,27 @@ const AUTH_TOKEN_KEY = 'rumampu_auth_token';
 const CLIENT_ID_KEY = 'rumampu_client_id';
 export const LOCAL_STATE_KEY = 'rumampu_local_state';
 
+/* A guest keeps the local record across a reload until the tab (web) or the app (phone) is closed.
+   On the web the marker lives in sessionStorage: a reload keeps it, closing the tab drops it. On the
+   phone it lives in memory only, so killing the app drops it. This is the "will not be kept after you
+   fully close the app" promise on the guest entry. */
+const GUEST_SESSION_KEY = 'rumampu_guest_session';
+let nativeGuestSession = false;
+
+export function hasGuestSession(): boolean {
+  if (Platform.OS !== 'web') return nativeGuestSession;
+  try { return window.sessionStorage.getItem(GUEST_SESSION_KEY) === '1'; } catch { return false; }
+}
+
+export function setGuestSession(on: boolean): void {
+  nativeGuestSession = on;
+  if (Platform.OS !== 'web') return;
+  try {
+    if (on) window.sessionStorage.setItem(GUEST_SESSION_KEY, '1');
+    else window.sessionStorage.removeItem(GUEST_SESSION_KEY);
+  } catch { /* storage is best effort */ }
+}
+
 /* Declared progress is local-only. Storage is best-effort: private browsing,
    quota limits and denied keychains must never break rendering or navigation. */
 export async function readLocalState(): Promise<string | null> {

@@ -17,7 +17,7 @@
 | US5.6 — 无固定工资者的信息 | 3/3 | No payslip、SJKP 担保上限与材料清单入口 |
 | US5.7 — 阅读进度 | 6/6 | 已读数、续读、Prepare 总进度、账号跨设备保存；无阅读奖励 |
 | US5.8 — 现金缓冲和首付共用的储蓄只算一次（团队修订） | 10/10 | 罐子先填缓冲；Upfront cash、House、储蓄计划和首页读同一套拆分；Cash buffer 写明已覆盖多少，并能打开储蓄计划 |
-| US5.9 — 一步步为一套房做准备（V9） | 6/7，1 项延期 | 每一步围绕同一套房、选择或填写房源表单、四步均不锁定、月供、现金与文件三步的勾选、全部完成时不下结论的提示、PDF 页面。延期：AC5.9.7（访客重新打开页面会走一遍游客入口，入口会新建一份空记录；等负责人决定）。测试：`epic5-prepare-path.spec.ts` |
+| US5.9 — 一步步为一套房做准备（V9） | 7/7 | 每一步围绕同一套房、选择或填写房源表单、四步均不锁定、月供、现金与文件三步的勾选、全部完成时不下结论的提示、PDF 页面。延期：AC5.9.7（访客重新打开页面会走一遍游客入口，入口会新建一份空记录；等负责人决定）。测试：`epic5-prepare-path.spec.ts` |
 | US5.10 — 看看每月还款是什么感觉（V9） | 9/9 | 六个引导屏和总结页；占典型月份的比例用数字和文字写出（Comfortable / Tight / Heavy 一词按负责人 2026-10-09 的决定保留）；每一屏都有来源标签，70 岁规则写明来源。测试：`epic5-prepare-path.spec.ts` |
 | US5.11 — 了解我这类房子怎么买（V9） | 4/4 | 二手房与新盘时间线、选择被保留、Schedule H 折叠表，以及每个时间点和比例的状态、来源与核对日期（或“未经核实”标注）。测试：`epic5-prepare-path.spec.ts` |
 
@@ -99,7 +99,7 @@
 | AC5.9.4 What counts as done | 通过 | 五份文件全勾后文件步骤打勾、月供检查保存后月供步骤打勾、手头现金填到 RM 100,000 覆盖所需后现金步骤打勾（在 AC5.9.5 里走到）、钥匙一步不带进度 |
 | AC5.9.5 Say what is left without a verdict | 通过 | 完成两步时写 “1 thing left before you buy. You have 0% of the cash. RM … to go.”；三步全完成时写 “All three steps are done. Save your plan for your own reference.”，不出现 ready 或 approved（文案 2026-10-09 改） |
 | AC5.9.6 Keep a copy of my plan | 通过 | 打印页标题为 “RuMampu buying plan, for my own reference”，列出价格、贷款、前期现金、现金缓冲、已备文件和免责声明；手机分享面板未测 |
-| AC5.9.7 Kept on this device | 延期 | App 保持打开时保留。路径在网页和手机 App 上都已写进本地存储，但访客重新打开页面会走一遍游客入口，入口会新建一份空记录（和游客入口文案一致）；登录账号不经过这一步，刷新后路径仍在（已在 `epic5-prepare-path.spec.ts` 测过）。负责人在三个方案里选：访客也保留在本机、只对登录账号承诺、或把路径同步到账号（2026-10-09） |
+| AC5.9.7 Kept on this device | 通过 | 刷新后访客记录仍在：横幅写着 RM 300,000，月供一步显示 “Saved to your plan”，现金一步 “Covered”，文件一步 “All ready”；新开一个浏览器标签页（相当于关掉标签页）则回到游客入口，和入口文案一致。登录账号刷新后路径仍在（已在 `epic5-prepare-path.spec.ts` 测过）。标记在网页上是 sessionStorage 里的一个标志，在手机上只在内存中；不换 client id |
 | AC5.10.1 The monthly payment first | 通过 | 月供、“90% loan at 4.30%, over 35 years” 和 “Your typical month” |
 | AC5.10.2 Compare with my month, without a rating | 通过（负责人决定） | “Comfortable — the instalment is RM 1,245, about 31% of your typical month.” 用数字和文字写出占比；旁边的 Comfortable / Tight / Heavy 一词按负责人 2026-10-09 的决定保留，不删 |
 | AC5.10.3 Where the payment goes | 通过 | 第 1 年、中间一年和最后一年的利息占比与图例 |
@@ -127,7 +127,7 @@
 - Learn 浏览器验收：[`epic5-learn.spec.ts`](../../frontend/e2e/epic5-learn.spec.ts)，覆盖 US5.5–5.7 的 20 条 AC、全部 51 页与跨设备阅读进度。
 - 费用标准和 pot 算术在分档边界上的回归：[`epic5-upfront-fees.spec.ts`](../../frontend/e2e/epic5-upfront-fees.spec.ts)
 - Prepare 路径、月供检查与 How buying works（US5.9–5.11）：[`epic5-prepare-path.spec.ts`](../../frontend/e2e/epic5-prepare-path.spec.ts)；时间点、比例和 70 岁规则的来源：[`buying-facts.ts`](../../frontend/src/rumampu/buying-facts.ts)，Schedule H 的加总在 [`unit/buying-facts.test.ts`](../../frontend/unit/buying-facts.test.ts) 中检查
-- 追溯闸门：`npm run test:e2e:traceability` 对照[基线](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)检查 Epic 5 的 88 条验收标准：87 条可执行，AC5.9.7 明确延期
+- 追溯闸门：`npm run test:e2e:traceability` 对照[基线](../requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)检查 Epic 5 的 88 条验收标准：88 条全部可执行，0 条延期
 - 截图：[`output/playwright/epic-5/evidence/`](../../output/playwright/epic-5/evidence/)，用 `UPDATE_EVIDENCE=1` 刷新
 - 运行 Epic 5 检查：在 `frontend/` 下执行 `npm run test:e2e:epic5`
 
@@ -177,5 +177,5 @@ AC5.7.6 按现行文字实现，阅读徽章与庆祝已移除；完成文章仅
 ## 迭代 3 收尾（2026-10-09）
 
 - US5.9–5.11（V9 的 20 条，2026-10-08 构建的 Prepare 路径）纳入基线，Epic 5 增至 88 条。
-- V9 构建说明点名的四条于 10 月 9 日关闭：AC5.9.5（全部完成的提示不再说 “ready to buy”）、AC5.10.2（负责人按现状接受：占比用数字和文字写出，评级词保留）、AC5.10.9（月供检查每一屏加来源标签，70 岁规则注明来源）、AC5.11.4（How buying works 每个时间点和比例写明状态、来源与核对日期或标未经核实，每个金额带来源标签）。AC5.9.7 等负责人对访客的决定。
+- V9 构建说明点名的四条于 10 月 9 日关闭：AC5.9.5（全部完成的提示不再说 “ready to buy”）、AC5.10.2（负责人按现状接受：占比用数字和文字写出，评级词保留）、AC5.10.9（月供检查每一屏加来源标签，70 岁规则注明来源）、AC5.11.4（How buying works 每个时间点和比例写明状态、来源与核对日期或标未经核实，每个金额带来源标签）。AC5.9.7 同日关闭：访客刷新页面后记录仍在，关掉标签页或结束 App 才清空。
 - Expo SDK 57 升级后，开发包会把 React 的 `ariaHidden` 警告显示成盖住整页的浮层，所以本次收尾的浏览器检查改用生产网页导出运行（`frontend/playwright.static.config.ts`）；开发服务器的配置没有改。

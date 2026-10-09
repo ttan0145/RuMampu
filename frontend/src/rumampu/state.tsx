@@ -49,6 +49,8 @@ import {
   rotateGuestClientId,
   saveHomeownershipMonth as saveHomeownershipMonthRequest,
   ApiError,
+  hasGuestSession,
+  setGuestSession,
   INCOME_API_ENABLED,
   isOutlierConfirmation,
   updateIncomeCoverage as updateIncomeCoverageRequest,
@@ -802,6 +804,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const patternRequestVersion = useRef(0);
   const patternRefreshInFlight = useRef<Promise<void> | null>(null);
+  const refreshAccountDataRef = useRef<((onProgress?: (progress: number, stage: string) => void, options?: { includeSavedTests?: boolean }) => Promise<void>) | null>(null);
   const coverageRequestVersion = useRef(0);
   const coverageRefreshInFlight = useRef<Promise<void> | null>(null);
   const workCostRequestVersion = useRef(0);
@@ -899,6 +902,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!INCOME_API_ENABLED) return;
       const hasLogin = await hasStoredLogin();
       if (!hasLogin) {
+        // A guest who only reloaded the page (the tab is still the same one) goes straight back to
+        // the app with the local record, without a new client id and without clearing anything.
+        if (active && hasGuestSession()) {
+          setS(prev => {
+            const next: AppState = JSON.parse(JSON.stringify(prev));
+            next.guest = true;
+            next.onboarded = true;
+            next.knew = true;
+            next.wstep = 0;
+            next.authEntryOpen = false;
+            next.splash = false;
+            return next;
+          });
+          try { await refreshAccountDataRef.current?.(undefined, { includeSavedTests: false }); } catch { /* the local record is still usable */ }
+        }
         if (active) setAuthReady(true);
         return;
       }
@@ -1318,6 +1336,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!INCOME_API_ENABLED || !authReady || S.guest || !S.onboarded || !S.knew) return;
     void refreshSavedHousingTests().catch(() => undefined);
   }, [authReady, S.guest, S.knew, S.onboarded, refreshSavedHousingTests]);
+
+  // Remember that this tab is a guest session so a reload does not send the guest back to the entry.
+  // The authReady guard keeps the first render from clearing the marker before it was read.
+  React.useEffect(() => {
+    if (!authReady) return;
+    setGuestSession(S.guest && S.onboarded);
+  }, [authReady, S.guest, S.onboarded]);
 
   const refreshAfterMoneyWrite = useCallback(() => {
     // Ignore any pre-write analyses; a successful write must not become a failed
@@ -2057,8 +2082,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await new Promise<void>(resolve => setTimeout(resolve, 0));
     onProgress?.(100, 'Your account is ready');
   }, [refreshIncomeRecord, refreshSavedHousingTests, refreshWorkCosts, up]);
+  refreshAccountDataRef.current = refreshAccountData;
 
   const signOut = useCallback(async (): Promise<void> => {
+    setGuestSession(false);
     accountAuthenticated.current = false;
     skipNextAccountSync.current = true;
     skipNextLocalStateWrite.current = true;
@@ -2093,6 +2120,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteCurrentRecord = useCallback(async (): Promise<void> => {
+    setGuestSession(false);
     accountAuthenticated.current = false;
     skipNextAccountSync.current = true;
     skipNextLocalStateWrite.current = true;
@@ -2153,6 +2181,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const enterGuestMode = useCallback(async (): Promise<void> => {
+    setGuestSession(false);
     accountAuthenticated.current = false;
     skipNextAccountSync.current = true;
     skipNextLocalStateWrite.current = true;

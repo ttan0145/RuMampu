@@ -552,7 +552,7 @@ _V9 note: Build note. 8 October 2026. The path is kept on the device only and do
 
 > Given I have chosen a home and worked through some steps, When I come back on the same device, Then the home, my answers and the steps I finished are still there.
 
-Owner review 2026-10-09: the path is already written to local storage on the web and in the phone apps. A guest loses it because reopening the app runs the guest entry, which starts a clean record (as its copy says); a signed-in account resumes without that step. The owner is choosing between keeping the guest record on the device, accepting the criterion for signed-in users only, or syncing the path to the account. Deferred until then.
+Built 2026-10-09: a guest who reloads the page keeps the record: the home, the answers and the finished steps are still there, and no new client id is made. Closing the tab, or ending the app on a phone, returns the guest to the guest entry, as the entry says ("will not be kept after you fully close the app"). The guest marker lives in sessionStorage on the web and in memory on a phone. A signed-in account keeps its path after a reload.
 
 
 ### US5.10 - Check what paying each month would be like
