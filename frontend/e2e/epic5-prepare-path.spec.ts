@@ -1,4 +1,4 @@
-﻿import { expect, Page } from '@playwright/test';
+import { expect, Page } from '@playwright/test';
 import { e2ePost, test } from './support/fixtures';
 import { ac } from './support/acceptance';
 import { API, endGuestSession, openGuestFast, reloadApp, seedKeptTest } from './support/app';
