@@ -51,6 +51,13 @@ function fit(b: Bounds, w: number, h: number, pad: Pad, maxZoom: number): View_ 
   return { zoom, cx: ((x0 + x1) / 2) * k + (pad.right - pad.left) / 2, cy: ((y0 + y1) / 2) * k + (pad.bottom - pad.top) / 2 };
 }
 
+/* On the web, react-native-svg turns onPress into touch-responder props that it
+   puts straight on the <path>, which React warns about ("Unknown event handler
+   property"). A plain click does the same job there; phones keep onPress. */
+function tapProps(fn: () => void): object {
+  return Platform.OS === 'web' ? { onClick: fn } : { onPress: fn };
+}
+
 export function GeoMap({ group, fitTo, pad, maxZoom = 12, styleOf, pins, onPick, attribution, zoomLabels }: {
   group: string;
   /* what to show: a region's or a district's bounds; a new value re-fits the map */
@@ -163,7 +170,7 @@ export function GeoMap({ group, fitTo, pad, maxZoom = 12, styleOf, pins, onPick,
           {paths.map(({ d, dpath, st: s }) => (
             <Path key={d} d={dpath} fill={s?.fill ?? 'none'} fillOpacity={s?.fillOpacity ?? 0}
               stroke={s?.stroke ?? '#7C9496'} strokeWidth={s?.strokeWidth ?? 0.8} strokeOpacity={s?.strokeOpacity ?? 0.5}
-              strokeLinejoin="round" onPress={s ? () => onPick(d) : undefined} testID={`area-${d}`} />
+              strokeLinejoin="round" {...(s ? tapProps(() => onPick(d)) : {})} testID={`area-${d}`} />
           ))}
         </Svg>
         {pinEls}

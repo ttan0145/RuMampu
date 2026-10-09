@@ -109,7 +109,7 @@ export function HomeHero({ panel }: { panel?: React.ReactNode }) {
         </View>
         <Text style={hp.heroSub}>{t('hx_left')}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, columnGap: 10 }}>
-          <Text style={hp.heroBig} testID="home-left">{rm(left)}</Text>
+          <Text style={[hp.heroBig, left < 0 && { color: '#FFC2CF' }]} testID="home-left">{rm(left)}</Text>
           {left < 0 ? (
             <View style={hp.heroChip}>
               <Ph n="warning-circle" c="#B23A12" size={13} />
@@ -118,9 +118,10 @@ export function HomeHero({ panel }: { panel?: React.ReactNode }) {
           ) : null}
         </View>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-          {[['arrow-up', '#1C8A4C', t('hm_income'), income], ['arrow-down', '#C2531D', t('hm_exp'), ex]].map(([ic, col, lbl, v]) => (
+          {/* the same colours as the Money card: mint for money in, pink for money out */}
+          {[['arrow-up', '#0B4F4C', '#7BE0B8', t('hm_income'), income], ['arrow-down', '#8A1E3F', '#FFB3C7', t('hm_exp'), ex]].map(([ic, col, bg, lbl, v]) => (
             <View key={ic as string} style={hp.io}>
-              <View style={hp.ioIc}><Ph n={ic as string} c={col as string} size={15} /></View>
+              <View style={[hp.ioIc, { backgroundColor: bg as string }]}><Ph n={ic as string} c={col as string} size={15} /></View>
               <View style={{ minWidth: 0, flexShrink: 1 }}>
                 <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, color: 'rgba(255,255,255,0.85)' }}>{lbl as string}</Text>
                 <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: '#fff', fontVariant: ['tabular-nums'] }}>{rm(v as number)}</Text>
@@ -762,7 +763,7 @@ const hp = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 3,
   },
   heroSub: { fontFamily: BODY_FONT, fontSize: 12.5, color: 'rgba(255,255,255,0.85)', marginTop: 6 },
-  heroBig: { fontFamily: XBOLD_FONT, fontSize: 36, lineHeight: 40, letterSpacing: -1, color: '#fff', fontVariant: ['tabular-nums'] },
+  heroBig: { fontFamily: XBOLD_FONT, fontSize: 36, lineHeight: 40, letterSpacing: -1, color: '#FFE08A', fontVariant: ['tabular-nums'] },
   heroChip: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 24, paddingHorizontal: 9, borderRadius: 999, backgroundColor: '#FFE3D6' },
   io: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.14)' },
   ioIc: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },

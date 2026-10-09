@@ -123,7 +123,7 @@ export function NoteC({ children }: { children: React.ReactNode }) {
 /* ---------- header ---------- */
 
 /* v22 header. Tab roots share the greeting header (Ruma avatar + time-of-day
-   greeting + eyebrow tab label); pushed screens keep the back arrow, the title
+   greeting); pushed screens keep the back arrow, the title
    and a small robot button that opens Ask RuMampu. Language selection moved to
    Profile › Language (US8.3), so the header no longer carries a lang button. */
 export function Hdr({ back, title, brand, greet, right }: {
@@ -137,7 +137,7 @@ export function Hdr({ back, title, brand, greet, right }: {
     const g = t(h < 12 ? 'hd_morning' : h < 18 ? 'hd_afternoon' : 'hd_evening');
     return (
       <View>
-        <View style={[st.hdr, { paddingBottom: title ? 2 : 10 }]}>
+        <View style={[st.hdr, { paddingBottom: 10 }]}>
           <RumaAvatar size={44} />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 16, color: C.ink64 }}>{g}</Text>
@@ -148,12 +148,7 @@ export function Hdr({ back, title, brand, greet, right }: {
           {right}
           <GuideBtn />
         </View>
-        {title ? (
-          <Text style={{
-            fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.99, textTransform: 'uppercase',
-            color: C.ink64, paddingHorizontal: 20, paddingBottom: 8,
-          }}>{title}</Text>
-        ) : null}
+        {/* the tab bar already says which tab this is, so no eyebrow under the greeting */}
       </View>
     );
   }

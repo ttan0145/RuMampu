@@ -94,6 +94,20 @@ export function noteScroll(y: number): void {
 export function registerRoot(view: View | null): void { rootView = view; }
 
 type Box = { x: number; y: number; w: number; h: number };
+const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
+/* A smooth scroll can take longer than any fixed wait on a phone, so keep
+   measuring until the part has stopped moving (or about 1.5 s have passed). */
+async function measureSettled(v: View | null): Promise<Box | null> {
+  let last = await measure(v);
+  for (let n = 0; n < 25; n++) {
+    await wait(60);
+    const now = await measure(v);
+    if (!now || !last) { last = now; continue; }
+    if (Math.abs(now.y - last.y) < 0.5 && Math.abs(now.x - last.x) < 0.5 && Math.abs(now.h - last.h) < 0.5) return now;
+    last = now;
+  }
+  return last;
+}
 function measure(v: View | null): Promise<Box | null> {
   return new Promise(resolve => {
     if (!v || typeof v.measureInWindow !== 'function') { resolve(null); return; }
@@ -284,9 +298,10 @@ function Tour() {
       if (r && view && scroller.view && step && !step.id.startsWith('tab.') && step.id !== 'aiedge'
         && (r.y < view.y + 70 || r.y + r.h > view.y + view.h - 170)) {
         scroller.view.scrollTo({ y: Math.max(0, scroller.y + (r.y - view.y - 120)), animated: !reduce });
-        await new Promise(res => setTimeout(res, reduce ? 60 : 380));
-        r = await measure(target);
+        await wait(reduce ? 60 : 120);
+        r = await measureSettled(target);
       }
+      else r = await measureSettled(target);
       if (!alive) return;
       const ox = root?.x ?? 0, oy = root?.y ?? 0;
       if (root) setFrame({ w: root.w, h: root.h });
@@ -320,6 +335,27 @@ function Tour() {
     return () => { alive = false; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tour.k, tour.i]);
+
+  /* the person scrolled while a tip is open: move the ring to where the part is now */
+  React.useEffect(() => onScrollSettle(() => {
+    void (async () => {
+      const target = step ? targets.get(step.id) ?? null : null;
+      const root = await measure(rootView);
+      const r = await measure(target);
+      if (!r) return;
+      const ox = root?.x ?? 0, oy = root?.y ?? 0, pad = 7, fw = root?.w ?? 390;
+      const to = { l: r.x - ox - pad, t: r.y - oy - pad, w: r.w + pad * 2, h: r.h + pad * 2 };
+      if (r.x + r.w < ox + fw - 2) { const L = Math.max(10, to.l), R = Math.min(fw - 10, to.l + to.w); to.l = L; to.w = Math.max(0, R - L); }
+      setHole(to);
+      Animated.parallel([
+        Animated.timing(hx, { toValue: to.l, duration: 200, useNativeDriver: false }),
+        Animated.timing(hy, { toValue: to.t, duration: 200, useNativeDriver: false }),
+        Animated.timing(hw, { toValue: to.w, duration: 200, useNativeDriver: false }),
+        Animated.timing(hh, { toValue: to.h, duration: 200, useNativeDriver: false }),
+      ]).start();
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [tour.k, tour.i]);
 
   if (!step) return null;
   const go = (d: number) => up(s => {

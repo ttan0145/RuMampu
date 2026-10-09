@@ -1,5 +1,5 @@
 import React from 'react';
-import { DimensionValue, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { DimensionValue, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Route, todayIso, useApp } from '../state';
 import { MOCK } from '../mock';
 import { ApiCoverageAnswer, INCOME_API_ENABLED } from '../api';
@@ -9,10 +9,10 @@ import {
 } from '../calc';
 import {
   Badge, BodyS, Btn, BtnLine, WholeMonthBtn, BtnQuiet, Card, Chip, Chips, Display, Divider, EditList,
-  Fig, IcLab, KV, NoteC, NumInput, P, Prov, StackS, TextField,
+  Fig, KV, NoteC, NumInput, P, Prov, StackS, TextField,
   CardI, FigRow, MonthBtn,
 } from '../ui';
-import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
+import { BODY_FONT, C, DISP_FONT, SEMI_FONT, XBOLD_FONT } from '../theme';
 import { SvgXml } from 'react-native-svg';
 import { LOG_META, logClock, logRecent, logWhen } from '../log';
 import { ExLimitsBody } from './expenses';
@@ -29,6 +29,8 @@ import {
 import { IncomePatternChart } from '../charts';
 import { ScreenShell } from './shell';
 import { GuideTarget } from '../tour';
+import { Ph } from '../homepath';
+import { RUMA_IMG } from '../ruma';
 import { IncomeCsvBody } from './imports';
 import { isValidIsoDate, isValidMoneyText } from '../validation';
 import { DatePickerField } from '../date-picker';
@@ -55,21 +57,24 @@ export function MoneyScreen() {
 
   const rows = monthsAgg(S.data).filter(r => r.y * 12 + r.m !== thisKey);
 
-  /* quiet vs usual: min and median surplus across recorded months */
+  /* quiet vs usual: min and median surplus across recorded months. Two friendly
+     pills say the numbers; the band underneath shows where they sit. */
   let quiet: React.ReactNode = null;
   if (rows.length >= 2) {
-    const s = rows.map(r => r.surplus).sort((a, b) => a - b);
+    const sorted = rows.slice().sort((a, b) => a.surplus - b.surplus);
+    const s = sorted.map(r => r.surplus);
     const lo = s[0], med = s[Math.floor(s.length / 2)], hi = s[s.length - 1];
+    const loRow = sorted[0];
     const span = Math.max(1, hi - Math.min(lo, 0));
     const pos = (v: number) => Math.round((v - Math.min(lo, 0)) / span * 100);
     const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
-    const dotPos = (v: number): DimensionValue => `${clamp(pos(v), 2, 98)}%`;
-    /* v24 .moband: labels ride the band, centred on their dot — quietest above, usual below. */
-    const bandLbl = (v: number, txtKey: string, amount: number, above: boolean) => (
-      <View style={{ position: 'absolute', left: dotPos(v), width: 0, alignItems: 'center', ...(above ? { bottom: 14 } : { top: 14 }) }}>
-        <View style={{ width: 120, alignItems: 'center', marginLeft: -60 }}>
-          <Text style={mo.bandLblTxt} numberOfLines={1}>{t(txtKey)}</Text>
-          <Text style={mo.bandLblVal} numberOfLines={1}>{rm(amount)}</Text>
+    const dotPos = (v: number): DimensionValue => `${clamp(pos(v), 3, 97)}%`;
+    const pill = (bg: string, fg: string, icon: string, label: string, amount: number) => (
+      <View style={[mo.qPill, { backgroundColor: bg }]}>
+        <View style={[mo.qPillIc, { backgroundColor: fg }]}><Ph n={icon} c="#fff" size={16} /></View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={mo.qPillLbl} numberOfLines={1}>{label}</Text>
+          <Text style={[mo.qPillVal, { color: C.ink }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{rm(amount)}</Text>
         </View>
       </View>
     );
@@ -79,16 +84,18 @@ export function MoneyScreen() {
           <Text style={mo.ttl3}>{t('mo_quiet')}</Text>
           <CardI t="mo_quiet" b={['mo_quiet_note', 'mo_quiet_ask']} p="calc" />
         </View>
-        <View style={{ marginTop: 26, marginBottom: 30, marginHorizontal: 8, height: 12 }}>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+          {pill('#FFF4D6', '#E39A00', 'umbrella', `${t('mo_quietest')} · ${monthName(loRow.m)}`, Math.max(0, lo))}
+          {pill('#E2F5F2', '#11A09B', 'sparkle', t('mo_usual'), med)}
+        </View>
+        <View style={{ marginTop: 16, marginBottom: 6, marginHorizontal: 4, height: 12 }}>
           <SvgXml
-            xml={'<svg width="100%" height="12" viewBox="0 0 100 12" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#F4D27A"/><stop offset="0.55" stop-color="#BFE2D8"/><stop offset="1" stop-color="#5CACB0"/></linearGradient></defs><rect width="100" height="12" rx="6" fill="url(#mb)"/></svg>'}
+            xml={'<svg width="100%" height="12" viewBox="0 0 100 12" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FFD866"/><stop offset="0.55" stop-color="#BFE2D8"/><stop offset="1" stop-color="#11A09B"/></linearGradient></defs><rect width="100" height="12" rx="6" fill="url(#mb)"/></svg>'}
             width="100%" height={12}
             style={{ position: 'absolute', left: 0, right: 0, top: 0 }}
           />
-          {bandLbl(lo, 'mo_quietest', Math.max(0, lo), true)}
-          <View style={[mo.bandDot, { left: dotPos(lo), backgroundColor: '#E0A800' }]} />
-          <View style={[mo.bandDot, { left: dotPos(med), backgroundColor: '#3F7A7E' }]} />
-          {bandLbl(med, 'mo_usual', med, false)}
+          <View style={[mo.bandDot, { left: dotPos(lo), backgroundColor: '#E39A00' }]} />
+          <View style={[mo.bandDot, { left: dotPos(med), backgroundColor: '#11A09B' }]} />
         </View>
         <BtnLine label={t('money_coverage') + ' →'} style={{ fontSize: 13 }} onPress={() => go('coverage')} />
       </View>
@@ -110,33 +117,36 @@ export function MoneyScreen() {
           <View key={r.y * 12 + r.m} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
             <Text style={mo.barVal}>{nf(r.net)}</Text>
             <View style={{
-              width: '100%', minHeight: 4, borderTopLeftRadius: 6, borderTopRightRadius: 6,
-              borderBottomLeftRadius: 3, borderBottomRightRadius: 3,
+              width: '100%', minHeight: 6, borderTopLeftRadius: 10, borderTopRightRadius: 10,
+              borderBottomLeftRadius: 4, borderBottomRightRadius: 4,
               height: `${Math.max(4, Math.round(r.net / mx * 78))}%`,
-              backgroundColor: qset.has(r.y * 12 + r.m) ? '#F4D27A' : C.ink,
+              backgroundColor: qset.has(r.y * 12 + r.m) ? '#FFC83D' : '#11A09B',
             }} />
             <Text style={mo.barLbl}>{monthName(r.m).toUpperCase()}</Text>
           </View>
         ))}
       </View>
+      <View style={{ flexDirection: 'row', gap: 14, marginTop: 10 }}>
+        <View style={mo.legend}><View style={[mo.legendDot, { backgroundColor: '#11A09B' }]} /><Text style={mo.legendTxt}>{t('mo_leg_month')}</Text></View>
+        <View style={mo.legend}><View style={[mo.legendDot, { backgroundColor: '#FFC83D' }]} /><Text style={mo.legendTxt}>{t('mo_leg_quiet')}</Text></View>
+      </View>
     </Pressable>
   ) : null;
 
   /* fixed costs */
+  const costTile = (to: Route, bg: string, fg: string, icon: string, label: string, value: number) => (
+    <Pressable onPress={() => go(to)} style={({ pressed }) => [mo.motile, { backgroundColor: bg, borderBottomColor: fg + '55' }, pressed && { transform: [{ scale: 0.98 }] }]}>
+      <View style={[mo.motileIc, { backgroundColor: fg }]}><Ph n={icon} c="#fff" size={18} /></View>
+      <Text style={mo.motileLbl} numberOfLines={1}>{label}</Text>
+      <Text style={mo.motileVal} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{rm(value)}</Text>
+      <Text style={mo.motileEm}>{t('mo_permo')}</Text>
+    </Pressable>
+  );
   const tiles = (
     <View style={{ flexDirection: 'row', gap: 10 }}>
-      <Pressable onPress={() => go('commit')} style={mo.motile}>
-        <View style={mo.motileIc}><Ico name="calendar" size={18} /></View>
-        <BodyS muted style={{ fontSize: 12 }}>{t('money_commit')}</BodyS>
-        <Text style={mo.motileVal}>{rm(commitTotal(S.data))}</Text>
-        <Text style={mo.motileEm}>{t('mo_permo')}</Text>
-      </Pressable>
-      <Pressable onPress={() => go('expenses')} style={mo.motile}>
-        <View style={mo.motileIc}><Ico name="wrench" size={18} /></View>
-        <BodyS muted style={{ fontSize: 12 }}>{t('money_workcosts')}</BodyS>
-        <Text style={mo.motileVal}>{rm(S.data.workCostEntries.filter(e => monthKeyOf(e.d) === mk).reduce((a, e) => a + (+e.a || 0), 0))}</Text>
-        <Text style={mo.motileEm}>{t('mo_permo')}</Text>
-      </Pressable>
+      {costTile('commit', '#FFF0DC', '#FF9416', 'calendar-check', t('money_commit'), commitTotal(S.data))}
+      {costTile('workcosts', '#E1F2FA', '#2A9AC9', 'receipt', t('money_workcosts'),
+        S.data.workCostEntries.filter(e => monthKeyOf(e.d) === mk).reduce((a, e) => a + (+e.a || 0), 0))}
     </View>
   );
 
@@ -152,8 +162,16 @@ export function MoneyScreen() {
         <Text style={mo.ttl3}>{t('mo_pace')}</Text>
         <Text style={{ color: C.ink }}>→</Text>
       </View>
-      <View style={{ height: 10, borderRadius: 5, backgroundColor: C.ink14, overflow: 'hidden', marginTop: 10 }}>
-        <View style={{ width: `${pct}%`, height: '100%', borderRadius: 5, backgroundColor: paceColor }} />
+      <View style={{ marginTop: 26, marginHorizontal: 6 }}>
+        <View style={{ height: 12, borderRadius: 6, backgroundColor: '#EFE7DA', overflow: 'hidden' }}>
+          <View style={{ width: `${Math.max(lim ? 3 : 0, pct)}%`, height: '100%', borderRadius: 6, backgroundColor: paceColor }} />
+        </View>
+        {/* today, as a share of the month */}
+        <View pointerEvents="none" style={[mo.paceDay, { left: `${Math.round(day / dim * 100)}%` }]} />
+        {lim ? (
+          <Image source={{ uri: pct >= 100 ? RUMA_IMG.oops : RUMA_IMG.wave }} resizeMode="contain"
+            style={[mo.paceRuma, { left: `${Math.min(96, Math.max(0, pct))}%` }]} />
+        ) : null}
       </View>
       <BodyS muted style={{ marginTop: 6 }}>
         {lim ? t('mo_pace_note', { v: rm(outSum), l: rm(lim), d: day, n: dim }) : t('mo_nolimit')}
@@ -185,9 +203,13 @@ export function MoneyScreen() {
         <View style={[mo.card, { paddingVertical: 2, paddingHorizontal: 12 }]}>
           {items.map(([r, k, ic], i) => (
             <Pressable key={r} onPress={() => go(r)}
-              style={[mo.morow, i > 0 && { borderTopWidth: 1, borderTopColor: C.ink14 }]}>
-              <IcLab name={ic}><P style={{ fontSize: 15 }}>{t(k)}</P></IcLab>
-              <Text style={{ color: C.ink }}>→</Text>
+              style={({ pressed }) => [mo.morow, i > 0 && { borderTopWidth: 1, borderTopColor: C.ink14 }, pressed && { opacity: 0.7 }]}>
+              {/* a soft hint of the tile view's colour, kept quiet in the list */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                <View style={[mo.rowIc, { backgroundColor: TILE_HUE[r]?.[1] ?? '#E2F5F2' }]}><Ico name={ic} size={18} color={TILE_HUE[r]?.[0] ?? C.brand} /></View>
+                <Text style={{ fontFamily: SEMI_FONT, fontSize: 15, color: C.ink, flexShrink: 1 }} numberOfLines={1}>{t(k)}</Text>
+              </View>
+              <Ph n="caret-right" c={C.ink40} size={16} />
             </Pressable>
           ))}
         </View>
@@ -200,10 +222,12 @@ export function MoneyScreen() {
       <GuideTarget id="money.hero">
       <View style={mo.hero}>
         <SvgXml
-          xml={'<svg width="100%" height="100%" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mh" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2F5D61"/><stop offset="1" stop-color="#1F3F42"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#mh)"/></svg>'}
+          xml={'<svg width="100%" height="100%" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="mh" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14A8A2"/><stop offset="1" stop-color="#0B7A76"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#mh)"/></svg>'}
           width="100%" height="100%"
           style={{ position: 'absolute', left: 0, top: 0 }}
         />
+        <View pointerEvents="none" style={mo.heroSun} />
+        <View pointerEvents="none" style={mo.heroBlob} />
         <View style={mo.rowBetween}>
           {/* v27b: a finished month is named as a whole month, the running one as "so far". */}
           <Text style={[mo.ttl3, { color: '#fff' }]}>
@@ -211,11 +235,18 @@ export function MoneyScreen() {
           </Text>
           <CardI t="mo_sofar_t" b={['mo_fixed']} p="user" light />
         </View>
-        <View style={{ flexDirection: 'row', marginTop: 10 }}>
-          {([[t('mo_in'), inSum, '#fff'], [t('mo_out'), outSum, '#fff'], [t('mo_left'), inSum - outSum, '#FEC844']] as [string, number, string][]).map(([lbl, v, col], i) => (
-            <View key={lbl} style={[{ flex: 1, minWidth: 0 }, i > 0 && { borderLeftWidth: 1.5, borderLeftColor: 'rgba(255,255,255,0.2)', paddingLeft: 12 }]}>
-              <Text style={mo.heroSmall}>{lbl.toUpperCase()}</Text>
-              <Text style={[mo.heroVal, { color: col }]} numberOfLines={1}>{rm(v)}</Text>
+        {/* the same build as Home's card, so the two read as one family and stand the same height */}
+        <Image source={{ uri: inSum - outSum >= 0 ? RUMA_IMG.count : RUMA_IMG.oops }} resizeMode="contain" style={mo.heroRuma} />
+        <Text style={mo.heroSub}>{t('mo_left')}</Text>
+        <Text style={[mo.heroBig, inSum - outSum < 0 && { color: '#FFC2CF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.45}>{rm(inSum - outSum)}</Text>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+          {([['arrow-up', t('hm_income'), inSum, '#7BE0B8'], ['arrow-down', t('hm_exp'), outSum, '#FFB3C7']] as [string, string, number, string][]).map(([ic, lbl, v, col]) => (
+            <View key={lbl} style={mo.heroPill}>
+              <View style={[mo.heroPillIc, { backgroundColor: col }]}><Ph n={ic} c="#0B4F4C" size={14} /></View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, color: 'rgba(255,255,255,0.85)' }}>{lbl}</Text>
+                <Text style={[mo.heroVal, { color: '#fff', fontSize: 16, lineHeight: 20, marginTop: 0 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{rm(v)}</Text>
+              </View>
             </View>
           ))}
         </View>
@@ -246,15 +277,33 @@ export function MoneyScreen() {
 
 const mo = StyleSheet.create({
   hero: {
-    backgroundColor: '#25494D', borderRadius: 18, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12,
+    backgroundColor: '#11A09B', borderRadius: 22, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 12,
+    borderBottomWidth: 5, borderBottomColor: '#08605D',
     overflow: 'hidden',
   },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   ttl3: { fontFamily: DISP_FONT, fontSize: 15, color: C.ink },
   heroProv: { fontFamily: BODY_FONT, fontSize: 11, letterSpacing: 0.88, color: 'rgba(255,255,255,0.95)', fontWeight: '600' },
-  heroSmall: { fontFamily: BODY_FONT, fontSize: 11, letterSpacing: 0.66, color: 'rgba(255,255,255,0.7)' },
+  heroSmall: { fontFamily: BODY_FONT, fontSize: 11, letterSpacing: 0.66, color: 'rgba(255,255,255,0.82)' },
+  heroBig: { fontFamily: XBOLD_FONT, fontSize: 36, lineHeight: 40, letterSpacing: -1, color: '#FFE08A', fontVariant: ['tabular-nums'], marginRight: 70 },
+  heroSub: { fontFamily: BODY_FONT, fontSize: 13, color: 'rgba(255,255,255,0.9)', marginTop: 8 },
+  heroRuma: { position: 'absolute', right: 6, top: 34, width: 72, height: 72 },
+  heroSun: { position: 'absolute', right: -24, top: -30, width: 110, height: 110, borderRadius: 55, backgroundColor: 'rgba(255,216,102,0.28)' },
+  heroBlob: { position: 'absolute', left: -40, bottom: -50, width: 150, height: 110, borderRadius: 75, backgroundColor: 'rgba(255,255,255,0.08)' },
+  heroPill: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 14, paddingVertical: 8, paddingHorizontal: 10 },
+  heroPillIc: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  qPill: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 10 },
+  qPillIc: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  qPillLbl: { fontFamily: BODY_FONT, fontSize: 11.5, color: C.ink64 },
+  qPillVal: { fontFamily: DISP_FONT, fontSize: 17, lineHeight: 21, fontVariant: ['tabular-nums'] },
+  legend: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot: { width: 10, height: 10, borderRadius: 5 },
+  legendTxt: { fontFamily: BODY_FONT, fontSize: 11.5, color: C.ink64 },
+  paceDay: { position: 'absolute', top: -4, width: 2, height: 20, marginLeft: -1, borderRadius: 1, backgroundColor: C.ink40 },
+  paceRuma: { position: 'absolute', top: -30, width: 30, height: 30, marginLeft: -15 },
+  motileLbl: { fontFamily: SEMI_FONT, fontSize: 12.5, color: C.ink },
+  rowIc: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   heroVal: { fontFamily: DISP_FONT, fontSize: 19, lineHeight: 24, marginTop: 2, fontVariant: ['tabular-nums'] },
-  heroNote: { fontFamily: BODY_FONT, fontSize: 12, lineHeight: 16, color: 'rgba(255,255,255,0.92)', marginTop: 10 },
   card: {
     backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E3EAE8', borderRadius: 18,
     paddingVertical: 14, paddingHorizontal: 16,
@@ -292,13 +341,10 @@ const mo = StyleSheet.create({
   barVal: { fontFamily: DISP_FONT, fontSize: 10.5, color: C.ink, marginBottom: 3, fontVariant: ['tabular-nums'] },
   barLbl: { fontFamily: BODY_FONT, fontSize: 10.5, color: C.ink64, marginTop: 5, letterSpacing: 0.3 },
   motile: {
-    flex: 1, backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E3EAE8', borderRadius: 16,
+    flex: 1, backgroundColor: '#fff', borderBottomWidth: 4, borderWidth: 1.5, borderColor: '#E3EAE8', borderRadius: 16,
     paddingVertical: 12, paddingHorizontal: 14, gap: 2, minWidth: 0,
   },
-  motileIc: {
-    width: 32, height: 32, borderRadius: 10, backgroundColor: '#E4EFEC',
-    alignItems: 'center', justifyContent: 'center', marginBottom: 6,
-  },
+  motileIc: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
   motileVal: { fontFamily: DISP_FONT, fontSize: 17, color: C.ink, fontVariant: ['tabular-nums'] },
   motileEm: { fontFamily: BODY_FONT, fontSize: 11, color: C.ink64 },
   viewTgl: {

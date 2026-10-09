@@ -8,12 +8,47 @@ import { Ruma } from '../ruma-view';
 import { ScreenShell } from './shell';
 import { exportRecord } from '../api';
 import { GuideTarget } from '../tour';
+import { ChunkyBtn, HUE, Ph } from '../homepath';
 import { ReminderSheet, useReminderSummary } from './reminder-sheet';
 import type { RecordReminderKind } from '../reminder-date';
 
 /* v22 profile tab: guest/signed hero, account rows, language, saved tests. */
 
 const FLAGS: Record<string, string> = { en: '🇬🇧', ms: '🇲🇾', zh: '🇨🇳' };
+
+/* A soft tinted square with its icon in colour, as on the Money list. */
+const HUES = {
+  teal: ['#11A09B', '#E2F5F2'], pink: ['#E8487A', '#FFE8EF'], gold: ['#D98E00', '#FFF4D6'],
+  violet: ['#7C5CFF', '#EEEAFF'], blue: ['#2A9AC9', '#E1F2FA'], slate: ['#5B6B8C', '#E9EDF4'],
+} as const;
+function IcSq({ hue, icon, emoji }: { hue: keyof typeof HUES; icon?: string; emoji?: string }) {
+  return (
+    <View style={[st.icsq, { backgroundColor: HUES[hue][1] }]}>
+      {emoji ? <Text style={{ fontSize: 18 }}>{emoji}</Text> : <Ph n={icon || 'info'} c={HUES[hue][0]} size={18} />}
+    </View>
+  );
+}
+function SecLbl({ children }: { children: string }) {
+  return <Text style={st.seclbl}>{children.toUpperCase()}</Text>;
+}
+/* one tappable row: icon, label (and a line under it), caret */
+function LinkRow({ hue, icon, label, sub, onPress, line, danger, testID }: {
+  hue: keyof typeof HUES; icon: string; label: string; sub?: string; onPress: () => void; line?: boolean; danger?: boolean; testID?: string;
+}) {
+  return (
+    <Pressable onPress={onPress} testID={testID} accessibilityRole="button"
+      style={({ pressed }) => [st.morow, line && st.morowLine, pressed && { opacity: 0.7 }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+        <IcSq hue={hue} icon={icon} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={[st.rowTxt, danger && { color: '#C2365F' }]} numberOfLines={1}>{label}</Text>
+          {sub ? <Text style={st.rowSub} numberOfLines={2}>{sub}</Text> : null}
+        </View>
+      </View>
+      <Ph n="caret-right" c={C.ink40} size={16} />
+    </Pressable>
+  );
+}
 
 export function ProfileScreen() {
   const { S, t, up, go, toast, signOut, deleteCurrentRecord, enterSampleMonths, leaveSampleMonths, setRecordReminder } = useApp();
@@ -33,11 +68,12 @@ export function ProfileScreen() {
     const saved = S.notificationPreferences.reminders[kind];
     const on = Boolean(saved?.enabled);
     return (
-      <View key={kind} style={[st.morow, kind === 'expenses' && st.morowLine]}>
+      <View key={kind} style={[st.morow, kind === 'expenses' && st.morowLine, { gap: 12 }]}>
+        <IcSq hue={kind === 'income' ? 'teal' : 'pink'} icon={kind === 'income' ? 'coins' : 'receipt'} />
         <Pressable onPress={() => setReminderKind(kind)} accessibilityRole="button"
           accessibilityLabel={t('rm_edit', { n: label })} style={{ flex: 1, minWidth: 0, gap: 2 }}>
-          <P style={{ fontSize: 15 }}>{label}</P>
-          {on && saved ? <BodyS muted style={{ fontSize: 12 }}>{reminderSummary(saved)}</BodyS> : null}
+          <Text style={st.rowTxt}>{label}</Text>
+          {on && saved ? <Text style={st.rowSub}>{reminderSummary(saved)}</Text> : null}
         </Pressable>
         <Pressable
           accessibilityRole="switch"
@@ -113,92 +149,88 @@ export function ProfileScreen() {
     <ScreenShell greet title={t('pf_title')} tint="#EEF6F3">
       <GuideTarget id="pf.hero">
       <View style={st.pfhero}>
+        <View style={st.pfheroSun} pointerEvents="none" />
         <View style={st.pfheroBubble} pointerEvents="none" />
-        <Ruma w={84} pose="wave" />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontFamily: DISP_FONT, fontSize: 20, lineHeight: 24, color: C.ink }}>
-            {S.guest ? t('hd_guest') : t('hd_welcome')}
-          </Text>
-          <View style={[st.pfpill]}>
-            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: S.guest ? '#E0A800' : C.confirm }} />
-            <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, fontWeight: '600', color: C.ink }}>
-              {S.guest ? t('pf_guest_t') : t('pf_signed_t')}
+        <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+          <Ruma w={88} pose="wave" />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 21, lineHeight: 26, color: C.ink }}>
+              {S.guest ? t('hd_guest') : t('hd_welcome')}
+            </Text>
+            <View style={[st.pfpill]}>
+              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: S.guest ? '#E0A800' : C.confirm }} />
+              <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, fontWeight: '600', color: C.ink }}>
+                {S.guest ? t('pf_guest_t') : t('pf_signed_t')}
+              </Text>
+            </View>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, lineHeight: 17, color: C.ink64, marginTop: 6 }}>
+              {S.guest ? t(Platform.OS === 'web' ? 'pf_guest' : 'pf_guest_native') : t('pf_signed')}
             </Text>
           </View>
-          <Text style={{ fontFamily: BODY_FONT, fontSize: 12.5, lineHeight: 16, color: C.ink64, marginTop: 6 }}>
-            {S.guest ? t(Platform.OS === 'web' ? 'pf_guest' : 'pf_guest_native') : t('pf_signed')}
-          </Text>
         </View>
+        {S.guest ? (
+          <View style={{ marginTop: 12 }}>
+            <ChunkyBtn label={t('pf_create')} hue={HUE.tl} icon="sparkle" onPress={() => setSignupChoiceOpen(true)} testID="pf-signup" />
+          </View>
+        ) : null}
       </View>
       </GuideTarget>
-      {S.guest ? <Btn label={t('pf_create')} onPress={() => setSignupChoiceOpen(true)} /> : null}
-      <Pressable onPress={() => up(s => { s.sheet = 'lang'; })} style={st.pfrow}>
-        <Text style={{ fontSize: 22 }}>{FLAGS[S.lang]}</Text>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <P style={{ fontSize: 15 }}>{t('pf_lang')}</P>
-          <BodyS muted style={{ fontSize: 12 }}>{String(STRINGS[S.lang].langname)}</BodyS>
-        </View>
-        <Text style={{ color: C.ink40 }}>▾</Text>
-      </Pressable>
-      {/* v27b: the invitation, the tour and the tips switch. Back on, every screen offers its tips again. */}
-      <GuideTarget id="pf.tips" style={[st.mocard, { paddingHorizontal: 16, paddingVertical: 4 }]}>
-        <SwRow on={!S.tipsOff} label={t('pf_tips')} hint={t('pf_tips_h')}
-          onPress={() => up(s => { s.tipsOff = !s.tipsOff; if (!s.tipsOff) s.seenG = []; })} />
-      </GuideTarget>
-      {/* v27b: look around with sample months, or put your own record back */}
-      <GuideTarget id="pf.sample">
-      <BtnQuiet onPress={() => {
-        if (S.demo) { leaveSampleMonths(); return; }
-        enterSampleMonths();
-        toast(t('demo_loaded'));
-      }} style={{ minHeight: 48 }}>
-        <IcLab name="book"><P style={{ fontSize: 15 }}>{t(S.demo ? 'demo_clear' : 'demo_load')}</P></IcLab>
-      </BtnQuiet>
-      </GuideTarget>
-      <GuideTarget id="pf.notif" style={{ gap: 7 }}>
-        <BodyS muted>{t('nt_title')}</BodyS>
+
+      <SecLbl>{t('pf_sec_settings')}</SecLbl>
+      <View style={st.mocard}>
+        <Pressable onPress={() => up(s => { s.sheet = 'lang'; })} accessibilityRole="button"
+          style={({ pressed }) => [st.morow, pressed && { opacity: 0.7 }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+            <IcSq hue="blue" emoji={FLAGS[S.lang]} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={st.rowTxt}>{t('pf_lang')}</Text>
+              <Text style={st.rowSub}>{String(STRINGS[S.lang].langname)}</Text>
+            </View>
+          </View>
+          <Ph n="caret-down" c={C.ink40} size={16} />
+        </Pressable>
+        {/* v27b: the invitation, the tour and the tips switch. Back on, every screen offers its tips again. */}
+        <GuideTarget id="pf.tips" style={[st.morowLine, { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 4 }]}>
+          <IcSq hue="gold" icon="lightbulb" />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <SwRow on={!S.tipsOff} label={t('pf_tips')} hint={t('pf_tips_h')}
+              onPress={() => up(s => { s.tipsOff = !s.tipsOff; if (!s.tipsOff) s.seenG = []; })} />
+          </View>
+        </GuideTarget>
+        {/* v27b: look around with sample months, or put your own record back */}
+        <GuideTarget id="pf.sample">
+          <LinkRow hue="violet" icon="notebook" line label={t(S.demo ? 'demo_clear' : 'demo_load')} onPress={() => {
+            if (S.demo) { leaveSampleMonths(); return; }
+            enterSampleMonths();
+            toast(t('demo_loaded'));
+          }} />
+        </GuideTarget>
+      </View>
+
+      <GuideTarget id="pf.notif" style={{ gap: 8 }}>
+        <SecLbl>{t('nt_title')}</SecLbl>
         <View style={st.mocard}>
           {notificationSwitch('income', t('nt_income'))}
           {notificationSwitch('expenses', t('nt_expenses'))}
         </View>
-        <BodyS muted>{t('nt_optional')}</BodyS>
+        <Text style={st.note}>{t('nt_optional')}</Text>
         {S.notificationPreferences.permission_asked && !S.notificationPreferences.permission_granted ? (
-          <BodyS muted>{t(Platform.OS === 'android' ? 'nt_denied_android' : Platform.OS === 'ios' ? 'nt_denied_ios' : 'nt_denied')}</BodyS>
+          <Text style={st.note}>{t(Platform.OS === 'android' ? 'nt_denied_android' : Platform.OS === 'ios' ? 'nt_denied_ios' : 'nt_denied')}</Text>
         ) : null}
       </GuideTarget>
+
+      <SecLbl>{t('money_record')}</SecLbl>
       {S.guest ? (
         <GuideTarget id="pf.recordg" style={st.mocard}>
-          <Pressable onPress={() => setDeleteConfirmOpen(true)} style={st.morow}>
-            <IcLab name="ring">
-              <P style={{ fontSize: 15, color: C.ink }}>{t('pf_delete_guest')}</P>
-            </IcLab>
-            <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
-          </Pressable>
+          <LinkRow hue="pink" icon="warning-circle" danger label={t('pf_delete_guest')} onPress={() => setDeleteConfirmOpen(true)} />
         </GuideTarget>
       ) : (
         <GuideTarget id="pf.record" style={st.mocard}>
-          <Pressable onPress={() => go('acctdetails')} style={st.morow}>
-            <IcLab name="band"><P style={{ fontSize: 15 }}>{t('pf_acct')}</P></IcLab>
-            <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
-          </Pressable>
-          <Pressable onPress={() => go('acctdetails')} style={[st.morow, st.morowLine]}>
-            <IcLab name="ring"><P style={{ fontSize: 15 }}>{t('pf_pw')}</P></IcLab>
-            <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
-          </Pressable>
-          <Pressable onPress={() => go('savedtests')} style={[st.morow, st.morowLine]}>
-            <IcLab name="book"><P style={{ fontSize: 15 }}>{t('sv_title')}</P></IcLab>
-            <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
-          </Pressable>
-          <Pressable onPress={() => setExportConfirmOpen(true)} style={[st.morow, st.morowLine]}>
-            <IcLab name="book"><P style={{ fontSize: 15 }}>{t('pf_export')}</P></IcLab>
-            <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
-          </Pressable>
-          <Pressable onPress={() => setDeleteConfirmOpen(true)} style={[st.morow, st.morowLine]}>
-            <IcLab name="ring">
-              <P style={{ fontSize: 15, color: C.ink }}>{t('pf_delete')}</P>
-            </IcLab>
-            <Text style={{ fontSize: 16, color: C.ink }}>→</Text>
-          </Pressable>
+          <LinkRow hue="teal" icon="info" label={t('pf_acct')} onPress={() => go('acctdetails')} />
+          <LinkRow hue="slate" icon="lock-simple" line label={t('pf_pw')} onPress={() => go('acctdetails')} />
+          <LinkRow hue="violet" icon="house-line" line label={t('sv_title')} onPress={() => go('savedtests')} />
+          <LinkRow hue="blue" icon="arrow-down" line label={t('pf_export')} onPress={() => setExportConfirmOpen(true)} />
+          <LinkRow hue="pink" icon="warning-circle" line danger label={t('pf_delete')} onPress={() => setDeleteConfirmOpen(true)} />
         </GuideTarget>
       )}
 
@@ -330,9 +362,15 @@ export function ProfileScreen() {
 
 const st = StyleSheet.create({
   pfhero: {
-    backgroundColor: '#D3E7E5', borderRadius: 20, padding: 16,
-    flexDirection: 'row', gap: 12, alignItems: 'center', position: 'relative', overflow: 'hidden',
+    backgroundColor: '#D7EFEC', borderRadius: 22, padding: 16, position: 'relative', overflow: 'hidden',
+    borderWidth: 1.5, borderColor: '#C3E4DF',
   },
+  pfheroSun: { position: 'absolute', right: -14, top: -14, width: 52, height: 52, borderRadius: 26, backgroundColor: '#FFD866' },
+  icsq: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  seclbl: { fontFamily: BODY_FONT, fontSize: 12, fontWeight: '700', letterSpacing: 0.9, color: C.ink64, marginTop: 4, marginBottom: -2, paddingHorizontal: 2 },
+  rowTxt: { fontFamily: BODY_FONT, fontSize: 15, fontWeight: '600', color: C.ink },
+  rowSub: { fontFamily: BODY_FONT, fontSize: 12.5, lineHeight: 17, color: C.ink64, marginTop: 1 },
+  note: { fontFamily: BODY_FONT, fontSize: 12.5, lineHeight: 17, color: C.ink64, paddingHorizontal: 2 },
   pfheroBubble: {
     position: 'absolute', right: -30, top: -40, width: 120, height: 120, borderRadius: 60,
     backgroundColor: 'rgba(255,255,255,0.35)',
@@ -352,7 +390,7 @@ const st = StyleSheet.create({
   },
   morow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    minHeight: 48, paddingHorizontal: 4,
+    minHeight: 58, paddingHorizontal: 4, paddingVertical: 6,
   },
   morowLine: { borderTopWidth: 1, borderTopColor: C.ink14 },
   logoutBtn: {
