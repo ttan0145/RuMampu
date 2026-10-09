@@ -69,4 +69,4 @@ The current [v5 + Iteration 3 baseline](requirements/EPIC_5_USER_STORIES_AND_ACC
 7. E1.7 receipt starting point — complete, 10/10 AC, with production OCR separated from human confirmation.
 8. E1.8 historical CSV import — complete, 8/8 AC.
 9. E2 backend-authoritative income pattern and coverage — complete, 18/18 AC.
-10. E5 preparation and Learn — all 8 user stories and 68 criteria implemented and mapped. This repair adds sources, Prepare entry, optional reading without rewards and account progress. Results are in the acceptance index; deployment requires migration 0022. Moving upfront scales into the backend remains separate architecture work.
+10. E5 preparation and Learn — all 8 user stories and 68 criteria implemented and mapped. This repair adds sources, Prepare entry, optional reading without rewards and account progress. Results are in the acceptance index; deployment requires migration 0022. Upfront scales stay on the client by decision (ADR 0006).

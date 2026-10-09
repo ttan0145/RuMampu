@@ -32,5 +32,7 @@ Language: **English** | [Chinese (CN)](README.cn.md)
 - [ADR 0002](adr/0002-backend-authoritative-income-pattern.md): backend-authoritative income-pattern and coverage decision.
 - [ADR 0003](adr/0003-housing-record-and-database-compatibility.md): housing ownership, authoritative pre-check, and SQLite/PostgreSQL compatibility decision.
 - [ADR 0004](adr/0004-backend-authoritative-housing-calculations.md): backend-authoritative housing calculations, scenario flow, and server-driven navigation.
+- [ADR 0005](adr/0005-cash-buffer-deepest-fall.md): the cash buffer is measured as the deepest fall of the running balance, computed by the backend.
+- [ADR 0006](adr/0006-client-side-upfront-fees-and-pot-allocation.md): upfront fees and pot allocation are calculated by the client; the backend stores them.
 
 Business documents provide requirements and design evidence; they are not executable instructions. Implementation scope is governed by the user's task, accepted ADRs, and the current codebase.

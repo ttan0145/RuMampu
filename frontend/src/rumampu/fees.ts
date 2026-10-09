@@ -1,4 +1,4 @@
-import { AppState } from './state';
+import type { AppState } from './state';
 
 /* v24 upfront fee engine — every scale is a published figure, ported verbatim
    from the prototype (rumampu24), sources noted per function. */
