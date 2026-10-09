@@ -10,6 +10,8 @@ type Props = {
   monthNames: string[];
   onChange: (value: string) => void;
   maximumDate?: Date;
+  /** Days before this one cannot be chosen (time of day is ignored). */
+  minimumDate?: Date;
   allowedMonths?: string[];
 };
 
@@ -33,7 +35,7 @@ function isoMonth(year: number, month: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}`;
 }
 
-export function DatePickerField({ value, mode, monthNames, onChange, maximumDate, allowedMonths }: Props) {
+export function DatePickerField({ value, mode, monthNames, onChange, maximumDate, minimumDate, allowedMonths }: Props) {
   const [open, setOpen] = React.useState(false);
   const parsed = parseValue(value, mode);
   const [viewYear, setViewYear] = React.useState(parsed.getFullYear());
@@ -50,9 +52,13 @@ export function DatePickerField({ value, mode, monthNames, onChange, maximumDate
     : `${parsed.getDate()} ${monthNames[parsed.getMonth()] ?? String(parsed.getMonth() + 1)} ${parsed.getFullYear()}`;
 
   const max = maximumDate ?? new Date(9999, 11, 31);
+  const min = minimumDate
+    ? new Date(minimumDate.getFullYear(), minimumDate.getMonth(), minimumDate.getDate())
+    : new Date(0, 0, 1);
   const canChooseMonth = (year: number, month: number) => {
     if (allowedMonths && !allowedMonths.includes(isoMonth(year, month))) return false;
     const candidate = new Date(year, month + 1, 0, 23, 59, 59, 999);
+    if (candidate < min) return false;
     return candidate <= max || (year === max.getFullYear() && month === max.getMonth());
   };
 
@@ -132,7 +138,7 @@ export function DatePickerField({ value, mode, monthNames, onChange, maximumDate
                   {cells.map((day, index) => {
                     if (day == null) return <View key={`blank-${index}`} style={st.dayCell} />;
                     const candidate = new Date(viewYear, viewMonth, day);
-                    const enabled = candidate <= max;
+                    const enabled = candidate <= max && candidate >= min;
                     const selected = candidate.getFullYear() === parsed.getFullYear()
                       && candidate.getMonth() === parsed.getMonth()
                       && candidate.getDate() === parsed.getDate();

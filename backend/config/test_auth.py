@@ -121,6 +121,30 @@ class AuthApiRegressionTests(TestCase):
         self.assertNotIn("notification_id", str(login.json()["notification_preferences"]))
         self.assertNotIn("permission_granted", str(login.json()["notification_preferences"]))
 
+    def test_bill_reminders_keep_daily_weekly_and_one_off_repeats(self):
+        user = User.objects.create_user(username="repeat-reminders@example.com")
+        token = Token.objects.create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+        preferences = {
+            "bill_reminders": True,
+            "reminders": {
+                "rent": {"enabled": True, "day": 1, "time": "09:00"},
+                "food": {"enabled": True, "day": 1, "time": "20:00", "repeat": "daily"},
+                "utilities": {"enabled": True, "day": 1, "time": "08:30", "repeat": "weekly", "weekday": 1},
+                "loan": {"enabled": False, "day": 1, "time": "10:00", "repeat": "once", "date": "2026-12-24"},
+            },
+        }
+
+        saved = client.patch(
+            "/api/v1/auth/me/",
+            {"notification_preferences": preferences},
+            content_type="application/json",
+        )
+
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json()["notification_preferences"], preferences)
+        self.assertEqual(UserAppState.objects.get(user=user).notification_preferences, preferences)
+
     def test_bill_reminder_choices_reject_invalid_or_device_local_data(self):
         user = User.objects.create_user(username="invalid-reminders@example.com")
         token = Token.objects.create(user=user)
@@ -131,6 +155,21 @@ class AuthApiRegressionTests(TestCase):
             {"bill_reminders": True, "reminders": {"rent": {"enabled": True, "day": 31, "time": "9:15"}}},
             {"bill_reminders": True, "reminders": {"rent": {
                 "enabled": True, "day": 31, "time": "09:15", "notification_id": "device-only",
+            }}},
+            {"bill_reminders": True, "reminders": {"rent": {
+                "enabled": True, "day": 1, "time": "09:15", "repeat": "hourly",
+            }}},
+            {"bill_reminders": True, "reminders": {"rent": {
+                "enabled": True, "day": 1, "time": "09:15", "repeat": "weekly",
+            }}},
+            {"bill_reminders": True, "reminders": {"rent": {
+                "enabled": True, "day": 1, "time": "09:15", "repeat": "weekly", "weekday": 7,
+            }}},
+            {"bill_reminders": True, "reminders": {"rent": {
+                "enabled": True, "day": 1, "time": "09:15", "repeat": "once",
+            }}},
+            {"bill_reminders": True, "reminders": {"rent": {
+                "enabled": True, "day": 1, "time": "09:15", "repeat": "once", "date": "2026-02-30",
             }}},
         ]
 

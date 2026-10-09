@@ -61,9 +61,11 @@ import {
   cancelEveryReminder,
   cancelReminder,
   notificationSchedulingSupported,
-  schedulePrivateBillReminder,
+  scheduleRecordReminder,
 } from './notifications';
-import { isValidReminderDay } from './reminder-date';
+import {
+  isRecordReminderKind, isValidReminderRule, reminderRepeat, type RecordReminderKind, type ReminderRule,
+} from './reminder-date';
 import { fetchHouseCosts as fetchHouseCostsRequest, fetchSavedHousingTests as fetchSavedHousingTestsRequest, setSampleHousingData } from '../../services/housingService';
 import { clearHousingSession, getHousingScenario, getHousingTestResult, hydrateHousingSession, setHousingScenario, setHousingTestResult, subscribeHousingSession } from '../../services/housingSession';
 import type { HousingScenarioResponse, HousingTestResult } from '../../types/housing';
@@ -360,7 +362,6 @@ export interface AppState {
   homeownershipMonths: ApiHomeownershipMonth[];
   homeownershipSync: 'idle' | 'loading' | 'ready' | 'saving' | 'error';
   homeownershipMonth: string;
-  pendingBillReminderId: string | null;
   retentionNotice: ApiRetentionStatus | null;
   notificationPreferences: ApiNotificationPreferences;
   incomeDraft: {
@@ -506,7 +507,7 @@ function initialState(): AppState {
     exCatOpen: false, exMonthOpen: null, incMonth: null, exMonth: null,
     shock: 0,
     bought: false, purchaseMonth: null,
-    homeownershipMonths: [], homeownershipSync: 'idle', homeownershipMonth: currentMonth, pendingBillReminderId: null,
+    homeownershipMonths: [], homeownershipSync: 'idle', homeownershipMonth: currentMonth,
     retentionNotice: null,
     notificationPreferences: {
       bill_reminders: true,
@@ -681,8 +682,8 @@ export interface Ctx {
   setExpenseMonthlyTotal: (entryId: string, monthlyTotal: boolean) => Promise<void>;
   refreshHomeownership: () => Promise<void>;
   saveHomeownershipMonth: (month: string, actualHomeCosts: number) => Promise<void>;
-  setBillReminder: (commitmentId: string, day: number, time: string, enabled: boolean) => Promise<'saved' | 'denied'>;
-  setNotificationKind: (kind: 'bill_reminders', enabled: boolean) => Promise<void>;
+  /* Profile: when to be reminded to record income or expenses. */
+  setRecordReminder: (kind: RecordReminderKind, rule: ReminderRule, enabled: boolean) => Promise<'saved' | 'denied'>;
   ensureAiDisclosure: () => Promise<boolean>;
   answerAiDisclosure: (accepted: boolean) => void;
   ensureStatementDisclosure: () => Promise<boolean>;
@@ -803,7 +804,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const skipNextAccountSync = useRef(false);
   const accountAuthenticated = useRef(false);
   const localStateWriteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reminderRefreshStarted = useRef(false);
+  /* The language the queued reminders were last written in. */
+  const reminderRefreshStarted = useRef<Lang | null>(null);
   /* The last snapshot written locally and, for accounts, patched to the
      server. Most state changes (a screen change, a data refresh landing) leave
      the declared progress untouched; without this check every one of them sent
@@ -945,33 +947,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setHousingSessionRevision(revision => revision + 1);
   }), []);
 
-  /* Native month-end reminders use a rolling set of concrete dates so 29–31
-     can fall back to a short month's final day. Refresh that window once when
-     the saved local preferences have loaded. Retention safeguards are separate
-     backend processes and never depend on these device notification settings. */
+  /* Once per launch: drop reminders that are no longer offered (the earlier
+     per-bill reminders), clear every notification this device still has queued,
+     and queue the income and expense reminders afresh. Monthly ones use a rolling
+     set of concrete dates, so this also keeps that window full. Retention
+     safeguards are separate backend processes and never depend on these settings. */
+  /* Also runs again when the language changes, so queued reminders speak it. */
   React.useEffect(() => {
-    if (!localStateReady || reminderRefreshStarted.current) return;
-    reminderRefreshStarted.current = true;
-    if (!notificationSchedulingSupported()
-      || !S.notificationPreferences.permission_granted
-      || !S.notificationPreferences.bill_reminders) return;
+    if (!localStateReady || reminderRefreshStarted.current === S.lang) return;
+    reminderRefreshStarted.current = S.lang;
+    if (Object.keys(S.notificationPreferences.reminders).some(key => !isRecordReminderKind(key))) {
+      up(s => {
+        for (const key of Object.keys(s.notificationPreferences.reminders)) {
+          if (!isRecordReminderKind(key)) delete s.notificationPreferences.reminders[key];
+        }
+      });
+    }
+    if (!notificationSchedulingSupported() || !S.notificationPreferences.permission_granted) return;
     let active = true;
     void (async () => {
-      const refreshed: Record<string, string | null> = {};
-      for (const [commitmentId, reminder] of Object.entries(S.notificationPreferences.reminders)) {
-        if (!reminder.enabled) continue;
-        await cancelReminder(reminder.notification_id);
-        refreshed[commitmentId] = await schedulePrivateBillReminder(commitmentId, reminder.day, reminder.time);
+      await cancelEveryReminder();
+      const refreshed: Partial<Record<RecordReminderKind, string | null>> = {};
+      for (const [key, reminder] of Object.entries(S.notificationPreferences.reminders)) {
+        if (!isRecordReminderKind(key) || !reminder.enabled) continue;
+        refreshed[key] = await scheduleRecordReminder(key, reminder, S.lang);
       }
       if (active) up(s => {
-        for (const [commitmentId, identifier] of Object.entries(refreshed)) {
-          const reminder = s.notificationPreferences.reminders[commitmentId];
-          if (reminder?.enabled) reminder.notification_id = identifier;
+        for (const [key, identifier] of Object.entries(refreshed)) {
+          const reminder = s.notificationPreferences.reminders[key];
+          if (reminder?.enabled) reminder.notification_id = identifier ?? null;
         }
       });
     })().catch(() => { /* Keep the saved settings if native scheduling is temporarily unavailable. */ });
     return () => { active = false; };
-  }, [S.notificationPreferences, localStateReady, up]);
+  }, [S.notificationPreferences, S.lang, localStateReady, up]);
 
   /* Persist the allow-listed declarations in one place. UI-only state (route,
      sheets, toasts, etc.) is ignored by snapshot(). Anonymous sessions remain
@@ -1883,20 +1892,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [up]);
 
-  const setBillReminder = useCallback(async (
-    commitmentId: string,
-    day: number,
-    time: string,
+  const setRecordReminder = useCallback(async (
+    kind: RecordReminderKind,
+    rule: ReminderRule,
     enabled: boolean,
   ): Promise<'saved' | 'denied'> => {
-    if (!isValidReminderDay(day)) throw new RangeError('Reminder day must be a whole number from 1 to 31.');
-    const current = S.notificationPreferences.reminders[commitmentId];
+    if (!isValidReminderRule(rule as unknown as Record<string, unknown>)) throw new RangeError('Reminder rule is not valid.');
+    /* Keep only the fields this repeat uses, so a weekly reminder never carries a stale date. */
+    const repeat = reminderRepeat(rule);
+    const saved: ReminderRule = {
+      day: rule.day,
+      time: rule.time,
+      ...(repeat === 'monthly' ? {} : { repeat }),
+      ...(repeat === 'weekly' ? { weekday: rule.weekday } : {}),
+      ...(repeat === 'once' ? { date: rule.date } : {}),
+    };
+    const current = S.notificationPreferences.reminders[kind];
     if (!enabled) {
       await cancelReminder(current?.notification_id);
       up(s => {
-        s.notificationPreferences.reminders[commitmentId] = {
-          day,
-          time,
+        s.notificationPreferences.reminders[kind] = {
+          ...saved,
           enabled: false,
           notification_id: null,
           last_recorded: current?.last_recorded ?? null,
@@ -1916,38 +1932,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (notificationSchedulingSupported() && !granted) return 'denied';
 
     await cancelReminder(current?.notification_id);
-    const identifier = await schedulePrivateBillReminder(commitmentId, day, time);
+    const identifier = await scheduleRecordReminder(kind, saved, S.lang);
     up(s => {
       s.notificationPreferences.bill_reminders = true;
-      s.notificationPreferences.reminders[commitmentId] = {
-        day,
-        time,
+      s.notificationPreferences.reminders[kind] = {
+        ...saved,
         enabled: true,
         notification_id: identifier,
         last_recorded: current?.last_recorded ?? null,
       };
     });
     return 'saved';
-  }, [S.notificationPreferences, up]);
-
-  const setNotificationKind = useCallback(async (
-    kind: 'bill_reminders',
-    enabled: boolean,
-  ): Promise<void> => {
-    if (kind === 'bill_reminders' && !enabled) {
-      await Promise.all(Object.values(S.notificationPreferences.reminders)
-        .map(reminder => cancelReminder(reminder.notification_id)));
-    }
-    up(s => {
-      s.notificationPreferences[kind] = enabled;
-      if (kind === 'bill_reminders' && !enabled) {
-        for (const reminder of Object.values(s.notificationPreferences.reminders)) {
-          reminder.enabled = false;
-          reminder.notification_id = null;
-        }
-      }
-    });
-  }, [S.notificationPreferences.reminders, up]);
+  }, [S.notificationPreferences, S.lang, up]);
 
   const refreshAccountData = useCallback(async (
     onProgress?: (progress: number, stage: string) => void,
@@ -2237,7 +2233,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     moveExpenseToWorkCost, moveWorkCostToExpense, updateExpenseEntry,
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry, setExpenseMonthlyTotal,
-    refreshHomeownership, saveHomeownershipMonth, setBillReminder, setNotificationKind,
+    refreshHomeownership, saveHomeownershipMonth, setRecordReminder,
     ensureAiDisclosure, answerAiDisclosure, ensureStatementDisclosure, answerStatementDisclosure,
   }), [
     S, authReady, up, t, monthName, go, goTab, backNav,
@@ -2246,7 +2242,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     moveExpenseToWorkCost, moveWorkCostToExpense, updateExpenseEntry,
     saveCommitmentAmount, loadHouseCosts, toast, toastMsg,
     saveExpenseCategory, saveExpenseEntry, setExpenseMonthlyTotal,
-    refreshHomeownership, saveHomeownershipMonth, setBillReminder, setNotificationKind,
+    refreshHomeownership, saveHomeownershipMonth, setRecordReminder,
     ensureAiDisclosure, answerAiDisclosure, ensureStatementDisclosure, answerStatementDisclosure,
   ]);
 

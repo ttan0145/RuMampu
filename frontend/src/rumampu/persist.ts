@@ -4,6 +4,7 @@ import type { ApiAccountNotificationPreferences } from './api';
 import { getHousingScenario, getHousingTestResult, hydrateHousingSession } from '../../services/housingSession';
 import { isValidIsoDate } from './validation';
 import { PREP_DEFAULT, validPrep } from './prep7state';
+import { isValidReminderRule } from './reminder-date';
 
 const VERSION = 1;
 /* AC5.8.10: the longest name a user can give their safety money. */
@@ -98,8 +99,8 @@ function validNotificationPreferences(value: unknown): value is AppState['notifi
   }
   return Object.values(value.reminders).every(reminder => {
     if (!record(reminder) || typeof reminder.enabled !== 'boolean') return false;
-    if (!Number.isInteger(reminder.day) || (reminder.day as number) < 1 || (reminder.day as number) > 31) return false;
-    if (reminder.time !== undefined && (typeof reminder.time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(reminder.time))) return false;
+    /* Very old local saves had no time; they default to 09:00 when scheduled. */
+    if (!isValidReminderRule({ time: '09:00', ...reminder })) return false;
     return reminder.notification_id === null || typeof reminder.notification_id === 'string';
   });
 }
@@ -109,11 +110,7 @@ function validAccountNotificationPreferences(value: unknown): value is ApiAccoun
   return Object.values(value.reminders).every(reminder => (
     record(reminder)
     && typeof reminder.enabled === 'boolean'
-    && Number.isInteger(reminder.day)
-    && (reminder.day as number) >= 1
-    && (reminder.day as number) <= 31
-    && typeof reminder.time === 'string'
-    && /^([01]\d|2[0-3]):[0-5]\d$/.test(reminder.time)
+    && isValidReminderRule(reminder)
   ));
 }
 
@@ -122,7 +119,14 @@ function accountNotificationPreferences(s: AppState): ApiAccountNotificationPref
     bill_reminders: s.notificationPreferences.bill_reminders,
     reminders: Object.fromEntries(Object.entries(s.notificationPreferences.reminders).map(([id, reminder]) => [
       id,
-      { day: reminder.day, time: reminder.time, enabled: reminder.enabled },
+      {
+        day: reminder.day,
+        time: reminder.time,
+        enabled: reminder.enabled,
+        ...(reminder.repeat ? { repeat: reminder.repeat } : {}),
+        ...(reminder.weekday !== undefined ? { weekday: reminder.weekday } : {}),
+        ...(reminder.date !== undefined ? { date: reminder.date } : {}),
+      },
     ])),
   };
 }
@@ -293,7 +297,10 @@ export function hydrateAccountState(s: AppState, remote: Record<string, unknown>
           const local = localReminders[id];
           const sameConfiguration = local?.day === reminder.day
             && local.time === reminder.time
-            && local.enabled === reminder.enabled;
+            && local.enabled === reminder.enabled
+            && (local.repeat ?? 'monthly') === (reminder.repeat ?? 'monthly')
+            && local.weekday === reminder.weekday
+            && local.date === reminder.date;
           return [id, {
             ...reminder,
             notification_id: sameConfiguration ? local.notification_id : null,

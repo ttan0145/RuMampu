@@ -8,13 +8,17 @@ import { Ruma } from '../ruma-view';
 import { ScreenShell } from './shell';
 import { exportRecord } from '../api';
 import { GuideTarget } from '../tour';
+import { ReminderSheet, useReminderSummary } from './reminder-sheet';
+import type { RecordReminderKind } from '../reminder-date';
 
 /* v22 profile tab: guest/signed hero, account rows, language, saved tests. */
 
 const FLAGS: Record<string, string> = { en: '🇬🇧', ms: '🇲🇾', zh: '🇨🇳' };
 
 export function ProfileScreen() {
-  const { S, t, up, go, toast, signOut, deleteCurrentRecord, enterSampleMonths, leaveSampleMonths, setNotificationKind } = useApp();
+  const { S, t, up, go, toast, signOut, deleteCurrentRecord, enterSampleMonths, leaveSampleMonths, setRecordReminder } = useApp();
+  const [reminderKind, setReminderKind] = React.useState<RecordReminderKind | null>(null);
+  const reminderSummary = useReminderSummary();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false);
   const [signupChoiceOpen, setSignupChoiceOpen] = React.useState(false);
   const [exportConfirmOpen, setExportConfirmOpen] = React.useState(false);
@@ -23,23 +27,34 @@ export function ProfileScreen() {
   const [deleting, setDeleting] = React.useState(false);
   const [loggingOut, setLoggingOut] = React.useState(false);
   const shouldOfferDeleteExport = !S.guest && !S.accountLastExportedAt;
-  const notificationSwitch = (kind: 'bill_reminders', label: string) => {
-    const on = S.notificationPreferences[kind];
+  /* Turning a reminder on opens the sheet to choose when; turning it off is
+     immediate. Tapping the words of a reminder that is on edits its timing. */
+  const notificationSwitch = (kind: RecordReminderKind, label: string) => {
+    const saved = S.notificationPreferences.reminders[kind];
+    const on = Boolean(saved?.enabled);
     return (
-      <Pressable
-        key={kind}
-        accessibilityRole="switch"
-        accessibilityState={{ checked: on }}
-        aria-checked={on}
-        accessibilityLabel={label}
-        onPress={() => { void setNotificationKind(kind, !on); }}
-        style={st.morow}
-      >
-        <P style={{ fontSize: 15 }}>{label}</P>
-        <View style={[st.switchTrack, on && st.switchTrackOn]}>
-          <View style={[st.switchThumb, on && st.switchThumbOn]} />
-        </View>
-      </Pressable>
+      <View key={kind} style={[st.morow, kind === 'expenses' && st.morowLine]}>
+        <Pressable onPress={() => setReminderKind(kind)} accessibilityRole="button"
+          accessibilityLabel={t('rm_edit', { n: label })} style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <P style={{ fontSize: 15 }}>{label}</P>
+          {on && saved ? <BodyS muted style={{ fontSize: 12 }}>{reminderSummary(saved)}</BodyS> : null}
+        </Pressable>
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityState={{ checked: on }}
+          aria-checked={on}
+          accessibilityLabel={label}
+          hitSlop={8}
+          onPress={() => {
+            if (!on) { setReminderKind(kind); return; }
+            void setRecordReminder(kind, saved!, false).catch(() => toast(t('br_failed'), 'error'));
+          }}
+        >
+          <View style={[st.switchTrack, on && st.switchTrackOn]}>
+            <View style={[st.switchThumb, on && st.switchThumbOn]} />
+          </View>
+        </Pressable>
+      </View>
     );
   };
 
@@ -143,7 +158,8 @@ export function ProfileScreen() {
       <GuideTarget id="pf.notif" style={{ gap: 7 }}>
         <BodyS muted>{t('nt_title')}</BodyS>
         <View style={st.mocard}>
-          {notificationSwitch('bill_reminders', t('nt_bill'))}
+          {notificationSwitch('income', t('nt_income'))}
+          {notificationSwitch('expenses', t('nt_expenses'))}
         </View>
         <BodyS muted>{t('nt_optional')}</BodyS>
         {S.notificationPreferences.permission_asked && !S.notificationPreferences.permission_granted ? (
@@ -307,6 +323,7 @@ export function ProfileScreen() {
           )}
         </Pressable>
       ) : null}
+      <ReminderSheet kind={reminderKind} onClose={() => setReminderKind(null)} />
     </ScreenShell>
   );
 }

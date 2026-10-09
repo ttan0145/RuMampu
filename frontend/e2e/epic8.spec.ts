@@ -355,41 +355,15 @@ async function loginThroughUi(page: Page, email: string, password: string): Prom
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible({ timeout: 15000 });
 }
 
-async function openBillsAndLimits(page: Page): Promise<void> {
-  await page.getByRole('tab', { name: 'Money', exact: true }).click();
-  await page.getByText('Bills and limits', { exact: true }).click();
-  await expect(page.getByText('Regular monthly bills', { exact: true })).toBeVisible();
+async function openProfile(page: Page): Promise<void> {
+  await page.getByRole('tab', { name: 'Profile', exact: true }).click();
+  await expect(page.getByText('Notifications', { exact: true })).toBeVisible();
 }
 
-async function saveBillAmount(page: Page, index: number, amount: string): Promise<void> {
-  const saved = page.waitForResponse(response => (
-    response.request().method() === 'PATCH'
-    && response.url().includes('/api/v1/commitments/')
-  ));
-  const input = page.getByRole('textbox').nth(index);
-  await input.fill(amount);
-  await input.blur();
-  expect((await saved).ok()).toBeTruthy();
-}
-
-async function saveBillReminder(
-  page: Page,
-  billName: string,
-  day: string,
-  time: string,
-  enabled: boolean,
-): Promise<void> {
-  await page.getByRole('switch', { name: `${billName} reminder` }).click();
-  await page.getByLabel('Day of month').fill(day);
-  await page.getByLabel('Time (24-hour HH:MM)').fill(time);
-  const enabledSwitch = page.getByRole('switch', { name: 'Reminder on' });
-  // A newly configured reminder opens On. This journey only toggles when it
-  // explicitly verifies that an existing reminder can be saved Off.
-  if (!enabled) {
-    await enabledSwitch.click();
-    await page.waitForTimeout(50);
-  }
-  const synced = page.waitForResponse(response => (
+/* Profile reminders: switching one on opens the sheet; the words of a reminder
+   that is on open the same sheet to edit it; switching it off is immediate. */
+async function syncedReminder(page: Page, key: 'income' | 'expenses', day: string, time: string, enabled: boolean) {
+  return page.waitForResponse(response => (
     response.request().method() === 'PATCH'
     && response.url().endsWith('/api/v1/auth/me/')
     && (() => {
@@ -397,30 +371,50 @@ async function saveBillReminder(
         const body = response.request().postDataJSON() as {
           notification_preferences?: { reminders?: Record<string, { day: number; time: string; enabled: boolean }> };
         };
-        return Object.values(body.notification_preferences?.reminders ?? {}).some(reminder => (
-          reminder.day === Number(day) && reminder.time === time && reminder.enabled === enabled
-        ));
+        const reminder = body.notification_preferences?.reminders?.[key];
+        return Boolean(reminder && reminder.day === Number(day) && reminder.time === time && reminder.enabled === enabled);
       } catch {
         return false;
       }
     })()
   ));
+}
+
+async function saveMonthlyReminder(
+  page: Page,
+  label: 'Income reminder' | 'Expenses reminder',
+  day: string,
+  time: string,
+): Promise<void> {
+  const key = label === 'Income reminder' ? 'income' : 'expenses';
+  await page.getByRole('switch', { name: label }).click();
+  await page.getByRole('radio', { name: 'Every month', exact: true }).click();
+  await page.getByLabel('Day of month').fill(day);
+  await page.getByLabel('Time (24-hour HH:MM)').fill(time);
+  const synced = syncedReminder(page, key, day, time, true);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   expect((await synced).ok()).toBeTruthy();
 }
 
-async function expectBillReminder(
+async function turnReminderOff(page: Page, label: 'Income reminder' | 'Expenses reminder', day: string, time: string) {
+  const synced = syncedReminder(page, label === 'Income reminder' ? 'income' : 'expenses', day, time, false);
+  await page.getByRole('switch', { name: label }).click();
+  expect((await synced).ok()).toBeTruthy();
+}
+
+async function expectReminder(
   page: Page,
-  billName: string,
+  label: 'Income reminder' | 'Expenses reminder',
   day: string,
   time: string,
   enabled: boolean,
 ): Promise<void> {
-  const inlineSwitch = page.getByRole('switch', { name: `${billName} reminder` });
-  await expect(inlineSwitch).toBeVisible();
-  if (enabled) await expect(inlineSwitch).toBeChecked();
-  else await expect(inlineSwitch).not.toBeChecked();
-  await inlineSwitch.click();
+  const reminderSwitch = page.getByRole('switch', { name: label });
+  await expect(reminderSwitch).toBeVisible();
+  if (!enabled) { await expect(reminderSwitch).not.toBeChecked(); return; }
+  await expect(reminderSwitch).toBeChecked();
+  await expect(page.getByText(`Day ${day} of each month, ${time}`, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: `Change when the ${label} comes` }).click();
   await expect(page.getByLabel('Day of month')).toHaveValue(day);
   await expect(page.getByLabel('Time (24-hour HH:MM)')).toHaveValue(time);
   await page.getByText('Cancel', { exact: true }).click();
@@ -746,47 +740,34 @@ test('US8.17 direct account can add income after skipping rough onboarding incom
   await expect(page.locator('body')).toContainText('1 entries');
 });
 
-test('US8.21 signed-in bill reminders persist independently through refresh and logout/login', async ({ page }) => {
+test('US8.22 signed-in income and expense reminders persist independently through refresh and logout/login', async ({ page }) => {
   const email = `epic8-reminder-persistence-${Date.now()}@example.com`;
   const password = 'Passw0rd123';
 
   await createDirectAccountThroughOnboarding(page, email, password);
-  await openBillsAndLimits(page);
-  await saveBillAmount(page, 0, '600'); // Rent
-  await saveBillAmount(page, 1, '500'); // Food: deliberately no saved reminder
-  await saveBillAmount(page, 2, '300'); // Utilities
-
-  await saveBillReminder(page, 'Rent', '31', '09:15', true);
+  await openProfile(page);
+  await saveMonthlyReminder(page, 'Income reminder', '31', '09:15');
 
   await page.reload();
   await dismissSplashIfVisible(page);
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
-  await openBillsAndLimits(page);
-  await expectBillReminder(page, 'Rent', '31', '09:15', true);
-  await saveBillReminder(page, 'Utilities', '15', '18:30', true);
+  await openProfile(page);
+  await expectReminder(page, 'Income reminder', '31', '09:15', true);
+  await expectReminder(page, 'Expenses reminder', '1', '20:00', false);
+  await saveMonthlyReminder(page, 'Expenses reminder', '15', '18:30');
 
   await logoutCurrentAccount(page);
   await loginThroughUi(page, email, password);
-  await openBillsAndLimits(page);
-  await expectBillReminder(page, 'Rent', '31', '09:15', true);
-  await expectBillReminder(page, 'Utilities', '15', '18:30', true);
-  const unsavedFoodReminder = page.getByRole('switch', { name: 'Food reminder' });
-  await expect(unsavedFoodReminder).not.toBeChecked();
-  await unsavedFoodReminder.click();
-  await expect(page.getByLabel('Day of month')).toHaveValue('1');
-  await expect(page.getByLabel('Time (24-hour HH:MM)')).toHaveValue('09:00');
-  await page.getByText('Cancel', { exact: true }).click();
-  await expect.poll(async () => page.getByRole('textbox').nth(0).inputValue()).toBe('600');
-  await expect.poll(async () => page.getByRole('textbox').nth(1).inputValue()).toBe('500');
-  await expect.poll(async () => page.getByRole('textbox').nth(2).inputValue()).toBe('300');
+  await openProfile(page);
+  await expectReminder(page, 'Income reminder', '31', '09:15', true);
+  await expectReminder(page, 'Expenses reminder', '15', '18:30', true);
 
-  await saveBillReminder(page, 'Rent', '31', '09:15', false);
+  await turnReminderOff(page, 'Income reminder', '31', '09:15');
   await logoutCurrentAccount(page);
   await loginThroughUi(page, email, password);
-  await openBillsAndLimits(page);
-  await expectBillReminder(page, 'Rent', '31', '09:15', false);
-  await expectBillReminder(page, 'Utilities', '15', '18:30', true);
-  await expect(page.getByRole('switch', { name: 'Food reminder' })).not.toBeChecked();
+  await openProfile(page);
+  await expectReminder(page, 'Income reminder', '31', '09:15', false);
+  await expectReminder(page, 'Expenses reminder', '15', '18:30', true);
 });
 
 test('US8.14.5 delete confirmation offers optional export first for a never-exported account', async ({ page }) => {

@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import type { ReminderRepeat } from './reminder-date';
 
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 const configuredAppMode = process.env.EXPO_PUBLIC_APP_MODE;
@@ -231,6 +232,10 @@ export interface ApiAccountReminderPreference {
   day: number;
   time: string;
   enabled: boolean;
+  /** Absent means monthly, the rule every earlier reminder used. */
+  repeat?: ReminderRepeat;
+  weekday?: number;
+  date?: string;
 }
 
 export interface ApiAccountNotificationPreferences {
@@ -269,6 +274,9 @@ export interface ApiReminderPreference {
   day: number;
   time: string;
   enabled: boolean;
+  repeat?: ReminderRepeat;
+  weekday?: number;
+  date?: string;
   notification_id: string | null;
   last_recorded?: string | null;
 }

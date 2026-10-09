@@ -220,7 +220,9 @@ def _valid_notification_preferences(value):
     for commitment_id, reminder in value["reminders"].items():
         if not isinstance(commitment_id, str) or not commitment_id or len(commitment_id) > 128:
             return False
-        if not isinstance(reminder, dict) or set(reminder) != {"enabled", "day", "time"}:
+        # A reminder repeats daily, weekly, monthly (the default when `repeat` is
+        # absent, as in every reminder saved before repeats existed) or fires once.
+        if not isinstance(reminder, dict) or not {"enabled", "day", "time"} <= set(reminder) <= _REMINDER_KEYS:
             return False
         if not isinstance(reminder["enabled"], bool):
             return False
@@ -228,6 +230,33 @@ def _valid_notification_preferences(value):
             return False
         if not isinstance(reminder["time"], str) or not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", reminder["time"]):
             return False
+        repeat = reminder.get("repeat", "monthly")
+        if repeat not in _REMINDER_REPEATS:
+            return False
+        if "weekday" in reminder and (
+            not _valid_number(reminder["weekday"], integer=True, minimum=0) or reminder["weekday"] > 6
+        ):
+            return False
+        if "date" in reminder and not _valid_reminder_date(reminder["date"]):
+            return False
+        if repeat == "weekly" and "weekday" not in reminder:
+            return False
+        if repeat == "once" and "date" not in reminder:
+            return False
+    return True
+
+
+_REMINDER_KEYS = {"enabled", "day", "time", "repeat", "weekday", "date"}
+_REMINDER_REPEATS = {"daily", "weekly", "monthly", "once"}
+
+
+def _valid_reminder_date(value):
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        return False
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
     return True
 
 

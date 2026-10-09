@@ -60,12 +60,10 @@ function Root() {
     return () => sub.remove();
   }, [S.onboarded, S.knew, S.sheet, backNav]);
 
+  /* A record reminder opens the screen where that entry is made. */
   React.useEffect(() => listenForNotificationOpen(data => {
-    if (data.route === 'commit') {
-      if (data.billId) up(s => { s.pendingBillReminderId = data.billId || null; });
-      go('commit');
-    }
-  }), [go, up]);
+    if (data.route === 'income' || data.route === 'expenses') go(data.route);
+  }), [go]);
 
   const Screen = SCREENS[S.route] || HomeScreen;
 
