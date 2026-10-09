@@ -34,7 +34,13 @@ def build_default_database_config(
         return {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": Path(sqlite_path) if sqlite_path else base_dir / "db.sqlite3",
-            "OPTIONS": {"timeout": 20},
+            "OPTIONS": {
+                # Parallel test workers share this file: wait for a writer, take the
+                # write lock when a transaction begins, and let readers run beside it.
+                "timeout": 20,
+                "transaction_mode": "IMMEDIATE",
+                "init_command": "PRAGMA journal_mode=WAL;",
+            },
         }
 
     missing = [name for name in POSTGRES_REQUIRED_SETTINGS if not environ.get(name, "").strip()]

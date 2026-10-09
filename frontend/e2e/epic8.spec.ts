@@ -620,7 +620,7 @@ test('US8.17 skipped get-to-know creates no fake income and leaves Home guidance
   await page.getByText('Next', { exact: true }).last().click();
   await page.getByText('Skip', { exact: true }).click();
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
-  await expect(page.getByText('Add last week’s earnings. That’s enough to start.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Tell Ruma what you earn and spend. Last week is enough to start.', { exact: true })).toBeVisible();
 
   const record = await e2eGet(page, `${API}/income/record/`);
   expect(record.status()).toBe(200);
@@ -888,7 +888,7 @@ test('US8.12 delete account then create account opens real registration first', 
   await page.getByText('Delete account and record', { exact: true }).first().click();
   await expect(page.getByText('Delete account and record?', { exact: true })).toBeVisible();
   await page.getByText('Delete account and record', { exact: true }).last().click();
-  await expect(page.getByText('Add last week’s earnings. That’s enough to start.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Tell Ruma what you earn and spend. Last week is enough to start.', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Home', exact: true }).click();
   await page.getByRole('tab', { name: 'Profile', exact: true }).click();
   await expect(page.getByText('Welcome, guest', { exact: true }).first()).toBeVisible();
@@ -1331,7 +1331,7 @@ test('US8.4 exposes the four main areas and returns with Back', async ({ page })
   await expect(page.getByText('Language', { exact: true })).toBeVisible();
 
   await page.getByRole('tab', { name: 'Home', exact: true }).click();
-  await expect(page.getByText('Add last week’s earnings. That’s enough to start.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Tell Ruma what you earn and spend. Last week is enough to start.', { exact: true })).toBeVisible();
 });
 
 // EN: US8.5 / AC8.5.1-AC8.5.5. This reads source files directly to guard the
