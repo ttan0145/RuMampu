@@ -558,7 +558,11 @@ test('US8.16 first-launch onboarding explains RuMampu and reaches get-to-know', 
   await expect(page.getByText('Step 3 of 3', { exact: true })).toBeVisible();
   await expect(page.getByText('How much did you earn last month?', { exact: true })).toBeVisible();
   await page.locator('input:visible').last().fill('1234');
+  // The Home tab is already on screen behind the wizard, so wait for the save of the completion flag before reloading.
+  const completionSaved = page.waitForResponse(r => r.request().method() === 'PATCH' && r.url().endsWith('/auth/me/')
+    && r.request().postDataJSON()?.onboarding_completed === true);
   await page.getByText('Start using RuMampu', { exact: true }).click();
+  expect((await completionSaved).status()).toBe(200);
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible({ timeout: 15000 });
 
   await page.reload();
