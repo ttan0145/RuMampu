@@ -365,6 +365,7 @@ export function AssistantSheet() {
   const [inputHeight, setInputHeight] = React.useState(48);
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
   const [webInputFocused, setWebInputFocused] = React.useState(false);
+  const inputRef = React.useRef<TextInput>(null);
   const webInputFocusedRef = React.useRef(false);
   const webLayoutBottomRef = React.useRef(0);
   const [webViewport, setWebViewport] = React.useState<{
@@ -375,6 +376,33 @@ export function AssistantSheet() {
   } | null>(null);
   const scrollRef = React.useRef<ScrollView>(null);
   const speechText = React.useMemo(() => speechUiText(S.lang), [S.lang]);
+
+  const updateInputHeight = React.useCallback((contentHeight: number) => {
+    const paddingAllowance = Platform.OS === 'web' ? 0 : 2;
+    const nextHeight = Math.max(48, Math.min(112, Math.ceil(contentHeight + paddingAllowance)));
+    setInputHeight(current => current === nextHeight ? current : nextHeight);
+  }, []);
+  const handleInputContentSizeChange = React.useCallback(
+    (event: { nativeEvent: { contentSize: { height: number } } }) => {
+      updateInputHeight(event.nativeEvent.contentSize.height);
+    },
+    [updateInputHeight],
+  );
+
+  /* react-native-web only reports content-size changes for DOM input events,
+     while speech recognition updates this controlled value programmatically.
+     Re-measure the underlying textarea for both paths. Temporarily returning
+     it to its minimum height also lets it shrink after text is removed. */
+  React.useLayoutEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const node = inputRef.current as unknown as HTMLTextAreaElement | null;
+    if (!node || typeof node.scrollHeight !== 'number') return;
+    const previousHeight = node.style.height;
+    node.style.height = '48px';
+    const contentHeight = node.scrollHeight;
+    node.style.height = previousHeight;
+    updateInputHeight(contentHeight);
+  }, [draft, updateInputHeight]);
 
   /* Do not scroll directly from ScrollView's onContentSizeChange. On web,
      scrollToEnd can itself change the measured content area (notably when a
@@ -567,10 +595,15 @@ export function AssistantSheet() {
   const send = async (text?: string) => {
     const content = (text ?? draft).trim();
     if (!content || sending) return;
+    /* A final/interim result can arrive after the user presses Send. Release
+       ownership first so that queued recognition events cannot restore the
+       message after the controlled draft has been cleared. */
+    if (getSpeechOwner() === 'assistant' || listening) stopSpeech();
     setPendingActions([]);
     setConfirmingOutlier(false);
     const history = [...S.assistantMsgs, { role: 'user' as const, content }];
     setDraft('');
+    setInputHeight(48);
     setSending(true);
     up(s => { s.assistantMsgs.push({ role: 'user', content }); });
     try {
@@ -830,13 +863,8 @@ export function AssistantSheet() {
               </View>
               <View style={st.inputRow}>
                 <TextInput
-                  /* react-native-web's content-size observer can oscillate when
-                     the action review card changes the popover's scrollbar and
-                     available width. A controlled height update from that
-                     observer then recurses until React throws error #185. Keep
-                     the web composer fixed and scrollable; native retains the
-                     measured auto-grow behaviour. */
-                  style={[st.input, { height: Platform.OS === 'web' ? 48 : inputHeight }]}
+                  ref={inputRef}
+                  style={[st.input, { height: inputHeight }]}
                   value={draft}
                   onChangeText={setDraft}
                   onFocus={() => {
@@ -850,11 +878,8 @@ export function AssistantSheet() {
                   editable={pendingActions.length === 0}
                   multiline
                   submitBehavior="submit"
-                  scrollEnabled={Platform.OS === 'web' || inputHeight >= 112}
-                  onContentSizeChange={Platform.OS === 'web' ? undefined : event => {
-                    const nextHeight = Math.max(48, Math.min(112, event.nativeEvent.contentSize.height + 2));
-                    setInputHeight(current => current === nextHeight ? current : nextHeight);
-                  }}
+                  scrollEnabled={inputHeight >= 112}
+                  onContentSizeChange={handleInputContentSizeChange}
                   placeholder={listening ? speechText.listening : t('ai_ph')}
                   placeholderTextColor={C.ink40}
                   onSubmitEditing={() => { void send(); }}
