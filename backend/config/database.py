@@ -31,6 +31,7 @@ def build_default_database_config(
         return {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": base_dir / "db.sqlite3",
+            "OPTIONS": {"timeout": 20},
         }
 
     missing = [name for name in POSTGRES_REQUIRED_SETTINGS if not environ.get(name, "").strip()]

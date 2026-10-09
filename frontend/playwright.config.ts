@@ -29,8 +29,8 @@ const frontendPort = process.env.PLAYWRIGHT_FRONTEND_PORT || '8081';
 
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: false,
-  workers: 1,
+  fullyParallel: Number(process.env.PLAYWRIGHT_WORKERS || 1) > 1,
+  workers: Number(process.env.PLAYWRIGHT_WORKERS || 1),
   timeout: 45_000,
   expect: { timeout: 8_000 },
   outputDir: '../output/playwright/test-results',
