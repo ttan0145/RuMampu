@@ -6,9 +6,9 @@
 - [架构基线](ARCHITECTURE.cn.md)：模块边界、数据流、隐私边界和完成定义。
 - [API 契约](API_CONTRACT.cn.md)：版本、数据类型、错误格式、端点和兼容政策。
 - [OpenAPI schema](openapi.yaml)：由后端代码生成并通过校验的机器可读协议。
-- [完整 US/AC Markdown](requirements/USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)：从正式 DOCX 提取的 8 个 Epic、35 个 US 和 219 条 AC。
-- [Epic 1 US/AC Markdown](requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)：v3 当前范围的 8 个有效 US 和 62 条 AC；本轮 UI 适配暂缓 AC1.1.8。
-- [Epic 2 US/AC Markdown](requirements/EPIC_2_USER_STORIES_AND_ACCEPTANCE_CRITERIA.cn.md)：校准后的 4 个 US、18 条 AC 与计算边界。
+- [完整 US/AC Markdown](requirements/USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)：Epic 1 为 72 条、Epic 2 为 21 条、Epic 5 为 88 条（以当前仓库快照为准）；其它 Epic 以 8 月 DOCX 汇总（8 个 Epic、35 个 US、219 条 AC）为准。
+- [Epic 1 US/AC Markdown](requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)：v7 范围的 9 个有效 US 和 72 条 AC（2026-10-08 校准）；72 条均由 epic1.spec.ts 的 ac() 执行。
+- [Epic 2 US/AC Markdown](requirements/EPIC_2_USER_STORIES_AND_ACCEPTANCE_CRITERIA.cn.md)：校准后的 4 个 US、21 条 AC 与计算边界。
 - [Epic 1 实施与验收索引](epic-1/README.cn.md)：逐个 US 跟踪 AC 完成度与验收证据。
 - [US1.1 验收记录](epic-1/US1.1_RECORD_INCOME.cn.md)：不同来源收入录入的 10 条 AC 证据。
 - [US1.2 验收记录](epic-1/US1.2_HISTORICAL_INCOME.cn.md)：历史月收入录入的 4 条 AC 证据与月份口径。
@@ -18,9 +18,10 @@
 - [US1.6 验收记录](epic-1/US1.6_EXPENSE_REVIEW.cn.md)：最新月份支出回顾、入口与月度汇总的 6 条 AC 证据。
 - [US1.7 验收记录](epic-1/US1.7_RECEIPT_STARTING_POINT.cn.md)：收据选择、读取预览、人工确认与保存的 10 条 AC 证据。
 - [US1.8 验收记录](epic-1/US1.8_HISTORICAL_IMPORT.cn.md)：历史 CSV 预览、错误行、确认入库与分析联动的 8 条 AC 证据。
+- [US1.9 验收记录](epic-1/US1.9_BANK_STATEMENT_SCAN.cn.md)：银行或电子账单读取的 5 条 AC 证据（上传前告知、只读交易行、保存前复核、处理方披露、失败提示）。
 - [Epic 1 完成报告](epic-1/EPIC_1_COMPLETION_REPORT.cn.md)：v3 的 61 条可执行 AC、1 条明确暂缓项及新版 UI 回归总览。
-- [Epic 2 实施与验收索引](epic-2/README.cn.md)：18/18 AC、逐 US 证据、API 边界与浏览器验收。
-- [Epic 5 US/AC 基线](requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)：v5 与迭代 3 合并后的 8 个 US、68 条 AC，与 2026-10-08 LeanKit 核对一致。
+- [Epic 2 实施与验收索引](epic-2/README.cn.md)：21/21 AC、逐 US 证据、API 边界与浏览器验收。
+- [Epic 5 US/AC 基线](requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md)：V9 的 11 个 US、88 条 AC；其中 83 条可执行，5 条记入验收索引的延期项。
 - [Epic 5 实施与验收索引](epic-5/README.cn.md)：购房准备、Learn、账号阅读进度与储蓄拆分的实现和检查证据。
 - [Learn 内容来源](epic-5/LEARN_SOURCES.md)：19 篇解释的公开依据、核对日期与本轮内容更正。
 - [Playwright 验收测试规范](testing/PLAYWRIGHT_ACCEPTANCE_STANDARD.cn.md)：Epic/US/AC 命名、精确追踪门槛、证据政策、命令和完成规则。

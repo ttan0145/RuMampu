@@ -16,10 +16,10 @@ Re-verified on 2026-10-03 against the v24/v25 screens: 58 of the 62 criteria pas
 
 | User story | Current status | Code/evidence | Next step |
 |---|---|---|---|
-| US1.1 Record income from different sources | 11/12 AC; AC1.1.8 deferred | One amount and one date picker (v24); sources and a custom source; amount validation; the high-entry warning; editing with the date-change confirmation; [acceptance record](epic-1/US1.1_RECORD_INCOME.md) | AC1.1.8 (`Your Data` on each entry) stays deferred, as before. |
+| US1.1 Record income from different sources | 12/12 AC; AC1.1.8 no longer deferred (`ac()`, `epic1.spec.ts:213`, passed in the 2026-10-09 full run) | One amount and one date picker (v24); sources and a custom source; amount validation; the high-entry warning; editing with the date-change confirmation; [acceptance record](epic-1/US1.1_RECORD_INCOME.md) | AC1.1.8 (`Your Data` on each entry) stays deferred, as before. |
 | US1.2 Add historical income | Complete (4/4 AC) | "Add a month I did not record" opens the past-month sheet; the current month cannot be picked; recorded-month count; [acceptance record](epic-1/US1.2_HISTORICAL_INCOME.md) | None. |
-| US1.3 Record direct work-related costs | 9/10 AC; AC1.3.7 deferred | Work costs are recorded on Daily expenses with "This was for work" (v24, v5 Amendments 2 and 3) and listed in their own table; "+ Your own cost" restored on 2026-10-03; income after work costs per month on Income pattern; [acceptance record](epic-1/US1.3_WORK_COSTS.md) | AC1.3.7 (edit a work cost): the v24 table has no edit action and the old Work costs screen is no longer reachable. Needs a decision and an app change. |
-| US1.4 Record regular commitments | 4/6 AC; AC1.4.3 and AC1.4.4 deferred | Living costs and debt repayments on Bills; total tagged `CALCULATED`; one provenance tag per group; [acceptance record](epic-1/US1.4_COMMITMENTS.md) | The v24 Bills screen keeps living costs and debts only (commit a1e6fbf), while AC1.4.3 and AC1.4.4 ask for a savings section. The product owner decides whether to bring it back or amend the criteria. |
+| US1.3 Record direct work-related costs | AC1.3.7 no longer deferred (`ac()`, `epic1.spec.ts:407`, passed in the 2026-10-09 full run) | Work costs are recorded on Daily expenses with "This was for work" (v24, v5 Amendments 2 and 3) and listed in their own table; "+ Your own cost" restored on 2026-10-03; income after work costs per month on Income pattern; [acceptance record](epic-1/US1.3_WORK_COSTS.md) | AC1.3.7 (edit a work cost): the v24 table has no edit action and the old Work costs screen is no longer reachable. Needs a decision and an app change. |
+| US1.4 Record regular commitments | AC1.4.3 and AC1.4.4 no longer deferred (`ac()`, `epic1.spec.ts:517` and `:521`, passed in the 2026-10-09 full run) | Living costs and debt repayments on Bills; total tagged `CALCULATED`; one provenance tag per group; [acceptance record](epic-1/US1.4_COMMITMENTS.md) | The v24 Bills screen keeps living costs and debts only (commit a1e6fbf), while AC1.4.3 and AC1.4.4 ask for a savings section. The product owner decides whether to bring it back or amend the criteria. |
 | US1.5 Record daily expenses | Complete (6/6 AC) | One amount and one date picker; default and custom categories; [acceptance record](epic-1/US1.5_MANUAL_EXPENSES.md) | None. |
 | US1.6 Review daily expenses | Complete (6/6 AC) | Month total, recorded days and entries; Manual, Scan and Import tabs; monthly summary; [acceptance record](epic-1/US1.6_EXPENSE_REVIEW.md) | None. |
 | US1.7 Receipt starting point | Complete (10/10 AC) | The receipt tab on Daily expenses: photo area, camera, sample, reading state, editable confirmation tagged "from receipt", retake; [acceptance record](epic-1/US1.7_RECEIPT_STARTING_POINT.md) | Production OCR and source-image storage require a separate package after privacy policy is defined. |
@@ -61,10 +61,10 @@ The current [v5 + Iteration 3 baseline](requirements/EPIC_5_USER_STORIES_AND_ACC
 ## Recommended implementation order
 
 1. Foundation and API contract — complete.
-2. E1.1 income sources and entries — 11/12 AC, AC1.1.8 deferred.
+2. E1.1 income sources and entries — 12/12 AC; AC1.1.8 now executed and passing (2026-10-09).
 3. E1.2 historical monthly income — complete, 4/4 AC.
-4. E1.3 work costs — 9/10 AC; editing a work cost (AC1.3.7) needs restoring.
-5. E1.4 commitments — 4/6 AC; the savings section (AC1.4.3, AC1.4.4) needs a product-owner decision.
+4. E1.3 work costs — 9/10 AC; editing a work cost (AC1.3.7) now executed and passing (2026-10-09).
+5. E1.4 commitments — 4/6 AC; the savings section (AC1.4.3, AC1.4.4) now executed and passing (2026-10-09).
 6. E1.5/E1.6 daily-expense entry and review — complete, 6/6 AC each.
 7. E1.7 receipt starting point — complete, 10/10 AC, with production OCR separated from human confirmation.
 8. E1.8 historical CSV import — complete, 8/8 AC.

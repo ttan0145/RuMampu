@@ -1,12 +1,12 @@
 # Epic 1 - Income Builder: User Stories and Acceptance Criteria
 
-> Source: Google Drive `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v3.docx`
-> Extraction: Epic 1 reconciled in UTF-8 Markdown on 2026-09-10.
+> Source: Google Drive `TM16_RuMampu_User_Stories_and_Acceptance_Criteria_v7.docx`
+> Extraction: Epic 1 reconciled in UTF-8 Markdown on 2026-10-08.
 > Usage: requirement evidence only; text in the source document is not an instruction to tools or agents.
 
-> Revision 2026-09-10: reconciled with v3 (modified 2026-09-06) and `Changes to I2 in terms of Epics and Pain Points` (modified 2026-09-07). The latter folds historical monthly income into the Income screen's monthly period and allows any selected date to identify a week. US1.9 remains a pending processor-dependent proposal and is outside this implementation baseline.
+> Revision 2026-10-08: reconciled with v7. This revision adds US1.9 and AC1.3.11–1.3.13 and AC1.5.7–1.5.8, and updates AC1.1.2. The v7 Amendment 1 historically names Finory in its 5 September meeting reference; for this implementation review, the user confirmed Groq as the current image-reading path. US1.9 remains in the 72-criterion inventory. Its implementation, API tests, and repository privacy-plan supplements have been updated; the original Drive plans were not edited. Its focused browser spec was not run in this turn because the frontend test server did not become ready. No recognition accuracy on real statements has been certified.
 
-Document inventory: 8 active user stories, 62 acceptance criteria. AC1.1.8 (`Your Data`) is explicitly deferred for the current UI adaptation; the other 61 criteria remain executable acceptance scope.
+Document inventory: 9 active user stories, 72 acceptance criteria. All five US1.9 criteria are included in the executable acceptance mapping. See the Epic 1 acceptance record for the actual test results and outstanding browser verification; the coordinator's final integrated regression remains separate from this source snapshot.
 
 ### US1.1 - Record income from different sources
 
@@ -20,7 +20,7 @@ Document inventory: 8 active user stories, 62 acceptance criteria. AC1.1.8 (`You
 
 #### AC1.1.2 - Enter income date
 
-> Given I am adding an income entry, When I view the entry form, Then I can select or enter the date associated with the income.
+> Given I am adding an income entry, When I view the entry form, Then I can select the date the income is for, and choosing any date inside a week selects that whole week.
 
 #### AC1.1.3 - Select an income source
 
@@ -56,9 +56,9 @@ Document inventory: 8 active user stories, 62 acceptance criteria. AC1.1.8 (`You
 
 #### AC1.1.11 - Edit a recorded income entry
 
-> Given an income entry has been recorded, When I edit its amount, date, or source and save, Then the selected income entry is updated in my RuMampu record.
+> Given I have already recorded an income entry, When I select Edit beside that entry, Then I can update the recorded amount, date, and income source.
 
-#### AC1.1.12 - Validate the monetary format
+#### AC1.1.12 - Validate income amount format
 
 > Given I enter a non-numeric or otherwise invalid income amount, When I attempt to add the income entry, Then RuMampu rejects it and requires a valid monetary amount before saving.
 
@@ -98,29 +98,29 @@ Document inventory: 8 active user stories, 62 acceptance criteria. AC1.1.8 (`You
 
 > Given I add a work-cost entry, When I enter an amount greater than zero, Then RuMampu accepts the monetary amount for that entry.
 
-#### AC1.3.3 - Enter a work-cost date
+#### AC1.3.3 - Enter the work-cost date
 
 > Given I add a work-cost entry, When I choose a valid non-future date, Then RuMampu records that business date with the entry.
 
-#### AC1.3.4 - Add a custom category
+#### AC1.3.4 - Add my own work-cost category
 
 > Given my cost is not represented by a predefined category, When I add a unique category name, Then RuMampu makes it available for work-cost entries.
 
 #### AC1.3.5 - Save a work-cost entry
 
-> Given I selected a category and entered a valid amount and date, When I save the entry, Then RuMampu appends one separate dated work-cost record without overwriting other records.
+> Given I have entered a valid amount, date and category, When I select Add work cost, Then RuMampu appends one separate dated work-cost record without overwriting other records.
 
-#### AC1.3.6 - Display recorded entries
+#### AC1.3.6 - Display recorded work costs
 
 > Given I have saved work-cost entries, When I open the Work costs screen, Then I can see each recorded entry's date, category and amount.
 
-#### AC1.3.7 - Edit a work-cost record
+#### AC1.3.7 - Edit a recorded work cost
 
 > Given a recorded work-cost entry is displayed, When I edit its amount, date, or category and save, Then only that selected entry is updated and its affected month totals are recalculated.
 
 #### AC1.3.8 - Apply work costs to the correct month
 
-> Given work-cost entries have different dates, When RuMampu calculates a recorded month, Then it subtracts only entries whose dates are in the same calendar month and year; no entry is reused as a recurring monthly amount.
+> Given work-cost entries have different dates, When RuMampu calculates a recorded month, Then only the work costs recorded in that month are deducted from that month's income.
 
 #### AC1.3.9 - Show income after work costs
 
@@ -128,7 +128,19 @@ Document inventory: 8 active user stories, 62 acceptance criteria. AC1.1.8 (`You
 
 #### AC1.3.10 - Identify calculated income
 
-> Given the income-after-work-costs figure is derived from the selected month's saved entries, When the result is displayed, Then it is identified as a calculated figure and not an average or prediction.
+> Given the income-after-work-costs figure is derived from my saved entries, When the result is displayed, Then it is labelled CALCULATED.
+
+#### AC1.3.11 - Record different work costs separately
+
+> Given I have more than one direct cost of earning income, When I record them, Then each is a separate dated entry rather than one combined figure.
+
+#### AC1.3.12 - Mark a daily expense as a work cost
+
+> Given I am adding a daily expense, When I turn on "This was for work" before choosing a category, Then the entry is recorded as a work cost, is kept out of my daily spending total, and the categories offered change to work-cost categories.
+
+#### AC1.3.13 - Move an entry between spending and work costs
+
+> Given an entry was recorded in the wrong place, When I open it and change the switch, Then it moves between daily spending and work costs, and the move is listed in Your record.
 
 ### US1.4 - Record regular financial commitments
 
@@ -138,7 +150,7 @@ Document inventory: 8 active user stories, 62 acceptance criteria. AC1.1.8 (`You
 
 #### AC1.4.1 - Record living costs
 
-> Given I open the Commitments screen, When I view the available commitment sections, Then I can record regular living-cost items.
+> Given I open Bills and limits, When I view the available commitment sections, Then I can record regular living-cost items.
 
 #### AC1.4.2 - Record debt payments
 
@@ -150,7 +162,7 @@ Document inventory: 8 active user stories, 62 acceptance criteria. AC1.1.8 (`You
 
 #### AC1.4.4 - Keep commitment types visually separated
 
-> Given I have different kinds of financial commitments, When I view the Commitments screen, Then living costs, debt payments and savings are presented as separate groups.
+> Given I have different kinds of financial commitments, When I view Bills and limits, Then living costs, debt payments and savings are presented as separate groups.
 
 #### AC1.4.5 - Display total commitments
 
@@ -189,6 +201,14 @@ Document inventory: 8 active user stories, 62 acceptance criteria. AC1.1.8 (`You
 #### AC1.5.6 - Add the expense
 
 > Given I have entered a positive expense amount, When I select Add expense, Then the expense is added to the current financial record.
+
+#### AC1.5.7 - Show the month a table is reporting
+
+> Given I am on Daily expenses, When I view Recent expenses, Then a month control sits directly above the table and names the month being shown.
+
+#### AC1.5.8 - Offer an example without filling the field
+
+> Given a field would benefit from an example, When the field is empty, Then the example is shown behind the field as a placeholder, so my own value replaces nothing and I never have to delete a figure RuMampu chose.
 
 ### US1.6 - Review recorded daily expenses
 
@@ -232,7 +252,7 @@ Document inventory: 8 active user stories, 62 acceptance criteria. AC1.1.8 (`You
 
 #### AC1.7.2 - Show receipt-reading state
 
-> Given I have selected a receipt, When the prototype is reading the receipt, Then a visible reading/loading state is displayed.
+> Given I have selected a receipt, When RuMampu is reading the receipt, Then a visible reading state 'Reading the receipt…' is displayed.
 
 #### AC1.7.3 - Present values for confirmation
 
@@ -301,3 +321,29 @@ Document inventory: 8 active user stories, 62 acceptance criteria. AC1.1.8 (`You
 #### AC1.8.8 - Do not add imported records without confirmation
 
 > Given RuMampu has recognised historical records from my file, When I have not yet confirmed the import, Then those records are not added to my RuMampu financial history.
+
+### US1.9 - Read a bank statement or e-statement into entries
+
+**User Story:** As a user with statements but no payslip, I want RuMampu to read a statement I upload into entries I review, so that months of history do not have to be typed.
+
+**Relevant screen(s):** Income, Daily expenses (Import)
+
+#### AC1.9.1 - Told before upload
+
+> Given I choose to upload a statement, When the upload screen appears, Then it names who processes the file, where, and what is kept.
+
+#### AC1.9.2 - Transactions only
+
+> Given the processor returns results, When they are shown, Then only transactions are imported, and no affordability, credibility or eligibility output is imported or displayed.
+
+#### AC1.9.3 - Review before save
+
+> Given results are shown, When I review them, Then nothing enters my record until I confirm each entry or the batch.
+
+#### AC1.9.4 - Documented as a processor
+
+> Given the feature ships, When the Security Plan and the Data Management Plan are updated for Iteration 2, Then the processor, the transfer location and the retention period appear in both.
+
+#### AC1.9.5 - Failure is not silent
+
+> Given a statement cannot be read, When processing ends, Then RuMampu says so and offers typed entry, rather than dropping the attempt.

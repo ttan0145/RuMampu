@@ -2,8 +2,8 @@
 
 语言：**中文（CN）** | [English](US1.5_MANUAL_EXPENSES.md)
 
-- 验收日期：2026-08-25
-- 状态：完成（6/6 AC）
+- 验收日期：2026-10-08
+- 状态：v7 下 8 条 AC 均纳入可执行浏览器验收；本轮运行结果见下方补记。
 - 需求来源：[US1.5 - Record daily expenses manually](../requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md#us15---record-daily-expenses-manually)
 
 ## 验收矩阵
@@ -16,12 +16,14 @@
 | AC1.5.4 Add a custom category | 通过 | 通过 `+ Your own category` 新建 `Pet supplies`，自动成为当前分类；刷新后该分类仍显示。 |
 | AC1.5.5 Enter expense date | 通过 | 表单接受 `YYYY-MM-DD` 日期并校验真实日历日期；验收分别保存 2026-08-24 与 2026-08-25。 |
 | AC1.5.6 Add the expense | 通过 | Groceries RM18.40 与 Pet supplies RM36.60 均通过 API 加入当前访客记录；刷新后列表与 RM55 总额保持，见[记录页截图](../../output/playwright/epic-1/evidence/ac1.5.6__manual-expenses-after-reload.png)。 |
+| AC1.5.7 Show the month a table is reporting | 通过 | Recent expenses 正上方显示月份选择控件和当前报表月份，自动化同时检查其垂直顺序。 |
+| AC1.5.8 Offer an example without filling the field | 通过 | 空金额字段显示 `0` 占位符，输入值仍为空，不需要先删掉预填金额。 |
 
 ## 自动化与浏览器验收
 
-- 后端 `finance` 测试：38 项通过；US1.5 新增覆盖默认分类、访客隔离、分类分离、自定义分类、正数金额、有效日期、跨访客分类拒绝、重复名称拒绝和整档级联删除。
+- 当前后端 `finance.tests`：2026-10-08 通过 60/60 项，包含 US1.5 分类、金额、日期及访客边界。
 - 前端 TypeScript 类型检查通过。
-- Playwright 真实浏览器验收通过：先验证空金额拦截，再保存一笔预设分类支出和一笔自定义分类支出。
+- Epic 1 完整 Playwright 浏览器套件：2026-10-08 通过 13/13 项，US1.5 的 8 条 AC 均通过；见[独立运行日志](../../output/playwright/epic1-supervised/full-final/run.log)。
 - 页面刷新后，两笔金额、日期、分类、自定义分类和 RM55 月内累计全部保持。
 - 最终浏览器控制台没有产品错误；仅有 Expo Web 关于原生动画驱动不可用的开发环境提示。
 - 验收结束后清理本地浏览器验收数据，不把示例支出或分类留在开发数据库中。
