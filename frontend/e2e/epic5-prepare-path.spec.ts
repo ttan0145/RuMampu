@@ -14,7 +14,11 @@ const DISCLAIMER = 'Illustration only. Not a loan offer or approval.';
 
 async function keepPriceTest(page: Page, price: number): Promise<void> {
   await page.getByRole('tab', { name: 'House', exact: true }).click();
-  await page.getByText('Test a house', { exact: true }).click();
+  // A first visit shows Test a house; once a test is kept (Home and Saving v2) the entry is the Your dream house card, which opens the last result.
+  const testEntry = page.getByText('Test a house', { exact: true }).or(page.getByText('Your dream house', { exact: true }));
+  await testEntry.first().click();
+  const editHouse = page.getByText('Edit house', { exact: true });
+  if (await editHouse.isVisible({ timeout: 3000 }).catch(() => false)) await editHouse.click();
   const fromPrice = page.getByText('Work it out from the price instead', { exact: true });
   const priceLabel = page.getByText('Property price', { exact: true });
   await expect(priceLabel.or(fromPrice).first()).toBeVisible();
