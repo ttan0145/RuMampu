@@ -1,7 +1,7 @@
 import { expect, Page } from '@playwright/test';
 import { e2eGet, e2ePost, test } from './support/fixtures';
 import { ac } from './support/acceptance';
-import { API, captureEvidence, openGuestApp, pinGuestClientId, reloadApp } from './support/app';
+import { API, captureEvidence, openGuestFast, reloadApp, seedKeptTest } from './support/app';
 
 /* Epic 5 — Homeownership Preparation (US5.1 to US5.4, 36 acceptance criteria, v5).
 
@@ -87,13 +87,13 @@ async function reloadAccountApp(page: Page): Promise<void> {
   await expect(page.getByText('Getting RuMampu ready', { exact: true })).toHaveCount(0, { timeout: 90_000 });
 }
 
-/* Seeds twelve recorded months, then onboards as a guest. The guest sign-in
-   rotates the client id, so it is pinned to the seeded one first. */
-async function startWithTwelveMonths(page: Page): Promise<void> {
-  await pinGuestClientId(page);
+/* Seeds twelve recorded months, optionally seeds the house tests the spec starts from, then opens
+   the app as a guest past the entry (the fixture's client id carries the record). */
+async function startWithTwelveMonths(page: Page, seeds: (number | { knownPayment: number })[] = []): Promise<void> {
   const loaded = await e2ePost(page, `${API}/dev/scenarios/my-gig-driver-12m/load/`, { data: { confirm_reset: true } });
   expect(loaded.status()).toBe(201);
-  await openGuestApp(page);
+  for (const seed of seeds) await (typeof seed === 'number' ? seedKeptTest(page, seed) : seedKeptTest(page, 0, seed));
+  await openGuestFast(page);
 }
 
 async function back(page: Page): Promise<void> {
@@ -626,8 +626,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
     // A RM 1,670 payment plus the default RM 230 of other costs is RM 1,900 a month. The
     // running balance falls from RM 1,260 in December to RM -680 in February, so the
     // buffer is RM 1,940 (ADR 0005); counting only from August would have said RM 680.
-    await startWithTwelveMonths(page);
-    await runKnownPaymentTest(page, 1670);
+    await startWithTwelveMonths(page, [{ knownPayment: 1670 }]);
     await openCashBuffer(page);
 
     const balances: [string, string, string, string][] = [
@@ -764,7 +763,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
   });
 
   test('US5.4 — Review financing preparation documents', { tag: '@us5.4' }, async ({ page }) => {
-    await openGuestApp(page);
+    await openGuestFast(page);
     await openPrepare(page);
     await ensureHome(page);
     await page.getByTestId('prep-node-2').click();
@@ -847,10 +846,9 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
     // RM 10,000 in the pot and a kept RM 250,000 test with a RM 905 buffer: RM 905 is held
     // and RM 9,095 counts towards upfront cash. Using RM 500 leaves RM 9,500 in the pot; the
     // buffer refills from the rest and stays full, so RM 8,595 counts towards upfront cash.
-    await startWithTwelveMonths(page);
+    await startWithTwelveMonths(page, [250000]);
     await openUpfrontCash(page);
     await page.getByLabel('Cash I have now', { exact: true }).fill('10000');
-    await keepPriceTest(page, 250000);
     await openUpfrontCash(page);
     await expect(haveLine(page)).toContainText(`You have ${'RM 9,095'} of`);
 
@@ -933,7 +931,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
   });
 
   test('TECH-5.1 — The Money tab shortcut opens Cash buffer', { tag: '@hardening' }, async ({ page }) => {
-    await openGuestApp(page);
+    await openGuestFast(page);
     await page.getByRole('tab', { name: 'Money', exact: true }).click();
     await page.getByText('Cash buffer', { exact: true }).click();
     await expect(page.getByText(
@@ -947,8 +945,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
   test('TECH-5.3 — A record that never goes below zero can still need a buffer', { tag: '@hardening' }, async ({ page }) => {
     // RM 250,000 costs RM 1,382.37 a month. The running balance stays above zero from
     // August, but a year started in January would fall RM 904.74 by February.
-    await startWithTwelveMonths(page);
-    await runPriceTest(page, 250000);
+    await startWithTwelveMonths(page, [250000]);
     await openCashBuffer(page);
     await expect(page.getByText('RM 904.74', { exact: true })).toBeVisible();
     await expect(page.getByTestId('buffer-fall-text')).toHaveText('The biggest drop ran from Dec 2025 to Feb 2026.');

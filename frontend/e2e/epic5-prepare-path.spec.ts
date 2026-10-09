@@ -1,7 +1,7 @@
-import { expect, Page } from '@playwright/test';
+﻿import { expect, Page } from '@playwright/test';
 import { e2ePost, test } from './support/fixtures';
 import { ac } from './support/acceptance';
-import { API, endGuestSession, openGuestApp, pinGuestClientId, reloadApp } from './support/app';
+import { API, endGuestSession, openGuestFast, reloadApp, seedKeptTest } from './support/app';
 
 /* Epic 5, Iteration 3 — US5.9 Prepare for one home, US5.10 the monthly check, US5.11 How buying works.
    Written from the Prepare path as built on 8 October 2026 (commit 1c037a7) against the V9 requirement text.
@@ -36,11 +36,12 @@ async function keepPriceTest(page: Page, price: number): Promise<void> {
   await expect(page.getByText('Saved tests', { exact: true }).first()).toBeVisible();
 }
 
-async function seededApp(page: Page): Promise<void> {
-  await pinGuestClientId(page);
+/* Loads the 12-month record through the API, seeds the house tests this spec starts from, then opens the app past the entry. */
+async function seededApp(page: Page, prices: number[] = []): Promise<void> {
   const loaded = await e2ePost(page, `${API}/dev/scenarios/my-gig-driver-12m/load/`, { data: { confirm_reset: true } });
   expect(loaded.status()).toBe(201);
-  await openGuestApp(page);
+  for (const price of prices) await seedKeptTest(page, price);
+  await openGuestFast(page);
 }
 
 async function openPrepare(page: Page): Promise<void> {
@@ -102,7 +103,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
   });
 
   test('US5.9 — Choose or type a home first', { tag: '@us5.9' }, async ({ page }) => {
-    await openGuestApp(page);
+    await openGuestFast(page);
     await ac('AC5.9.2', 'Choose or type a home first', async () => {
       await openPrepare(page);
       await expect(page.getByText('Which home are you preparing for?', { exact: true })).toBeVisible();
@@ -126,9 +127,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
   });
 
   test('US5.9 — Prepare for one home, step by step', { tag: '@us5.9' }, async ({ page }) => {
-    await seededApp(page);
-    await keepPriceTest(page, 300000);
-    await keepPriceTest(page, 400000);
+    await seededApp(page, [300000, 400000]);
 
     await ac('AC5.9.1', 'One home for every step', async () => {
       await openPrepare(page);
@@ -227,8 +226,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
   });
 
   test('US5.10 — Check what paying each month would be like', { tag: '@us5.10' }, async ({ page }) => {
-    await seededApp(page);
-    await keepPriceTest(page, 600000);
+    await seededApp(page, [600000]);
     await openPrepare(page);
     await page.getByTestId('prep-node-0').click();
 
@@ -331,7 +329,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
   });
 
   test('US5.10 — My full monthly bill for a condo', { tag: '@us5.10' }, async ({ page }) => {
-    await openGuestApp(page);
+    await openGuestFast(page);
     await openPrepare(page);
     await page.getByLabel('Price').fill('450000');
     await page.getByText('Condo or apartment', { exact: true }).click();
@@ -355,8 +353,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
   });
 
   test('US5.10 — Say where every figure comes from', { tag: '@us5.10' }, async ({ page }) => {
-    await seededApp(page);
-    await keepPriceTest(page, 600000);
+    await seededApp(page, [600000]);
     await openPrepare(page);
     await page.getByTestId('prep-node-0').click();
 
@@ -406,8 +403,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
   });
 
   test('US5.11 — See how buying works for my kind of home', { tag: '@us5.11' }, async ({ page }) => {
-    await seededApp(page);
-    await keepPriceTest(page, 300000);
+    await seededApp(page, [300000]);
     await openPrepare(page);
 
     await ac('AC5.11.2', 'A subsale in five steps', async () => {

@@ -1,7 +1,7 @@
 import { expect, Page } from '@playwright/test';
 import { test } from './support/fixtures';
 import { ac } from './support/acceptance';
-import { API, endGuestSession, openGuestApp, reloadApp } from './support/app';
+import { API, endGuestSession, openGuestFast, reloadApp } from './support/app';
 
 const SJKP = 'How SJKP helps if you don’t have a payslip';
 const DISCLAIMER = 'This explains how things work. It isn’t advice on your decision, and RuMampu can’t tell you whether a bank will approve you.';
@@ -99,7 +99,7 @@ test.describe('Epic 5 — Learn what buying involves', { tag: '@epic5' }, () => 
   });
 
   test('US5.5 — Learn what buying involves before I commit', { tag: '@us5.5' }, async ({ page }, info) => {
-    await openGuestApp(page);
+    await openGuestFast(page);
     await ac('AC5.5.1', 'Open the explanations from Prepare', async () => {
       await prepareHub(page);
       await page.getByText('New to buying?', { exact: true }).click();
@@ -256,7 +256,7 @@ test.describe('Epic 5 — Learn what buying involves', { tag: '@epic5' }, () => 
   });
 
   test('US5.6 — Find what applies to someone without a payslip', { tag: '@us5.6' }, async ({ page }) => {
-    await openGuestApp(page);
+    await openGuestFast(page);
     await ac('AC5.6.1', 'A tab for irregular income', async () => {
       await learn(page);
       await expect(page.getByRole('tab', { name: 'No payslip', exact: true })).toHaveAttribute('aria-selected', 'true');
