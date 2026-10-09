@@ -81,6 +81,8 @@ export default defineConfig({
         RECEIPT_SCAN_RATE: '',
         ASSISTANT_ACTION_PREVIEW_RATE: '',
         CORS_ALLOWED_ORIGINS: `http://localhost:${frontendPort},http://127.0.0.1:${frontendPort}`,
+        // A run on a non-default backend port gets its own SQLite file, so parallel local runs do not lock one shared database.
+        ...(process.env.PLAYWRIGHT_BACKEND_PORT ? { SQLITE_PATH: path.join(repositoryDirectory, 'backend', `db-e2e-${backendPort}.sqlite3`) } : {}),
 
         // Local tests use SQLite; opt-in Epic 4 runs can use backend/.env Neon settings.
         ...(!useNeon ? {

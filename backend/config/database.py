@@ -28,9 +28,12 @@ def build_default_database_config(
 
     postgres_host = environ.get("PGHOST", "").strip()
     if not postgres_host:
+        # SQLITE_PATH lets a local test run keep its own file (parallel Playwright
+        # runs on different ports would otherwise lock one shared database).
+        sqlite_path = environ.get("SQLITE_PATH", "").strip()
         return {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": base_dir / "db.sqlite3",
+            "NAME": Path(sqlite_path) if sqlite_path else base_dir / "db.sqlite3",
             "OPTIONS": {"timeout": 20},
         }
 
