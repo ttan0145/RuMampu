@@ -25,6 +25,22 @@ export const BUY_SRC: Record<string, { n: string; h: string; d: string }> = {
     h: 'https://www.cimb.com.my/en/personal/day-to-day-banking/financing/property-financing/homeloan.html',
     d: '9 October 2026',
   },
+  /* the same age-70 or 35-year rule, in the banks' own words; the line shows the first link and names all three */
+  rhb: {
+    n: 'RHB Islamic: Green Home Financing-i',
+    h: 'https://www.rhbgroup.com/islamic/financing/property-financing/commodity-murabahah-green-home-financing-guarantee-i/index.html',
+    d: '9 October 2026',
+  },
+  bankislam: {
+    n: 'Bank Islam: Baiti Home Financing-i',
+    h: 'https://www.bankislam.com/personal-banking/financing/home-financing/baiti-home-financing',
+    d: '9 October 2026',
+  },
+  hba: {
+    n: 'HBA: Understanding an SPA, Part 1 (2006)',
+    h: 'https://www.hba.org.my/articles/lawyers/2006/understanding-1.htm',
+    d: '9 October 2026',
+  },
 };
 
 /* practice: common practice or a contract term, not a legal rule; the source and
@@ -36,10 +52,10 @@ export interface BuyFact { status: FactStatus; src: keyof typeof BUY_SRC | null;
 export const BUY_FACTS: Record<string, BuyFact> = {
   /* subsale: the earnest deposit, usually 2 to 3% */
   book: { status: 'practice', src: 'guides' },
-  /* subsale: the SPA within about 14 days */
-  spa: { status: 'practice', src: 'guides', note: 'p7_src_spa_n' },
+  /* subsale: the SPA within about 14 days. No guide that states the 14 days could be opened on 9 October 2026, so it is unverified */
+  spa: { status: 'unverified', src: null, note: 'p7_src_spa_n' },
   /* subsale: completion 3 to 4 months later */
-  comp: { status: 'practice', src: 'guides', note: 'p7_src_comp_n' },
+  comp: { status: 'practice', src: 'hba', note: 'p7_src_comp_n' },
   /* subsale: the first instalment about a month after the bank pays in full */
   keys: { status: 'unverified', src: null, note: 'p7_src_keys_n' },
   /* project: every stage share, and how long the build takes */

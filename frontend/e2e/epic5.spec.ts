@@ -1,7 +1,7 @@
 import { expect, Page } from '@playwright/test';
 import { e2eGet, e2ePost, test } from './support/fixtures';
 import { ac } from './support/acceptance';
-import { API, captureEvidence, openGuestApp, pinGuestClientId, reloadApp } from './support/app';
+import { API, captureEvidence, openGuestFast, reloadApp, seedKeptTest } from './support/app';
 
 /* Epic 5 — Homeownership Preparation (US5.1 to US5.4, 36 acceptance criteria, v5).
 
@@ -87,13 +87,13 @@ async function reloadAccountApp(page: Page): Promise<void> {
   await expect(page.getByText('Getting RuMampu ready', { exact: true })).toHaveCount(0, { timeout: 90_000 });
 }
 
-/* Seeds twelve recorded months, then onboards as a guest. The guest sign-in
-   rotates the client id, so it is pinned to the seeded one first. */
-async function startWithTwelveMonths(page: Page): Promise<void> {
-  await pinGuestClientId(page);
+/* Seeds twelve recorded months, optionally seeds the house tests the spec starts from, then opens
+   the app as a guest past the entry (the fixture's client id carries the record). */
+async function startWithTwelveMonths(page: Page, seeds: (number | { knownPayment: number })[] = []): Promise<void> {
   const loaded = await e2ePost(page, `${API}/dev/scenarios/my-gig-driver-12m/load/`, { data: { confirm_reset: true } });
   expect(loaded.status()).toBe(201);
-  await openGuestApp(page);
+  for (const seed of seeds) await (typeof seed === 'number' ? seedKeptTest(page, seed) : seedKeptTest(page, 0, seed));
+  await openGuestFast(page);
 }
 
 async function back(page: Page): Promise<void> {
@@ -166,9 +166,14 @@ async function openCostSources(page: Page): Promise<void> {
   await page.getByText(/^What makes up RM/).locator('xpath=..').getByLabel('What this is').click();
 }
 
+/* The House tab's test entry is "Test a house", and "Your dream house" once a house has been tested. */
+async function openTestForm(page: Page): Promise<void> {
+  await page.getByText('Test a house', { exact: true }).or(page.getByText('Your dream house', { exact: true })).first().click();
+}
+
 async function runKnownPaymentTest(page: Page, payment: number): Promise<void> {
   await page.getByRole('tab', { name: 'House', exact: true }).click();
-  await page.getByText('Test a house', { exact: true }).click();
+  await openTestForm(page);
   // The link is only there while the form works from a price.
   const known = page.getByText('I already know my monthly payment', { exact: true });
   if (await known.isVisible().catch(() => false)) await known.click();
@@ -181,7 +186,7 @@ async function runKnownPaymentTest(page: Page, payment: number): Promise<void> {
 /* Runs the housing test from a property price, leaving the known-payment form. */
 async function runPriceTest(page: Page, price: number): Promise<void> {
   await page.getByRole('tab', { name: 'House', exact: true }).click();
-  await page.getByText('Test a house', { exact: true }).click();
+  await openTestForm(page);
   // The link is only there while the form works from a known monthly payment.
   const fromPrice = page.getByText('Work it out from the price instead', { exact: true });
   const priceLabel = page.getByText('Property price', { exact: true });
@@ -206,34 +211,63 @@ async function openCashBuffer(page: Page): Promise<void> {
 /* Keeps an affordable RM 80,000 test, which opens the saving plan on Home. */
 async function keepAffordableTest(page: Page): Promise<void> {
   await page.getByRole('tab', { name: 'House', exact: true }).click();
-  await page.getByText('Test a house', { exact: true }).click();
+  await openTestForm(page);
   await expect(page.getByText('Property price', { exact: true })).toBeVisible();
   await page.locator('input:visible').nth(0).fill('80000');
   await page.getByText('The house', { exact: true }).click();
   await page.getByText('Run the test', { exact: true }).last().click();
   await expect(page.getByText(/All 12 months would carry it/)).toBeVisible();
-  await page.getByText('Save test', { exact: true }).click();
-  await expect(page.getByText('Name this test', { exact: true })).toBeVisible();
-  await page.getByRole('dialog').getByRole('button', { name: 'Save test', exact: true }).click();
+  // The result is kept automatically once the test has run.
+  await page.getByRole('tab', { name: 'House', exact: true }).click();
   await expect(page.getByText('Saved tests', { exact: true }).first()).toBeVisible();
   await page.getByRole('tab', { name: 'Home', exact: true }).click();
-  await expect(page.getByText('Save today', { exact: true })).toBeVisible();
+  await expect(homeSaveStep(page)).toBeVisible();
 }
 
-/* Runs a price test and keeps it, which opens the saving plan on Home. */
+/* The saving step on Home's path: "Start my saving plan" until a day has been saved (or the
+   pot holds money), and then the "I saved" button for today. */
+function homeSaveStep(page: Page) {
+  return page.getByTestId('path-start').or(page.getByTestId('home-save-today'));
+}
+
+/* Saves today's amount and ends on Home. The first day is saved on the plan screen,
+   reached from "Start my saving plan"; after that Home has the button itself. */
+async function saveTodayFromHome(page: Page): Promise<void> {
+  await page.getByRole('tab', { name: 'Home', exact: true }).click();
+  await expect(homeSaveStep(page)).toBeVisible();
+  if (await page.getByTestId('path-start').isVisible()) {
+    await page.getByTestId('path-start').click();
+    await page.getByTestId('plan-save-today').click();
+    await page.getByRole('tab', { name: 'Home', exact: true }).click();
+  } else {
+    await page.getByTestId('home-save-today').click();
+  }
+}
+
+/* Runs a price test, which the app keeps by itself; Home's path then offers the saving plan. */
 async function keepPriceTest(page: Page, price: number): Promise<void> {
   await runPriceTest(page, price);
-  await page.getByText('Save test', { exact: true }).click();
-  await expect(page.getByText('Name this test', { exact: true })).toBeVisible();
-  await page.getByRole('dialog').getByRole('button', { name: 'Save test', exact: true }).click();
+  // The result is kept automatically once the test has run.
+  await page.getByRole('tab', { name: 'House', exact: true }).click();
   await expect(page.getByText('Saved tests', { exact: true }).first()).toBeVisible();
   await page.getByRole('tab', { name: 'Home', exact: true }).click();
-  await expect(page.getByText('Save today', { exact: true })).toBeVisible();
+  await expect(homeSaveStep(page)).toBeVisible();
 }
 
+/* Opens the saving plan from Home's path: "Start my saving plan" before the first saved day,
+   "Open saving plan" after it. */
 async function openSavingPlan(page: Page): Promise<void> {
   await page.getByRole('tab', { name: 'Home', exact: true }).click();
-  await page.getByText(/^Saving plan · /).click();
+  await expect(homeSaveStep(page)).toBeVisible();
+  if (await page.getByTestId('path-start').isVisible()) await page.getByTestId('path-start').click();
+  else await page.getByTestId('home-open-plan').click();
+  await showPlanPots(page);
+}
+
+/* While the plan is counting down, its pots sit under the folded Settings card. */
+async function showPlanPots(page: Page): Promise<void> {
+  await expect(page.getByTestId('plan-settings').or(page.getByTestId('plan-pot-total'))).toBeVisible();
+  if (!(await page.getByTestId('plan-pot-total').isVisible())) await page.getByTestId('plan-settings').click();
   await expect(page.getByTestId('plan-pot-total')).toBeVisible();
 }
 
@@ -566,9 +600,8 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
   test('US5.2 — "You have" is one pot, stated once', { tag: '@us5.2' }, async ({ page }) => {
     // A kept RM 80,000 test needs RM 3,600 with no deposit. The pot is the RM 1,000 entered
     // plus whatever one saved day in the plan adds.
-    await startWithTwelveMonths(page);
-    await keepAffordableTest(page);
-    await page.getByText('Save today', { exact: true }).click();
+    await startWithTwelveMonths(page, [80000]);
+    await saveTodayFromHome(page);
     const planAdded = await savedByPlan(page, 1);
     expect(planAdded).toBeGreaterThan(0);
     await openUpfrontCash(page);
@@ -590,9 +623,9 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
       await captureEvidence(page, 'epic-5', 'ac5.2.17__pot-adds-up.png');
       await page.getByText('Done', { exact: true }).click();
 
-      // The gap is what I need less what I have, here and on Home (this test needs no buffer).
+      // The gap is what I need less what I have, here and in the saving plan's pot (this test needs no buffer).
       await expectGap(page, rmText(gap));
-      await page.getByRole('tab', { name: 'Home', exact: true }).click();
+      await openSavingPlan(page);
       await expect(page.getByText(`${rmText(gap)} more to go for your safety money and upfront cash`, { exact: true })).toBeVisible();
     });
   });
@@ -628,8 +661,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
     // A RM 1,670 payment plus the default RM 230 of other costs is RM 1,900 a month. The
     // running balance falls from RM 1,260 in December to RM -680 in February, so the
     // buffer is RM 1,940 (ADR 0005); counting only from August would have said RM 680.
-    await startWithTwelveMonths(page);
-    await runKnownPaymentTest(page, 1670);
+    await startWithTwelveMonths(page, [{ knownPayment: 1670 }]);
     await openCashBuffer(page);
 
     const balances: [string, string, string, string][] = [
@@ -766,7 +798,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
   });
 
   test('US5.4 — Review financing preparation documents', { tag: '@us5.4' }, async ({ page }) => {
-    await openGuestApp(page);
+    await openGuestFast(page);
     await openPrepare(page);
     await ensureHome(page);
     await page.getByTestId('prep-node-2').click();
@@ -849,10 +881,9 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
     // RM 10,000 in the pot and a kept RM 250,000 test with a RM 905 buffer: RM 905 is held
     // and RM 9,095 counts towards upfront cash. Using RM 500 leaves RM 9,500 in the pot; the
     // buffer refills from the rest and stays full, so RM 8,595 counts towards upfront cash.
-    await startWithTwelveMonths(page);
+    await startWithTwelveMonths(page, [250000]);
     await openUpfrontCash(page);
     await page.getByLabel('Cash I have now', { exact: true }).fill('10000');
-    await keepPriceTest(page, 250000);
     await openUpfrontCash(page);
     await expect(haveLine(page)).toContainText(`You have ${'RM 9,095'} of`);
 
@@ -916,7 +947,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
       await expect(page.getByText('Held as your Rainy day fund', { exact: true })).toBeVisible();
       await expect(page.getByText('Used from your Rainy day fund', { exact: true })).toBeVisible();
       await page.getByText('Done', { exact: true }).click();
-      await page.getByRole('tab', { name: 'Home', exact: true }).click();
+      await openSavingPlan(page);
       await expect(page.getByText(/more to go for your Rainy day fund and upfront cash/)).toBeVisible();
 
       // The name is kept with the rest of the plan.
@@ -935,7 +966,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
   });
 
   test('TECH-5.1 — The Money tab shortcut opens Cash buffer', { tag: '@hardening' }, async ({ page }) => {
-    await openGuestApp(page);
+    await openGuestFast(page);
     await page.getByRole('tab', { name: 'Money', exact: true }).click();
     await page.getByText('Cash buffer', { exact: true }).click();
     await expect(page.getByText(
@@ -949,8 +980,7 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
   test('TECH-5.3 — A record that never goes below zero can still need a buffer', { tag: '@hardening' }, async ({ page }) => {
     // RM 250,000 costs RM 1,382.37 a month. The running balance stays above zero from
     // August, but a year started in January would fall RM 904.74 by February.
-    await startWithTwelveMonths(page);
-    await runPriceTest(page, 250000);
+    await startWithTwelveMonths(page, [250000]);
     await openCashBuffer(page);
     await expect(page.getByText('RM 904.74', { exact: true })).toBeVisible();
     await expect(page.getByTestId('buffer-fall-text')).toHaveText('The biggest drop ran from Dec 2025 to Feb 2026.');
@@ -1001,7 +1031,8 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
       await openSavingPlan(page);
       await expect(page.getByTestId('plan-pot-total')).toHaveText('RM 1,000');
       await expect(page.getByText('Safety money RM 905 · Upfront cash RM 95', { exact: true })).toBeVisible();
-      await page.getByRole('tab', { name: 'Home', exact: true }).click();
+      // Home and Saving v2 (d992fa4) shows one goal at a time on Home; the combined figure
+      // lives on the Saving plan's Pots card.
       await expect(page.getByText(`${rmText(need - 95)} more to go for your safety money and upfront cash`, { exact: true })).toBeVisible();
     });
 
@@ -1021,13 +1052,16 @@ test.describe('Epic 5 — Homeownership Preparation', { tag: '@epic5' }, () => {
 
     await ac('AC5.8.8', 'Go on to the saving plan', async () => {
       await page.getByText('Open the saving plan', { exact: true }).click();
+      await showPlanPots(page);
       await expect(page.getByTestId('plan-pot-total')).toHaveText('RM 500');
       await expect(page.getByText('Safety money RM 500 · Upfront cash RM 0', { exact: true })).toBeVisible();
     });
 
     await ac('AC5.8.6', 'Amounts, not a verdict', async () => {
       // The pot covers neither goal in full: the shortfall is ringgit only, with no verdict.
-      await page.getByRole('tab', { name: 'Home', exact: true }).click();
+      // Home and Saving v2 (d992fa4) shows one goal at a time on Home; the combined figure
+      // lives on the Saving plan's Pots card.
+      await openSavingPlan(page);
       await expect(page.getByText(`${rmText(905 + need - 500)} more to go for your safety money and upfront cash`, { exact: true })).toBeVisible();
       await expect(page.getByText(/can(not|'t)? afford|not affordable|you qualify/i)).toHaveCount(0);
       await openUpfrontCash(page);

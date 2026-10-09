@@ -60,10 +60,10 @@ LHDN 的印花税标准保留原核对日期 2026-09-10，本轮没有把未完�
 | 条目 | 状态 | 来源 | 核对日期 |
 | --- | --- | --- | --- |
 | 定金通常 2–3%（Book the home） | 惯例 | Agent and lawyer guides (iProperty, DNH, HBA) | 9 October 2026 |
-| 约 14 天内签 SPA | 惯例（日期以出价函为准） | 同上 | 9 October 2026 |
-| 3 到 4 个月后完成（常见为 3 个月加 1 个月计息） | 惯例 | 同上 | 9 October 2026 |
+| 约 14 天内签 SPA | 未经核实（10/09 找不到任何可打开的来源；界面只写"以出价函为准"） | 无 | — |
+| 3 到 4 个月后完成（常见为 3 个月加 1 个月计息） | 惯例 | HBA: Understanding an SPA, Part 1 (2006) | 9 October 2026 |
 | 银行付清后约一个月开始供款 | 未经核实（由银行决定） | 无 | — |
 | 新盘各阶段比例与建设周期 | 未经核实（宪报原文未打开；二手来源与代码的 12 个阶段逐项一致） | Housing Development (Control and Licensing) Regulations 1989, Schedule H（hba.org.my 收录的 1989 年原文；2015 年修订本未取得） | 二手来源 9 October 2026 |
-| 贷款到 70 岁、最长 35 年 | 惯例（只有 CIMB 官网写明，界面写 “Banks commonly”） | CIMB: Home loan | 9 October 2026 |
+| 贷款到 70 岁、最长 35 年 | 惯例（CIMB、RHB Islamic、Bank Islam 官网逐字写明，界面写 "Banks commonly"；"大多数银行"仍无证据） | CIMB: Home loan（界面链接）；RHB Islamic、Bank Islam 登记在 buying-facts.ts | 9 October 2026 |
 
 没有做的：Schedule G/H 2015 年修订本原文、建筑师局通告 GC 2/2017、其他银行的年龄条款。调研过程见本地审查目录 `RuMampu_全面审查_2026-10-09/15-购房时间线来源调研.md`（不在仓库内）。

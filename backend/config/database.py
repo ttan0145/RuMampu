@@ -28,9 +28,19 @@ def build_default_database_config(
 
     postgres_host = environ.get("PGHOST", "").strip()
     if not postgres_host:
+        # SQLITE_PATH lets a local test run keep its own file (parallel Playwright
+        # runs on different ports would otherwise lock one shared database).
+        sqlite_path = environ.get("SQLITE_PATH", "").strip()
         return {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": base_dir / "db.sqlite3",
+            "NAME": Path(sqlite_path) if sqlite_path else base_dir / "db.sqlite3",
+            "OPTIONS": {
+                # Parallel test workers share this file: wait for a writer, take the
+                # write lock when a transaction begins, and let readers run beside it.
+                "timeout": 20,
+                "transaction_mode": "IMMEDIATE",
+                "init_command": "PRAGMA journal_mode=WAL;",
+            },
         }
 
     missing = [name for name in POSTGRES_REQUIRED_SETTINGS if not environ.get(name, "").strip()]

@@ -1,6 +1,7 @@
 import { expect, Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
+import { e2ePost } from './fixtures';
 
 export const API = `http://localhost:${process.env.PLAYWRIGHT_BACKEND_PORT || '8000'}/api/v1`;
 
@@ -48,6 +49,92 @@ export async function openGuestApp(page: Page): Promise<void> {
   await page.getByRole('tab', { name: 'Home', exact: true }).click({ trial: true, timeout: 30000 });
   await expect(page.getByText('What RuMampu does', { exact: true })).toHaveCount(0);
   await expect(page.getByText(/^Skip$/i)).toHaveCount(0);
+}
+
+/**
+ * Opens the app as a guest who is already past the entry, for specs where the entry is not what is
+ * tested. state.tsx restores a guest at start when sessionStorage holds 'rumampu_guest_session' = '1'
+ * and no account is stored, and then reads the record under the client id the fixture put in
+ * localStorage, so nothing is rotated and no pinning is needed. The marker is written once per tab:
+ * a reload keeps it, and a spec that clears it (endGuestSession) still starts at the entry.
+ */
+export async function openGuestFast(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    try {
+      if (window.sessionStorage.getItem('rumampu_e2e_fast') !== '1') {
+        window.sessionStorage.setItem('rumampu_e2e_fast', '1');
+        window.sessionStorage.setItem('rumampu_guest_session', '1');
+      }
+    } catch { /* storage may be unavailable */ }
+  });
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'Home', exact: true }).click({ trial: true, timeout: 30000 });
+  await expect(page.getByText('What RuMampu does', { exact: true })).toHaveCount(0);
+}
+
+/**
+ * Keeps a house test in the guest's local record without walking the House screens. The scenario and the
+ * result come from the same backend calls the app makes (with the fixture's client id), and are written to
+ * 'rumampu_local_state' the way keepTest() in screens/test.tsx keeps one: a keptTests entry named by the
+ * price (or the monthly cost), the last test and its scenario, and ufTest pointing at it. Other fields in the
+ * record are left as they are, and each seed is written once per tab, so a reload does not undo later edits.
+ * Call after the record is loaded (dev scenario) and before openGuestFast(). A spec that checks the House
+ * screens themselves keeps its test through the screens instead.
+ */
+export async function seedKeptTest(
+  page: Page,
+  price: number,
+  opts: { deposit?: number; knownPayment?: number } = {},
+): Promise<void> {
+  const known = opts.knownPayment ?? null;
+  const created = await e2ePost(page, `${API}/housing/scenarios/`, { data: {
+    property_price: known == null ? price : 0,
+    deposit: opts.deposit ?? 0,
+    financing_rate: 4.3,
+    tenure_years: 35,
+    known_monthly_payment: known,
+    // the app's starting list of home costs (mock.ts)
+    additional_costs: [
+      { category: 'maint', amount: 150 }, { category: 'insure', amount: 55 }, { category: 'assess', amount: 20 },
+      { category: 'quit', amount: 5 }, { category: 'parking', amount: 0 }, { category: 'other', amount: 0 },
+    ],
+  } });
+  expect(created.status()).toBe(201);
+  const scenario = await created.json();
+  const ran = await e2ePost(page, `${API}/housing/test-result/`, { data: { scenario_id: scenario.id, income_shock_percent: 0 } });
+  expect(ran.status()).toBe(200);
+  const result = await ran.json();
+  // the app's rm(): whole ringgit, sen only when present
+  const money = (v: number) => `RM ${(Math.round(v * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: Number.isInteger(Math.round(v * 100) / 100) ? 0 : 2, maximumFractionDigits: 2 })}`;
+  const pay = Math.round(result.tested_home_cost);
+  const kept = {
+    name: known == null ? money(price) : `${money(pay)} / month`,
+    pay,
+    s: result.short_month_count,
+    n: result.tested_months,
+    g: Math.round(result.largest_gap),
+    scenarioId: scenario.id,
+    scenario,
+    result,
+    propertyPrice: known == null ? price : null,
+    incomeShockPercent: result.income_shock_percent,
+  };
+  await page.addInitScript(({ kept, result, scenario }) => {
+    try {
+      const flag = `rumampu_e2e_seeded_${scenario.id}`;
+      if (window.sessionStorage.getItem(flag) === '1') return;
+      window.sessionStorage.setItem(flag, '1');
+      const raw = window.localStorage.getItem('rumampu_local_state');
+      const state = raw ? JSON.parse(raw) : { version: 1 };
+      const tests = Array.isArray(state.keptTests) ? state.keptTests : [];
+      tests.push(kept);
+      state.keptTests = tests;
+      state.ufTest = tests.length - 1;
+      state.housingTestResult = result;
+      state.housingScenario = scenario;
+      window.localStorage.setItem('rumampu_local_state', JSON.stringify(state));
+    } catch { /* storage may be unavailable */ }
+  }, { kept, result, scenario });
 }
 
 /**

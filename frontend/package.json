@@ -44,6 +44,7 @@
     "test:unit": "node --experimental-strip-types --test \"unit/*.test.ts\"",
     "test:e2e:traceability": "node scripts/check-e2e-traceability.mjs",
     "test:e2e": "npm run test:e2e:traceability && playwright test",
+    "test:e2e:static": "npm run test:e2e:traceability && playwright test --config playwright.static.config.ts",
     "test:e2e:acceptance": "npm run test:e2e:traceability && playwright test e2e/epic1.spec.ts e2e/epic2.spec.ts",
     "test:e2e:epic1": "npm run test:e2e:traceability && playwright test e2e/epic1.spec.ts",
     "test:e2e:epic2": "npm run test:e2e:traceability && playwright test e2e/epic2.spec.ts",

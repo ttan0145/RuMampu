@@ -1,7 +1,7 @@
 import { expect, Page } from '@playwright/test';
 import { e2ePost, test } from './support/fixtures';
 import { ac } from './support/acceptance';
-import { API, endGuestSession, openGuestApp, pinGuestClientId, reloadApp } from './support/app';
+import { API, endGuestSession, openGuestFast, reloadApp, seedKeptTest } from './support/app';
 
 /* Epic 5, Iteration 3 — US5.9 Prepare for one home, US5.10 the monthly check, US5.11 How buying works.
    Written from the Prepare path as built on 8 October 2026 (commit 1c037a7) against the V9 requirement text.
@@ -14,7 +14,11 @@ const DISCLAIMER = 'Illustration only. Not a loan offer or approval.';
 
 async function keepPriceTest(page: Page, price: number): Promise<void> {
   await page.getByRole('tab', { name: 'House', exact: true }).click();
-  await page.getByText('Test a house', { exact: true }).click();
+  // A first visit shows Test a house; once a test is kept (Home and Saving v2) the entry is the Your dream house card, which opens the last result.
+  const testEntry = page.getByText('Test a house', { exact: true }).or(page.getByText('Your dream house', { exact: true }));
+  await testEntry.first().click();
+  const editHouse = page.getByText('Edit house', { exact: true });
+  if (await editHouse.isVisible({ timeout: 3000 }).catch(() => false)) await editHouse.click();
   const fromPrice = page.getByText('Work it out from the price instead', { exact: true });
   const priceLabel = page.getByText('Property price', { exact: true });
   await expect(priceLabel.or(fromPrice).first()).toBeVisible();
@@ -32,11 +36,12 @@ async function keepPriceTest(page: Page, price: number): Promise<void> {
   await expect(page.getByText('Saved tests', { exact: true }).first()).toBeVisible();
 }
 
-async function seededApp(page: Page): Promise<void> {
-  await pinGuestClientId(page);
+/* Loads the 12-month record through the API, seeds the house tests this spec starts from, then opens the app past the entry. */
+async function seededApp(page: Page, prices: number[] = []): Promise<void> {
   const loaded = await e2ePost(page, `${API}/dev/scenarios/my-gig-driver-12m/load/`, { data: { confirm_reset: true } });
   expect(loaded.status()).toBe(201);
-  await openGuestApp(page);
+  for (const price of prices) await seedKeptTest(page, price);
+  await openGuestFast(page);
 }
 
 async function openPrepare(page: Page): Promise<void> {
@@ -98,7 +103,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
   });
 
   test('US5.9 — Choose or type a home first', { tag: '@us5.9' }, async ({ page }) => {
-    await openGuestApp(page);
+    await openGuestFast(page);
     await ac('AC5.9.2', 'Choose or type a home first', async () => {
       await openPrepare(page);
       await expect(page.getByText('Which home are you preparing for?', { exact: true })).toBeVisible();
@@ -122,9 +127,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
   });
 
   test('US5.9 — Prepare for one home, step by step', { tag: '@us5.9' }, async ({ page }) => {
-    await seededApp(page);
-    await keepPriceTest(page, 300000);
-    await keepPriceTest(page, 400000);
+    await seededApp(page, [300000, 400000]);
 
     await ac('AC5.9.1', 'One home for every step', async () => {
       await openPrepare(page);
@@ -223,8 +226,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
   });
 
   test('US5.10 — Check what paying each month would be like', { tag: '@us5.10' }, async ({ page }) => {
-    await seededApp(page);
-    await keepPriceTest(page, 600000);
+    await seededApp(page, [600000]);
     await openPrepare(page);
     await page.getByTestId('prep-node-0').click();
 
@@ -327,7 +329,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
   });
 
   test('US5.10 — My full monthly bill for a condo', { tag: '@us5.10' }, async ({ page }) => {
-    await openGuestApp(page);
+    await openGuestFast(page);
     await openPrepare(page);
     await page.getByLabel('Price').fill('450000');
     await page.getByText('Condo or apartment', { exact: true }).click();
@@ -351,8 +353,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
   });
 
   test('US5.10 — Say where every figure comes from', { tag: '@us5.10' }, async ({ page }) => {
-    await seededApp(page);
-    await keepPriceTest(page, 600000);
+    await seededApp(page, [600000]);
     await openPrepare(page);
     await page.getByTestId('prep-node-0').click();
 
@@ -374,7 +375,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
       await expect(page.getByTestId('prov-lends')).toContainText('CALCULATED');
       await page.getByLabel('Your age').fill('40');
       await expect(page.locator('body')).toContainText('Banks commonly end the loan by age 70, so up to 30 years for you.');
-      await expect(page.getByTestId('fact-age')).toContainText('Common practice, not a legal rule. CIMB lends up to 35 years or to age 70, whichever is earlier; other banks set their own limit. Source: CIMB: Home loan. Checked 9 October 2026.');
+      await expect(page.getByTestId('fact-age')).toContainText('Common practice, not a legal rule. CIMB, RHB Islamic and Bank Islam finance up to 35 years or to age 70, whichever is earlier; other banks set their own limit. Source: CIMB: Home loan. Checked 9 October 2026.');
       await page.getByLabel('Your age').fill('');
       // what if rates go up: the higher rates are what-ifs
       await page.getByTestId('lesson-next').click();
@@ -402,8 +403,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
   });
 
   test('US5.11 — See how buying works for my kind of home', { tag: '@us5.11' }, async ({ page }) => {
-    await seededApp(page);
-    await keepPriceTest(page, 300000);
+    await seededApp(page, [300000]);
     await openPrepare(page);
 
     await ac('AC5.11.2', 'A subsale in five steps', async () => {
@@ -450,7 +450,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
       // subsale: each timing carries its status, its source and the checked date, or is marked unverified
       await page.getByText('Subsale', { exact: true }).click();
       await expect(page.getByTestId('fact-book')).toContainText('Common practice, not a legal rule. Source: Agent and lawyer guides (iProperty, DNH, HBA). Checked 9 October 2026.');
-      await expect(page.getByTestId('fact-spa')).toContainText('Common practice, not a legal rule. Your offer letter sets the date. Source: Agent and lawyer guides (iProperty, DNH, HBA). Checked 9 October 2026.');
+      await expect(page.getByTestId('fact-spa')).toContainText('Unverified. Your offer letter sets the date.');
       await expect(page.getByTestId('fact-comp')).toContainText('Many agreements give 3 months, plus 1 month with interest.');
       await expect(page.getByTestId('fact-keys')).toContainText('Unverified. The bank sets when the first instalment is due.');
       // every amount carries its provenance label: the 2% earnest deposit is RuMampu's assumption, the rest is calculated
