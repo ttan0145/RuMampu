@@ -68,6 +68,12 @@ export function prepLoan(s: AppState, o: { rate?: number; years?: number; margin
   return { name: src.name ?? (src.saved ? null : s.prep.name || null), price, L, dep: price - L, mo, rate, yrs, m, total, interest: total - L, maxYrs };
 }
 
+/* True when the tested home has no deposit and the loan share falls back to the usual 10%. */
+export function depositAssumed(s: AppState): boolean {
+  const src = upfrontFees(s).src;
+  return src.price > 0 && !src.typed && !(src.dep || s.data.house.deposit);
+}
+
 /* interest and principal in the payment after k months */
 export function amort(c: Loan, k: number): { int: number; prin: number } {
   const r = c.rate / 100 / 12;

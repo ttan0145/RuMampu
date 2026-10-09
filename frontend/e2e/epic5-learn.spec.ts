@@ -29,10 +29,24 @@ const LESSONS = [
 
 test.setTimeout(240_000);
 
+/* The learning card with its read total now sits on the House tab; Prepare for a house is a path of steps. */
 async function prepare(page: Page) {
   await page.getByRole('tab', { name: 'House', exact: true }).click();
+  await expect(page.getByText('Learn what buying involves', { exact: true })).toBeVisible();
+}
+
+/* Prepare for a house: the path needs one home first, so a home is typed in when none is kept. */
+async function prepareHub(page: Page) {
+  await page.getByRole('tab', { name: 'House', exact: true }).click();
   await page.getByText('Prepare for a house', { exact: true }).click();
-  await expect(page.getByTestId('prepare-learning')).toBeVisible();
+  const use = page.getByTestId('prep-use-home');
+  const banner = page.getByTestId('prep-banner');
+  await expect(use.or(banner).first()).toBeVisible();
+  if (await use.isVisible()) {
+    await page.getByLabel('Price').fill('450000');
+    await use.click();
+  }
+  await expect(banner).toBeVisible();
 }
 
 async function learn(page: Page, topic = 'No payslip') {
@@ -86,8 +100,8 @@ test.describe('Epic 5 — Learn what buying involves', { tag: '@epic5' }, () => 
   test('US5.5 — Learn what buying involves before I commit', { tag: '@us5.5' }, async ({ page }, info) => {
     await openGuestApp(page);
     await ac('AC5.5.1', 'Open the explanations from Prepare', async () => {
-      await prepare(page);
-      await page.getByText('Learn what buying involves', { exact: true }).click();
+      await prepareHub(page);
+      await page.getByText('New to buying?', { exact: true }).click();
       await expect(page.getByText('Your learning', { exact: true })).toBeVisible();
       await expect(page.getByRole('tab', { name: 'No payslip', exact: true })).toBeVisible();
     });
@@ -168,12 +182,12 @@ test.describe('Epic 5 — Learn what buying involves', { tag: '@epic5' }, () => 
       await expect(page.getByText('Page 1 of 5', { exact: true })).toBeVisible();
     });
     await ac('AC5.5.5', 'Reach the right tab from each tool', async () => {
-      await prepare(page);
-      await page.getByText('Upfront cash', { exact: true }).click();
+      await prepareHub(page);
+      await page.getByTestId('prep-node-1').click();
       await page.getByText('What these costs are', { exact: true }).click();
       await expect(page.getByTestId('lesson-fees')).toBeVisible();
-      await prepare(page);
-      await page.getByText('Documents & financing', { exact: true }).click();
+      await prepareHub(page);
+      await page.getByTestId('prep-node-2').click();
       await page.getByText('What to bring instead of a payslip', { exact: true }).click();
       await expect(page.getByTestId('lesson-docs')).toBeVisible();
     });
@@ -264,8 +278,11 @@ test.describe('Epic 5 — Learn what buying involves', { tag: '@epic5' }, () => 
       await expect(page.getByTestId('lesson-page')).toContainText('Bank or deposit statements');
       await page.getByRole('button', { name: 'Next', exact: true }).click();
       await page.getByRole('button', { name: /^Open your document checklist/ }).click();
+      await page.getByLabel('What this is').click();
       await expect(page.getByText('65% check: needs review', { exact: true })).toBeVisible();
-      await expect(page.getByText('☐ Bank statements, 6 months', { exact: true })).toBeVisible();
+      await page.getByText('Done', { exact: true }).click();
+      await expect(page.getByTestId('doc-dc_bank')).toHaveAttribute('aria-checked', 'false');
+      await expect(page.getByText('Bank statements, 6 months', { exact: true })).toBeVisible();
     });
   });
 
@@ -320,9 +337,9 @@ test.describe('Epic 5 — Learn what buying involves', { tag: '@epic5' }, () => 
       } finally { await second.close(); }
     });
     await ac('AC5.7.6', 'Nothing is locked behind reading', async () => {
-      await prepare(page);
-      await page.getByText('Upfront cash', { exact: true }).click();
-      await expect(page.getByText('You need', { exact: true })).toBeVisible();
+      await prepareHub(page);
+      await page.getByTestId('prep-node-1').click();
+      await expect(page.getByTestId('upfront-summary')).toBeVisible();
       await learn(page);
       for (const id of ['docs', 'limit']) {
         await lesson(page, id); await lastPage(page);
@@ -330,9 +347,10 @@ test.describe('Epic 5 — Learn what buying involves', { tag: '@epic5' }, () => 
       }
       await expect(page.getByRole('dialog')).toHaveCount(0);
       await expect(page.getByText(/badge|streak|reward|earned|congratulations/i)).toHaveCount(0);
-      await prepare(page);
-      await page.getByText('Documents & financing', { exact: true }).click();
-      await expect(page.getByText('☐ Bank statements, 6 months', { exact: true })).toBeVisible();
+      await prepareHub(page);
+      await page.getByTestId('prep-node-2').click();
+      await expect(page.getByTestId('doc-dc_bank')).toHaveAttribute('aria-checked', 'false');
+      await expect(page.getByText('Bank statements, 6 months', { exact: true })).toBeVisible();
     });
   });
 });
