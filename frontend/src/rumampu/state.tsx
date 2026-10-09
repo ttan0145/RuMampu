@@ -49,6 +49,8 @@ import {
   rotateGuestClientId,
   saveHomeownershipMonth as saveHomeownershipMonthRequest,
   ApiError,
+  hasGuestSession,
+  setGuestSession,
   INCOME_API_ENABLED,
   isOutlierConfirmation,
   updateIncomeCoverage as updateIncomeCoverageRequest,
@@ -104,7 +106,7 @@ export const TAB_OF: Record<Route, Tab> = {
   house: 'test', homecost: 'test', precheck: 'test', result: 'test', range: 'test',
   homecosts: 'test', acctdetails: 'profile',
   compare: 'test', shock: 'test',
-  plan: 'money', profile: 'profile', prepare: 'test', prepare_soon: 'test', upfront: 'test', buffer: 'money', docs: 'test',
+  plan: 'test', profile: 'profile', prepare: 'test', prepare_soon: 'test', upfront: 'test', buffer: 'test', docs: 'test',
   pv_switch: 'test', pv_month: 'test', pv_compare: 'test', prepmonthly: 'test',
   learn: 'test', learnsec: 'test', learnread: 'test', priceexplorer: 'test',
 };
@@ -153,6 +155,8 @@ export interface VillageState {
   collection: number; queued: number; savedRm: number;
   /* the square the last swipe placed a ready Pondok on, and the move it happened on */
   spawn?: number | null; spawnAt?: number;
+  /* every swipe that changed the plot, counted as a move or not; drives the slide animation */
+  turn?: number;
   /* how each house travelled on the last move (from square, to square, its tier), for the slide */
   slide?: Array<{ f: number; t: number; tier: number }>;
   msg?: string;
@@ -287,6 +291,13 @@ export interface AppState {
   vLand: { at: number; a: number; cell: number | null; moves: number } | null;
   /* "Let's start!" plays once a session; after that Play opens the village directly */
   vFlashSeen: boolean;
+  /* a one-off pointer after a step on the path is done (first income, a house test):
+     shown under the back button on that screen, cleared once Home is open again */
+  pathCoach: { route: Route; key: string; stop?: number } | null;
+  /* the path stop Home should open on, set when a coach bubble sends the person there */
+  pathFocus: number | null;
+  /* a house test just ran: the result screen keeps it once, without asking */
+  autoKeep: boolean;
   /* Months the user chose to spread the upfront need over (village phase).
      null = go by the record's median leftover, or 12 when there is no record. */
   planHorizon: number | null;
@@ -487,7 +498,7 @@ function initialState(): AppState {
     onboard: 0, onboarded: false, splash: true,
     wstep: 0, authEntryOpen: false, authMode: 'login', acctMade: false, fgMail: '', guest: false, accountLastExportedAt: null, preferredIncomeSourceId: null, mergeGuestOnSignup: false, discardGuestOnSignup: false,
     knew: false, kstep: 0, jobs: ['taxi'], ownJobs: [], lastMonth: '',
-    plan: null, village: null, buffer: null, vHelp: false, vLand: null, vFlashSeen: false, planHorizon: null,
+    plan: null, village: null, buffer: null, vHelp: false, vLand: null, vFlashSeen: false, pathCoach: null, pathFocus: null, autoKeep: false, planHorizon: null,
     moView: 'tiles', houseTab: 'test',
     houseCosts: null, houseCostsSync: 'idle', hcState: 'sgr', hcType: 'all', hcKind: 'all', hcBudget: null, firstHome: false,
     potMoved: 0, potMovedMonths: [], ufTest: null, prep: { ...PREP_DEFAULT, mHome: { ...PREP_DEFAULT.mHome } }, ufReno: false, viewTestName: null, scanAuto: false, pastT: 'inc', cardInfo: null, log: [],
@@ -794,6 +805,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const patternRequestVersion = useRef(0);
   const patternRefreshInFlight = useRef<Promise<void> | null>(null);
+  const refreshAccountDataRef = useRef<((onProgress?: (progress: number, stage: string) => void, options?: { includeSavedTests?: boolean }) => Promise<void>) | null>(null);
   const coverageRequestVersion = useRef(0);
   const coverageRefreshInFlight = useRef<Promise<void> | null>(null);
   const workCostRequestVersion = useRef(0);
@@ -892,6 +904,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!INCOME_API_ENABLED) return;
       const hasLogin = await hasStoredLogin();
       if (!hasLogin) {
+        // A guest who only reloaded the page (the tab is still the same one) goes straight back to
+        // the app with the local record, without a new client id and without clearing anything.
+        if (active && hasGuestSession()) {
+          setS(prev => {
+            const next: AppState = JSON.parse(JSON.stringify(prev));
+            next.guest = true;
+            next.onboarded = true;
+            next.knew = true;
+            next.wstep = 0;
+            next.authEntryOpen = false;
+            next.splash = false;
+            return next;
+          });
+          try { await refreshAccountDataRef.current?.(undefined, { includeSavedTests: false }); } catch { /* the local record is still usable */ }
+        }
         if (active) setAuthReady(true);
         return;
       }
@@ -1319,6 +1346,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     void refreshSavedHousingTests().catch(() => undefined);
   }, [authReady, S.guest, S.knew, S.onboarded, refreshSavedHousingTests]);
 
+  // Remember that this tab is a guest session so a reload does not send the guest back to the entry.
+  // The authReady guard keeps the first render from clearing the marker before it was read.
+  React.useEffect(() => {
+    if (!authReady) return;
+    setGuestSession(S.guest && S.onboarded);
+  }, [authReady, S.guest, S.onboarded]);
+
   const refreshAfterMoneyWrite = useCallback(() => {
     // Ignore any pre-write analyses; a successful write must not become a failed
     // save just because its follow-up GET fails. The page offers a read-only retry.
@@ -1461,6 +1495,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (input.amount > median * 3) return 'outlier';
       }
       up(s => {
+        if (!s.data.income.length) s.pathCoach = { route: s.route, key: 'hx_coach_income' };
         s.data.income.push({
           id: `local-${Date.now()}`,
           a: input.amount,
@@ -1478,6 +1513,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const entry = await createIncomeEntryRequest(input);
       up(s => {
+        if (!s.data.income.length) s.pathCoach = { route: s.route, key: 'hx_coach_income' };
         s.data.income.push({
           id: String(entry.id),
           a: Number(entry.amount),
@@ -2042,8 +2078,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await new Promise<void>(resolve => setTimeout(resolve, 0));
     onProgress?.(100, 'Your account is ready');
   }, [refreshIncomeRecord, refreshSavedHousingTests, refreshWorkCosts, up]);
+  refreshAccountDataRef.current = refreshAccountData;
 
   const signOut = useCallback(async (): Promise<void> => {
+    setGuestSession(false);
     accountAuthenticated.current = false;
     skipNextAccountSync.current = true;
     skipNextLocalStateWrite.current = true;
@@ -2078,6 +2116,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteCurrentRecord = useCallback(async (): Promise<void> => {
+    setGuestSession(false);
     accountAuthenticated.current = false;
     skipNextAccountSync.current = true;
     skipNextLocalStateWrite.current = true;
@@ -2138,6 +2177,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const enterGuestMode = useCallback(async (): Promise<void> => {
+    setGuestSession(false);
     accountAuthenticated.current = false;
     skipNextAccountSync.current = true;
     skipNextLocalStateWrite.current = true;

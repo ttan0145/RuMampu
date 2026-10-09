@@ -13,9 +13,10 @@ import { IsoIsland } from '../isosvg';
 import { ReadyTag } from '../overlays';
 import { RUMA_IMG } from '../ruma';
 import { BODY_FONT, C, DISP_FONT } from '../theme';
-import { BodyS, DemoChip, Display } from '../ui';
+import { BodyS, Display } from '../ui';
 import { ScreenShell } from './shell';
 import { SayCard } from '../say';
+import { FirstPath, HomeHero, PathCard, SayPill } from '../homepath';
 import { GuideTarget } from '../tour';
 
 
@@ -706,6 +707,9 @@ function readableDate(iso: string, lang: string, monthName: (m: number) => strin
 
 export function HomeScreen() {
   const { S, t, go, up, monthName } = useApp();
+  const { height: winH } = useWindowDimensions();
+  /* back on Home: the pointer to come back here has done its job */
+  React.useEffect(() => { if (S.pathCoach) up(s2 => { s2.pathCoach = null; }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const sp = recSpan(S.data);
   const retention = S.retentionNotice?.warning_due ? (
     <View style={st.retentionNotice}>
@@ -718,39 +722,26 @@ export function HomeScreen() {
     </View>
   ) : null;
 
-  if (!sp) {
-    /* Empty record: Ruma welcomes, one button to start, and three friendly
-       cards explain how the app works. The meadow stays behind it all. */
+  if (!sp && !S.testRan) {
+    /* Empty record and no house tested yet: the whole journey as one winding road, with Record as the step to start. */
     return (
-      <ScreenShell brand right={<DemoChip />} bg={<HomeMeadow />}>
+      <ScreenShell brand noScene tint="#DDF1F6"
+        contentStyle={{ paddingHorizontal: 0, paddingBottom: 0, backgroundColor: '#DCEFD2' }}>
         {retention}
-        <View style={{ alignItems: 'center', gap: 12, paddingTop: 6 }}>
-          <RumaHero />
-          <Display cls="h-l" style={{ textAlign: 'center', maxWidth: 280 }}>{t('inc_empty')}</Display>
-          <GuideTarget id="home.add"><AddIncomeCta label={t('inc_add')} onPress={() => go('income')} /></GuideTarget>
-        </View>
-        <Text style={{
-          fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.88, textTransform: 'uppercase',
-          color: C.ink64, marginTop: 6,
-        }}>{t('hw_title')}</Text>
-        <HowCard n={1} bg="#F3F6F5" doodle={HW_DOODLES.coins} title={t('hw_t1')} body={t('hw_b1')} delay={250} />
-        <HowCard n={2} bg="#F3F6F5" doodle={HW_DOODLES.house} title={t('hw_t2')} body={t('hw_b2')} delay={430} />
-        <HowCard n={3} bg="#F3F6F5" doodle={HW_DOODLES.sprout} title={t('hw_t3')} body={t('hw_b3')} delay={610} />
-        <HomePurposeControl />
-        <View style={{ height: 56 }} />
+        {/* Say it, the month summary and the road with its stops come once there is a record. */}
+        <FirstPath minHeight={winH - 150} />
       </ScreenShell>
     );
   }
 
   return (
-    <ScreenShell brand right={<DemoChip />}>
+    <ScreenShell brand tint="#EEF6F3">
       {retention}
-      <GuideTarget id="home.hero"><HomeCards /></GuideTarget>
-      {/* v27b2: Say an entry sits above the house test. */}
-      <GuideTarget id="home.say"><SayCard /></GuideTarget>
-      <GuideTarget id="home.test"><HouseTestRow /></GuideTarget>
-      <HomePurposeControl />
-      <GuideTarget id="home.plan"><PlanCard /></GuideTarget>
+      {/* Home and Saving v2: this month (with Say it) feeds the record, which moves the
+          person along the path to a home: Record, Test, Save, then Plan complete. */}
+      <GuideTarget id="home.hero"><HomeHero panel={<BalPanel />} /></GuideTarget>
+      <GuideTarget id="home.say">{S.sayOpen ? <View style={{ marginTop: 12 }}><SayCard /></View> : <SayPill />}</GuideTarget>
+      <GuideTarget id="home.test" style={{ marginTop: 12 }}><GuideTarget id="home.plan"><PathCard /></GuideTarget></GuideTarget>
     </ScreenShell>
   );
 }

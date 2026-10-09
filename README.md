@@ -42,7 +42,7 @@ See the [Epic 1 implementation and acceptance index](docs/epic-1/README.md) for 
 
 See the [Epic 2 implementation and acceptance index](docs/epic-2/README.md) for all 18 criteria, calculation boundaries, and browser evidence.
 
-The [Epic 1 completion report](docs/epic-1/EPIC_1_COMPLETION_REPORT.md) summarises that release. Production-grade OCR, user accounts, cross-device synchronisation, income prediction, and risk scoring remain outside the current milestone. Epic 5 is delivered: 11 user stories and 88 acceptance criteria are mapped, 83 are executable, and 5 (AC5.9.5, AC5.9.7, AC5.10.2, AC5.10.9, AC5.11.4) are recorded as deferred in the Epic 5 acceptance index as of 2026-10-09; see the [Epic 1/2/5 implementation matrix](docs/EPIC_1_2_5_IMPLEMENTATION_MATRIX.md) for the boundary.
+The [Epic 1 completion report](docs/epic-1/EPIC_1_COMPLETION_REPORT.md) summarises that release. Production-grade OCR, user accounts, cross-device synchronisation, income prediction, and risk scoring remain outside the current milestone. Epic 5 is delivered: 11 user stories and 88 acceptance criteria are mapped, all 88 are executable and none is deferred as of 2026-10-09; see the [Epic 1/2/5 implementation matrix](docs/EPIC_1_2_5_IMPLEMENTATION_MATRIX.md) for the boundary.
 
 The formal requirements are available as searchable Markdown: [all user stories and acceptance criteria](docs/requirements/USER_STORIES_AND_ACCEPTANCE_CRITERIA.md), [Epic 1](docs/requirements/EPIC_1_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md), and [Epic 2](docs/requirements/EPIC_2_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md). Delivery is organised by user story and verified by acceptance criterion.
 

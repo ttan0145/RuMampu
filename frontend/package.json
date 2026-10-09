@@ -47,7 +47,7 @@
     "test:e2e:acceptance": "npm run test:e2e:traceability && playwright test e2e/epic1.spec.ts e2e/epic2.spec.ts",
     "test:e2e:epic1": "npm run test:e2e:traceability && playwright test e2e/epic1.spec.ts",
     "test:e2e:epic2": "npm run test:e2e:traceability && playwright test e2e/epic2.spec.ts",
-    "test:e2e:epic5": "npm run test:e2e:traceability && playwright test e2e/epic5.spec.ts e2e/epic5-upfront-fees.spec.ts e2e/epic5-learn.spec.ts",
+    "test:e2e:epic5": "npm run test:e2e:traceability && playwright test e2e/epic5.spec.ts e2e/epic5-upfront-fees.spec.ts e2e/epic5-learn.spec.ts e2e/epic5-prepare-path.spec.ts",
     "test:e2e:epic3": "playwright test e2e/epic3.spec.ts",
     "test:e2e:epic4": "playwright test e2e/epic4.spec.ts",
     "test:e2e:epic8": "playwright test e2e/epic8.spec.ts",

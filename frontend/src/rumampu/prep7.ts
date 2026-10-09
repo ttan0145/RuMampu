@@ -74,6 +74,20 @@ export function depositAssumed(s: AppState): boolean {
   return src.price > 0 && !src.typed && !(src.dep || s.data.house.deposit);
 }
 
+/* Where the loan terms come from (AC5.10.9): 'user' when the share, the rate and
+   the years all come from the house test or from a choice made in this check;
+   'assume' when any of them is a RuMampu starting point (the 10% deposit
+   fallback, 4.3%, 35 years). A typed 4.3 cannot be told from the default, so a
+   value equal to the default counts as assumed. */
+export function termsProv(s: AppState): 'user' | 'assume' {
+  const src = upfrontFees(s).src;
+  const base = baseTerms(s);
+  const share = s.prep.margin != null || !!(src.dep || s.data.house.deposit);
+  const rate = base.rate !== 4.3;
+  const years = s.prep.years != null || base.years !== 35;
+  return share && rate && years ? 'user' : 'assume';
+}
+
 /* interest and principal in the payment after k months */
 export function amort(c: Loan, k: number): { int: number; prin: number } {
   const r = c.rate / 100 / 12;
@@ -131,15 +145,14 @@ export function stageCash(s: AppState, c: Loan) {
     book: earnest,
     spa: Math.max(0, c.dep - earnest) + f.spa + f.t,
     loan: f.loanLegal + f.l + f.val + mrta,
+    /* the earnest deposit was typed on Upfront cash; otherwise 2% is RuMampu's assumption */
+    bookTyped: earnestIn > 0,
   };
 }
 
-/* Schedule H stages, % of the price. The description is a string key. */
-export const SCHED: [string, string, number][] = [
-  ['1', 'p7_h1', 10], ['2(a)', 'p7_h2a', 10], ['2(b)', 'p7_h2b', 15], ['2(c)', 'p7_h2c', 10], ['2(d)', 'p7_h2d', 10],
-  ['2(e)', 'p7_h2e', 10], ['2(f)', 'p7_h2f', 5], ['2(g)', 'p7_h2g', 2.5], ['2(h)', 'p7_h2h', 2.5], ['3', 'p7_h3', 17.5],
-  ['4', 'p7_h4', 2.5], ['5', 'p7_h5', 5],
-];
+/* Schedule H stages, % of the price, kept with their sources in buying-facts.ts (AC5.11.4). */
+export { SCHED } from './buying-facts';
+import { SCHED } from './buying-facts';
 export function schedRows(c: Loan) {
   const P = c.price;
   let cum = 0, youLeft = P - c.L;

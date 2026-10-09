@@ -182,20 +182,23 @@ export function villageMove(s: AppState, dir: 'l' | 'r' | 'u' | 'd'): number {
 }
 
 /* One player move: slide and merge, then one ready Pondok lands on a free square (the "+1").
-   A swipe that only places a Pondok still counts as a move. Returns false if nothing happened. */
+   A move counts when it places a Pondok or merges houses; a swipe that only slides
+   houses around (say, once every ready Pondok is placed) moves them but adds no move.
+   Returns false if nothing happened. */
 export function villagePlay(s: AppState, dir: 'l' | 'r' | 'u' | 'd', builtLabel: (tier: number) => string): boolean {
   const r = villageMove(s, dir);
   const v = villageEnsure(s);
   const placed = villagePlaceOne(s);
   if (r < 0 && placed == null) return false;
   v.msg = r >= 2 ? builtLabel(r) : '';
-  v.moves++;
+  if (placed != null || (r >= 0 && v.gain > 0)) v.moves++;
   if (r >= 0) {
     v.score += v.gain;
     v.best = Math.max(v.best, v.score);
   }
+  v.turn = (v.turn ?? 0) + 1;
   v.spawn = placed;
-  v.spawnAt = v.moves;
+  v.spawnAt = v.turn;
   return true;
 }
 
@@ -240,5 +243,5 @@ export function villageQueueKey(s: AppState): string | null {
 /* The square to light up: where the last swipe placed a ready Pondok, until the next move. */
 export function villageGlow(s: AppState): number[] {
   const v = s.village;
-  return v && v.spawn != null && v.spawnAt === v.moves && v.cells[v.spawn] ? [v.spawn] : [];
+  return v && v.spawn != null && v.spawnAt === (v.turn ?? v.moves) && v.cells[v.spawn] ? [v.spawn] : [];
 }

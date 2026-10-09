@@ -2,7 +2,7 @@ import React from 'react';
 import {
   Pressable, StyleSheet, Text, TextInput, TextStyle, View, ViewStyle,
 } from 'react-native';
-import { BODY_FONT, C, DISP_FONT, SEMI_FONT, XBOLD_FONT } from './theme';
+import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from './theme';
 import { Ico } from './svgs';
 import { RumaAvatar } from './ruma-view';
 import { useApp } from './state';
@@ -129,7 +129,8 @@ export function NoteC({ children }: { children: React.ReactNode }) {
 export function Hdr({ back, title, brand, greet, right }: {
   back?: boolean; title?: string; brand?: boolean; greet?: boolean; right?: React.ReactNode;
 }) {
-  const { t, S, backNav } = useApp();
+  const { t, S, backNav, up, go } = useApp();
+  const coach = back && S.pathCoach && S.pathCoach.route === S.route ? S.pathCoach : null;
 
   if (brand || greet) {
     const h = new Date().getHours();
@@ -158,11 +159,28 @@ export function Hdr({ back, title, brand, greet, right }: {
   }
 
   return (
-    <View style={st.hdr}>
+    <View style={[st.hdr, coach && { zIndex: 30, elevation: 9 }]}>
       {back ? (
-        <Pressable style={st.iconbtn} onPress={backNav} accessibilityLabel={t('back')}>
+        <Pressable style={[st.iconbtn, coach && st.coachRing]} onPress={() => { if (coach) up(x => { x.pathCoach = null; }); backNav(); }}
+          accessibilityLabel={t('back')}>
           <Text style={{ fontSize: 20, color: C.ink }}>←</Text>
         </Pressable>
+      ) : null}
+      {coach ? (
+        /* the step is done: point at the way back, with a shortcut straight to the path */
+        <View style={st.coach} testID="path-coach">
+          <View style={st.coachTail} />
+          <Text style={{ fontFamily: SEMI_FONT, fontSize: 13.5, lineHeight: 19, color: '#fff' }}>{t(coach.key)}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 8 }}>
+            <Pressable onPress={() => { up(x => { x.pathFocus = x.pathCoach?.stop ?? null; x.pathCoach = null; }); go('home'); }} accessibilityRole="button"
+              testID="path-coach-go" style={st.coachBtn}>
+              <Text style={{ fontFamily: DISP_FONT, fontSize: 13, color: '#0B6F6B' }}>{t('hx_coach_go')}</Text>
+            </Pressable>
+            <Pressable onPress={() => up(x => { x.pathCoach = null; })} accessibilityRole="button" hitSlop={8}>
+              <Text style={{ fontFamily: SEMI_FONT, fontSize: 13, color: 'rgba(255,255,255,0.85)' }}>{t('hx_coach_later')}</Text>
+            </Pressable>
+          </View>
+        </View>
       ) : null}
       <Text style={{ flex: 1, fontFamily: DISP_FONT, fontSize: 19, color: C.ink, fontVariant: ['tabular-nums'] }}>
         {title || ''}
@@ -471,17 +489,6 @@ export function SwRow({ on, onPress, label, hint }: { on: boolean; onPress: () =
   );
 }
 
-/* v27b: while sample months show, Home and Money say so in the header. */
-export function DemoChip() {
-  const { S, t, toast } = useApp();
-  if (!S.demo) return null;
-  return (
-    <Pressable onPress={() => toast(t('demo_note'))} accessibilityRole="button" style={st.demochip}>
-      <Text style={st.demochipTxt}>{t('demo_chip').toUpperCase()}</Text>
-    </Pressable>
-  );
-}
-
 /* v27 (I2-F04): a whole past month is a button that says what it adds. */
 export function WholeMonthBtn({ title, sub, onPress }: { title: string; sub: string; onPress: () => void }) {
   return (
@@ -519,7 +526,8 @@ export function FromR({ label }: { label: string }) {
 
 const st = StyleSheet.create({
   hdr: {
-    backgroundColor: C.paper,
+    /* the page's own colour shows through (white unless the screen sets a tint) */
+    backgroundColor: 'transparent',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -529,6 +537,14 @@ const st = StyleSheet.create({
     paddingHorizontal: 20,
   },
   iconbtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
+  coachRing: { borderRadius: 22, borderWidth: 3, borderColor: '#11A09B', backgroundColor: '#DAF3F0' },
+  coach: {
+    position: 'absolute', left: 10, top: 58, maxWidth: 290, zIndex: 50, elevation: 8,
+    backgroundColor: '#11A09B', borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14,
+    shadowColor: '#1F2A44', shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
+  },
+  coachTail: { position: 'absolute', left: 18, top: -6, width: 14, height: 14, backgroundColor: '#11A09B', transform: [{ rotate: '45deg' }] },
+  coachBtn: { backgroundColor: '#fff', borderRadius: 999, paddingVertical: 7, paddingHorizontal: 14 },
   card: { backgroundColor: C.card, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: C.ink14 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   noteC: {
@@ -577,8 +593,6 @@ const st = StyleSheet.create({
     borderRadius: 10, alignSelf: 'flex-start', justifyContent: 'center',
   },
   fromrTxt: { fontSize: 11, letterSpacing: 0.55, color: C.ink64, fontWeight: '600' },
-  demochip: { backgroundColor: C.caution, paddingVertical: 5, paddingHorizontal: 9, borderRadius: 9, marginRight: 6 },
-  demochipTxt: { fontFamily: XBOLD_FONT, fontSize: 11, letterSpacing: 0.44, color: C.ink },
   wmbtn: {
     flexDirection: 'row', alignItems: 'center', gap: 12, width: '100%', minHeight: 58, marginTop: 10,
     paddingVertical: 10, paddingHorizontal: 14, borderRadius: 14, backgroundColor: C.paper,

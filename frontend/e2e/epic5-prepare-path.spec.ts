@@ -1,12 +1,12 @@
 import { expect, Page } from '@playwright/test';
 import { e2ePost, test } from './support/fixtures';
-import { ac, deferredAc } from './support/acceptance';
-import { API, openGuestApp, pinGuestClientId } from './support/app';
+import { ac } from './support/acceptance';
+import { API, endGuestSession, openGuestApp, pinGuestClientId, reloadApp } from './support/app';
 
 /* Epic 5, Iteration 3 — US5.9 Prepare for one home, US5.10 the monthly check, US5.11 How buying works.
    Written from the Prepare path as built on 8 October 2026 (commit 1c037a7) against the V9 requirement text.
-   Where the build contradicts the V9 wording, the AC is registered with deferredAc() and the reason is
-   written down instead of being made to pass. */
+   Where the build contradicts the V9 wording, the AC is registered with deferredAc() (from ./support/acceptance)
+   and the reason is written down instead of being made to pass. */
 
 test.setTimeout(300_000);
 
@@ -22,9 +22,13 @@ async function keepPriceTest(page: Page, price: number): Promise<void> {
   await page.getByPlaceholder('e.g. 250,000').fill(String(price));
   await page.getByText('The house', { exact: true }).click();
   await page.getByText('Run the test', { exact: true }).last().click();
-  await expect(page.getByText(/months would run short|All \d+ months would carry it/)).toBeVisible();
-  await page.getByText('Save test', { exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Save test', exact: true }).click();
+  const result = page.getByText(/months would run short|All \d+ months would carry it/);
+  const noCommitments = page.getByText('I have no commitments', { exact: true });
+  await expect(result.or(noCommitments).first()).toBeVisible();
+  if (await noCommitments.isVisible()) await noCommitments.click();
+  await expect(result).toBeVisible();
+  // Home and Saving v2 (d992fa4): every test that runs is kept straight away under its price; the House tab lists it under Saved tests.
+  await page.getByRole('tab', { name: 'House', exact: true }).click();
   await expect(page.getByText('Saved tests', { exact: true }).first()).toBeVisible();
 }
 
@@ -49,6 +53,50 @@ async function runLessonToSummary(page: Page): Promise<void> {
 const bodyText = (page: Page) => page.locator('body').innerText();
 
 test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iteration 3)', { tag: '@epic5' }, () => {
+  let accountToken: string | undefined;
+  test.afterEach(async ({ page }) => {
+    if (!accountToken) return;
+    const cleanup = await page.request.delete(`${API}/auth/record/`, { headers: { Authorization: `Token ${accountToken}` } });
+    accountToken = undefined;
+    expect([200, 204]).toContain(cleanup.status());
+  });
+
+  test('US5.9 — Kept on this device for a signed-in account', { tag: '@us5.9' }, async ({ page }) => {
+    const email = `epic5-prepare-${Date.now()}@example.com`, password = 'Passw0rd123';
+    const registered = await page.request.post(`${API}/auth/register/`, { data: { email, password } });
+    expect(registered.status()).toBe(201);
+    const { token } = await registered.json();
+    accountToken = token;
+    const seeded = await page.request.patch(`${API}/auth/me/`, { headers: { Authorization: `Token ${token}` }, data: { preferred_language: 'en', onboarding_completed: true } });
+    expect(seeded.status()).toBe(200);
+    await endGuestSession(page);
+    await page.goto('/');
+    await page.getByPlaceholder('name@example.com').fill(email);
+    await page.getByPlaceholder('Your password').fill(password);
+    const response = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/auth/login/'));
+    await page.getByText('Log in', { exact: true }).last().click();
+    expect((await response).status()).toBe(200);
+    await page.getByRole('tab', { name: 'Home', exact: true }).click({ trial: true, timeout: 90_000 });
+
+    await test.step('AC5.9.7 for a signed-in account', async () => {
+      await keepPriceTest(page, 300000);
+      await openPrepare(page);
+      await page.getByTestId('prep-node-2').click();
+      // the account keeps the ticks on the server; wait for the save that carries all five before reloading
+      const saved = page.waitForResponse(r => r.request().method() === 'PATCH' && r.url().endsWith('/auth/me/')
+        && (r.request().postDataJSON()?.docs_checked?.length ?? 0) === 5);
+      for (const key of ['dc_bank', 'dc_ehail', 'dc_statdec', 'dc_epf', 'dc_commitlist']) {
+        await page.getByTestId(`doc-${key}`).click();
+      }
+      expect((await saved).status()).toBe(200);
+      await page.getByLabel('Back').click();
+      await reloadApp(page);
+      await openPrepare(page);
+      await expect(page.getByTestId('prep-banner')).toContainText('RM 300,000');
+      await expect(page.getByTestId('prep-node-2')).toHaveAccessibleName(/All ready/);
+    });
+  });
+
   test('US5.9 — Choose or type a home first', { tag: '@us5.9' }, async ({ page }) => {
     await openGuestApp(page);
     await ac('AC5.9.2', 'Choose or type a home first', async () => {
@@ -127,9 +175,19 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
       await expect(page.getByTestId('prep-node-3')).not.toHaveAccessibleName(/All ready|Saved|Covered/);
     });
 
-    deferredAc('AC5.9.5', 'Say what is left without a verdict',
-      'The build says "You’re ready to buy! Save your plan for your own reference." once all three steps are done (strings.ts p7_ready), which the AC and the rule that RuMampu never says a user is ready or approved forbid (V9 build note, conflict with 10.15.4). A test of the required wording would fail until the copy is changed.');
-    await expect(page.getByTestId('prep-bubble')).toContainText('1 thing left before you buy.');
+    await ac('AC5.9.5', 'Say what is left without a verdict', async () => {
+      // two steps are done, so the line counts what is left and names the next one: the cash
+      await expect(page.getByTestId('prep-bubble')).toContainText('1 thing left before you buy.');
+      await expect(page.getByTestId('prep-bubble')).toContainText(/You have \d+% of the cash\. RM [\d,]+ to go\./);
+      // enough cash on hand covers what the home needs, so all three steps are done
+      await page.getByTestId('prep-node-1').click();
+      await page.getByLabel('Cash I have now', { exact: true }).fill('100000');
+      await page.getByLabel('Back').click();
+      await expect(page.getByTestId('prep-node-1')).toHaveAccessibleName(/Covered/);
+      // ... and the line says so without calling me ready or approved (copy changed 2026-10-09)
+      await expect(page.getByTestId('prep-bubble')).toContainText('All three steps are done. Save your plan for your own reference.');
+      await expect(page.getByTestId('prep-bubble')).not.toContainText(/ready to buy|approved/i);
+    });
 
     await ac('AC5.9.6', 'Keep a copy of my plan', async () => {
       const popupPromise = page.waitForEvent('popup');
@@ -148,20 +206,20 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
       await popup.close();
     });
 
-    // Coming back within the open app keeps the home, the answers and the finished steps ...
-    await page.getByLabel('Back').click();
-    await page.getByRole('tab', { name: 'Money', exact: true }).click();
-    await openPrepare(page);
-    await expect(page.getByTestId('prep-banner')).toContainText('RM 300,000');
-    await expect(page.getByTestId('prep-node-0')).toHaveAccessibleName(/Saved to your plan/);
-    await expect(page.getByTestId('prep-node-2')).toHaveAccessibleName(/All ready/);
-    // ... but a guest who reopens the page lands on the guest entry again and Prepare starts empty (observed, not asserted).
-    await openGuestApp(page);
-    await openPrepare(page);
-    const keptAfterReopen = await page.getByTestId('prep-banner').count();
-    test.info().annotations.push({ type: 'observation', description: `AC5.9.7: after reopening the page as a guest the Prepare banner count is ${keptAfterReopen} (0 = the home and steps were not kept).` });
-    deferredAc('AC5.9.7', 'Kept on this device',
-      'Within the open app the home, answers and finished steps stay, but a guest who reopens the page (a full reload) is sent through the guest entry again and Prepare starts empty with no kept house tests, which the guest-entry copy ("Your records will not be kept after you fully close the app") describes. Whether the path persists on the same device for a signed-in account was not verified. The AC says "when I come back on the same device", so it is not claimed as passed.');
+    await ac('AC5.9.7', 'Kept on this device', async () => {
+      // a reload of the same tab keeps the guest record, so the home and the finished steps are still there
+      await reloadApp(page);
+      await openPrepare(page);
+      await expect(page.getByTestId('prep-banner')).toContainText('RM 300,000');
+      await expect(page.getByTestId('prep-node-0')).toHaveAccessibleName(/Saved to your plan/);
+      await expect(page.getByTestId('prep-node-1')).toHaveAccessibleName(/Covered/);
+      await expect(page.getByTestId('prep-node-2')).toHaveAccessibleName(/All ready/);
+      // closing the tab ends the guest session: a new tab in the same browser starts at the guest entry
+      const tab = await page.context().newPage();
+      await tab.goto('/');
+      await expect(tab.getByText('Continue as guest', { exact: true }).last()).toBeVisible({ timeout: 30000 });
+      await tab.close();
+    });
   });
 
   test('US5.10 — Check what paying each month would be like', { tag: '@us5.10' }, async ({ page }) => {
@@ -176,8 +234,12 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
       await expect(page.getByTestId('lesson-answer')).toContainText('Your typical month:');
     });
 
-    deferredAc('AC5.10.2', 'Compare with my month, without a rating',
-      'The build rates the share with the words Comfortable (35% or less), Tight (up to 50%) and Heavy (above 50%) and colours the rate rows by the same cut-offs (V9 build note; prep7.ts fitOf, strings p7_fit_*). The AC forbids any rating and the cut-offs have no published source, so the required behaviour is not built.');
+    await ac('AC5.10.2', 'Compare with my month: the share in figures and words', async () => {
+      // the share of the typical month, as a figure and in words; the Comfortable / Tight / Heavy word
+      // beside it stays by the owner's decision of 2026-10-09 (docs/epic-5/README.md)
+      await expect(page.getByTestId('lesson-fit-fact')).toContainText(/the instalment is RM [\d,]+, about \d+% of your typical month\./);
+      await expect(page.getByTestId('lesson-answer')).toContainText(/\d+% loan/);
+    });
 
     await ac('AC5.10.3', 'Where the payment goes', async () => {
       await page.getByTestId('lesson-next').click();
@@ -249,8 +311,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
       await expect(page.getByTestId('prep-node-0')).toHaveAccessibleName(/Saved to your plan/);
     });
 
-    deferredAc('AC5.10.9', 'Say where every figure comes from',
-      'The build uses no provenance label on this check apart from "Our guess" on the monthly bill (V9 build note); figures from the record or the test are not labelled your data or calculated, the defaults for rate and tenure are not marked as assumptions, and the age-70 rule on Pick how long names no source. The required labelling is not built.');
+    // AC5.10.9 (where every figure comes from) walks the six screens in its own test below.
 
     await ac('AC5.10.7', 'A cushion from my own months', async () => {
       await page.getByTestId('prep-node-0').click();
@@ -286,6 +347,57 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
       await page.getByLabel('Fire insurance').fill('90');
       await expect(page.getByText('Our guess', { exact: true })).toHaveCount(2);
       await expect(page.getByTestId('lesson-bills-total')).not.toHaveText(before);
+    });
+  });
+
+  test('US5.10 — Say where every figure comes from', { tag: '@us5.10' }, async ({ page }) => {
+    await seededApp(page);
+    await keepPriceTest(page, 600000);
+    await openPrepare(page);
+    await page.getByTestId('prep-node-0').click();
+
+    await ac('AC5.10.9', 'Say where every figure comes from', async () => {
+      // the first screen: the instalment is calculated; the test carries RuMampu's 4.30% and 35 years, so the terms are an assumption
+      await expect(page.getByTestId('prov-answer')).toContainText('CALCULATED');
+      await expect(page.getByTestId('prov-terms')).toContainText('ASSUMPTION');
+      await page.getByTestId('lesson-prov-info').click();
+      await expect(page.getByText('Where these figures come from', { exact: true })).toBeVisible();
+      await expect(page.getByText(/Monthly instalment: worked out from the price/)).toBeVisible();
+      await expect(page.getByText(/RuMampu's usual starting point/)).toBeVisible();
+      await page.getByText('Done', { exact: true }).click();
+      await expect(page.getByText('Where these figures come from', { exact: true })).toHaveCount(0);
+      // where the payment goes: calculated
+      await page.getByTestId('lesson-next').click();
+      await expect(page.getByTestId('prov-split')).toContainText('CALCULATED');
+      // pick how long: the figures are calculated, and the age rule names its source
+      await page.getByTestId('lesson-next').click();
+      await expect(page.getByTestId('prov-lends')).toContainText('CALCULATED');
+      await page.getByLabel('Your age').fill('40');
+      await expect(page.locator('body')).toContainText('Banks commonly end the loan by age 70, so up to 30 years for you.');
+      await expect(page.getByTestId('fact-age')).toContainText('Common practice, not a legal rule. CIMB lends up to 35 years or to age 70, whichever is earlier; other banks set their own limit. Source: CIMB: Home loan. Checked 9 October 2026.');
+      await page.getByLabel('Your age').fill('');
+      // what if rates go up: the higher rates are what-ifs
+      await page.getByTestId('lesson-next').click();
+      await expect(page.getByTestId('prov-rates')).toContainText('CALCULATED');
+      await expect(page.getByTestId('prov-whatif')).toContainText('ASSUMPTION');
+      await expect(page.getByText('+1% and +2% are what-ifs, not a forecast.', { exact: true })).toBeVisible();
+      // the full monthly bill: the instalment is calculated, a guess stays a guess, a changed amount is my data
+      await page.getByTestId('lesson-next').click();
+      await expect(page.getByTestId('prov-inst')).toContainText('CALCULATED');
+      await expect(page.getByText('Our guess', { exact: true })).toHaveCount(2);
+      await page.getByLabel('Fire insurance').fill('90');
+      await expect(page.getByTestId('prov-fire')).toContainText('YOUR DATA');
+      await expect(page.getByText('Our guess', { exact: true })).toHaveCount(1);
+      // the cushion comes from my recorded months
+      await page.getByTestId('lesson-next').click();
+      await expect(page.getByTestId('prov-cushion')).toContainText('CALCULATED');
+      // the summary: three calculated numbers, and the loan summary says which rows are assumed and which are calculated
+      await page.getByTestId('lesson-next').click();
+      await expect(page.getByText('Monthly check done', { exact: true })).toBeVisible();
+      await expect(page.getByTestId('prov-remember')).toContainText('CALCULATED');
+      await page.getByText('Full loan summary', { exact: true }).click();
+      await expect(page.getByTestId('prov-sum-terms')).toContainText('ASSUMPTION');
+      await expect(page.getByTestId('prov-sum-calc')).toContainText('CALCULATED');
     });
   });
 
@@ -329,7 +441,23 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
       await expect(page.getByText('Total', { exact: true })).toBeVisible();
     });
 
-    deferredAc('AC5.11.4', 'Timings and shares name their source',
-      'No timing or share on How buying works carries a source or a checked date ("usually 2 to 3%", "within about 14 days", "3 to 4 months later", the Schedule H stage percentages) and the amounts carry no provenance label; Schedule H is named without its regulation (V9 build note). The required sourcing is not built.');
+    await ac('AC5.11.4', 'Timings and shares name their source', async () => {
+      // project: the shares name their regulation and say they are not yet checked against the gazette text
+      await expect(page.getByTestId('fact-sched').first()).toContainText('Unverified. Shares follow Schedule H of the Housing Development (Control and Licensing) Regulations 1989 for strata homes');
+      await expect(page.getByTestId('fact-sched').first()).toContainText('secondary sources read 9 October 2026');
+      await expect(page.getByTestId('fact-sched').first()).toContainText('Source: Housing Development (Control and Licensing) Regulations 1989, Schedule H.');
+      await expect(page.getByTestId('prov-tl-uc_keys')).toContainText('CALCULATED');
+      // subsale: each timing carries its status, its source and the checked date, or is marked unverified
+      await page.getByText('Subsale', { exact: true }).click();
+      await expect(page.getByTestId('fact-book')).toContainText('Common practice, not a legal rule. Source: Agent and lawyer guides (iProperty, DNH, HBA). Checked 9 October 2026.');
+      await expect(page.getByTestId('fact-spa')).toContainText('Common practice, not a legal rule. Your offer letter sets the date. Source: Agent and lawyer guides (iProperty, DNH, HBA). Checked 9 October 2026.');
+      await expect(page.getByTestId('fact-comp')).toContainText('Many agreements give 3 months, plus 1 month with interest.');
+      await expect(page.getByTestId('fact-keys')).toContainText('Unverified. The bank sets when the first instalment is due.');
+      // every amount carries its provenance label: the 2% earnest deposit is RuMampu's assumption, the rest is calculated
+      await expect(page.getByTestId('prov-tl-book')).toContainText('ASSUMPTION');
+      await expect(page.getByTestId('prov-tl-spa')).toContainText('CALCULATED');
+      await expect(page.getByTestId('prov-tl-comp')).toContainText('CALCULATED');
+      await expect(page.getByTestId('prov-tl-keys')).toContainText('CALCULATED');
+    });
   });
 });

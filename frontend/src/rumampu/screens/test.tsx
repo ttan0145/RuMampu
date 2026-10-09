@@ -33,6 +33,7 @@ import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from '../theme';
 import { Band, Waterline } from '../charts';
 import { ScreenShell } from './shell';
 import { GuideTarget } from '../tour';
+import { PathStrip, Ph, pathSteps } from '../homepath';
 import { LearnStrip } from './learn';
 import { useHousingCalculation } from '../useHousingCalculation';
 import { ApiError } from '../../../services/api';
@@ -92,6 +93,7 @@ function useRunTest() {
           setHousingTestResult(housingTest);
           up(state => {
             state.testRan = true;
+          state.pathCoach = { route: 'result', key: 'hx_coach_test' };
             state.viewTestName = null;
             state.tryPay = null;
             state.shock = 0;
@@ -123,6 +125,8 @@ function useRunTest() {
         setHousingTestResult(housingTest);
         up(state => {
           state.testRan = true;
+          state.autoKeep = true;
+          state.pathCoach = { route: 'result', key: 'hx_coach_test' };
           state.viewTestName = null;
           state.tryPay = null;
           state.shock = 0;
@@ -171,7 +175,7 @@ function TxRow({ label, sub, prov, value, editLabel, onEdit, total }: {
 }
 
 export function HouseBody() {
-  const { S, t, up } = useApp();
+  const { S, t, up, go } = useApp();
   const h = S.data.house;
   const calc = useHousingCalculation(S.data);
   const { run, running } = useRunTest();
@@ -249,7 +253,16 @@ export function HouseBody() {
                 style={tx.txamt}
               />
             </View>
-            <BodyS muted style={{ marginTop: 12 }}>{t('tx_dep')} · {rm(h.deposit)}</BodyS>
+            {/* a tip, not a footnote: a first price is the hardest part of the test */}
+            <GuideTarget id="tx.price" style={{ alignSelf: 'flex-start', marginTop: 8 }}>
+              <Pressable onPress={() => go('homecosts')} accessibilityRole="link" testID="tx-price-help"
+                style={({ pressed }) => [tx.pricetip, pressed && { opacity: 0.8 }]}>
+                <Ph n="lightbulb" c="#A86A00" size={16} />
+                <Text style={{ fontFamily: SEMI_FONT, fontSize: 13, color: '#7A4D00', flexShrink: 1 }}>{t('tx_price_help')}</Text>
+                <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: '#A86A00' }}>{'\u203A'}</Text>
+              </Pressable>
+            </GuideTarget>
+            <BodyS muted style={{ marginTop: 4 }}>{t('tx_dep')} · {rm(h.deposit)}</BodyS>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8, alignItems: 'center' }}>
               {[0, 10, 20].map(depChip)}
               <Pressable onPress={() => up(s => { s.depMode = 'other'; })}
@@ -324,6 +337,15 @@ const HH_SCENE: Record<string, { bg: string; xml: string }> = {
   <rect x="47" y="55" width="12" height="19" rx="2" fill="#F2C14E" stroke="${INK}" stroke-width="1.8"/>
   <circle cx="82" cy="30" r="12" fill="#3F8A8E" stroke="${INK}" stroke-width="2"/>
   <path d="M76.5 30 l4 4 l7.5 -7.5" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>` },
+  plan: { bg: '#ECE8FF', xml: `<svg viewBox="0 0 104 84" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="54" cy="42" r="38" fill="#DCD4FF"/>
+  <ellipse cx="52" cy="76" rx="42" ry="6" fill="#C9BEFA"/>
+  <path d="M30 44 Q30 30 50 30 Q70 30 70 44 L70 62 Q70 74 50 74 Q30 74 30 62 Z" fill="#FFFFFF" stroke="${INK}" stroke-width="2"/>
+  <rect x="38" y="24" width="24" height="8" rx="3" fill="#7C5CFF" stroke="${INK}" stroke-width="2"/>
+  <g stroke="${INK}" stroke-width="1.6"><ellipse cx="50" cy="64" rx="12" ry="4" fill="#FFC83D"/><ellipse cx="50" cy="58" rx="12" ry="4" fill="#FFC83D"/><ellipse cx="50" cy="52" rx="12" ry="4" fill="#FFD866"/></g>
+  <circle cx="82" cy="28" r="11" fill="#FFC83D" stroke="${INK}" stroke-width="2"/>
+  <text x="76.5" y="32" font-family="sans-serif" font-size="10" font-weight="700" fill="${INK}">RM</text>
 </svg>` },
   homecosts: { bg: '#FBF0DC', xml: `<svg viewBox="0 0 104 84" xmlns="http://www.w3.org/2000/svg">
   <circle cx="54" cy="42" r="38" fill="#F5E1BE"/>
@@ -407,6 +429,7 @@ export function HousehomeScreen() {
   React.useEffect(() => { void loadHouseCosts(); }, [loadHouseCosts]);
 
   /* v24 hcMonthsStrip: recorded months → test outcome per month. */
+  const dream = !!(S.testRan && getHousingTestResult());
   const monthsStrip = (() => {
     const n = monthsAgg(S.data).length;
     if (!n) return { label: t('hc_first') };
@@ -450,13 +473,73 @@ export function HousehomeScreen() {
     return { label: held > 0 ? `${label} · ${t('hc_held', { h: rm(held) })}` : label, pct };
   })();
 
-  const HUB_ID: Record<string, string> = { house: 'hh.test', homecosts: 'hh.costs', prepare_soon: 'hh.prep', learn: 'hh.learn' };
-  const card = (to: Parameters<typeof go>[0], scene: string, title: string, desc: string, strip: React.ReactNode) => (
+  /* Saving plan: locked until a house is tested, then today's amount and how full the goal is. */
+  const steps = pathSteps(S, getHousingTestResult());
+  const planStrip = (() => {
+    if (!steps.tested) return { label: t('hh_plan_lock') };
+    if (steps.phase === 'explain') return { label: t('hh_plan_hold') };
+    const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+    const p = S.plan && S.plan.key === monthKey ? S.plan : null;
+    const day = new Date().getDate() - 1;
+    const amt = p?.amounts[day] ?? 0;
+    const q = steps.q;
+    const have = steps.inBuf ? q.buf : q.up, goal = steps.inBuf ? q.bt : q.need;
+    const pct = goal > 0 ? Math.min(100, Math.round(have / goal * 100)) : 100;
+    if (!steps.saving) return { label: amt ? t('hh_plan_ready', { a: rm(amt) }) : t('hx_ready') };
+    return {
+      label: p?.done[day] ? t('hh_plan_saved', { h: rm(have), t: rm(goal) }) : t('hh_plan_today', { a: rm(amt) }),
+      pct,
+    };
+  })();
+
+  /* Your dream house: the price that was tested and how it fits. */
+  const dreamInfo = (() => {
+    const result = getHousingTestResult();
+    if (!steps.tested || !result) return null;
+    const sc = getHousingScenario();
+    const pay = sc?.known_monthly_payment ?? null;
+    const price = pay == null ? (sc?.property_price || S.data.house.price || result.indicative_tested_property_price || 0) : 0;
+    const short = Number(result.short_month_count) || 0;
+    const fit: 'ok' | 'warn' | 'bad' = steps.phase === 'explain' ? 'bad' : short ? 'warn' : 'ok';
+    return {
+      amount: pay != null ? t('hh_dream_pay', { a: rm(pay) }) : price ? rm(price) : null,
+      fit, fitLbl: t(fit === 'bad' ? 'hx_nofit' : fit === 'warn' ? 'hx_tight' : 'hx_fits'),
+    };
+  })();
+  const FIT = { ok: { bg: '#D9F2E3', fg: '#1C8A4C' }, warn: { bg: '#FFF0C7', fg: '#8A5A00' }, bad: { bg: '#FFE0D6', fg: '#B5401A' } };
+
+  /* Tools that help at any step: a slim row, so the path cards above lead. */
+  const row = (to: Parameters<typeof go>[0], scene: string, title: string, desc: string, strip: React.ReactNode) => (
+    <GuideTarget key={to} id={HUB_ID[to] || `hh.${to}`}>
+    <Pressable onPress={() => go(to)} accessibilityRole="button"
+      style={({ pressed }) => [tx.hrow, pressed && { transform: [{ scale: 0.985 }] }]}>
+      <View pointerEvents="none" style={[tx.hrowIc, { backgroundColor: HH_SCENE[scene].bg }]}>
+        <SvgXml xml={HH_SCENE[scene].xml} width={56} height={45} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+        <Text style={{ fontFamily: DISP_FONT, fontSize: 15, lineHeight: 19, color: C.ink }}>{t(title)}</Text>
+        <Text numberOfLines={2} style={{ fontFamily: BODY_FONT, fontSize: 12.5, lineHeight: 17, color: C.ink64 }}>{t(desc)}</Text>
+        {strip}
+      </View>
+      <Text style={{ fontSize: 20, color: C.ink40 }}>{'\u203A'}</Text>
+    </Pressable>
+    </GuideTarget>
+  );
+
+  const HUB_ID: Record<string, string> = { house: 'hh.test', homecosts: 'hh.costs', prepare_soon: 'hh.prep', learn: 'hh.learn', plan: 'hh.plan' };
+  const card = (to: Parameters<typeof go>[0], scene: string, title: string, desc: string, strip: React.ReactNode,
+    badge?: { label: string; lock?: boolean }) => (
     <GuideTarget key={to} id={HUB_ID[to] || `hh.${to}`}>
     <Pressable onPress={() => go(to)} accessibilityRole="button"
       style={({ pressed }) => [tx.hcard, { backgroundColor: HH_SCENE[scene].bg }, pressed && { transform: [{ scale: 0.985 }] }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%' }}>
         <View style={{ flex: 1, minWidth: 0 }}>
+          {badge ? (
+            <View style={[tx.hbadge, badge.lock && tx.hbadgeLock]}>
+              {badge.lock ? <Ph n="lock-simple" c={C.ink64} size={11} /> : null}
+              <Text style={{ fontFamily: SEMI_FONT, fontSize: 11, color: badge.lock ? C.ink64 : '#5B3FD9' }}>{badge.label}</Text>
+            </View>
+          ) : null}
           <Text style={{ fontFamily: DISP_FONT, fontSize: 17, lineHeight: 22, color: C.ink }}>{t(title)}</Text>
           <Text style={{ fontFamily: BODY_FONT, fontSize: 13, lineHeight: 18, color: C.ink64, marginTop: 3 }}>{t(desc)}</Text>
         </View>
@@ -474,7 +557,7 @@ export function HousehomeScreen() {
   );
 
   return (
-    <ScreenShell greet title={t('tab_test')} noScene right={
+    <ScreenShell greet title={t('tab_test')} noScene tint="#EEF6F3" right={
       <GuideTarget id="hh.saved">
       <Pressable onPress={() => go('savedtests')} style={tx.savedchip} accessibilityLabel={t('sv_title')}>
         <SvgXml xml={`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="${C.ink}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M6.5 3.5h11V21L12 17l-5.5 4z"/></svg>`} width={13} height={13} />
@@ -487,8 +570,20 @@ export function HousehomeScreen() {
     }>
       {/* after buying, monitoring leads the House tab (Epic 7) */}
       {S.bought ? <BoughtCard /> : null}
-      {card('house', 'house', 'hh_test', 'hh_test_d', (
+      {/* the same path as Home: each stop opens where that step is done */}
+      {!S.bought ? <GuideTarget id="hh.path"><PathStrip /></GuideTarget> : null}
+      {card('house', 'house', dream ? 'hx_dream_t' : 'hh_test', dream ? 'hh_dream_d' : 'hh_test_d', (
         <View style={{ gap: 7, width: '100%' }}>
+          {dreamInfo ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }} testID="house-dream">
+              {dreamInfo.amount ? (
+                <Text style={{ fontFamily: DISP_FONT, fontSize: 20, lineHeight: 24, color: C.ink, fontVariant: ['tabular-nums'] }}>{dreamInfo.amount}</Text>
+              ) : null}
+              <View style={[tx.hfit, { backgroundColor: FIT[dreamInfo.fit].bg }]}>
+                <Text style={{ fontFamily: DISP_FONT, fontSize: 11.5, color: FIT[dreamInfo.fit].fg }}>{dreamInfo.fitLbl}</Text>
+              </View>
+            </View>
+          ) : null}
           {monthsStrip.segs ? (
             <View style={{ flexDirection: 'row', gap: 4, height: 8 }}>
               {monthsStrip.segs.map((ok, i) => (
@@ -499,25 +594,16 @@ export function HousehomeScreen() {
           {stripLbl(monthsStrip.label)}
         </View>
       ))}
-      {card('homecosts', 'homecosts', 'hh_cost', 'hh_cost_d', (
+      {card('plan', 'plan', 'pl_title', 'hh_plan_d', (
         <View style={{ gap: 7, width: '100%' }}>
-          {costStrip.a != null ? (
-            <View style={{ position: 'relative', height: 8, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.85)' }}>
-              <View style={{
-                position: 'absolute', top: 0, bottom: 0, borderRadius: 5, backgroundColor: C.brand, opacity: 0.55,
-                left: `${costStrip.a}%` as DimensionValue, width: `${Math.max(2, (costStrip.b ?? 0) - costStrip.a)}%` as DimensionValue,
-              }} />
-              {[costStrip.a, costStrip.b ?? 0].map((p, i) => (
-                <View key={i} style={{
-                  position: 'absolute', top: -3, width: 3, height: 14, borderRadius: 2, backgroundColor: C.ink,
-                  left: `${p}%` as DimensionValue,
-                }} />
-              ))}
+          {planStrip.pct != null ? (
+            <View style={{ height: 8, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.85)', overflow: 'hidden' }}>
+              <View style={{ width: `${Math.max(2, planStrip.pct)}%` as DimensionValue, height: '100%', borderRadius: 5, backgroundColor: '#7C5CFF' }} />
             </View>
           ) : null}
-          {stripLbl(costStrip.label)}
+          {stripLbl(planStrip.label)}
         </View>
-      ))}
+      ), !steps.tested ? { label: t('hx_locked'), lock: true } : undefined)}
       {card('prepare', 'prepare', 'hh_prep', 'hh_prep_d', (
         <View style={{ gap: 7, width: '100%' }}>
           {prepStrip.pct != null ? (
@@ -527,9 +613,11 @@ export function HousehomeScreen() {
           ) : null}
           {stripLbl(prepStrip.label)}
         </View>
-      ))}
+      ), steps.cur >= 0 && steps.cur < 3 ? { label: t('hh_prep_after') } : undefined)}
+      <Text style={tx.hsec}>{t('hh_tools')}</Text>
+      {row('homecosts', 'homecosts', 'hh_cost', 'hh_cost_d', stripLbl(costStrip.label))}
       {/* v26/v27b: What buying involves, with pages read and badges earned. */}
-      {card('learn', 'learn', 'hh_learn', 'hh_learn_d', <LearnStrip />)}
+      {row('learn', 'learn', 'hh_learn', 'hh_learn_d', <LearnStrip />)}
       {/* before buying: a quiet but solid way into "I've bought a home" (the Prepare path's
           keys step leads there too, but only once Prepare has a home to work from) */}
       {!S.bought ? (
@@ -547,9 +635,10 @@ export function HousehomeScreen() {
 }
 
 export function HouseScreen() {
-  const { t } = useApp();
+  const { S, t } = useApp();
+  const dream = !!(S.testRan && getHousingTestResult());
   return (
-    <ScreenShell back title={t('hh_test')}>
+    <ScreenShell back title={t(dream ? 'hx_dream_t' : 'hh_test')}>
       <HouseBody />
     </ScreenShell>
   );
@@ -863,9 +952,11 @@ export function ResultScreen() {
     </View>
   ) : null;
 
-  const keepTest = () => {
+  /* Every test that runs is kept straight away under a plain name (the price, or the
+     monthly cost); it can be renamed in Saved tests. */
+  const keepTest = (silent = false) => {
     /* v27b: a test on sample months is for looking around; it is never kept. */
-    if (S.demo) { toast(t('demo_note')); return; }
+    if (S.demo) { if (!silent) toast(t('demo_note')); return; }
     const scenario = getHousingScenario();
     const duplicate = S.keptTests.some(test => (
       test.pay === Math.round(cost)
@@ -878,6 +969,7 @@ export function ResultScreen() {
         : `${rm(Math.round(cost))} ${t('mo_permo')}`;
       if (!duplicate) {
         x2.keptTests.push({
+          ...(silent ? { name: x2.svDraft } : {}),
           pay: Math.round(cost),
           s,
           n,
@@ -890,8 +982,9 @@ export function ResultScreen() {
         });
         logIt(x2, 'lg_test_save', { name: x2.svDraft });
       }
-      x2.sheet = 'savename';
+      if (!silent) x2.sheet = 'savename';
     });
+    if (silent && !duplicate) toast(t('rx_saved_auto'));
     if (!duplicate && !S.guest && scenario?.id) {
       void createSavedHousingTest({
         scenario_id: scenario.id,
@@ -934,6 +1027,12 @@ export function ResultScreen() {
     }
   };
 
+  React.useEffect(() => {
+    if (!S.autoKeep || S.viewTestName) return;
+    up(x2 => { x2.autoKeep = false; });
+    keepTest(true);
+  }, [S.autoKeep]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <ScreenShell back title={t('rs_title')}>
       {viewingBanner}
@@ -947,16 +1046,6 @@ export function ResultScreen() {
       </View>
       </GuideTarget>
       {tryCard ? <GuideTarget id="rx.try">{tryCard}</GuideTarget> : null}
-      {S.viewTestName ? null : (
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <GuideTarget id="rx.keep" style={{ flex: 1 }}>
-            <Btn label={t('rx_keep')} onPress={keepTest} />
-          </GuideTarget>
-          <Pressable onPress={() => go('house')} style={[tx.btnQuiet, { flex: 1, justifyContent: 'center' }]}>
-            <P>{t('rx_change')}</P>
-          </Pressable>
-        </View>
-      )}
       <View style={{ flexDirection: 'row', gap: 12 }}>
         <Pressable onPress={() => go('range')} style={tx.hubtile}>
           <View style={tx.hubIc}><Ico name="band" size={22} color="#fff" /></View>
@@ -969,7 +1058,7 @@ export function ResultScreen() {
           <Text style={{ fontFamily: BODY_FONT, fontSize: 11.5, lineHeight: 15, color: C.ink64 }}>{t('cp_tile_d')}</Text>
         </Pressable>
       </View>
-      <Pressable onPress={() => { up(x2 => { x2.px.budget = null; }); go('priceexplorer'); }} style={[tx.hubtile, { flex: 0 }]}
+      <Pressable onPress={() => { up(x2 => { x2.px.budget = null; }); go('priceexplorer'); }} style={[tx.hubtile, tx.hubtileWide]}
         accessibilityRole="button" testID="rx-px">
         <View style={tx.hubIc}><Ico name="search" size={22} color="#fff" /></View>
         <Text style={{ fontFamily: DISP_FONT, fontSize: 15, lineHeight: 20, color: C.ink }}>{t('px_tile')}</Text>
@@ -1266,6 +1355,23 @@ const tx = StyleSheet.create({
     shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
+  pricetip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 34,
+    backgroundColor: '#FFF4D6', borderWidth: 1.5, borderColor: '#F5D88A', borderRadius: 14,
+    paddingVertical: 6, paddingLeft: 10, paddingRight: 12,
+  },
+  hfit: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999 },
+  hrow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff',
+    borderWidth: 1.5, borderColor: '#E3EAE8', borderRadius: 16, paddingVertical: 10, paddingHorizontal: 12,
+  },
+  hrowIc: { width: 56, height: 56, borderRadius: 14, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  hbadge: {
+    alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4,
+    paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.85)',
+  },
+  hbadgeLock: { backgroundColor: 'rgba(255,255,255,0.6)' },
+  hsec: { fontFamily: DISP_FONT, fontSize: 14, color: C.ink64, marginTop: 6, marginBottom: -4, paddingHorizontal: 2 },
   hcard: {
     width: '100%', backgroundColor: C.card, borderRadius: 18,
     paddingVertical: 14, paddingHorizontal: 16, minHeight: 92,
@@ -1333,6 +1439,8 @@ const tx = StyleSheet.create({
     flex: 1, minHeight: 100, backgroundColor: C.card, borderRadius: 18,
     paddingVertical: 16, paddingHorizontal: 14, gap: 6,
   },
+  /* full width in a column: sized by its content, so the last line is never cut off */
+  hubtileWide: { flexGrow: 0, flexShrink: 0, flexBasis: 'auto' },
   hubIc: {
     width: 40, height: 40, borderRadius: 12, backgroundColor: C.brand,
     alignItems: 'center', justifyContent: 'center',

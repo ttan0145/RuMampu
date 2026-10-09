@@ -1,4 +1,5 @@
 import React from 'react';
+import { QDot, QHUE } from './qhue';
 import {
   AccessibilityInfo, Animated, Easing, Image, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions,
 } from 'react-native';
@@ -189,15 +190,15 @@ function QuickMenu() {
           item(t('qk_income'), <QIo dir="in" />, () => spGo('in'), 100),
           item(t('qk_expense'), <QIo dir="out" />, () => spGo('out'), 50),
         ] : [
-          item(t('qk_income'), <Ico name={QK_IN_ICO} size={22} />, () => {
+          item(t('qk_income'), <QDot hue={QHUE.in}><Ico name={QK_IN_ICO} size={18} color="#FFFFFF" /></QDot>, () => {
             up(s => { s.sheet = null; s.incMode = 'type'; });
             go('income');
           }, 100),
-          item(t('qk_expense'), <Ico name={QK_OUT_ICO} size={22} />, () => {
+          item(t('qk_expense'), <QDot hue={QHUE.out}><Ico name={QK_OUT_ICO} size={18} color="#FFFFFF" /></QDot>, () => {
             up(s => { s.sheet = null; s.exMode = 'type'; });
             go('expenses');
           }, 50),
-          item(t('qk_scan'), <Ico name="camera" size={22} />, () => up(s => { s.sheet = 'quick2'; s.qSay = false; }), 0),
+          item(t('qk_scan'), <QDot hue={QHUE.scan}><Ico name="camera" size={18} color="#FFFFFF" /></QDot>, () => up(s => { s.sheet = 'quick2'; s.qSay = false; }), 0),
           /* v27b3: Say it sits nearest the + button and grows upward into the voice card. */
           S.qSay
             ? <QuickSay key="qsay" width={Math.min(358, box.w - 32)} maxHeight={Math.max(220, box.h - 284)} />
@@ -292,6 +293,22 @@ function HudTile({ kind, label, value, id, a11y, children, badge }: {
         <Text numberOfLines={1} style={[sheetSt.hudLbl, { color: c.ink, opacity: 0.8 }]}>{label}</Text>
         <Text numberOfLines={1} style={[sheetSt.hudVal, { color: c.ink }, (value ?? '').length > 5 && { fontSize: 14.5 }]}>{value}</Text>
       </View>
+      {badge}
+    </View>
+  );
+}
+
+/* One figure in the score bar: a small icon and label over a big number. */
+function ScoreCell({ icon, label, value, gold, badge }: {
+  icon: keyof typeof HUD_ICON; label: string; value: string; gold?: boolean; badge?: React.ReactNode;
+}) {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', paddingVertical: 2 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <SvgXml xml={HUD_ICON[icon]} width={14} height={14} />
+        <Text style={sheetSt.scoreLbl}>{label}</Text>
+      </View>
+      <Text style={[sheetSt.scoreVal, gold && { color: '#FFC53D' }]}>{value}</Text>
       {badge}
     </View>
   );
@@ -433,39 +450,47 @@ function VillageSheet() {
           <BodyS muted style={{ marginTop: 6 }}>{t('sv_not_advice')}</BodyS>
         </View>
       ) : null}
-      {/* the game (score, best, moves) on top; below it what the saved days are:
-         the ready Pondoks that drop one per move, the ringgit behind them, and start over */}
-      <View style={{ gap: 6, marginTop: 10 }}>
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          <HudTile kind="score" label={t('vl_score')} value={String(v.score)}
-            badge={<ScorePop gain={v.gain ?? 0} k={v.moves} />} />
-          <HudTile kind="best" label={t('vl_bestscore')} value={String(v.best)}
-            badge={newBest ? <View style={sheetSt.hudNew}><Text style={sheetSt.hudNewT}>{t('vl_newbest')}</Text></View> : null} />
-          <HudTile kind="moves" label={t('vl_moves')} value={String(v.moves)} />
+      {/* one dark score bar (score, best, moves), then what the saved days are: the
+         Pondoks ready to drop one per move, the ringgit behind them, and start over */}
+      <View style={sheetSt.scoreBar}>
+        <ScoreCell icon="score" label={t('vl_score')} value={String(v.score)} badge={<ScorePop gain={v.gain ?? 0} k={v.moves} />} />
+        <View style={sheetSt.scoreDiv} />
+        <ScoreCell icon="best" label={t('vl_bestscore')} value={String(v.best)} gold
+          badge={newBest ? <View style={sheetSt.hudNew}><Text style={sheetSt.hudNewT}>{t('vl_newbest')}</Text></View> : null} />
+        <View style={sheetSt.scoreDiv} />
+        <ScoreCell icon="moves" label={t('vl_moves')} value={String(v.moves)} />
+      </View>
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'stretch' }}>
+        <View accessible accessibilityLabel={t('vl_ready', { n: v.queued ?? 0 })} testID="village-ready-n"
+          style={[sheetSt.softCard, { backgroundColor: '#FFF1E6' }]}>
+          <BobbingPondok on={(v.queued ?? 0) > 0} />
+          <View style={{ flexShrink: 1 }}>
+            <Text style={[sheetSt.softVal, { color: '#A8461E' }]}>{v.queued ?? 0}</Text>
+            <Text numberOfLines={1} style={sheetSt.softLbl}>{t('vl_t_ready_l')}</Text>
+          </View>
         </View>
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          <HudTile kind="ready" label={t('vl_t_ready')} value={String(v.queued ?? 0)} id="village-ready-n"
-            a11y={t('vl_ready', { n: v.queued ?? 0 })}>
-            <BobbingPondok on={(v.queued ?? 0) > 0} />
-          </HudTile>
-          <HudTile kind="saved" label={t('vl_t_saved')} value={rm(v.savedRm ?? 0)} id="village-saved"
-            a11y={t('vl_t_saved') + ' ' + rm(v.savedRm ?? 0)} />
-          {/* start over: two taps, so a stray tap never clears the plot */}
-          <Pressable disabled={!canRestart} onPress={() => {
-            if (!restartArmed) { setRestartArmed(true); return; }
-            setRestartArmed(false);
-            up(villageRestart);
-          }} accessibilityRole="button" accessibilityLabel={t(restartArmed ? 'vl_restart_confirm' : 'vl_restart')}
-            accessibilityState={{ disabled: !canRestart }} testID="village-restart"
-            style={({ pressed }) => [sheetSt.hud, { backgroundColor: HUD.restart.bg, borderBottomColor: HUD.restart.edge },
-              restartArmed && { backgroundColor: C.short, borderBottomColor: '#B8401B' },
-              !canRestart && { opacity: 0.45 }, pressed && { borderBottomWidth: 1, transform: [{ translateY: 3 }] }]}>
-            <View style={sheetSt.hudIco}><SvgXml xml={REFRESH_SVG} width={17} height={17} /></View>
-            <Text numberOfLines={2} style={{ flexShrink: 1, fontFamily: DISP_FONT, fontSize: 12.5, lineHeight: 15, color: '#fff' }}>
-              {t(restartArmed ? 'vl_restart_tap' : 'vl_restart')}
-            </Text>
-          </Pressable>
+        <View accessible accessibilityLabel={t('vl_t_saved') + ' ' + rm(v.savedRm ?? 0)} testID="village-saved"
+          style={[sheetSt.softCard, { backgroundColor: '#E9F5EC' }]}>
+          <SvgXml xml={HUD_ICON.saved} width={22} height={22} />
+          <View style={{ flexShrink: 1 }}>
+            <Text numberOfLines={1} style={[sheetSt.softVal, { color: '#2E7A45' }]}>{rm(v.savedRm ?? 0)}</Text>
+            <Text numberOfLines={1} style={sheetSt.softLbl}>{t('vl_t_saved_l')}</Text>
+          </View>
         </View>
+        {/* start over: two taps, so a stray tap never clears the plot */}
+        <Pressable disabled={!canRestart} onPress={() => {
+          if (!restartArmed) { setRestartArmed(true); return; }
+          setRestartArmed(false);
+          up(villageRestart);
+        }} accessibilityRole="button" accessibilityLabel={t(restartArmed ? 'vl_restart_confirm' : 'vl_restart')}
+          accessibilityState={{ disabled: !canRestart }} testID="village-restart"
+          style={({ pressed }) => [sheetSt.restart, restartArmed && { backgroundColor: C.short, borderColor: C.short },
+            !canRestart && { opacity: 0.45 }, pressed && { transform: [{ scale: 0.95 }] }]}>
+          <SvgXml xml={REFRESH_SVG.split('#fff').join(restartArmed ? '#fff' : C.ink)} width={18} height={18} />
+          <Text numberOfLines={1} style={{ fontFamily: SEMI_FONT, fontSize: 11, color: restartArmed ? '#fff' : C.ink, marginTop: 2 }}>
+            {t(restartArmed ? 'vl_restart_tap' : 'vl_restart')}
+          </Text>
+        </Pressable>
       </View>
       <View {...pan.panHandlers} style={sheetSt.vscene}>
         <View style={{ position: 'absolute', right: 18, top: 10 }}>
@@ -474,7 +499,7 @@ function VillageSheet() {
         <View style={{ alignItems: 'center', marginTop: 16 }}>
           <View style={{ width: isleW, height: isleW * 292 / 440 }}>
             <IsoIsland cells={v.cells} width={isleW} glow={villageGlow(S)} burst={villageGlow(S).length ? S.village?.spawnAt : undefined}
-              slide={S.village?.slide} slideKey={S.village?.moves} />
+              slide={S.village?.slide} slideKey={S.village?.turn ?? S.village?.moves} />
             {/* one arrow at the middle of each edge of the plot, pointing out of it:
                 tap it and every house slides to that edge */}
             {VILLAGE_EDGES.map(e => {
@@ -1278,6 +1303,22 @@ const sheetSt = StyleSheet.create({
     paddingHorizontal: 6, paddingVertical: 1, transform: [{ rotate: '8deg' }],
   },
   hudNewT: { fontFamily: DISP_FONT, fontSize: 9.5, color: '#fff', letterSpacing: 0.5 },
+  scoreBar: {
+    flexDirection: 'row', alignItems: 'center', marginTop: 10, paddingVertical: 10, paddingHorizontal: 6,
+    backgroundColor: '#2F4344', borderRadius: 16,
+  },
+  scoreDiv: { width: 1, alignSelf: 'stretch', marginVertical: 4, backgroundColor: 'rgba(255,255,255,0.14)' },
+  scoreLbl: { fontFamily: SEMI_FONT, fontSize: 10, letterSpacing: 0.8, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' },
+  scoreVal: { fontFamily: DISP_FONT, fontSize: 22, lineHeight: 27, color: '#fff', fontVariant: ['tabular-nums'], marginTop: 1 },
+  softCard: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 56, paddingHorizontal: 10, borderRadius: 14,
+  },
+  softVal: { fontFamily: DISP_FONT, fontSize: 17, lineHeight: 21, fontVariant: ['tabular-nums'] },
+  softLbl: { fontFamily: BODY_FONT, fontSize: 11, color: C.ink64 },
+  restart: {
+    width: 74, borderRadius: 14, borderWidth: 1.5, borderColor: C.ink14, backgroundColor: '#fff',
+    alignItems: 'center', justifyContent: 'center', paddingVertical: 6,
+  },
   vedge: {
     position: 'absolute', backgroundColor: 'rgba(255,255,255,0.92)', borderWidth: 1.5, borderColor: C.ink14,
     alignItems: 'center', justifyContent: 'center',

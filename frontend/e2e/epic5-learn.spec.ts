@@ -1,7 +1,7 @@
 import { expect, Page } from '@playwright/test';
 import { test } from './support/fixtures';
 import { ac } from './support/acceptance';
-import { API, openGuestApp, reloadApp } from './support/app';
+import { API, endGuestSession, openGuestApp, reloadApp } from './support/app';
 
 const SJKP = 'How SJKP helps if you don’t have a payslip';
 const DISCLAIMER = 'This explains how things work. It isn’t advice on your decision, and RuMampu can’t tell you whether a bank will approve you.';
@@ -78,6 +78,7 @@ async function lastPage(page: Page) {
 }
 
 async function login(page: Page, email: string, password: string) {
+  await endGuestSession(page);
   await page.goto('/');
   await page.getByPlaceholder('name@example.com').fill(email);
   await page.getByPlaceholder('Your password').fill(password);

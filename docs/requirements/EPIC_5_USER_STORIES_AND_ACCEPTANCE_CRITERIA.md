@@ -540,6 +540,8 @@ _V9 note: Build note. 8 October 2026. Once all three steps are done, the build s
 
 > Given some steps are not done, When the path is shown, Then a line says how many things are left before I buy and what the next one is, and when all three are done it says so without saying I am ready to buy or approved.
 
+Built 2026-10-09: with all three steps done the line reads "All three steps are done. Save your plan for your own reference." (`p7_ready`, in all three languages); the count-and-next line is unchanged.
+
 #### AC5.9.6 - Keep a copy of my plan
 
 > Given I want a copy of my preparation, When I use Save my plan as PDF, Then a page headed RuMampu buying plan, for my own reference lists the home, the loan figures, the upfront cash, the cash buffer and which documents are ready, with the disclaimer; on the web I save it from the print dialog, and in the phone apps it goes to the share sheet.
@@ -549,6 +551,8 @@ _V9 note: Build note. 8 October 2026. Once all three steps are done, the build s
 _V9 note: Build note. 8 October 2026. The path is kept on the device only and does not follow the account._
 
 > Given I have chosen a home and worked through some steps, When I come back on the same device, Then the home, my answers and the steps I finished are still there.
+
+Built 2026-10-09: a guest who reloads the page keeps the record: the home, the answers and the finished steps are still there, and no new client id is made. Closing the tab, or ending the app on a phone, returns the guest to the guest entry, as the entry says ("will not be kept after you fully close the app"). The guest marker lives in sessionStorage on the web and in memory on a phone. A signed-in account keeps its path after a reload.
 
 
 ### US5.10 - Check what paying each month would be like
@@ -570,6 +574,8 @@ _V9 note: Amendment 1. New in Iteration 3. Written from the monthly check as bui
 _V9 note: Build note. 8 October 2026. The build rates the share Comfortable at 35% or less, Tight up to 50% and Heavy above 50%, and colours the rows on What if rates go up? by the same cut-offs with no word beside them. The cut-offs have no published source, which D07 does not allow, and the colour carries the meaning alone (D44)._
 
 > Given the instalment is set beside my typical month, When the comparison is shown, Then it is stated as a share of my typical month in figures and words, with no rating of whether that share is good or bad.
+
+Owner decision 2026-10-09: accepted as built. The share is stated in figures and words ("the instalment is RM x, about p% of your typical month"); the Comfortable / Tight / Heavy word stays beside it.
 
 #### AC5.10.3 - Where the payment goes
 
@@ -605,6 +611,8 @@ _V9 note: Build note. 8 October 2026. The check uses no provenance label apart f
 
 > Given the check shows a figure, When I read it, Then a figure from my record or test is labelled your data or calculated, a figure RuMampu supplies is labelled an assumption, and a rule it states names its source.
 
+Built 2026-10-09: the product's provenance tags on every screen of the check (your data / calculated / assumption; the loan share, rate and years count as an assumption whenever a RuMampu starting point is in use), "Where these figures come from" behind (i) on the first screen, and the age rule reworded to "Banks commonly end the loan by age 70" with its source (CIMB home loan page, checked 9 October 2026; other banks set their own limit).
+
 
 ### US5.11 - See how buying works for my kind of home
 
@@ -633,4 +641,6 @@ _V9 note: Amendment 1. New in Iteration 3. Written from How buying works as buil
 _V9 note: Build note. 8 October 2026. No timing or share carries a source or a date, including usually 2 to 3%, within about 14 days, 3 to 4 months later and the stage percentages. Schedule H is named without the regulation it comes from, and the amounts carry no provenance label._
 
 > Given the timeline states a timing or a share of the price, When I read it, Then its source and the date it was checked are shown, or it is marked as unverified, and each amount carries its provenance label.
+
+Built 2026-10-09: each subsale timing carries its status (common practice, not a legal rule, or unverified), its source and the date it was checked; the project shares name Schedule H of the Housing Development (Control and Licensing) Regulations 1989 and are marked unverified against the gazette text (secondary sources read 9 October 2026); every amount carries a provenance label. The sources are registered in `frontend/src/rumampu/buying-facts.ts` and listed in `docs/epic-5/LEARN_SOURCES.md`.
 

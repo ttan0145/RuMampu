@@ -29,8 +29,6 @@ const completedEpics = [
   {
     epic: 'Epic 5',
     expected: 88,
-    // AC5.9.5, 5.9.7, 5.10.2, 5.10.9 and 5.11.4: the build contradicts or omits what V9 requires; see the reasons in epic5-prepare-path.spec.ts.
-    allowedDeferred: ['AC5.9.5', 'AC5.9.7', 'AC5.10.2', 'AC5.10.9', 'AC5.11.4'],
     requirements: 'docs/requirements/EPIC_5_USER_STORIES_AND_ACCEPTANCE_CRITERIA.md',
     specifications: ['frontend/e2e/epic5.spec.ts', 'frontend/e2e/epic5-learn.spec.ts', 'frontend/e2e/epic5-prepare-path.spec.ts'],
   },

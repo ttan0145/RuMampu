@@ -110,7 +110,7 @@ export function ProfileScreen() {
   };
 
   return (
-    <ScreenShell greet title={t('pf_title')}>
+    <ScreenShell greet title={t('pf_title')} tint="#EEF6F3">
       <GuideTarget id="pf.hero">
       <View style={st.pfhero}>
         <View style={st.pfheroBubble} pointerEvents="none" />

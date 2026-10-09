@@ -12,6 +12,7 @@ import { previewAssistantAction } from './api';
 import { rmx } from './calc';
 import { BODY_FONT, C, DISP_FONT, XBOLD_FONT } from './theme';
 import { Ico } from './svgs';
+import { QDot, QHUE } from './qhue';
 import { claimSpeechOwner, getSpeechOwner, releaseSpeechOwner, speechLocale } from './speech';
 
 /* v27b3 Say an entry. The person says, or types, what they earned or spent.
@@ -750,7 +751,6 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
         </Pressable>
       </View>
       <View style={{ alignItems: 'center', paddingTop: 12 }}>
-        <View style={sy.badge}><Text style={sy.badgeTxt}>{t('vo_badge').toUpperCase()}</Text></View>
         <Pressable onPress={d.micTap} accessibilityRole="button"
           accessibilityLabel={t(listening ? 'vo_stop' : 'vo_tap')}
           style={[sy.vmic, listening && sy.vmicOn]}>
@@ -897,7 +897,7 @@ export function QuickSayPill() {
   return (
     <Pressable onPress={() => { if (S.demo) leaveSampleMonths(); up(s => { s.qSay = true; s.sayOpen = false; }); }} style={sy.qitem}
       accessibilityRole="button" accessibilityState={{ expanded: false }}>
-      <Ico name="mic" size={22} color={C.brand} />
+      <QDot hue={QHUE.say}><Ico name="mic" size={18} color="#FFFFFF" /></QDot>
       <Text style={{ fontFamily: DISP_FONT, fontSize: 14.5, color: C.ink }}>{t('qk_voice')}</Text>
     </Pressable>
   );
@@ -920,11 +920,6 @@ const sy = StyleSheet.create({
     position: 'absolute', right: -10, top: -8, width: 44, height: 44, borderRadius: 22,
     alignItems: 'center', justifyContent: 'center',
   },
-  badge: {
-    position: 'absolute', left: 0, top: 2, minHeight: 19, paddingVertical: 1, paddingHorizontal: 8,
-    borderRadius: 10, backgroundColor: C.caution,
-  },
-  badgeTxt: { fontSize: 10, fontWeight: '700', letterSpacing: 0.4, color: C.ink },
   vmic: {
     width: 84, height: 84, borderRadius: 42, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center',
     shadowColor: 'rgba(74,145,149,1)', shadowOpacity: 0.42, shadowRadius: 26, shadowOffset: { width: 0, height: 12 }, elevation: 6,
