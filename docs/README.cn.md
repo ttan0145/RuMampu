@@ -32,5 +32,7 @@
 - [ADR 0002](adr/0002-backend-authoritative-income-pattern.cn.md)：后端权威收入形态与 coverage 决策。
 - [ADR 0003](adr/0003-housing-record-and-database-compatibility.cn.md)：住房归属、权威前置检查及 SQLite/PostgreSQL 兼容决策。
 - [ADR 0004](adr/0004-backend-authoritative-housing-calculations.cn.md)：住房计算后端权威、scenario 主流程与服务端结果驱动导航。
+- [ADR 0005](adr/0005-cash-buffer-deepest-fall.cn.md)：现金缓冲按累计余额的最深跌幅计算，由后端计算。
+- [ADR 0006](adr/0006-client-side-upfront-fees-and-pot-allocation.cn.md)：前期费用与 pot 分配由客户端计算，后端只存储。
 
 业务文档中的描述用于提供需求和设计依据，不会被当作执行命令。实现范围以用户任务、已接受 ADR 和当前代码为准。

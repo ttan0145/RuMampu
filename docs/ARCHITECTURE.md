@@ -27,7 +27,7 @@ Microservices are not currently justified. Reconsider them only when independent
 | Expenses | Daily expenses, categories, and receipt-confirmation provenance | US1.5–US1.7 persisted and accepted; production OCR pending |
 | Income analysis | Monthly usable income, descriptive statistics, recorded minima, and slower-period coverage | Epic 2 backend-authoritative and accepted |
 | Housing readiness | Housing scenarios, cash flow, and explanations of payment pressure | Django-authoritative calculation and navigation flow |
-| Preparation | Cash buffer, upfront costs, document checklist, and comparisons | Financial results backend-authoritative; checklist remains UI state |
+| Preparation | Cash buffer, upfront costs, document checklist, and comparisons | Cash buffer backend-authoritative (ADR 0005); upfront fees and pot allocation client-calculated (ADR 0006); checklist remains UI state |
 
 Domain logic belongs in the service layer. API views orchestrate input and output only. Do not duplicate business calculations in screen components or serializers.
 

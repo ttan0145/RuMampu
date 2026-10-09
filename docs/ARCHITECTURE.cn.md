@@ -27,7 +27,7 @@ RuMampu 需要让收入不规律的用户理解住房付款压力，而不是给
 | Expenses | 日常支出、分类及收据确认来源 | US1.5–US1.7 已持久化并验收；生产 OCR 待实现 |
 | Income analysis | 月度可用收入、描述统计、记录最低月与慢时期 coverage | Epic 2 已以后端权威方式验收 |
 | Housing readiness | 住房情景、现金流和付款压力解释 | Django 权威计算与导航流程 |
-| Preparation | 缓冲金、前期费用、材料清单与对比 | 财务结果以后端为权威；清单仍为 UI 状态 |
+| Preparation | 缓冲金、前期费用、材料清单与对比 | 现金缓冲以后端为权威（ADR 0005）；前期费用与 pot 分配由客户端计算（ADR 0006）；清单仍为 UI 状态 |
 
 领域逻辑放在服务层，API view 只负责输入输出编排。不要把新的业务计算复制到页面组件或 serializer 中。
 

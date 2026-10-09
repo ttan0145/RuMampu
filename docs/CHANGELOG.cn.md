@@ -2,6 +2,11 @@
 
 语言：**中文（CN）** | [English](CHANGELOG.md)
 
+## 2026-10-09 — 前期费用与 pot 分配由客户端计算（ADR 0006）
+
+- 与 Epic 5 负责人确认：`fees.ts` 的费用公式（转让印花税、贷款印花税、律师费、估价费、首套房豁免、`upfrontNeed`）和 `pot.ts` 的 pot 规则保留在客户端，后端只存储和做范围校验。记录于新的 [ADR 0006](adr/0006-client-side-upfront-fees-and-pot-allocation.cn.md)，并给 [ADR 0004](adr/0004-backend-authoritative-housing-calculations.cn.md) 加了修订说明。起始现金缓冲不变（ADR 0005）。
+- 新增 54 条单元测试（`frontend/unit/`，`npm run test:unit`，Node 内置测试运行器，无新依赖），覆盖每个费率档位边界、首套房豁免、`upfrontNeed` 以及 AC5.8.5 / AC5.8.9 的 pot 示例。CI 在类型检查之后运行，`npm run typecheck` 也检查它们。
+
 ## 2026-10-08 — 补齐 Epic 5 迭代 3 的 Learn 范围
 
 - US5.5–5.7 的 20 条 AC 纳入正式基线与浏览器验收，Epic 5 追溯范围改为 68 条。

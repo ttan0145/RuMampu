@@ -2,6 +2,11 @@
 
 Language: **English** | [Chinese (CN)](CHANGELOG.cn.md)
 
+## 2026-10-09 — Upfront fees and pot allocation are client-side (ADR 0006)
+
+- Decided with the Epic 5 owner: the fee formulas in `fees.ts` (stamp duty, loan stamp duty, legal and valuation fees, first-home exemption, `upfrontNeed`) and the pot rules in `pot.ts` stay on the client; the backend stores and range-checks only. Recorded in the new [ADR 0006](adr/0006-client-side-upfront-fees-and-pot-allocation.md), with an amendment to [ADR 0004](adr/0004-backend-authoritative-housing-calculations.md). The starting cash buffer is unchanged (ADR 0005).
+- Added 54 unit tests (`frontend/unit/`, `npm run test:unit`, Node built-in runner, no new dependency) covering every fee band edge, the first-home exemption, `upfrontNeed` and the AC5.8.5 / AC5.8.9 pot examples. They run in CI after the type check, and `npm run typecheck` now covers them.
+
 ## 2026-10-08 — Complete the Iteration 3 Learn scope of Epic 5
 
 - Added all 20 criteria for US5.5–5.7 to the requirement baseline and executable browser suite; Epic 5 traceability now covers 68 criteria across two specs.
