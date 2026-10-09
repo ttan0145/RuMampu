@@ -102,7 +102,7 @@ export const TAB_OF: Record<Route, Tab> = {
   house: 'test', homecost: 'test', precheck: 'test', result: 'test', range: 'test',
   homecosts: 'test', acctdetails: 'profile',
   compare: 'test', shock: 'test',
-  plan: 'money', profile: 'profile', prepare: 'test', prepare_soon: 'test', upfront: 'test', buffer: 'money', docs: 'test',
+  plan: 'test', profile: 'profile', prepare: 'test', prepare_soon: 'test', upfront: 'test', buffer: 'test', docs: 'test',
   pv_switch: 'test', pv_month: 'test', pv_compare: 'test', prepmonthly: 'test',
   learn: 'test', learnsec: 'test', learnread: 'test', priceexplorer: 'test',
 };
@@ -151,6 +151,8 @@ export interface VillageState {
   collection: number; queued: number; savedRm: number;
   /* the square the last swipe placed a ready Pondok on, and the move it happened on */
   spawn?: number | null; spawnAt?: number;
+  /* every swipe that changed the plot, counted as a move or not; drives the slide animation */
+  turn?: number;
   /* how each house travelled on the last move (from square, to square, its tier), for the slide */
   slide?: Array<{ f: number; t: number; tier: number }>;
   msg?: string;
@@ -285,6 +287,13 @@ export interface AppState {
   vLand: { at: number; a: number; cell: number | null; moves: number } | null;
   /* "Let's start!" plays once a session; after that Play opens the village directly */
   vFlashSeen: boolean;
+  /* a one-off pointer after a step on the path is done (first income, a house test):
+     shown under the back button on that screen, cleared once Home is open again */
+  pathCoach: { route: Route; key: string; stop?: number } | null;
+  /* the path stop Home should open on, set when a coach bubble sends the person there */
+  pathFocus: number | null;
+  /* a house test just ran: the result screen keeps it once, without asking */
+  autoKeep: boolean;
   /* Months the user chose to spread the upfront need over (village phase).
      null = go by the record's median leftover, or 12 when there is no record. */
   planHorizon: number | null;
@@ -486,7 +495,7 @@ function initialState(): AppState {
     onboard: 0, onboarded: false, splash: true,
     wstep: 0, authEntryOpen: false, authMode: 'login', acctMade: false, fgMail: '', guest: false, accountLastExportedAt: null, preferredIncomeSourceId: null, mergeGuestOnSignup: false, discardGuestOnSignup: false,
     knew: false, kstep: 0, jobs: ['taxi'], ownJobs: [], lastMonth: '',
-    plan: null, village: null, buffer: null, vHelp: false, vLand: null, vFlashSeen: false, planHorizon: null,
+    plan: null, village: null, buffer: null, vHelp: false, vLand: null, vFlashSeen: false, pathCoach: null, pathFocus: null, autoKeep: false, planHorizon: null,
     moView: 'tiles', houseTab: 'test',
     houseCosts: null, houseCostsSync: 'idle', hcState: 'sgr', hcType: 'all', hcKind: 'all', hcBudget: null, firstHome: false,
     potMoved: 0, potMovedMonths: [], ufTest: null, prep: { ...PREP_DEFAULT, mHome: { ...PREP_DEFAULT.mHome } }, ufReno: false, viewTestName: null, scanAuto: false, pastT: 'inc', cardInfo: null, log: [],
@@ -1452,6 +1461,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (input.amount > median * 3) return 'outlier';
       }
       up(s => {
+        if (!s.data.income.length) s.pathCoach = { route: s.route, key: 'hx_coach_income' };
         s.data.income.push({
           id: `local-${Date.now()}`,
           a: input.amount,
@@ -1469,6 +1479,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const entry = await createIncomeEntryRequest(input);
       up(s => {
+        if (!s.data.income.length) s.pathCoach = { route: s.route, key: 'hx_coach_income' };
         s.data.income.push({
           id: String(entry.id),
           a: Number(entry.amount),

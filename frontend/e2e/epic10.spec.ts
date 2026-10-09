@@ -665,7 +665,7 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
       if ((await localState(page)).village!.cells.filter(Boolean).length === 2) {
         await page.getByTestId('village-r').click();
       }
-      await expect(page.getByText('You built a Kampung house!', { exact: true })).toBeVisible();
+      await expect(page.getByText('You built a Kampung!', { exact: true })).toBeVisible();
       await captureEvidence(page, 'epic-10', 'ac10.6.2__merge-kampung.png', { resetScroll: false });
       const { village } = await localState(page);
       expect(village!.cells.filter(Boolean)).toEqual([2]);
@@ -705,12 +705,12 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
     });
 
     await ac('AC10.6.4', 'The order is the game\'s own ladder', async () => {
-      await expect(page.getByText('4. Keep going: Pondok, Kampung house, Terrace, Condo, then Istana.', { exact: true })).toBeVisible();
+      await expect(page.getByText('4. Keep going: Pondok, Kampung, Terrace, Condo, then Istana.', { exact: true })).toBeVisible();
       // Two Pondoks merged into the next house on the ladder, and the legend runs in that order.
       expect((await localState(page)).village!.cells.filter(Boolean)).toEqual([2]);
       const dialog = page.getByRole('dialog');
       const xs = [];
-      for (const house of ['Pondok', 'Kampung house', 'Terrace', 'Condo', 'Istana']) {
+      for (const house of ['Pondok', 'Kampung', 'Terrace', 'Condo', 'Istana']) {
         xs.push((await dialog.getByText(house, { exact: true }).last().boundingBox())!.x);
       }
       expect([...xs].sort((a, b) => a - b)).toEqual(xs);
@@ -749,7 +749,7 @@ test.describe('Epic 10 — Saving Plan and Gamified Progress', { tag: '@epic10' 
       const dialog = page.getByRole('dialog');
       for (const label of ['Score', 'Best', 'Moves']) await expect(dialog.getByText(label, { exact: true })).toBeVisible();
       // A legend of what each house is worth.
-      for (const [house, points] of [['Pondok', '1 pt'], ['Kampung house', '2 pt'], ['Terrace', '4 pt'], ['Condo', '8 pt'], ['Istana', '16 pt']]) {
+      for (const [house, points] of [['Pondok', '1 pt'], ['Kampung', '2 pt'], ['Terrace', '4 pt'], ['Condo', '8 pt'], ['Istana', '16 pt']]) {
         const label = dialog.getByText(house, { exact: true }).last();
         await expect(label).toBeVisible();
         await expect(label.locator('xpath=following-sibling::div[1]')).toHaveText(points);

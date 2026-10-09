@@ -26,10 +26,12 @@ export const GUIDES: Partial<Record<Route, { id: string; k: string }[]>> = {
   ],
   money: [{ id: 'money.links', k: 'g_mo3' }, { id: 'money.hero', k: 'g_mo1' }, { id: 'money.quiet', k: 'g_mo2' }],
   househome: [
-    { id: 'hh.test', k: 'g_hh1' }, { id: 'hh.costs', k: 'g_hh2' }, { id: 'hh.prep', k: 'g_hh3' },
+    { id: 'hh.path', k: 'g_hh0' }, { id: 'hh.test', k: 'g_hh1' }, { id: 'hh.plan', k: 'g_hh6' },
+    { id: 'hh.costs', k: 'g_hh2' }, { id: 'hh.prep', k: 'g_hh3' },
     { id: 'hh.learn', k: 'g_hh4' }, { id: 'hh.saved', k: 'g_hh5' },
   ],
-  result: [{ id: 'rx.chart', k: 'g_rx2' }, { id: 'rx.verdict', k: 'g_rx1' }, { id: 'rx.try', k: 'g_rx3' }, { id: 'rx.keep', k: 'g_rx4' }],
+  house: [{ id: 'tx.price', k: 'g_tx1' }],
+  result: [{ id: 'rx.chart', k: 'g_rx2' }, { id: 'rx.verdict', k: 'g_rx1' }, { id: 'rx.try', k: 'g_rx3' }],
   homecosts: [{ id: 'fh.map', k: 'g_fh4' }, { id: 'fh.sel', k: 'g_fh1' }, { id: 'fh.place', k: 'g_fh2' }],
   upfront: [{ id: 'uf.chart', k: 'g_uf1' }, { id: 'uf.stage', k: 'g_uf2' }, { id: 'uf.first', k: 'g_uf3' }],
   income: [{ id: 'in.seg', k: 'g_in1' }, { id: 'in.hero', k: 'g_in2' }, { id: 'in.wm', k: 'g_in3' }],
@@ -46,7 +48,7 @@ const QUIET: Route[] = ['priceexplorer'];
 
 /* The screen's name in the hint and invitation. */
 const GNAME: Partial<Record<Route, string>> = {
-  money: 'tab_money', househome: 'tab_test', result: 'rs_title', homecosts: 'fh_title', upfront: 'pr_upfront',
+  money: 'tab_money', househome: 'tab_test', house: 'hh_test', result: 'rs_title', homecosts: 'fh_title', upfront: 'pr_upfront',
   income: 'money_income', expenses: 'money_expenses', plan: 'pl_title', learn: 'hh_learn', pv_compare: 'pv_then',
   priceexplorer: 'px_title', profile: 'pf_title',
 };

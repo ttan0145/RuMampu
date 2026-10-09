@@ -8,7 +8,7 @@ import {
   actualMonths, commitSwap, commitTotal, expByMonth, monthsAgg, nf, pickMonth, recordSummary, rm,
 } from '../calc';
 import {
-  Badge, BodyS, Btn, BtnLine, DemoChip, WholeMonthBtn, BtnQuiet, Card, Chip, Chips, Display, Divider, EditList,
+  Badge, BodyS, Btn, BtnLine, WholeMonthBtn, BtnQuiet, Card, Chip, Chips, Display, Divider, EditList,
   Fig, IcLab, KV, NoteC, NumInput, P, Prov, StackS, TextField,
   CardI, FigRow, MonthBtn,
 } from '../ui';
@@ -163,7 +163,12 @@ export function MoneyScreen() {
     </Pressable>
   );
 
-  /* grouped links */
+  /* grouped links: white tiles that stand off the tinted page, each with its own colour */
+  const TILE_HUE: Partial<Record<Route, [string, string]>> = {
+    income: ['#11A09B', '#E2F5F2'], expenses: ['#FF4F80', '#FFE8EF'], commit: ['#FF9416', '#FFF0DC'],
+    plan: ['#7C5CFF', '#EEEAFF'], buffer: ['#E39A00', '#FFF4D6'],
+    pattern: ['#2A9AC9', '#E1F2FA'], coverage: ['#1C8A4C', '#E2F4E8'], record: ['#5B6B8C', '#E9EDF4'],
+  };
   const tilesView = S.moView !== 'list';
   const group = (key: string, items: [Route, string, string][]) => (
     <View key={key}>
@@ -171,8 +176,9 @@ export function MoneyScreen() {
       {tilesView ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
           {items.map(([r, k, ic]) => (
-            <Pressable key={r} onPress={() => go(r)} style={mo.hubtile}>
-              <View style={mo.hubIc}><Ico name={ic} size={22} color="#fff" /></View>
+            <Pressable key={r} onPress={() => go(r)}
+              style={({ pressed }) => [mo.hubtile, { borderBottomColor: TILE_HUE[r] ? TILE_HUE[r]![0] + '66' : '#E3EAE8' }, pressed && { transform: [{ scale: 0.98 }] }]}>
+              <View style={[mo.hubIc, { backgroundColor: TILE_HUE[r]?.[0] ?? C.brand }]}><Ico name={ic} size={22} color="#fff" /></View>
               <Text style={{ fontFamily: DISP_FONT, fontSize: 15, lineHeight: 20, color: C.ink }}>{t(k)}</Text>
             </Pressable>
           ))}
@@ -192,7 +198,7 @@ export function MoneyScreen() {
   );
 
   return (
-    <ScreenShell greet title={t('tab_money')} right={<DemoChip />}>
+    <ScreenShell greet title={t('tab_money')} tint="#EEF6F3">
       <GuideTarget id="money.hero">
       <View style={mo.hero}>
         <SvgXml
@@ -307,8 +313,11 @@ const mo = StyleSheet.create({
     color: C.ink64, marginBottom: 6,
   },
   hubtile: {
-    width: '47%', flexGrow: 1, minHeight: 92, backgroundColor: C.card, borderRadius: 18,
+    width: '47%', flexGrow: 1, minHeight: 92, backgroundColor: '#FFFFFF', borderRadius: 18,
     paddingVertical: 16, paddingHorizontal: 14, gap: 8,
+    borderWidth: 1.5, borderColor: '#E3EAE8', borderBottomWidth: 4,
+    shadowColor: 'rgba(60,81,82,1)', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 5 },
+    elevation: 2,
   },
   hubIc: {
     width: 40, height: 40, borderRadius: 12, backgroundColor: C.brand,
@@ -862,6 +871,15 @@ export function IncomeScreen() {
             <InChip label={d.proposedTargetName} on={!d.s}
               selectionRole="radio" onPress={() => undefined} />
           ) : null}
+          {!S.data.sources.length ? (
+            /* choices come from the record; hold their place while it loads */
+            <View testID="inc-src-loading" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {[64, 84, 56].map(w => (
+                <View key={w} style={{ width: w, height: 36, borderRadius: 18, backgroundColor: C.ink14, opacity: 0.6 }} />
+              ))}
+              <Text style={{ fontFamily: BODY_FONT, fontSize: 12, color: C.ink64 }}>{t('inc_src_loading')}</Text>
+            </View>
+          ) : null}
           {S.data.sources.map(x => (
             <InChip key={x.id}
               icon={<SrcIcon id={x.id} data={S.data} size={18} color={d.s === x.id ? '#fff' : C.ink} />}
@@ -894,8 +912,11 @@ export function IncomeScreen() {
             {t('inc_sofar', { m: monthName(now.getMonth()), v: rm(sofar) })}
           </BodyS>
         ) : null}
-        {/* v27 (I2-F04): a whole past month is a button that says what it adds. */}
-        <GuideTarget id="in.wm"><WholeMonthBtn title={t('inc_past')} sub={t('wm_btn_in')} onPress={() => up(s => { s.pastT = 'inc'; s.sheet = 'pastmonth'; })} /></GuideTarget>
+        {/* v27 (I2-F04): a whole past month is a button that says what it adds.
+            Hidden on the very first income entry, so the first step is one clear form. */}
+        {S.data.income.length ? (
+          <GuideTarget id="in.wm"><WholeMonthBtn title={t('inc_past')} sub={t('wm_btn_in')} onPress={() => up(s => { s.pastT = 'inc'; s.sheet = 'pastmonth'; })} /></GuideTarget>
+        ) : null}
       </InSec>
     </>
   );

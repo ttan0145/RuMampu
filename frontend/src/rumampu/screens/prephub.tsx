@@ -65,14 +65,23 @@ function bez(a: Pt, c: Pt, t: number): Pt {
 }
 
 /* .node .ring: progress round the step, 9px outside the knob */
-function Ring({ p }: { p: number }) {
+/* Each step wears its own colour, like the path on Home: teal for paying each
+   month, orange for upfront cash, violet for paperwork. */
+const HUB_BG = '#EEF6F3';
+const NH = [
+  { c: '#11A09B', d: '#0B7A76', e: '#075E5B', s: '#D7F1EE', se: '#B2E2DC', ink: '#0B6F6B' },
+  { c: '#FF9416', d: '#D9760A', e: '#A85400', s: '#FFE9CF', se: '#F7CF9F', ink: '#A85400' },
+  { c: '#7C5CFF', d: '#5B3FD9', e: '#4429B0', s: '#E9E3FF', se: '#CFC4FF', ink: '#4A30C2' },
+];
+
+function Ring({ p, color }: { p: number; color: string }) {
   const size = NODE + 18, r = size / 2 - 3, circ = 2 * Math.PI * r;
   return (
     <Svg width={size} height={size} style={{ position: 'absolute', left: -9, top: -9 }}>
-      <Circle cx={size / 2} cy={size / 2} r={size / 2} fill={T7.bg} />
+      <Circle cx={size / 2} cy={size / 2} r={size / 2} fill={HUB_BG} />
       <Circle cx={size / 2} cy={size / 2} r={r} stroke={T7.surface3} strokeWidth={5.5} fill="none" />
       {p > 0 ? (
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke={T7.accent} strokeWidth={5.5} fill="none"
+        <Circle cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={5.5} fill="none"
           strokeDasharray={`${circ * Math.min(1, p)} ${circ}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
       ) : null}
     </Svg>
@@ -193,7 +202,7 @@ export function PrepareHubScreen() {
   };
 
   const shell = (children: React.ReactNode, footer?: React.ReactNode) => (
-    <ScreenShell tint={T7.bg} noScene header={<Hdr7 title={t('hh_prep')} />} contentStyle={PAGE} footer={footer}
+    <ScreenShell tint={HUB_BG} noScene header={<Hdr7 title={t('hh_prep')} />} contentStyle={PAGE} footer={footer}
       scrollRef={scrollRef} onScrollY={y => { HUB_MEM.y = y; }}>
       {children}
       {pick ? <HomePicker tests={tests} onClose={() => setPick(false)} /> : null}
@@ -205,25 +214,26 @@ export function PrepareHubScreen() {
   const name = src.name || S.prep.name || t('p7_tested_home');
   const NI = (i: number) => {
     const n = nodes[i], p = pts[i], st = i === lit ? 'now' : n.done ? 'done' : 'todo', right = side[i] < 0;
-    const knobBg = st === 'now' ? T7.accent : st === 'done' ? T7.accentDeep : T7.surface3;
-    const edge = st === 'now' ? T7.accentDeep : st === 'done' ? T7.deepEdge : T7.line2;
+    const hu = NH[i];
+    const knobBg = st === 'now' ? hu.c : st === 'done' ? hu.d : hu.s;
+    const edge = st === 'now' ? hu.d : st === 'done' ? hu.e : hu.se;
     const dy = press[i].interpolate({ inputRange: [0, 1], outputRange: [0, 4] });
     return (
       <React.Fragment key={i}>
         <Pressable onPress={() => open(i)} accessibilityRole="button" testID={`prep-node-${i}`}
           accessibilityLabel={`${n.tool}: ${n.q} ${n.fig} ${n.unit}. ${n.sub}`}
           style={[h.node, { left: p.x - NODE / 2, top: p.y - NODE / 2 }]}>
-          {st !== 'done' ? <Ring p={n.done ? 1 : n.p} /> : null}
+          {st !== 'done' ? <Ring p={n.done ? 1 : n.p} color={hu.c} /> : null}
           {/* the 6px edge under the knob, then the knob that presses into it */}
           <View style={[h.knob, { top: 6, backgroundColor: edge }]} />
           <Animated.View style={[h.knob, { backgroundColor: knobBg, transform: [{ translateY: dy }] }]}>
             {st === 'now' && !reduce ? (
-              <Animated.View pointerEvents="none" style={[h.pulse, {
+              <Animated.View pointerEvents="none" style={[h.pulse, { borderColor: hu.c,
                 opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] }),
                 transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.35] }) }],
               }]} />
             ) : null}
-            <Ph name={n.done ? 'check' : n.ic} size={34} color={st === 'todo' ? T7.text2 : T7.onAccent} />
+            <Ph name={n.done ? 'check' : n.ic} size={34} color={st === 'todo' ? hu.ink : '#FFFFFF'} />
           </Animated.View>
           {i === lit ? (
             <Animated.View pointerEvents="none" style={[h.ntipWrap, { transform: [{ translateY: bob.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, -4, 0] }) }] }]}>
@@ -236,7 +246,7 @@ export function PrepareHubScreen() {
         </Pressable>
         <Pressable onPress={() => open(i)} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden
           style={[h.nlab, right ? { left: p.x + 56, alignItems: 'flex-start' } : { right: w - p.x + 56, alignItems: 'flex-end' }, { top: p.y - 52 }]}>
-          <Text style={[h.tool, !right && { textAlign: 'right' }]}>{n.tool}</Text>
+          <Text style={[h.tool, { color: hu.ink }, !right && { textAlign: 'right' }]}>{n.tool}</Text>
           <Text style={[h.nq, !right && { textAlign: 'right' }]}>{n.q}</Text>
           <Text style={[h.nf, !right && { textAlign: 'right' }]}>{n.fig}<Text style={h.nfu}>{` ${n.unit}`}</Text></Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
@@ -281,6 +291,7 @@ export function PrepareHubScreen() {
       <View style={h.banEdge}>
         <View style={h.ban} testID="prep-banner">
           <View style={h.banGlow} />
+          <View style={h.banSun} />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={h.banK}>{t('p7_banner_k')}</Text>
             <Text style={h.banN} numberOfLines={1}>{name}</Text>
@@ -303,7 +314,7 @@ export function PrepareHubScreen() {
           <>
             <Svg width={w} height={H} style={StyleSheet.absoluteFill}>
               {pts.slice(1).map((p, i) => (
-                <Path key={i} d={segD(pts[i], p)} stroke={nodes[i]?.done ? T7.accent : T7.line2}
+                <Path key={i} d={segD(pts[i], p)} stroke={nodes[i]?.done ? NH[i].c : NH[i].se}
                   strokeWidth={5} strokeLinecap="round" strokeDasharray="0.1 13" fill="none" />
               ))}
             </Svg>
@@ -988,12 +999,13 @@ function Lg({ col, label }: { col: string; label: string }) {
 }
 
 const h = StyleSheet.create({
-  banEdge: { marginTop: 4, borderRadius: 16, backgroundColor: T7.deepEdge, paddingBottom: 5 },
+  banEdge: { marginTop: 4, borderRadius: 16, backgroundColor: '#0B7A76', paddingBottom: 5 },
   ban: {
     flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, overflow: 'hidden',
-    paddingVertical: 16, paddingRight: 16, paddingLeft: 18, backgroundColor: T7.accentDeep,
+    paddingVertical: 16, paddingRight: 16, paddingLeft: 18, backgroundColor: '#11A09B',
   },
-  banGlow: { position: 'absolute', right: -60, top: -90, width: 220, height: 200, borderRadius: 110, backgroundColor: 'rgba(255,255,255,0.07)' },
+  banGlow: { position: 'absolute', right: -60, top: -90, width: 220, height: 200, borderRadius: 110, backgroundColor: 'rgba(255,255,255,0.12)' },
+  banSun: { position: 'absolute', right: 74, top: -14, width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFC83D', opacity: 0.95 },
   banK: { fontFamily: G.m, fontSize: 12.5, color: 'rgba(238,246,246,0.75)' },
   banN: { fontFamily: G.s, fontSize: 19, letterSpacing: -0.19, color: '#EEF6F6', marginTop: 2 },
   banS: { fontFamily: G.r, fontSize: 13, color: 'rgba(238,246,246,0.8)', marginTop: 1 },
