@@ -32,6 +32,27 @@ class GuestProfile(models.Model):
         return str(self.public_id)
 
 
+class IdempotencyRecord(models.Model):
+    """One completed create request, replayable after a double tap or retry."""
+
+    owner_key = models.CharField(max_length=80)
+    operation = models.CharField(max_length=80)
+    request_key = models.CharField(max_length=128)
+    request_hash = models.CharField(max_length=64)
+    response_status = models.PositiveSmallIntegerField(null=True)
+    response_data = models.JSONField(null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner_key", "operation", "request_key"],
+                name="unique_idempotent_create_request",
+            )
+        ]
+        indexes = [models.Index(fields=["created_at"])]
+
+
 class IncomeSource(models.Model):
     """EN: Predefined or user-defined income source for US1.1.
     中文：US1.1 使用的预设或用户自定义收入来源。

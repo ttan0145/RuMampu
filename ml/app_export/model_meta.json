@@ -11,6 +11,11 @@
   "2026Q2"
  ],
  "test_sales": 32070,
+ "expected_counts": {
+  "price_range_cell": 2004,
+  "price_scenario": 414,
+  "price_index_point": 3608
+ },
  "overall": {
   "median_APE": 0.1115,
   "within_20pct": 0.739,

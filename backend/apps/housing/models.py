@@ -167,6 +167,15 @@ class PriceModelVersion(models.Model):
     meta = models.JSONField(default=dict, blank=True)               # window, accuracy, drivers, notes
     loaded_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['is_active'],
+                condition=models.Q(is_active=True),
+                name='unique_active_price_model',
+            ),
+        ]
+
     def __str__(self):
         return self.version
 
@@ -197,8 +206,28 @@ class PriceRangeCell(models.Model):
     y3_p90 = models.PositiveIntegerField()
 
     class Meta:
-        constraints = [models.UniqueConstraint(
-            fields=['version', 'district', 'property_type', 'tenure', 'size_band'], name='unique_price_cell')]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['version', 'district', 'property_type', 'tenure', 'size_band'],
+                name='unique_price_cell',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(p10__gt=0, p10__lte=models.F('p50'), p50__lte=models.F('p90')),
+                name='price_cell_today_ordered_positive',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(y1_p10__gt=0, y1_p10__lte=models.F('y1_p50'), y1_p50__lte=models.F('y1_p90')),
+                name='price_cell_y1_ordered_positive',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(y2_p10__gt=0, y2_p10__lte=models.F('y2_p50'), y2_p50__lte=models.F('y2_p90')),
+                name='price_cell_y2_ordered_positive',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(y3_p10__gt=0, y3_p10__lte=models.F('y3_p50'), y3_p50__lte=models.F('y3_p90')),
+                name='price_cell_y3_ordered_positive',
+            ),
+        ]
         indexes = [models.Index(fields=['version', 'state_code', 'property_type'])]
 
 
@@ -219,8 +248,27 @@ class PriceScenario(models.Model):
     data_quality = models.CharField(max_length=5)                    # good / fair / thin
 
     class Meta:
-        constraints = [models.UniqueConstraint(
-            fields=['version', 'state_code', 'property_type', 'years'], name='unique_price_scenario')]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['version', 'state_code', 'property_type', 'years'],
+                name='unique_price_scenario',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(growth_low__lte=models.F('growth_mid'), growth_mid__lte=models.F('growth_high')),
+                name='price_scenario_growth_ordered',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    annual_trend_p10__lte=models.F('annual_trend'),
+                    annual_trend__lte=models.F('annual_trend_p90'),
+                ),
+                name='price_scenario_trend_ordered',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(prob_price_fall__gte=0, prob_price_fall__lte=1),
+                name='price_scenario_probability_valid',
+            ),
+        ]
 
 
 class PriceIndexPoint(models.Model):
@@ -233,6 +281,11 @@ class PriceIndexPoint(models.Model):
     sales = models.PositiveIntegerField()
 
     class Meta:
-        constraints = [models.UniqueConstraint(
-            fields=['version', 'state_code', 'property_type', 'quarter'], name='unique_price_index_point')]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['version', 'state_code', 'property_type', 'quarter'],
+                name='unique_price_index_point',
+            ),
+            models.CheckConstraint(condition=models.Q(index_value__gt=0), name='price_index_value_positive'),
+        ]
         ordering = ['quarter']

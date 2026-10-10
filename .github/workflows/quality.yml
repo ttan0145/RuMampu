@@ -2,7 +2,6 @@ name: Quality gates
 
 on:
   push:
-    branches: [main]
   pull_request:
 
 permissions:
@@ -31,6 +30,29 @@ jobs:
         run: |
           python manage.py spectacular --file /tmp/rumampu-openapi.yaml --validate
           diff -u ../docs/openapi.yaml /tmp/rumampu-openapi.yaml
+      - name: Fuzz the OpenAPI contract
+        working-directory: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PGHOST=""
+          export SQLITE_PATH="${RUNNER_TEMP}/schemathesis.sqlite3"
+          python manage.py migrate --noinput
+          python manage.py load_price_model ../ml/app_export --activate
+          python manage.py runserver 127.0.0.1:8765 --noreload &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          schemathesis run ../docs/openapi.yaml \
+            --url http://127.0.0.1:8765 \
+            --wait-for-schema 20 \
+            --phases fuzzing \
+            --checks not_a_server_error,negative_data_rejection \
+            --max-examples 10 \
+            --workers 1 \
+            --generation-deterministic \
+            --exclude-path /api/v1/expenses/receipt-scan/ \
+            --exclude-path /api/v1/income/scan/ \
+            --no-color
 
   backend-postgresql:
     runs-on: ubuntu-latest

@@ -11,6 +11,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/database-backup.yml"
+      - "backend/scripts/database_counts.py"
 
 permissions:
   contents: read
@@ -23,16 +24,26 @@ jobs:
   backup:
     name: Dump Neon and upload to Backblaze B2
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
       AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
       B2_BUCKET: ${{ secrets.B2_BUCKET }}
       B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
       AWS_EC2_METADATA_DISABLED: "true"
 
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
       - name: Validate backup configuration
         shell: bash
         run: |
@@ -44,9 +55,11 @@ jobs:
             [AWS_SECRET_ACCESS_KEY]=B2_APPLICATION_KEY
             [B2_BUCKET]=B2_BUCKET
             [B2_ENDPOINT]=B2_ENDPOINT
+            [NEON_API_KEY]=NEON_API_KEY
+            [NEON_PROJECT_ID]=NEON_PROJECT_ID
           )
           missing=()
-          for variable in DATABASE_URL AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY B2_BUCKET B2_ENDPOINT; do
+          for variable in DATABASE_URL AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY B2_BUCKET B2_ENDPOINT NEON_API_KEY NEON_PROJECT_ID; do
             if [[ -z "${!variable:-}" ]]; then
               missing+=("${secret_names[$variable]}")
             fi
@@ -68,6 +81,17 @@ jobs:
           fi
 
           echo "Configuration is present and has the expected format."
+
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+
+      - name: Create disposable Neon restore branch
+        id: restore-branch
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch_name: integrity/restore-${{ github.run_id }}-${{ github.run_attempt }}
+          api_key: ${{ env.NEON_API_KEY }}
 
       - name: Install backup tools
         shell: bash
@@ -174,3 +198,46 @@ jobs:
 
           echo "Backup verified: s3://${B2_BUCKET}/${OBJECT_KEY} (${size} bytes)"
           echo "Backup file: ${BACKUP_NAME}"
+
+      - name: Restore backup and compare every table with production
+        working-directory: backend
+        env:
+          BACKUP_FILE: ${{ steps.dump.outputs.file }}
+          PRODUCTION_DATABASE_URL: ${{ env.DATABASE_URL }}
+          RESTORE_DATABASE_URL: ${{ steps.restore-branch.outputs.db_url }}
+        run: |
+          DATABASE_URL="$PRODUCTION_DATABASE_URL" python scripts/database_counts.py snapshot "${RUNNER_TEMP}/production-counts.json"
+          docker run --rm \
+            --env RESTORE_DATABASE_URL \
+            --env BACKUP_NAME="$(basename "$BACKUP_FILE")" \
+            --volume "${RUNNER_TEMP}:/backup" \
+            postgres:18 \
+            sh -ceu 'pg_restore \
+              --clean \
+              --if-exists \
+              --no-owner \
+              --no-acl \
+              --dbname="$RESTORE_DATABASE_URL" \
+              "/backup/$BACKUP_NAME"'
+          DATABASE_URL="$RESTORE_DATABASE_URL" python scripts/database_counts.py snapshot "${RUNNER_TEMP}/restore-counts.json"
+          python scripts/database_counts.py compare \
+            "${RUNNER_TEMP}/production-counts.json" \
+            "${RUNNER_TEMP}/restore-counts.json" \
+            --exact-tables
+
+      - name: Remove temporary backup copy
+        if: always()
+        env:
+          BACKUP_FILE: ${{ steps.dump.outputs.file }}
+        run: |
+          if [[ -n "${BACKUP_FILE:-}" && -f "$BACKUP_FILE" ]]; then
+            rm -f -- "$BACKUP_FILE"
+          fi
+
+      - name: Delete disposable Neon restore branch
+        if: always() && steps.restore-branch.outputs.branch_id != ''
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: ${{ steps.restore-branch.outputs.branch_id }}
+          api_key: ${{ env.NEON_API_KEY }}

@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/database-migrate.yml"
+      - "backend/scripts/database_counts.py"
+      - "backend/scripts/run_with_database_url.py"
       - "backend/**/migrations/*.py"
 
 permissions:
@@ -19,13 +21,15 @@ jobs:
   migrate:
     name: Back up Neon and apply Django migrations
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
       AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
       B2_BUCKET: ${{ secrets.B2_BUCKET }}
       B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
       AWS_EC2_METADATA_DISABLED: "true"
 
     steps:
@@ -48,9 +52,11 @@ jobs:
             [AWS_SECRET_ACCESS_KEY]=B2_APPLICATION_KEY
             [B2_BUCKET]=B2_BUCKET
             [B2_ENDPOINT]=B2_ENDPOINT
+            [NEON_API_KEY]=NEON_API_KEY
+            [NEON_PROJECT_ID]=NEON_PROJECT_ID
           )
           missing=()
-          for variable in DATABASE_URL AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY B2_BUCKET B2_ENDPOINT; do
+          for variable in DATABASE_URL AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY B2_BUCKET B2_ENDPOINT NEON_API_KEY NEON_PROJECT_ID; do
             if [[ -z "${!variable:-}" ]]; then
               missing+=("${secret_names[$variable]}")
             fi
@@ -99,6 +105,18 @@ jobs:
       - name: Install backend dependencies
         run: python -m pip install -r backend/requirements.txt
 
+      - name: Ensure model changes have migrations
+        working-directory: backend
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Create disposable Neon migration branch
+        id: migration-branch
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch_name: integrity/migration-${{ github.run_id }}-${{ github.run_attempt }}
+          api_key: ${{ env.NEON_API_KEY }}
+
       - name: Install backup tools
         shell: bash
         run: |
@@ -121,6 +139,26 @@ jobs:
           aws --version
           docker --version
           docker pull postgres:18
+
+      - name: Verify branch clone and test migrations without row loss
+        working-directory: backend
+        env:
+          PRODUCTION_DATABASE_URL: ${{ env.DATABASE_URL }}
+          BRANCH_DATABASE_URL: ${{ steps.migration-branch.outputs.db_url }}
+        run: |
+          DATABASE_URL="$PRODUCTION_DATABASE_URL" python scripts/database_counts.py snapshot "${RUNNER_TEMP}/production-before.json"
+          DATABASE_URL="$BRANCH_DATABASE_URL" python scripts/database_counts.py snapshot "${RUNNER_TEMP}/branch-before.json"
+          python scripts/database_counts.py compare \
+            "${RUNNER_TEMP}/production-before.json" \
+            "${RUNNER_TEMP}/branch-before.json" \
+            --exact-tables
+          DATABASE_URL="$BRANCH_DATABASE_URL" python scripts/run_with_database_url.py migrate --noinput
+          DATABASE_URL="$BRANCH_DATABASE_URL" python scripts/run_with_database_url.py migrate --check
+          DATABASE_URL="$BRANCH_DATABASE_URL" python scripts/database_counts.py snapshot "${RUNNER_TEMP}/branch-after.json"
+          python scripts/database_counts.py compare \
+            "${RUNNER_TEMP}/branch-before.json" \
+            "${RUNNER_TEMP}/branch-after.json" \
+            --ignore-table django_migrations
 
       - name: Create a pre-migration database backup
         id: backup
@@ -214,3 +252,20 @@ jobs:
         run: |
           python manage.py migrate --check
           python manage.py showmigrations finance housing
+
+      - name: Verify production row counts after migration
+        working-directory: backend
+        run: |
+          python scripts/database_counts.py snapshot "${RUNNER_TEMP}/production-after.json"
+          python scripts/database_counts.py compare \
+            "${RUNNER_TEMP}/production-before.json" \
+            "${RUNNER_TEMP}/production-after.json" \
+            --ignore-table django_migrations
+
+      - name: Delete disposable Neon migration branch
+        if: always() && steps.migration-branch.outputs.branch_id != ''
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: ${{ steps.migration-branch.outputs.branch_id }}
+          api_key: ${{ env.NEON_API_KEY }}

@@ -26,6 +26,7 @@ from .serializers import (
 )
 from .services import calculation_result, housing_test_result, pre_housing_check, stateless_housing_test_result
 from finance.services import profile_for_request
+from finance.idempotency import idempotent_create
 
 
 def _scenario_snapshot(scenario):
@@ -67,6 +68,15 @@ class HousingScenarioViewSet(viewsets.ModelViewSet):
             return HousingScenario.objects.filter(user=self.request.user).prefetch_related('additional_costs')
         profile = profile_for_request(self.request)
         return HousingScenario.objects.filter(profile=profile).prefetch_related('additional_costs')
+
+    def create(self, request, *args, **kwargs):
+        profile = None if request.user.is_authenticated else profile_for_request(request)
+        return idempotent_create(
+            request,
+            operation="housing-scenario",
+            profile=profile,
+            create=lambda: super(HousingScenarioViewSet, self).create(request, *args, **kwargs),
+        )
 
 
 class HousingCalculationView(APIView):
@@ -178,14 +188,17 @@ class SavedHousingTestListView(SavedHousingTestMixin, APIView):
                 from rest_framework.exceptions import NotFound
                 raise NotFound('Housing scenario not found.')
         result_snapshot = values.pop('result', {})
-        x = SavedHousingTest.objects.create(
-            user=request.user,
-            scenario=scenario,
-            scenario_snapshot=_scenario_snapshot(scenario),
-            result_snapshot=result_snapshot,
-            **values,
-        )
-        return Response(_saved_test_payload(x), status=status.HTTP_201_CREATED)
+        def create():
+            row = SavedHousingTest.objects.create(
+                user=request.user,
+                scenario=scenario,
+                scenario_snapshot=_scenario_snapshot(scenario),
+                result_snapshot=result_snapshot,
+                **values,
+            )
+            return Response(_saved_test_payload(row), status=status.HTTP_201_CREATED)
+
+        return idempotent_create(request, operation="saved-housing-test", create=create)
 
 
 class SavedHousingTestDetailView(SavedHousingTestMixin, APIView):

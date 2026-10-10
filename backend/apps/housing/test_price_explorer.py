@@ -7,6 +7,8 @@ from unittest import mock
 
 from django.core.cache import cache
 from django.core.management import call_command
+from django.core.management.base import CommandError
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -24,19 +26,20 @@ def _write(folder, name, cols, rows):
         w.writerows(rows)
 
 
-def _cell(district, tenure, band, p50):
-    return ['pm-test', 'SGR', 'Selangor', district, 'terrace', tenure, '2.0', band, '120', '2026Q2', '130.0',
+def _cell(district, tenure, band, p50, version='pm-test'):
+    return [version, 'SGR', 'Selangor', district, 'terrace', tenure, '2.0', band, '120', '2026Q2', '130.0',
             p50 * 0.8, p50, p50 * 1.4, p50 * 0.82, p50 * 1.03, p50 * 1.45,
             p50 * 0.84, p50 * 1.06, p50 * 1.5, p50 * 0.85, p50 * 1.09, p50 * 1.56]
 
 
 def build_export(folder, version='pm-test'):
     json.dump({'model_version': version, 'price_level_quarter': '2026Q2', 'test_window': ['2025Q3', '2026Q2'],
-               'test_sales': 100, 'notes': 'What-if ranges, not valuations.'},
+               'test_sales': 100, 'notes': 'What-if ranges, not valuations.',
+               'expected_counts': {'price_range_cell': 2, 'price_scenario': 3, 'price_index_point': 4}},
               open(Path(folder) / 'model_meta.json', 'w', encoding='utf-8'))
     _write(folder, 'price_range_cell.csv', CELL_COLS, [
-        _cell('Petaling', 'F', 'typical', 634000),
-        _cell('Petaling', 'F', 'small', 520000),
+        _cell('Petaling', 'F', 'typical', 634000, version),
+        _cell('Petaling', 'F', 'small', 520000, version),
     ])
     _write(folder, 'price_scenario.csv',
            ['model_version', 'state', 'state_code', 'property_type', 'years', 'target_quarter', 'growth_low',
@@ -77,6 +80,35 @@ class LoadPriceModelTests(TestCase):
         self.assertEqual(list(PriceModelVersion.objects.filter(is_active=True).values_list('version', flat=True)),
                          ['pm-new'])
 
+    def test_wrong_count_is_rejected_before_existing_data_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            build_export(tmp)
+            call_command('load_price_model', tmp, '--activate', stdout=io.StringIO())
+            meta_path = Path(tmp) / 'model_meta.json'
+            meta = json.loads(meta_path.read_text(encoding='utf-8'))
+            meta['expected_counts']['price_range_cell'] = 2004
+            meta_path.write_text(json.dumps(meta), encoding='utf-8')
+            with self.assertRaises(CommandError):
+                call_command('load_price_model', tmp, '--activate', stdout=io.StringIO())
+        self.assertEqual(PriceRangeCell.objects.count(), 2)
+        self.assertEqual(PriceModelVersion.objects.get().version, 'pm-test')
+
+    def test_invalid_range_is_rejected_before_database_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            build_export(tmp)
+            path = Path(tmp) / 'price_range_cell.csv'
+            rows = list(csv.reader(path.open(encoding='utf-8')))
+            rows[1][rows[0].index('p10')] = rows[1][rows[0].index('p90')]
+            _write(tmp, 'price_range_cell.csv', rows[0], rows[1:])
+            with self.assertRaises(CommandError):
+                call_command('load_price_model', tmp, '--activate', stdout=io.StringIO())
+        self.assertFalse(PriceModelVersion.objects.exists())
+
+    def test_database_prevents_two_active_versions(self):
+        PriceModelVersion.objects.create(version='one', is_active=True)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            PriceModelVersion.objects.create(version='two', is_active=True)
+
 
 class PriceExplorerApiTests(TestCase):
     def setUp(self):
@@ -99,6 +131,22 @@ class PriceExplorerApiTests(TestCase):
         self.assertLessEqual(body['today']['p10'], body['today']['p50'])
         self.assertLessEqual(body['today']['p50'], body['today']['p90'])
         self.assertEqual(body['future'][0]['prob_lower'], 0.2)
+
+    def test_home_endpoint_figures_match_loaded_table(self):
+        cell = PriceRangeCell.objects.get(size_band='typical')
+        response = self.client.get('/api/v1/housing/price-explorer/home/', {
+            'district': cell.district,
+            'property_type': cell.property_type,
+            'tenure': cell.tenure,
+            'size': cell.size_band,
+        })
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body['today'], {'p10': cell.p10, 'p50': cell.p50, 'p90': cell.p90})
+        for year in (1, 2, 3):
+            self.assertEqual(body['future'][year - 1]['p10'], getattr(cell, f'y{year}_p10'))
+            self.assertEqual(body['future'][year - 1]['p50'], getattr(cell, f'y{year}_p50'))
+            self.assertEqual(body['future'][year - 1]['p90'], getattr(cell, f'y{year}_p90'))
 
     def test_home_unknown_district_is_404(self):
         r = self.client.get('/api/v1/housing/price-explorer/home/', {'district': 'Nowhere', 'property_type': 'terrace'})

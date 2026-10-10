@@ -578,7 +578,9 @@ async function fetchWithTimeout(url: string, init: RequestInit): Promise<Respons
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+const inFlightJsonCreates = new Map<string, Promise<unknown>>();
+
+async function performRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData;
   const identityHeaders = await apiIdentityHeaders();
   const response = await fetchWithTimeout(`${API_ROOT}${path}`, {
@@ -602,6 +604,27 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     );
   }
   return payload as T;
+}
+
+function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method || 'GET').toUpperCase();
+  const isJsonCreate = method === 'POST' && typeof init?.body === 'string';
+  if (!isJsonCreate) return performRequest<T>(path, init);
+
+  // A double tap produces the same path and JSON while the first save is still
+  // in flight. Share that promise, and give the server one replay key as a
+  // second line of defence against network retries.
+  const signature = `${path}\n${init.body}`;
+  const existing = inFlightJsonCreates.get(signature);
+  if (existing) return existing as Promise<T>;
+
+  const promise = performRequest<T>(path, {
+    ...init,
+    headers: { ...init.headers, 'Idempotency-Key': newClientId() },
+  });
+  inFlightJsonCreates.set(signature, promise);
+  void promise.finally(() => inFlightJsonCreates.delete(signature)).catch(() => undefined);
+  return promise;
 }
 
 export async function login(identifier: string, password: string): Promise<ApiAuthResponse> {
