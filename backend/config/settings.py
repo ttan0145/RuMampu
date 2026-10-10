@@ -150,6 +150,7 @@ CORS_ALLOWED_ORIGINS = [
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = (
     *default_headers,
+    "idempotency-key",
     "x-rumampu-client-id",
 )
 CORS_EXPOSE_HEADERS = ("Content-Disposition",)

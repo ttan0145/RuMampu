@@ -8,7 +8,7 @@ from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
 from .management.commands.process_record_retention import add_months
-from .models import FinancialPeriod, GuestProfile, HomeownershipMonth, IncomeEntry
+from .models import FinancialPeriod, GuestProfile, HomeownershipMonth, IdempotencyRecord, IncomeEntry
 
 
 User = get_user_model()
@@ -126,6 +126,15 @@ class Iteration3RetentionTests(TestCase):
             password="Passw0rd123",
         )
         profile = GuestProfile.objects.create(user=user, session_key="retention-account")
+        owner_key = f"user:{user.pk}"
+        IdempotencyRecord.objects.create(
+            owner_key=owner_key,
+            operation="income-entry",
+            request_key="retention-account-replay-0001",
+            request_hash="a" * 64,
+            response_status=201,
+            response_data={"amount": "120.50"},
+        )
         five_months = months_ago(timezone.localdate(), 5)
         GuestProfile.objects.filter(pk=profile.pk).update(last_active_at=self.aware_on(five_months))
 
@@ -134,11 +143,32 @@ class Iteration3RetentionTests(TestCase):
         self.assertIsNotNone(profile.retention_warning_sent_at)
         self.assertEqual(len(mail.outbox), 1)
         self.assertTrue(User.objects.filter(pk=user.pk).exists())
+        self.assertTrue(IdempotencyRecord.objects.filter(owner_key=owner_key).exists())
 
         seven_months = months_ago(timezone.localdate(), 7)
         GuestProfile.objects.filter(pk=profile.pk).update(last_active_at=self.aware_on(seven_months))
         call_command("process_record_retention", stdout=StringIO())
         self.assertFalse(User.objects.filter(pk=user.pk).exists())
+        self.assertFalse(IdempotencyRecord.objects.filter(owner_key=owner_key).exists())
+
+    def test_inactive_guest_retention_removes_replay_response(self):
+        profile = GuestProfile.objects.create(session_key="retention-guest")
+        owner_key = f"profile:{profile.public_id}"
+        IdempotencyRecord.objects.create(
+            owner_key=owner_key,
+            operation="expense-entry",
+            request_key="retention-guest-replay-0001",
+            request_hash="b" * 64,
+            response_status=201,
+            response_data={"amount": "30.00"},
+        )
+        old = months_ago(timezone.localdate(), 7)
+        GuestProfile.objects.filter(pk=profile.pk).update(last_active_at=self.aware_on(old))
+
+        call_command("process_record_retention", stdout=StringIO())
+
+        self.assertFalse(GuestProfile.objects.filter(pk=profile.pk).exists())
+        self.assertFalse(IdempotencyRecord.objects.filter(owner_key=owner_key).exists())
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
     def test_unwarned_account_is_not_removed(self):

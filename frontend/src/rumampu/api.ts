@@ -693,10 +693,11 @@ export function completeAccountOnboarding(): Promise<ApiAuthState> {
   });
 }
 
-export function patchAccountState(value: Partial<AccountStatePatch>): Promise<ApiAuthState> {
+export function patchAccountState(value: Partial<AccountStatePatch>, authorization: string): Promise<ApiAuthState> {
   return request<ApiAuthState>('/auth/me/', {
     method: 'PATCH',
     body: JSON.stringify(value),
+    headers: { Authorization: authorization },
   });
 }
 

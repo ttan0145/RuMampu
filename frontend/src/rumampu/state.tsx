@@ -43,6 +43,7 @@ import {
   readLocalState,
   writeLocalState,
   clearLocalState,
+  apiIdentityHeaders,
   patchAccountState,
   savePreferredIncomeSource as savePreferredIncomeSourceRequest,
   logout as logoutRequest,
@@ -76,7 +77,7 @@ import { logIt } from './log';
 import { rm, rmx } from './calc';
 import { PREP_DEFAULT, type PrepState } from './prep7state';
 import { accountSnapshot, hydrate, hydrateAccountState, snapshot } from './persist';
-import { changedAccountFields } from './account-sync';
+import { AccountPatchQueue, changedAccountFields } from './account-sync';
 import type { AccountStatePatch } from './api';
 
 /* Central app state — mirrors the prototype's `S` object and navigation model. */
@@ -828,8 +829,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
      are derived from this baseline so unrelated stale fields never travel
      with a local edit from another device. */
   const lastAccountSnapshot = useRef<AccountStatePatch | null>(null);
-  /* Preserve local edit order when two debounced account writes overlap. */
-  const accountSyncTail = useRef<Promise<unknown>>(Promise.resolve());
+  /* Preserve edit order within one account and invalidate writes at identity changes. */
+  const accountPatchQueue = useRef<AccountPatchQueue | null>(null);
+  if (!accountPatchQueue.current) {
+    accountPatchQueue.current = new AccountPatchQueue(
+      async () => (await apiIdentityHeaders()).Authorization ?? null,
+      (fields, authorization) => patchAccountState(fields, authorization),
+    );
+  }
   const aiDisclosureWaiters = useRef<Array<(accepted: boolean) => void>>([]);
   const statementDisclosureWaiters = useRef<Array<(accepted: boolean) => void>>([]);
 
@@ -868,6 +875,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [up]);
 
   const applyAccountState = useCallback((auth: ApiAuthState) => {
+    accountPatchQueue.current?.reset();
     accountAuthenticated.current = true;
     // The account snapshot is recorded below, so the first user edit after
     // login must be allowed to sync instead of being silently skipped.
@@ -1048,10 +1056,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (syncAccount && previousAccountSnapshot) {
           const changed = changedAccountFields(previousAccountSnapshot, currentAccountSnapshot);
           if (Object.keys(changed).length > 0) {
-            accountSyncTail.current = accountSyncTail.current
-              .catch(() => undefined)
-              .then(() => patchAccountState(changed))
-              .catch(() => undefined);
+            void accountPatchQueue.current?.enqueue(changed);
           }
         }
       }
@@ -2100,6 +2105,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async (): Promise<void> => {
     setGuestSession(false);
     accountAuthenticated.current = false;
+    accountPatchQueue.current?.reset();
     skipNextAccountSync.current = true;
     skipNextLocalStateWrite.current = true;
     if (localStateWriteTimer.current) {
@@ -2136,6 +2142,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const deleteCurrentRecord = useCallback(async (): Promise<void> => {
     setGuestSession(false);
     accountAuthenticated.current = false;
+    accountPatchQueue.current?.reset();
     skipNextAccountSync.current = true;
     skipNextLocalStateWrite.current = true;
     if (localStateWriteTimer.current) {
@@ -2198,6 +2205,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const enterGuestMode = useCallback(async (): Promise<void> => {
     setGuestSession(false);
     accountAuthenticated.current = false;
+    accountPatchQueue.current?.reset();
     skipNextAccountSync.current = true;
     skipNextLocalStateWrite.current = true;
     if (localStateWriteTimer.current) {
