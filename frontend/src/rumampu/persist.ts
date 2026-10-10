@@ -12,7 +12,7 @@ export const BUFFER_NAME_MAX = 30;
 const PERSISTED = ['plan', 'buffer', 'village', 'planHorizon',
   'potMovedMonths', 'potMoved', 'docsChecked', 'keptTests', 'tipsOff', 'seenG', 'lnProg',
   'bought', 'purchaseMonth', 'notificationPreferences', 'aiDisclosureAccepted', 'statementDisclosureVersion',
-  'voiceDisclosureAccepted', 'prep', 'ufTest'] as const;
+  'voiceDisclosureAccepted', 'prep', 'ufTest', 'firstHome', 'ufReno'] as const;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -139,6 +139,7 @@ export function snapshot(s: AppState): string {
     cashOnHand: s.data.cashOnHand,
     cashOnHandDate: s.data.cashOnHandDate,
     expenseLimits: s.data.expenseLimits,
+    upfront: upfrontAmounts(s),
   };
   payload.housingTestResult = getHousingTestResult();
   payload.housingScenario = getHousingScenario();
@@ -188,6 +189,8 @@ export function hydrate(s: AppState, raw: string | null): void {
       s.lnProg = payload.lnProg as Record<string, number>;
     }
     if (validPrep(payload.prep)) s.prep = { ...PREP_DEFAULT, ...payload.prep };
+    if (typeof payload.firstHome === 'boolean') s.firstHome = payload.firstHome;
+    if (typeof payload.ufReno === 'boolean') s.ufReno = payload.ufReno;
     if (typeof payload.bought === 'boolean') s.bought = payload.bought;
     if (payload.purchaseMonth === null || (typeof payload.purchaseMonth === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(payload.purchaseMonth))) {
       s.purchaseMonth = payload.purchaseMonth as string | null;
@@ -218,10 +221,37 @@ export function hydrate(s: AppState, raw: string | null): void {
       if (validExpenseLimits(payload.data.expenseLimits)) {
         s.data.expenseLimits = payload.data.expenseLimits;
       }
+      if (validUpfrontAmounts(payload.data.upfront)) applyUpfrontAmounts(s, payload.data.upfront);
     }
   } catch {
     // Corrupt or incompatible local data is discarded; start with clean state.
   }
+}
+
+/* Upfront cash: the amounts the person typed in, by item. The fee rows worked
+   out from the price are not stored; only these entered amounts are. */
+type UpfrontAmount = { category: string; amount: number };
+
+function upfrontAmounts(s: AppState): UpfrontAmount[] {
+  return s.data.upfront.map(item => ({ category: item.id, amount: Math.max(0, Number(item.a) || 0) }));
+}
+
+function validUpfrontAmounts(value: unknown): value is UpfrontAmount[] {
+  return Array.isArray(value) && value.length <= 50 && value.every(item => (
+    record(item) && typeof item.category === 'string' && finite(item.amount) && item.amount >= 0
+  ));
+}
+
+/** Set each known item's amount from the saved list; items not in it go back to empty. */
+function applyUpfrontAmounts(s: AppState, amounts: UpfrontAmount[]): void {
+  const byId = new Map(amounts.map(item => [item.category, item.amount]));
+  s.data.upfront = s.data.upfront.map(item => ({ ...item, a: byId.get(item.id) ?? 0 }));
+}
+
+/** A saved test as "price:monthly payment", stable across devices and re-saves. */
+export function keptTestKey(test: KeptTest | undefined): string | null {
+  if (!test || !(Number(test.propertyPrice) > 0)) return null;
+  return `${Math.round(Number(test.propertyPrice))}:${Math.round(Number(test.pay) || 0)}`;
 }
 
 /** Shape the same allow-listed state for the account PATCH endpoint. */
@@ -240,6 +270,7 @@ export function accountSnapshot(s: AppState): AccountStatePatch {
     docs_checked: (local.docsChecked as string[]) ?? [],
     learning_progress: (local.lnProg as Record<string, number>) ?? {},
     kept_tests: (local.keptTests as unknown[]) ?? [],
+    upfront_costs: upfrontAmounts(s),
     bought_home: s.bought,
     homeownership_purchase_month: s.purchaseMonth,
     notification_preferences: accountNotificationPreferences(s),
@@ -247,6 +278,11 @@ export function accountSnapshot(s: AppState): AccountStatePatch {
       ai_disclosure_accepted: s.aiDisclosureAccepted,
       tips_off: s.tipsOff,
       seen_guides: s.seenG,
+      statement_disclosure_version: s.statementDisclosureVersion,
+      voice_disclosure_accepted: s.voiceDisclosureAccepted,
+      upfront_test: s.ufTest != null ? keptTestKey(s.keptTests[s.ufTest]) : s.ufTestKey,
+      first_home: s.firstHome,
+      upfront_reno: s.ufReno,
     },
   };
 }
@@ -280,6 +316,16 @@ export function hydrateAccountState(s: AppState, remote: Record<string, unknown>
   if (validExpenseLimits(remote.expense_limits)) {
     s.data.expenseLimits = remote.expense_limits;
   }
+  /* The account decides these too, so one account's answers never carry into
+     another's; a state saved before they were kept gives the defaults. */
+  applyUpfrontAmounts(s, validUpfrontAmounts(remote.upfront_costs) ? remote.upfront_costs : []);
+  s.statementDisclosureVersion = experience.statement_disclosure_version === STATEMENT_SCAN_DISCLOSURE_VERSION
+    ? STATEMENT_SCAN_DISCLOSURE_VERSION : null;
+  s.voiceDisclosureAccepted = experience.voice_disclosure_accepted === true;
+  s.firstHome = experience.first_home === true;
+  s.ufReno = experience.upfront_reno === true;
+  s.ufTestKey = typeof experience.upfront_test === 'string' ? experience.upfront_test : null;
+  if (s.ufTestKey) s.ufTest = null;
   if (Object.prototype.hasOwnProperty.call(remote, 'notification_preferences')) {
     const saved = remote.notification_preferences;
     if (validAccountNotificationPreferences(saved)) {

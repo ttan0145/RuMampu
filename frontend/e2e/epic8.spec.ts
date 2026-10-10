@@ -955,6 +955,18 @@ test('US8.12 transfers guest saved housing tests to a new account on Keep', asyn
   await expect(page.getByText(savedName, { exact: true })).toBeVisible();
   await page.getByText('Open this result').click();
   await expect(page.getByText('Result', { exact: true }).first()).toBeVisible();
+
+  // Upfront cash works from the same saved test after logging in again: the
+  // account keeps which test it is, by price and monthly payment.
+  await expect.poll(async () => {
+    const response = await e2eGet(page, `${API}/auth/me/`, {
+      headers: { Authorization: `Token ${await accountToken(page)}` },
+    });
+    return ((await response.json()).experience_preferences?.upfront_test ?? '') as string;
+  }, { timeout: 15000 }).toMatch(/^250000:\d+$/);
+  await expect.poll(async () => page.evaluate(() => (
+    JSON.parse(window.localStorage.getItem('rumampu_local_state') || '{}').ufTest
+  ))).toBe(0);
 });
 
 test('US8.12 Keep transfers onboarding-derived guest income to a new account', async ({ page }) => {
@@ -1001,6 +1013,21 @@ test('US8.12 Keep carries the guest saving plan and other declarations into the 
     const local = JSON.parse(window.localStorage.getItem('rumampu_local_state') || '{}');
     local.plan = value;
     local.docsChecked = checked;
+    local.lnProg = { deposit: 3 };
+    local.bought = true;
+    local.purchaseMonth = '2026-07';
+    local.data = {
+      ...(local.data || {}), cashOnHand: 4200, cashOnHandDate: '2026-10-01',
+      upfront: [{ category: 'earnest', amount: 5000 }, { category: 'furn', amount: 6500 }],
+    };
+    local.firstHome = true;
+    local.ufReno = true;
+    local.voiceDisclosureAccepted = true;
+    local.statementDisclosureVersion = 'groq-statement-scan-2026-10-08-v1';
+    local.notificationPreferences = {
+      ...(local.notificationPreferences || {}),
+      reminders: { income: { enabled: true, repeat: 'daily', day: 1, time: '20:00', notification_id: null } },
+    };
     window.localStorage.setItem('rumampu_local_state', JSON.stringify(local));
   }, [plan, ['ic']] as const);
   await page.reload();
@@ -1023,9 +1050,34 @@ test('US8.12 Keep carries the guest saving plan and other declarations into the 
     const response = await e2eGet(page, `${API}/auth/me/`, {
       headers: { Authorization: `Token ${await accountToken(page)}` },
     });
-    const body = await response.json() as { saving_plan?: { done?: boolean[] }; docs_checked?: string[] };
-    return { saved: body.saving_plan?.done?.filter(Boolean).length ?? 0, docs: body.docs_checked ?? [] };
-  }, { timeout: 15000 }).toEqual({ saved: 3, docs: ['ic'] });
+    const body = await response.json() as {
+      saving_plan?: { done?: boolean[] }; docs_checked?: string[]; learning_progress?: Record<string, number>;
+      bought_home?: boolean; homeownership_purchase_month?: string | null; cash_on_hand?: number | string;
+      notification_preferences?: { reminders?: Record<string, { repeat?: string; time?: string }> };
+      upfront_costs?: Array<{ category: string; amount: number }>;
+      experience_preferences?: Record<string, unknown>;
+    };
+    const upfront = Object.fromEntries((body.upfront_costs ?? []).filter(item => item.amount > 0).map(item => [item.category, item.amount]));
+    const experience = body.experience_preferences ?? {};
+    return {
+      saved: body.saving_plan?.done?.filter(Boolean).length ?? 0,
+      docs: body.docs_checked ?? [],
+      learn: body.learning_progress ?? {},
+      bought: body.bought_home,
+      purchaseMonth: body.homeownership_purchase_month,
+      cash: Number(body.cash_on_hand),
+      reminder: body.notification_preferences?.reminders?.income?.repeat,
+      upfront,
+      firstHome: experience.first_home,
+      reno: experience.upfront_reno,
+      voice: experience.voice_disclosure_accepted,
+      statement: experience.statement_disclosure_version,
+    };
+  }, { timeout: 15000 }).toEqual({
+    saved: 3, docs: ['ic'], learn: { deposit: 3 }, bought: true, purchaseMonth: '2026-07', cash: 4200, reminder: 'daily',
+    upfront: { earnest: 5000, furn: 6500 }, firstHome: true, reno: true, voice: true,
+    statement: 'groq-statement-scan-2026-10-08-v1',
+  });
   await expect.poll(async () => page.evaluate(() => (
     JSON.parse(window.localStorage.getItem('rumampu_local_state') || '{}').plan?.done?.filter(Boolean).length ?? 0
   ))).toBe(3);

@@ -252,13 +252,30 @@ def _valid_notification_preferences(value):
     return True
 
 
+_EXPERIENCE_REQUIRED = {"ai_disclosure_accepted", "tips_off", "seen_guides"}
+# Optional so states saved before these existed stay valid: the two consent
+# answers, the saved test Upfront cash works from (identified by its price and
+# monthly payment, which survive a guest's tests being saved again under the
+# account), and the two Upfront cash switches.
+_EXPERIENCE_OPTIONAL = {
+    "statement_disclosure_version", "voice_disclosure_accepted", "upfront_test", "first_home", "upfront_reno",
+}
+
+
 def _valid_experience_preferences(value):
     """Only account-owned, non-transient guidance choices may cross devices."""
-    if not isinstance(value, dict) or set(value) != {
-        "ai_disclosure_accepted", "tips_off", "seen_guides"
-    }:
+    if not isinstance(value, dict) or not _EXPERIENCE_REQUIRED <= set(value) <= _EXPERIENCE_REQUIRED | _EXPERIENCE_OPTIONAL:
         return False
     if not isinstance(value["ai_disclosure_accepted"], bool) or not isinstance(value["tips_off"], bool):
+        return False
+    version = value.get("statement_disclosure_version")
+    if version is not None and (not isinstance(version, str) or len(version) > 100):
+        return False
+    for key in ("voice_disclosure_accepted", "first_home", "upfront_reno"):
+        if key in value and not isinstance(value[key], bool):
+            return False
+    test = value.get("upfront_test")
+    if test is not None and (not isinstance(test, str) or not re.fullmatch(r"\d{1,9}:\d{1,9}", test)):
         return False
     seen = value["seen_guides"]
     if not isinstance(seen, list) or len(seen) > 100:
@@ -333,6 +350,13 @@ def _validate_app_state_field(field, value):
         if not isinstance(value, list):
             return None
         if field == "docs_checked" and not all(isinstance(item, str) for item in value):
+            return None
+        if field == "upfront_costs" and (len(value) > 50 or not all(
+            isinstance(item, dict) and set(item) == {"category", "amount"}
+            and isinstance(item["category"], str) and re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", item["category"])
+            and _valid_number(item["amount"], minimum=0)
+            for item in value
+        )):
             return None
         if field == "pot_moved_months" and not all(isinstance(item, str) for item in value):
             return None

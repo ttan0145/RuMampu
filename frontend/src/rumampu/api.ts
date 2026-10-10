@@ -247,6 +247,19 @@ export interface ApiExperiencePreferences {
   ai_disclosure_accepted: boolean;
   tips_off: boolean;
   seen_guides: string[];
+  /* Optional: absent in states saved before they followed the account. */
+  statement_disclosure_version?: string | null;
+  voice_disclosure_accepted?: boolean;
+  /** The saved test Upfront cash works from, as "price:monthly payment". */
+  upfront_test?: string | null;
+  first_home?: boolean;
+  upfront_reno?: boolean;
+}
+
+/** One Upfront cash amount the person entered. */
+export interface ApiUpfrontCost {
+  category: string;
+  amount: number;
 }
 
 export interface ApiAuthState {
@@ -315,6 +328,7 @@ export interface AccountStatePatch {
   docs_checked: string[];
   learning_progress: Record<string, number>;
   kept_tests: unknown[];
+  upfront_costs: ApiUpfrontCost[];
   notification_preferences: ApiAccountNotificationPreferences;
   experience_preferences: ApiExperiencePreferences;
 }

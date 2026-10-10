@@ -76,7 +76,7 @@ import { HouseCostType, HouseCostsResponse, PxKind, PxSize, PxType, SavedHousing
 import { logIt } from './log';
 import { rm, rmx } from './calc';
 import { PREP_DEFAULT, type PrepState } from './prep7state';
-import { accountSnapshot, hydrate, hydrateAccountState, snapshot } from './persist';
+import { accountSnapshot, hydrate, hydrateAccountState, keptTestKey, snapshot } from './persist';
 import { AccountPatchQueue, changedAccountFields } from './account-sync';
 import type { AccountStatePatch } from './api';
 
@@ -318,6 +318,9 @@ export interface AppState {
      figures work from, and the renovation switch. */
   firstHome: boolean;
   ufTest: number | null;
+  /* The Upfront cash choice as it came from the account ("price:monthly payment"),
+     waiting for the saved tests it names to load; null once resolved. */
+  ufTestKey: string | null;
   /* Prepare v7: the monthly lesson's place and what-ifs, and the hub's choices */
   prep: PrepState;
   ufReno: boolean;
@@ -504,7 +507,7 @@ function initialState(): AppState {
     plan: null, village: null, buffer: null, vHelp: false, vLand: null, vFlashSeen: false, pathCoach: null, pathFocus: null, autoKeep: false, planHorizon: null,
     moView: 'tiles', houseTab: 'test',
     houseCosts: null, houseCostsSync: 'idle', hcState: 'sgr', hcType: 'all', hcKind: 'all', hcBudget: null, firstHome: false,
-    potMoved: 0, potMovedMonths: [], ufTest: null, prep: { ...PREP_DEFAULT, mHome: { ...PREP_DEFAULT.mHome } }, ufReno: false, viewTestName: null, scanAuto: false, pastT: 'inc', cardInfo: null, log: [],
+    potMoved: 0, potMovedMonths: [], ufTest: null, ufTestKey: null, prep: { ...PREP_DEFAULT, mHome: { ...PREP_DEFAULT.mHome } }, ufReno: false, viewTestName: null, scanAuto: false, pastT: 'inc', cardInfo: null, log: [],
     tryPay: null, tryCust: false, depMode: null,
     incPick: false, incMode: 'type', incScan: { stage: 'pick', rows: [] }, incCsv: { stage: 'pick' }, incEdit: null,
     exMode: 'type', exCsv: { stage: 'pick' }, exEdit: null,
@@ -743,6 +746,14 @@ function restoreHousingGoal(s: AppState): void {
     if (scenario && typeof scenario === 'object' && 'id' in scenario && typeof scenario.id === 'number') {
       setHousingScenario(scenario as HousingScenarioResponse);
     }
+  }
+
+  /* A choice that came from the account names its test by price and payment,
+     because the list order differs between devices and after a guest's tests
+     are saved again under a new account. */
+  if (s.ufTestKey) {
+    const index = s.keptTests.findIndex(test => keptTestKey(test) === s.ufTestKey);
+    if (index >= 0) { s.ufTest = index; s.ufTestKey = null; }
   }
 
   /* Point the upfront figures at the kept test behind the goal when no valid

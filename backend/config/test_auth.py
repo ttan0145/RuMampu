@@ -268,6 +268,44 @@ class AuthApiRegressionTests(TestCase):
         self.assertEqual(saved.json()["notification_preferences"], preferences)
         self.assertEqual(UserAppState.objects.get(user=user).notification_preferences, preferences)
 
+    def test_upfront_cash_and_consents_follow_the_account(self):
+        user = User.objects.create_user(username="upfront-follows@example.com")
+        token = Token.objects.create(user=user)
+        client = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+        experience = {
+            "ai_disclosure_accepted": True, "tips_off": False, "seen_guides": ["home"],
+            "statement_disclosure_version": "groq-statement-scan-2026-10-08-v1",
+            "voice_disclosure_accepted": True, "upfront_test": "250000:1382",
+            "first_home": True, "upfront_reno": False,
+        }
+        upfront = [{"category": "earnest", "amount": 5000}, {"category": "furn", "amount": 6500.5}]
+
+        saved = client.patch(
+            "/api/v1/auth/me/",
+            {"experience_preferences": experience, "upfront_costs": upfront},
+            content_type="application/json",
+        )
+
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json()["experience_preferences"], experience)
+        self.assertEqual(saved.json()["upfront_costs"], upfront)
+        # States saved before the optional keys existed are still valid.
+        older = client.patch(
+            "/api/v1/auth/me/",
+            {"experience_preferences": {"ai_disclosure_accepted": False, "tips_off": True, "seen_guides": []}},
+            content_type="application/json",
+        )
+        self.assertEqual(older.status_code, 200)
+        for bad in (
+            {"experience_preferences": {**experience, "upfront_test": "a lot"}},
+            {"experience_preferences": {**experience, "unknown": 1}},
+            {"upfront_costs": [{"category": "earnest", "amount": -1}]},
+            {"upfront_costs": [{"category": "earnest"}]},
+        ):
+            with self.subTest(bad=bad):
+                response = client.patch("/api/v1/auth/me/", bad, content_type="application/json")
+                self.assertEqual(response.status_code, 400)
+
     def test_bill_reminder_choices_reject_invalid_or_device_local_data(self):
         user = User.objects.create_user(username="invalid-reminders@example.com")
         token = Token.objects.create(user=user)
