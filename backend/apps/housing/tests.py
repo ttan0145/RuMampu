@@ -279,6 +279,67 @@ class AuthenticatedHousingApiTests(HousingApiTestMixin, TestCase):
         self.assertEqual(deleted.status_code, 204)
         self.assertFalse(SavedHousingTest.objects.filter(id=saved_id, user=user).exists())
 
+    def test_saved_housing_test_rejects_malformed_and_out_of_range_values(self):
+        client, user = self.auth_client("invalid-save@example.com")
+        valid = {
+            "name": "Valid baseline",
+            "monthly_payment": "1000.00",
+            "short_month_count": 0,
+            "tested_months": 12,
+            "largest_gap": "0.00",
+            "income_shock_percent": "0.00",
+            "result": {},
+        }
+        invalid_values = {
+            "negative monthly payment": {"monthly_payment": "-1.00"},
+            "non-numeric monthly payment": {"monthly_payment": "not-a-number"},
+            "oversized monthly payment": {"monthly_payment": "999999999999999999999999999999"},
+            "negative short month count": {"short_month_count": -1},
+            "negative tested month count": {"tested_months": -1},
+            "negative largest gap": {"largest_gap": "-1.00"},
+            "negative income shock": {"income_shock_percent": "-1.00"},
+            "income shock above supported range": {"income_shock_percent": "91.00"},
+            "non-object result": {"result": []},
+        }
+
+        for label, replacement in invalid_values.items():
+            with self.subTest(label=label):
+                response = client.post(
+                    self.saved_tests_url,
+                    data={**valid, **replacement},
+                    content_type="application/json",
+                )
+                self.assertEqual(response.status_code, 400)
+
+        self.assertFalse(SavedHousingTest.objects.filter(user=user).exists())
+
+    def test_saved_housing_test_patch_rejects_invalid_payment_without_changing_record(self):
+        client, user = self.auth_client("invalid-patch@example.com")
+        row = SavedHousingTest.objects.create(user=user, name="Safe", monthly_payment="900.00")
+
+        response = client.patch(
+            f"{self.saved_tests_url}{row.id}/",
+            data={"name": "Should not apply", "monthly_payment": "not-a-number"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        row.refresh_from_db()
+        self.assertEqual(row.name, "Safe")
+        self.assertEqual(row.monthly_payment, Decimal("900.00"))
+
+    def test_saved_housing_test_keeps_legacy_tested_home_cost_alias(self):
+        client, _ = self.auth_client("legacy-save@example.com")
+
+        response = client.post(
+            self.saved_tests_url,
+            data={"name": "Legacy", "tested_monthly_home_cost": "875.50"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["monthly_payment"], 875.5)
+
 
 class PreHousingCheckApiTests(HousingApiTestMixin, TestCase):
     def setUp(self):

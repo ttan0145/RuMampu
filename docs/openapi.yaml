@@ -966,44 +966,47 @@ paths:
           description: ''
   /api/v1/housing/saved-tests/:
     get:
-      operationId: housing_saved_tests_retrieve
+      operationId: housing_saved_tests_list
       tags:
       - housing
       security:
       - tokenAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SavedHousingTestResponse'
+          description: ''
     post:
       operationId: housing_saved_tests_create
       tags:
       - housing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedHousingTestCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SavedHousingTestCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SavedHousingTestCreateRequest'
       security:
       - tokenAuth: []
       responses:
-        '200':
-          description: No response body
-    patch:
-      operationId: housing_saved_tests_partial_update
-      tags:
-      - housing
-      security:
-      - tokenAuth: []
-      responses:
-        '200':
-          description: No response body
-    delete:
-      operationId: housing_saved_tests_destroy
-      tags:
-      - housing
-      security:
-      - tokenAuth: []
-      responses:
-        '204':
-          description: No response body
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedHousingTestResponse'
+          description: ''
   /api/v1/housing/saved-tests/{test_id}/:
     get:
-      operationId: housing_saved_tests_retrieve_2
+      operationId: housing_saved_tests_retrieve
       parameters:
       - in: path
         name: test_id
@@ -1016,24 +1019,13 @@ paths:
       - tokenAuth: []
       responses:
         '200':
-          description: No response body
-    post:
-      operationId: housing_saved_tests_create_2
-      parameters:
-      - in: path
-        name: test_id
-        schema:
-          type: integer
-        required: true
-      tags:
-      - housing
-      security:
-      - tokenAuth: []
-      responses:
-        '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedHousingTestResponse'
+          description: ''
     patch:
-      operationId: housing_saved_tests_partial_update_2
+      operationId: housing_saved_tests_partial_update
       parameters:
       - in: path
         name: test_id
@@ -1042,13 +1034,28 @@ paths:
         required: true
       tags:
       - housing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSavedHousingTestUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSavedHousingTestUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSavedHousingTestUpdateRequest'
       security:
       - tokenAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedHousingTestResponse'
+          description: ''
     delete:
-      operationId: housing_saved_tests_destroy_2
+      operationId: housing_saved_tests_destroy
       parameters:
       - in: path
         name: test_id
@@ -3385,6 +3392,21 @@ components:
         date:
           type: string
           format: date
+    PatchedSavedHousingTestUpdateRequest:
+      type: object
+      properties:
+        monthly_payment:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        tested_monthly_home_cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          writeOnly: true
+        name:
+          type: string
+          maxLength: 120
     PatchedWorkCostEntryWriteRequest:
       type: object
       properties:
@@ -3583,6 +3605,114 @@ components:
       description: |-
         * `user` - user
         * `assistant` - assistant
+    SavedHousingTestCreateRequest:
+      type: object
+      properties:
+        monthly_payment:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+        tested_monthly_home_cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          writeOnly: true
+        name:
+          type: string
+          default: ''
+          maxLength: 120
+        scenario_id:
+          type: integer
+          minimum: 1
+          nullable: true
+        short_month_count:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          default: 0
+        tested_months:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          default: 0
+        largest_gap:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          default: '0.00'
+        income_shock_percent:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          default: '0.00'
+        result:
+          type: object
+          additionalProperties: {}
+    SavedHousingTestResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        scenario_id:
+          type: integer
+          nullable: true
+        property_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          nullable: true
+        monthly_payment:
+          type: number
+          format: double
+          minimum: 0
+        tested_monthly_home_cost:
+          type: number
+          format: double
+          minimum: 0
+        short_month_count:
+          type: integer
+          minimum: 0
+        tested_months:
+          type: integer
+          minimum: 0
+        largest_gap:
+          type: number
+          format: double
+          minimum: 0
+        income_shock_percent:
+          type: number
+          format: double
+          maximum: 90
+          minimum: 0
+        scenario:
+          type: object
+          additionalProperties: {}
+        result:
+          type: object
+          additionalProperties: {}
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - id
+      - income_shock_percent
+      - largest_gap
+      - monthly_payment
+      - name
+      - property_price
+      - result
+      - scenario
+      - scenario_id
+      - short_month_count
+      - tested_monthly_home_cost
+      - tested_months
+      - updated_at
     ShortfallTypeEnum:
       enum:
       - none

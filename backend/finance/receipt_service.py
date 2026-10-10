@@ -15,6 +15,7 @@ from typing import Any
 
 from jsonschema import ValidationError as SchemaValidationError
 from jsonschema import validate
+from django.utils import timezone
 
 DEFAULT_MODEL = "qwen/qwen3.8-27b"
 
@@ -219,7 +220,7 @@ def scan_income(image_base64: str, media_type: str) -> dict[str, Any]:
                         {
                             "type": "text",
                             "text": INCOME_PROMPT_TEMPLATE.format(
-                                today=datetime.date.today().isoformat(),
+                                today=timezone.localdate().isoformat(),
                                 row_limit=INCOME_SCAN_ROW_LIMIT,
                             ),
                         },

@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.db import transaction
 from rest_framework import serializers
 
@@ -178,6 +180,70 @@ class StatelessHousingTestRequestSerializer(HousingCalculationSerializer):
     income_shock_percent = serializers.DecimalField(
         max_digits=5, decimal_places=2, min_value=0, max_value=90, required=False, default=0
     )
+
+
+class SavedHousingTestPaymentMixin(serializers.Serializer):
+    monthly_payment = serializers.DecimalField(
+        max_digits=12, decimal_places=2, min_value=0, required=False
+    )
+    tested_monthly_home_cost = serializers.DecimalField(
+        max_digits=12, decimal_places=2, min_value=0, required=False, write_only=True
+    )
+
+    def validate(self, attrs):
+        monthly_payment = attrs.get('monthly_payment')
+        tested_home_cost = attrs.pop('tested_monthly_home_cost', None)
+        if monthly_payment is not None and tested_home_cost is not None and monthly_payment != tested_home_cost:
+            raise serializers.ValidationError(
+                'monthly_payment and tested_monthly_home_cost must match when both are provided.'
+            )
+        if monthly_payment is None and tested_home_cost is not None:
+            attrs['monthly_payment'] = tested_home_cost
+        return attrs
+
+
+class SavedHousingTestCreateSerializer(SavedHousingTestPaymentMixin):
+    name = serializers.CharField(max_length=120, allow_blank=True, required=False, default='')
+    scenario_id = serializers.IntegerField(min_value=1, allow_null=True, required=False)
+    short_month_count = serializers.IntegerField(
+        min_value=0, max_value=2147483647, required=False, default=0
+    )
+    tested_months = serializers.IntegerField(
+        min_value=0, max_value=2147483647, required=False, default=0
+    )
+    largest_gap = serializers.DecimalField(
+        max_digits=12, decimal_places=2, min_value=0, required=False, default=0
+    )
+    income_shock_percent = serializers.DecimalField(
+        max_digits=6, decimal_places=2, min_value=0, max_value=90, required=False, default=0
+    )
+    result = serializers.DictField(required=False, default=dict)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        attrs.setdefault('monthly_payment', Decimal('0'))
+        return attrs
+
+
+class SavedHousingTestUpdateSerializer(SavedHousingTestPaymentMixin):
+    name = serializers.CharField(max_length=120, allow_blank=True, required=False)
+
+
+class SavedHousingTestResponseSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    scenario_id = serializers.IntegerField(allow_null=True)
+    property_price = serializers.DecimalField(max_digits=12, decimal_places=2, allow_null=True)
+    monthly_payment = serializers.FloatField(min_value=0)
+    tested_monthly_home_cost = serializers.FloatField(min_value=0)
+    short_month_count = serializers.IntegerField(min_value=0)
+    tested_months = serializers.IntegerField(min_value=0)
+    largest_gap = serializers.FloatField(min_value=0)
+    income_shock_percent = serializers.FloatField(min_value=0, max_value=90)
+    scenario = serializers.DictField()
+    result = serializers.DictField()
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
 
 
 class HousingTestMonthResultSerializer(PreHousingMonthResultSerializer):

@@ -201,9 +201,11 @@ class IncomeScanNormaliseTests(TestCase):
         completion = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(body)))])
         create = Mock(return_value=completion)
         client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
-        with patch.object(receipt_service, "_client", return_value=client):
+        with patch.object(receipt_service, "_client", return_value=client), \
+             patch.object(receipt_service.timezone, "localdate", return_value=datetime.date(2026, 11, 1)):
             result = receipt_service.scan_income("c3ludGhldGljLWltYWdl", "image/jpeg")
         prompt = create.call_args.kwargs["messages"][0]["content"][0]["text"]
+        self.assertIn("Today is 2026-11-01", prompt)
         self.assertIn("at most 20 rows", prompt)
         self.assertIn("Never guess a date", prompt)
         self.assertEqual(set(result["rows"][0]), {"date", "amount", "low_confidence"})

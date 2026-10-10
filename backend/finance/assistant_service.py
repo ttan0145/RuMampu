@@ -8,7 +8,6 @@ these rules.
 """
 from __future__ import annotations
 
-import datetime
 from decimal import ROUND_HALF_UP, Decimal
 import json
 import os
@@ -16,6 +15,7 @@ import re
 from typing import Any
 
 from django.core.cache import cache
+from django.utils import timezone
 
 from apps.housing.services import housing_test_result
 from .analysis_service import build_income_coverage, build_income_pattern
@@ -301,7 +301,7 @@ def _completion(model: str, messages: list[dict[str, str]]) -> str:
 
 
 def _enforce_daily_limit(profile: GuestProfile) -> None:
-    key = f"assistant-count:{profile.pk}:{datetime.date.today().isoformat()}"
+    key = f"assistant-count:{profile.pk}:{timezone.localdate().isoformat()}"
     count = cache.get(key, 0)
     if count >= DAILY_MESSAGE_LIMIT:
         raise AssistantError(
@@ -322,7 +322,7 @@ def answer_chat(
     _enforce_daily_limit(profile)
     snapshot = _localize_terms(build_financial_snapshot(profile), term_labels)
     system = SYSTEM_TEMPLATE.format(
-        today=datetime.date.today().isoformat(),
+        today=timezone.localdate().isoformat(),
         ui_language=LANGUAGE_NAMES.get(ui_language, "English"),
         app_map=_app_map(ui_labels),
         snapshot=json.dumps(snapshot, ensure_ascii=False, default=str),

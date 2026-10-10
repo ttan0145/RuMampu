@@ -1,5 +1,3 @@
-from decimal import Decimal, InvalidOperation
-
 from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -21,19 +19,13 @@ from .serializers import (
     PreHousingCheckSerializer,
     HousingTestRequestSerializer,
     HousingTestResultSerializer,
+    SavedHousingTestCreateSerializer,
+    SavedHousingTestResponseSerializer,
+    SavedHousingTestUpdateSerializer,
     StatelessHousingTestRequestSerializer,
 )
 from .services import calculation_result, housing_test_result, pre_housing_check, stateless_housing_test_result
 from finance.services import profile_for_request
-
-
-def _decimal_from_input(value, default='0'):
-    if value in (None, ''):
-        value = default
-    try:
-        return Decimal(str(value))
-    except (InvalidOperation, TypeError, ValueError):
-        return Decimal(default)
 
 
 def _scenario_snapshot(scenario):
@@ -145,8 +137,9 @@ class StatelessHousingTestView(APIView):
         profile = profile_for_request(request)
         return Response(stateless_housing_test_result(profile, serializer.validated_data))
 
-class SavedHousingTestView(APIView):
+class SavedHousingTestMixin:
     permission_classes = [IsAuthenticated]
+    serializer_class = SavedHousingTestResponseSerializer
 
     def get_object(self, request, test_id):
         from rest_framework.exceptions import NotFound
@@ -158,17 +151,25 @@ class SavedHousingTestView(APIView):
             raise NotFound('Saved housing test not found.')
         return row
 
-    def get(self, request, test_id=None):
-        if test_id is not None:
-            return Response(_saved_test_payload(self.get_object(request, test_id)))
+
+class SavedHousingTestListView(SavedHousingTestMixin, APIView):
+    @extend_schema(responses=SavedHousingTestResponseSerializer(many=True))
+    def get(self, request):
         rows = SavedHousingTest.objects.filter(
             user=request.user,
         ).select_related('scenario').prefetch_related('scenario__additional_costs')
         return Response([_saved_test_payload(row) for row in rows])
 
+    @extend_schema(
+        request=SavedHousingTestCreateSerializer,
+        responses={status.HTTP_201_CREATED: SavedHousingTestResponseSerializer},
+    )
     def post(self, request):
+        serializer = SavedHousingTestCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        values = dict(serializer.validated_data)
         scenario = None
-        scenario_id = request.data.get('scenario_id')
+        scenario_id = values.pop('scenario_id', None)
         if scenario_id:
             scenario = HousingScenario.objects.filter(
                 id=scenario_id, user=request.user
@@ -176,46 +177,39 @@ class SavedHousingTestView(APIView):
             if scenario is None:
                 from rest_framework.exceptions import NotFound
                 raise NotFound('Housing scenario not found.')
-        result_snapshot = request.data.get('result') if isinstance(request.data.get('result'), dict) else {}
+        result_snapshot = values.pop('result', {})
         x = SavedHousingTest.objects.create(
             user=request.user,
             scenario=scenario,
-            name=str(request.data.get('name', '')).strip()[:120],
-            monthly_payment=_decimal_from_input(
-                request.data.get('monthly_payment', request.data.get('tested_monthly_home_cost', 0))
-            ),
-            short_month_count=request.data.get('short_month_count', 0),
-            tested_months=request.data.get('tested_months', 0),
-            largest_gap=_decimal_from_input(request.data.get('largest_gap', 0)),
-            income_shock_percent=_decimal_from_input(request.data.get('income_shock_percent', 0)),
             scenario_snapshot=_scenario_snapshot(scenario),
             result_snapshot=result_snapshot,
+            **values,
         )
         return Response(_saved_test_payload(x), status=status.HTTP_201_CREATED)
 
-    def patch(self, request, test_id=None):
-        if test_id is None:
-            from rest_framework.exceptions import NotFound
-            raise NotFound('Saved housing test not found.')
+
+class SavedHousingTestDetailView(SavedHousingTestMixin, APIView):
+    @extend_schema(responses=SavedHousingTestResponseSerializer)
+    def get(self, request, test_id):
+        return Response(_saved_test_payload(self.get_object(request, test_id)))
+
+    @extend_schema(
+        request=SavedHousingTestUpdateSerializer,
+        responses=SavedHousingTestResponseSerializer,
+    )
+    def patch(self, request, test_id):
         row = self.get_object(request, test_id)
-        update_fields = []
-        if 'name' in request.data:
-            row.name = str(request.data.get('name', '')).strip()[:120]
-            update_fields.append('name')
-        if 'monthly_payment' in request.data or 'tested_monthly_home_cost' in request.data:
-            row.monthly_payment = _decimal_from_input(
-                request.data.get('monthly_payment', request.data.get('tested_monthly_home_cost'))
-            )
-            update_fields.append('monthly_payment')
+        serializer = SavedHousingTestUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        update_fields = list(serializer.validated_data)
+        for field, value in serializer.validated_data.items():
+            setattr(row, field, value)
         if update_fields:
             update_fields.append('updated_at')
             row.save(update_fields=update_fields)
         return Response(_saved_test_payload(row))
 
-    def delete(self, request, test_id=None):
-        if test_id is None:
-            from rest_framework.exceptions import NotFound
-            raise NotFound('Saved housing test not found.')
+    def delete(self, request, test_id):
         row = self.get_object(request, test_id)
         row.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

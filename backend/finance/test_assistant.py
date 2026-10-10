@@ -332,6 +332,19 @@ class AssistantServiceTests(TestCase):
                 assistant_service.answer_chat(profile, [{"role": "user", "content": "hi"}])
         self.assertEqual(ctx.exception.code, "assistant_rate_limited")
 
+    def test_daily_limit_rolls_over_on_the_malaysia_calendar_date(self):
+        profile = _make_profile("limit-timezone-tests")
+        from . import assistant_service
+
+        with patch.object(assistant_service.timezone, "localdate", return_value=date(2026, 10, 31)):
+            for _ in range(DAILY_MESSAGE_LIMIT):
+                assistant_service._enforce_daily_limit(profile)
+            with self.assertRaises(AssistantError):
+                assistant_service._enforce_daily_limit(profile)
+
+        with patch.object(assistant_service.timezone, "localdate", return_value=date(2026, 11, 1)):
+            assistant_service._enforce_daily_limit(profile)
+
     def test_completion_failure_maps_to_assistant_failed(self):
         profile = _make_profile("failure-tests")
         from . import assistant_service
@@ -352,7 +365,8 @@ class AssistantServiceTests(TestCase):
             captured["messages"] = messages
             return "answer"
 
-        with patch.object(assistant_service, "_completion", side_effect=fake_completion):
+        with patch.object(assistant_service, "_completion", side_effect=fake_completion), \
+             patch.object(assistant_service.timezone, "localdate", return_value=date(2026, 11, 1)):
             assistant_service.answer_chat(
                 profile,
                 [{"role": "user", "content": "berapa gaji saya bulan lepas?"}],
@@ -363,6 +377,7 @@ class AssistantServiceTests(TestCase):
         self.assertIn("recorded_month_count", system["content"])
         self.assertIn("ONLY discuss", system["content"])
         self.assertIn("Bahasa Melayu", system["content"])
+        self.assertIn("Today's date is 2026-11-01", system["content"])
         self.assertEqual(captured["messages"][-1]["content"], "berapa gaji saya bulan lepas?")
 
     def test_prompt_names_controls_in_the_apps_language(self):
