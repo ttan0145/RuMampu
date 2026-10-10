@@ -303,6 +303,7 @@ export interface ApiAuthResponse extends ApiAuthState {
 export interface AccountStatePatch {
   cash_on_hand: number;
   cash_on_hand_date: string | null;
+  expense_limits: Record<string, number>;
   bought_home: boolean;
   homeownership_purchase_month: string | null;
   saving_plan: Record<string, unknown>;
@@ -669,7 +670,7 @@ export function completeAccountOnboarding(): Promise<ApiAuthState> {
   });
 }
 
-export function patchAccountState(value: AccountStatePatch): Promise<ApiAuthState> {
+export function patchAccountState(value: Partial<AccountStatePatch>): Promise<ApiAuthState> {
   return request<ApiAuthState>('/auth/me/', {
     method: 'PATCH',
     body: JSON.stringify(value),

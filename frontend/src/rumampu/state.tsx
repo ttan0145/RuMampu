@@ -76,6 +76,8 @@ import { logIt } from './log';
 import { rm, rmx } from './calc';
 import { PREP_DEFAULT, type PrepState } from './prep7state';
 import { accountSnapshot, hydrate, hydrateAccountState, snapshot } from './persist';
+import { changedAccountFields } from './account-sync';
+import type { AccountStatePatch } from './api';
 
 /* Central app state — mirrors the prototype's `S` object and navigation model. */
 
@@ -818,12 +820,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const localStateWriteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /* The language the queued reminders were last written in. */
   const reminderRefreshStarted = useRef<Lang | null>(null);
-  /* The last snapshot written locally and, for accounts, patched to the
-     server. Most state changes (a screen change, a data refresh landing) leave
-     the declared progress untouched; without this check every one of them sent
-     a PATCH, and on the dev server those bursts queued long enough to push
-     ordinary reads past their timeout. */
+  /* The last snapshot written locally. Most state changes (a screen change, a
+     data refresh landing) leave the declared progress untouched; without this
+     check every one of them rewrote local storage. */
   const lastPersistedSnapshot = useRef<string | null>(null);
+  /* The last account declarations observed on this device. Account PATCHes
+     are derived from this baseline so unrelated stale fields never travel
+     with a local edit from another device. */
+  const lastAccountSnapshot = useRef<AccountStatePatch | null>(null);
+  /* Preserve local edit order when two debounced account writes overlap. */
+  const accountSyncTail = useRef<Promise<unknown>>(Promise.resolve());
   const aiDisclosureWaiters = useRef<Array<(accepted: boolean) => void>>([]);
   const statementDisclosureWaiters = useRef<Array<(accepted: boolean) => void>>([]);
 
@@ -872,6 +878,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
          rather than merged when both devices contain a plan for the same day. */
       hydrateAccountState(next, auth as unknown as Record<string, unknown>);
       restoreHousingGoal(next);
+      lastAccountSnapshot.current = accountSnapshot(next);
       try {
         const local = snapshot(next);
         lastPersistedSnapshot.current = local;
@@ -1035,9 +1042,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (accountAuthenticated.current) {
         const syncAccount = !skipNextAccountSync.current;
         skipNextAccountSync.current = false;
-        if (syncAccount) void patchAccountState(accountSnapshot(S)).catch(() => {
-          // Local state remains available if an account sync is temporarily offline.
-        });
+        const currentAccountSnapshot = accountSnapshot(S);
+        const previousAccountSnapshot = lastAccountSnapshot.current;
+        lastAccountSnapshot.current = currentAccountSnapshot;
+        if (syncAccount && previousAccountSnapshot) {
+          const changed = changedAccountFields(previousAccountSnapshot, currentAccountSnapshot);
+          if (Object.keys(changed).length > 0) {
+            accountSyncTail.current = accountSyncTail.current
+              .catch(() => undefined)
+              .then(() => patchAccountState(changed))
+              .catch(() => undefined);
+          }
+        }
       }
     }, 500);
     return () => {
@@ -2100,6 +2116,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     await rotateGuestClientId();
     lastPersistedSnapshot.current = null;
+    lastAccountSnapshot.current = null;
     await clearLocalState();
     clearHousingSession();
     guestBootstrap.current = null;
@@ -2129,6 +2146,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await deleteRecordRequest();
     await rotateGuestClientId();
     lastPersistedSnapshot.current = null;
+    lastAccountSnapshot.current = null;
     await clearLocalState();
     clearHousingSession();
     guestBootstrap.current = null;
@@ -2194,6 +2212,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     await rotateGuestClientId();
     lastPersistedSnapshot.current = null;
+    lastAccountSnapshot.current = null;
     await clearLocalState();
     clearHousingSession();
     guestBootstrap.current = null;

@@ -1,6 +1,6 @@
 import type { AppState, BufferState, KeptTest, PlanState, VillageState } from './state';
 import { STATEMENT_SCAN_DISCLOSURE_VERSION } from './ai-disclosure';
-import type { ApiAccountNotificationPreferences, ApiExperiencePreferences } from './api';
+import type { AccountStatePatch, ApiAccountNotificationPreferences } from './api';
 import { getHousingScenario, getHousingTestResult, hydrateHousingSession } from '../../services/housingSession';
 import { isValidIsoDate } from './validation';
 import { PREP_DEFAULT, validPrep } from './prep7state';
@@ -225,24 +225,7 @@ export function hydrate(s: AppState, raw: string | null): void {
 }
 
 /** Shape the same allow-listed state for the account PATCH endpoint. */
-export function accountSnapshot(s: AppState): {
-  cash_on_hand: number;
-  cash_on_hand_date: string | null;
-  expense_limits: Record<string, number>;
-  saving_plan: Record<string, unknown>;
-  buffer_state: Record<string, unknown>;
-  village_state: Record<string, unknown>;
-  plan_horizon: number | null;
-  pot_moved_months: string[];
-  pot_moved: number;
-  docs_checked: string[];
-  learning_progress: Record<string, number>;
-  kept_tests: unknown[];
-  bought_home: boolean;
-  homeownership_purchase_month: string | null;
-  notification_preferences: ApiAccountNotificationPreferences;
-  experience_preferences: ApiExperiencePreferences;
-} {
+export function accountSnapshot(s: AppState): AccountStatePatch {
   const local = JSON.parse(snapshot(s)) as JsonRecord;
   return {
     cash_on_hand: s.data.cashOnHand,

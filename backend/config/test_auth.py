@@ -136,6 +136,60 @@ class AuthApiRegressionTests(TestCase):
                                      content_type="application/json").status_code, 200)
         self.assertEqual(first.get("/api/v1/auth/me/").json()["learning_progress"], {})
 
+    def test_independent_device_patches_do_not_overwrite_progress_or_reminders(self):
+        user = User.objects.create_user(username="two-devices@example.com")
+        token = Token.objects.create(user=user)
+        first = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+        second = Client(HTTP_AUTHORIZATION=f"Token {token.key}")
+        progress = {"sjkp": 2}
+        reminders = {
+            "bill_reminders": True,
+            "reminders": {
+                "income": {
+                    "enabled": True,
+                    "day": 1,
+                    "time": "20:00",
+                    "repeat": "daily",
+                }
+            },
+        }
+
+        self.assertEqual(first.patch(
+            "/api/v1/auth/me/",
+            {"learning_progress": progress},
+            content_type="application/json",
+        ).status_code, 200)
+        self.assertEqual(second.patch(
+            "/api/v1/auth/me/",
+            {"notification_preferences": reminders},
+            content_type="application/json",
+        ).status_code, 200)
+
+        saved = first.get("/api/v1/auth/me/").json()
+        self.assertEqual(saved["learning_progress"], progress)
+        self.assertEqual(saved["notification_preferences"], reminders)
+
+        # Request completion order must not matter: repeat with the reminder
+        # patch first, as either device can win the database write race.
+        state = UserAppState.objects.get(user=user)
+        state.learning_progress = {}
+        state.notification_preferences = {}
+        state.save(update_fields=["learning_progress", "notification_preferences"])
+        self.assertEqual(second.patch(
+            "/api/v1/auth/me/",
+            {"notification_preferences": reminders},
+            content_type="application/json",
+        ).status_code, 200)
+        self.assertEqual(first.patch(
+            "/api/v1/auth/me/",
+            {"learning_progress": progress},
+            content_type="application/json",
+        ).status_code, 200)
+
+        saved = second.get("/api/v1/auth/me/").json()
+        self.assertEqual(saved["learning_progress"], progress)
+        self.assertEqual(saved["notification_preferences"], reminders)
+
     def test_invalid_learning_progress_is_rejected_without_overwriting_saved_state(self):
         user = User.objects.create_user(username="reader-validation@example.com", password="Passw0rd123")
         token = Token.objects.create(user=user)
