@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 import hashlib
+import secrets
 from decimal import Decimal
 from statistics import median
 
 from django.db import transaction
 from django.utils import timezone
+from rest_framework.exceptions import PermissionDenied
 
 from .models import (
     CommitmentItem,
@@ -77,6 +79,21 @@ def touch_profile(profile: GuestProfile, *, force: bool = False) -> None:
     profile.retention_warning_sent_at = None
 
 
+def _account_profile_for_user(user, *, touch: bool = True) -> GuestProfile:
+    profile, created = GuestProfile.objects.get_or_create(
+        user=user,
+        defaults={"session_key": secrets.token_hex(20)},
+    )
+    if created:
+        ensure_default_sources(profile)
+        ensure_default_work_costs(profile)
+        ensure_default_commitments(profile)
+        ensure_default_expense_categories(profile)
+    elif touch:
+        touch_profile(profile)
+    return profile
+
+
 def profile_for_request(request, *, touch: bool = True) -> GuestProfile:
     """EN: Resolve the account profile first, otherwise the current guest boundary.
     中文：已登录时优先使用账号 profile，否则使用当前访客边界。
@@ -84,27 +101,7 @@ def profile_for_request(request, *, touch: bool = True) -> GuestProfile:
 
     user = getattr(request, "user", None)
     if user is not None and user.is_authenticated:
-        existing = GuestProfile.objects.filter(user=user).first()
-        if existing is not None:
-            if touch:
-                touch_profile(existing)
-            return existing
-        fallback_key = hashlib.sha256(f"user:{user.pk}".encode("utf-8")).hexdigest()[:40]
-        profile, created = GuestProfile.objects.get_or_create(
-            session_key=fallback_key,
-            defaults={"user": user},
-        )
-        if profile.user_id is None:
-            profile.user = user
-            profile.save(update_fields=["user", "last_active_at"])
-        if created:
-            ensure_default_sources(profile)
-            ensure_default_work_costs(profile)
-            ensure_default_commitments(profile)
-            ensure_default_expense_categories(profile)
-        elif touch:
-            touch_profile(profile)
-        return profile
+        return _account_profile_for_user(user, touch=touch)
 
     client_id = request.headers.get("X-RuMampu-Client-ID", "").strip()
 
@@ -122,6 +119,8 @@ def profile_for_request(request, *, touch: bool = True) -> GuestProfile:
     profile, created = GuestProfile.objects.get_or_create(
         session_key=profile_key,
     )
+    if profile.user_id is not None:
+        raise PermissionDenied("This guest profile is unavailable.")
     # Defaults are profile bootstrap data. Creating/checking them on every API
     # request adds many unnecessary database round trips, especially against a
     # remote PostgreSQL database. Existing guest profiles were already
@@ -380,7 +379,7 @@ def claim_guest_profile_for_user(request, user) -> GuestProfile:
 
     profile = guest_profile_for_request(request)
     if profile is None:
-        return profile_for_request(request)
+        return _account_profile_for_user(user)
     if profile.user_id is None:
         profile.user = user
         profile.save(update_fields=["user", "last_active_at"])
@@ -391,20 +390,7 @@ def claim_guest_profile_for_user(request, user) -> GuestProfile:
 
     # The current anonymous identifier is already owned by another account.
     # Create a clean account profile rather than stealing another user's data.
-    fallback_key = hashlib.sha256(f"user:{user.pk}".encode("utf-8")).hexdigest()[:40]
-    profile, created = GuestProfile.objects.get_or_create(
-        session_key=fallback_key,
-        defaults={"user": user},
-    )
-    if profile.user_id is None:
-        profile.user = user
-        profile.save(update_fields=["user", "last_active_at"])
-    if created:
-        ensure_default_sources(profile)
-        ensure_default_work_costs(profile)
-        ensure_default_commitments(profile)
-        ensure_default_expense_categories(profile)
-    return profile
+    return _account_profile_for_user(user)
 
 def is_unusually_high(profile: GuestProfile, amount: Decimal) -> tuple[bool, Decimal | None]:
     """EN: AC1.1.10 requires confirmation above 3x median after 3 manual entries.
