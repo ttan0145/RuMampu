@@ -983,6 +983,54 @@ test('US8.12 Keep transfers onboarding-derived guest income to a new account', a
   expect(accountRecord.sources.some(source => source.name === 'Food delivery' && source.is_custom)).toBe(true);
 });
 
+test('US8.12 Keep carries the guest saving plan and other declarations into the new account', async ({ page }) => {
+  await openApp(page);
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+
+  // A guest saving plan for this month with the first three days saved, and
+  // one checked document: declarations that live only on the guest's device.
+  const now = new Date();
+  const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const n = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const plan = {
+    key, target: 600, n, seed: 7,
+    amounts: Array.from({ length: n }, () => 20),
+    done: Array.from({ length: n }, (_, i) => i < 3),
+  };
+  await page.evaluate(([value, checked]) => {
+    const local = JSON.parse(window.localStorage.getItem('rumampu_local_state') || '{}');
+    local.plan = value;
+    local.docsChecked = checked;
+    window.localStorage.setItem('rumampu_local_state', JSON.stringify(local));
+  }, [plan, ['ic']] as const);
+  await page.reload();
+  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible({ timeout: 30000 });
+  await expect.poll(async () => page.evaluate(() => (
+    JSON.parse(window.localStorage.getItem('rumampu_local_state') || '{}').plan?.done?.filter(Boolean).length ?? 0
+  ))).toBe(3);
+
+  await openSignupFromProfile(page, 'keep');
+  const email = `epic8-keep-plan-${Date.now()}@example.com`;
+  const password = 'Passw0rd123';
+  await page.getByPlaceholder('name@example.com').fill(email);
+  await page.getByPlaceholder('At least 8 characters').fill(password);
+  await page.getByPlaceholder('Type it again').fill(password);
+  await page.getByText('Create account', { exact: true }).last().click();
+  await clickThroughFirstAccountOnboarding(page);
+
+  // The new account holds the guest's plan, so it survives any device or a new log-in.
+  await expect.poll(async () => {
+    const response = await e2eGet(page, `${API}/auth/me/`, {
+      headers: { Authorization: `Token ${await accountToken(page)}` },
+    });
+    const body = await response.json() as { saving_plan?: { done?: boolean[] }; docs_checked?: string[] };
+    return { saved: body.saving_plan?.done?.filter(Boolean).length ?? 0, docs: body.docs_checked ?? [] };
+  }, { timeout: 15000 }).toEqual({ saved: 3, docs: ['ic'] });
+  await expect.poll(async () => page.evaluate(() => (
+    JSON.parse(window.localStorage.getItem('rumampu_local_state') || '{}').plan?.done?.filter(Boolean).length ?? 0
+  ))).toBe(3);
+});
+
 test('US8.12 login to existing account does not show retired guest-transfer prompt', async ({ page }) => {
   const password = 'Passw0rd123';
   const email = `epic8-existing-${Date.now()}@example.com`;

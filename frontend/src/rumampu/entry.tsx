@@ -6,8 +6,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
 import {
-  ApiAuthResponse, ApiError, completeAccountOnboarding, confirmPasswordReset, fetchGuestTransferStatus, fetchIncomeRecord, login as loginRequest, register as registerRequest, requestPasswordReset, resolveGuestTransfer, rotateGuestClientId, savePreferredLanguage,
+  ApiAuthResponse, ApiError, completeAccountOnboarding, confirmPasswordReset, fetchGuestTransferStatus, fetchIncomeRecord, login as loginRequest, patchAccountState, register as registerRequest, requestPasswordReset, resolveGuestTransfer, rotateGuestClientId, savePreferredLanguage,
 } from './api';
+import { accountSnapshot } from './persist';
 import { lastMonthIso, resetGuestIdentityForStartFreshAccount, useApp, type KeptTest } from './state';
 import { createSavedHousingTest, fetchSavedHousingTests } from '../../services/housingService';
 import { SavedHousingTestRecord } from '../../types/housing';
@@ -471,6 +472,12 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
       const guestSavedTests = mergeGuestData
         ? S.keptTests.map(test => JSON.parse(JSON.stringify(test)) as KeptTest)
         : [];
+      /* AC8.12: a guest's declarations (saving plan and village, safety money,
+         pot, documents, Learn progress, cash on hand, limits, purchase month,
+         reminders) live only on this device. The server moves the guest's
+         financial records to the new account, but not these, and the new
+         account's empty state would otherwise replace them. Capture them now. */
+      const guestDeclarations = mergeGuestData ? accountSnapshot(S) : null;
       let auth = amode === 'signup'
         ? await registerRequest(cleanEmail, pw, mergeGuestData)
         : await loginRequest(cleanEmail, pw);
@@ -480,6 +487,16 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
       }
       if (mergeGuestData) {
         if (guestSavedTests.length) await persistGuestSavedTests(guestSavedTests);
+        if (guestDeclarations) {
+          // Saved tests travel through their own endpoint above, so they are left out here.
+          const { kept_tests: _savedTests, ...declarations } = guestDeclarations;
+          // The account already exists at this point, so a failed copy must not
+          // block entering it; the financial records have moved either way.
+          try {
+            const keptState = await patchAccountState(declarations, `Token ${auth.token}`);
+            auth = { ...auth, ...keptState };
+          } catch { /* keep going with the new account as it is */ }
+        }
         up(s => {
           s.keptTests = [];
           s.mergeGuestOnSignup = false;
