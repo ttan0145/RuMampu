@@ -957,7 +957,8 @@ export function AssistantSheet() {
                             </View>
                             {showChoices && action.target_id ? <Text style={st.actionText}>{action.target_label}</Text> : null}
                             {dated && showChoices ? <TextInput accessibilityLabel={`${targetLabel} ${index + 1}`}
-                              placeholder={t('as_action_name_target')} value={action.target_id ? '' : action.target_label} editable={!actionSaving}
+                              placeholder={t('as_action_name_target')} placeholderTextColor={C.ink40}
+                              value={action.target_id ? '' : action.target_label} editable={!actionSaving}
                               onChangeText={target_label => updateAction(index, { target_id: '', target_label }, 'target')}
                               style={st.actionInput} /> : null}
                             {reviewFlag(index, action, 'target', targetFilled)}
