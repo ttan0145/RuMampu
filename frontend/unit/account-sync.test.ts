@@ -15,6 +15,7 @@ function accountState(): AccountStatePatch {
     plan_horizon: null,
     pot_moved_months: [],
     pot_moved: 0,
+    upfront_costs: [],
     docs_checked: [],
     learning_progress: { sjkp: 1 },
     kept_tests: [],

@@ -27,16 +27,10 @@ function amount(r: () => number): number {
   return Math.round(r() * 200_000 * 100) / 100;
 }
 
-/* The plan amount is never NaN here: potParts does not guard it yet (see the todo below). */
-function planAmount(r: () => number): number {
-  const value = amount(r);
-  return Number.isNaN(value) ? 0 : value;
-}
-
 function randomState(r: () => number): { s: AppState; target: number } {
   const s = {
     data: { cashOnHand: amount(r) },
-    village: r() < 0.1 ? undefined : { savedRm: planAmount(r) },
+    village: r() < 0.1 ? undefined : { savedRm: amount(r) },
     potMoved: r() < 0.1 ? undefined : amount(r),
     buffer: r() < 0.1 ? undefined : { used: amount(r) },
   } as unknown as AppState;
@@ -94,13 +88,9 @@ describe('pot properties (US5.8), generated', () => {
     }
   });
 
-  /* Found by these checks on 11 October 2026: every other part treats a value that
-     is not a number as 0, but the plan amount (village.savedRm) does not, so one
-     NaN turns the whole pot into NaN. Marked todo so it is tracked without failing
-     the run; it passes once potParts guards the plan amount like the other parts. */
-  it('a plan amount that is not a number counts as 0, like the other parts', {
-    todo: 'potParts does not guard village.savedRm against NaN',
-  }, () => {
+  /* Found by these checks on 11 October 2026 (integrity finding F1): one plan amount
+     that was not a number used to turn the whole pot into NaN. */
+  it('a plan amount that is not a number counts as 0, like the other parts', () => {
     const s = { data: { cashOnHand: 1_000 }, village: { savedRm: Number.NaN } } as unknown as AppState;
     assert.equal(potParts(s).plan, 0);
     assert.equal(potSum(s), 1_000);

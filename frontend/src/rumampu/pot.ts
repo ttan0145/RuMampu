@@ -7,7 +7,7 @@ import type { AppState } from './state';
    arithmetic can be tested on its own. */
 export function potParts(s: AppState): { had: number; plan: number; moved: number; used: number; total: number } {
   const had = Math.max(0, +s.data.cashOnHand || 0);
-  const plan = Math.max(0, s.village?.savedRm ?? 0);
+  const plan = Math.max(0, +(s.village?.savedRm ?? 0) || 0);
   const moved = Math.max(0, s.potMoved || 0);
   /* What was drawn from the safety buffer has been spent, so it leaves the pot. */
   const used = Math.max(0, +(s.buffer?.used ?? 0) || 0);
