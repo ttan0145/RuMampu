@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import date
+import re
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -157,6 +158,77 @@ def _category_name(value: Any) -> str:
     return " ".join(value.split())[:120]
 
 
+def _explicit_incomplete_review(
+    text: str,
+    sources: dict[str, str],
+    categories: dict[str, str],
+    bills: dict[str, str],
+    limits: dict[str, str],
+) -> dict[str, Any] | None:
+    """Keep a clear write request reviewable when the model returns no action.
+
+    This reader only fills fields supported directly by the words. Missing
+    values remain blank or low confidence and cannot be saved without review.
+    """
+    english = re.match(
+        r"^\s*(?:(?:please|help me|can you|could you|would you|i want to)\s+)*"
+        r"(?:add|enter|record|log|set|change|update)\b",
+        text, re.IGNORECASE,
+    )
+    malay = re.match(
+        r"^\s*(?:(?:tolong|boleh\s+awak|boleh\s+saya)\s+)*"
+        r"(?:tambah|masukkan|rekod|catat|simpan|tetapkan|ubah)\b",
+        text, re.IGNORECASE,
+    )
+    chinese = re.match(r"^\s*(?:请|幫我|帮我)?(?:添加|新增|记录|記錄|录入|輸入|设置|設定|更改|修改)", text)
+    if not (english or malay or chinese):
+        return None
+
+    kinds: set[str] = set()
+    if re.search(r"\b(?:income|earnings|salary|pendapatan|gaji)\b|收入|工资|工資", text, re.IGNORECASE):
+        kinds.add("income")
+    if re.search(r"\b(?:expense|spending|purchase|perbelanjaan|belanja)\b|开销|開銷|支出|花费|花費", text, re.IGNORECASE):
+        kinds.add("expense")
+    if re.search(r"\b(?:bill|bil)\b|账单|帳單", text, re.IGNORECASE):
+        kinds.add("bill")
+    if re.search(r"\b(?:limit|had)\b|限额|限額|预算|預算", text, re.IGNORECASE):
+        kinds.add("limit")
+        if re.search(r"\b(?:spending|perbelanjaan|belanja)\s+(?:limit|had)\b|支出(?:限额|限額|预算|預算)", text, re.IGNORECASE):
+            kinds.discard("expense")
+    if len(kinds) != 1:
+        return None
+
+    kind = next(iter(kinds))
+    choices = {"income": sources, "expense": categories, "bill": bills, "limit": limits}[kind]
+    found_target = next((
+        (option_id, label) for option_id, label in choices.items()
+        if re.search(rf"(?<!\w){re.escape(label)}(?!\w)", text, re.IGNORECASE)
+    ), None)
+    money_words = re.search(
+        r"\bRM\s*(\d[\d,]*(?:\.\d{1,2})?)\b|\b(\d[\d,]*(?:\.\d{1,2})?)\s*ringgit\b",
+        text, re.IGNORECASE,
+    )
+    amount = _amount((money_words.group(1) or money_words.group(2)).replace(",", "")) if money_words else None
+    dated = kind in ("income", "expense")
+    today = timezone.localdate()
+    yesterday = bool(re.search(r"\b(?:yesterday|semalam)\b|昨天", text, re.IGNORECASE))
+    spoken_today = bool(re.search(r"\b(?:today|hari\s+ini)\b|今天|今日", text, re.IGNORECASE))
+    action_date = (today - timedelta(days=1) if yesterday else today).isoformat() if dated else None
+    return {
+        "kind": kind,
+        "amount": str(amount) if amount is not None else "",
+        "date": action_date,
+        "target_id": found_target[0] if found_target else "",
+        "target_label": found_target[1] if found_target else "",
+        "confidence": {
+            "kind": "high",
+            "amount": "high" if amount is not None else "low",
+            "date": "high" if not dated or yesterday or spoken_today else "low",
+            "target": "high" if found_target else "low",
+        },
+    }
+
+
 def preview_action(
     text: str,
     language: str,
@@ -170,17 +242,24 @@ def preview_action(
     categories = _options_by_id(expense_categories)
     bills = _options_by_id(commitments)
     limits = _options_by_id(limit_categories)
+    incomplete = _explicit_incomplete_review(text, sources, categories, bills, limits)
     try:
         result = _completion(_prompt(text, language, sources, categories, bills, limits))
     except AssistantError:
+        if incomplete:
+            return {"status": "ready", "message": "", "actions": [incomplete]}
         raise
     except (json.JSONDecodeError, SchemaValidationError) as exc:
+        if incomplete:
+            return {"status": "ready", "message": "", "actions": [incomplete]}
         raise AssistantError(
             "assistant_action_unreadable",
             "The command could not be understood safely.",
             502,
         ) from exc
     except Exception as exc:
+        if incomplete:
+            return {"status": "ready", "message": "", "actions": [incomplete]}
         raise AssistantError(
             "assistant_action_failed",
             "Assistant actions are unavailable right now.",
@@ -189,6 +268,8 @@ def preview_action(
 
     proposed = result.get("actions") or []
     if not proposed:
+        if incomplete:
+            return {"status": "ready", "message": "", "actions": [incomplete]}
         return {"status": "not_action", "message": "", "actions": []}
 
     actions: list[dict[str, Any]] = []

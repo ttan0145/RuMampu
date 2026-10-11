@@ -319,7 +319,6 @@ function useSayDraft() {
             } as VoiceItem;
           });
         const hadEntryActions = items.length > 0;
-        if (hadEntryActions && items.every(item => String(item.a).trim() === '')) items = [];
         /* Voice entry is deliberately limited to record entries. A bill,
            limit, housing action or other non-entry command belongs in Ask
            Ruma and must never fall through as a guessed expense. */
@@ -689,12 +688,22 @@ function DraftCard({ it, i, edit, remove, confirm, transferToTyped }: {
   const anyLow = Object.values(it.confidence || {}).includes('low');
   const check = (field: keyof NonNullable<VoiceItem['confidence']>) => low(field)
     ? <Text style={sy.vflag}>{t('vo_flag')}</Text> : null;
+  const fieldLabel = (label: string, field: keyof NonNullable<VoiceItem['confidence']>) => (
+    <View style={sy.vfieldLabel}>
+      <Text style={sy.vrowK}>{label}</Text>
+      {check(field)}
+    </View>
+  );
   return (
     <View style={sy.vent}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 30 }}>
+      <View style={sy.ventHead}>
         <Text style={[sy.ventK, { color: inc ? '#1E7A33' : '#B8421A' }]}>{t(inc ? 'vo_in' : 'vo_out')}</Text>
+        <Pressable hitSlop={6} onPress={() => remove(i)}>
+          <Text style={[sy.vswap, { color: C.ink64, textDecorationColor: C.ink40 }]}>{t('vo_del')}</Text>
+        </Pressable>
+      </View>
+      <View style={sy.ventTypeRow}>
         {check('kind')}
-        <View style={{ flex: 1 }} />
         <Pressable hitSlop={6} onPress={() => edit(i, 'kind', x => {
           x.kind = x.kind === 'in' ? 'out' : 'in';
           if (x.kind === 'in') {
@@ -707,12 +716,9 @@ function DraftCard({ it, i, edit, remove, confirm, transferToTyped }: {
         })}>
           <Text style={sy.vswap}>{t(inc ? 'vo_to_out' : 'vo_to_in')}</Text>
         </Pressable>
-        <Pressable hitSlop={6} onPress={() => remove(i)} style={{ marginLeft: 10 }}>
-          <Text style={[sy.vswap, { color: C.ink64, textDecorationColor: C.ink40 }]}>{t('vo_del')}</Text>
-        </Pressable>
       </View>
       <View style={sy.vrow}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Text style={sy.vrowK}>{t('vo_amt')}</Text>{check('amount')}</View>
+        {fieldLabel(t('vo_amt'), 'amount')}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Text style={{ fontFamily: DISP_FONT, fontSize: 13, color: C.ink64 }}>RM</Text>
           <TextInput
@@ -726,11 +732,11 @@ function DraftCard({ it, i, edit, remove, confirm, transferToTyped }: {
         </View>
       </View>
       <View style={sy.vrow}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Text style={sy.vrowK}>{t('vo_date')}</Text>{check('date')}</View>
+        {fieldLabel(t('vo_date'), 'date')}
         <InlineSelect label={t('vo_date')} value={it.d} options={days} onChange={v => edit(i, 'date', x => { x.d = v; })} />
       </View>
       <View style={sy.vrow}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, minWidth: 0 }}><Text style={[sy.vrowK, { flexShrink: 1 }]}>{t(inc ? 'vo_src' : 'vo_cat')}</Text>{check('target')}</View>
+        {fieldLabel(t(inc ? 'vo_src' : 'vo_cat'), 'target')}
         <InlineSelect label={t(inc ? 'vo_src' : 'vo_cat')}
           value={(inc ? it.s || (it.sourceName ? proposedSource : '') : it.c || (it.categoryName ? proposedCategory : '')) || ''} options={opts}
           onChange={v => edit(i, 'target', x => {
@@ -1048,11 +1054,14 @@ const sy = StyleSheet.create({
   btnLine: { fontFamily: BODY_FONT, fontSize: 16, color: C.ink, textDecorationLine: 'underline', textDecorationColor: C.brand },
   vent: { borderWidth: 1, borderColor: C.ink14, borderRadius: 16, paddingTop: 10, paddingHorizontal: 14, paddingBottom: 4, backgroundColor: '#FFFFFF' },
   ventK: { fontFamily: XBOLD_FONT, fontSize: 11.5, letterSpacing: 0.7, textTransform: 'uppercase' },
+  ventHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 28 },
+  ventTypeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, minHeight: 32 },
   vflag: {
-    marginLeft: 6, fontFamily: DISP_FONT, fontSize: 11, color: '#7A5800', backgroundColor: '#FFF3D1',
+    alignSelf: 'flex-start', fontFamily: DISP_FONT, fontSize: 11, color: '#7A5800', backgroundColor: '#FFF3D1',
     borderRadius: 8, paddingVertical: 2, paddingHorizontal: 8, overflow: 'hidden',
   },
   vswap: { fontFamily: BODY_FONT, fontSize: 12, color: C.brand, textDecorationLine: 'underline' },
+  vfieldLabel: { flexShrink: 1, minWidth: 0, alignItems: 'flex-start', gap: 4, paddingVertical: 6 },
   vrow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, minHeight: 46,
     borderTopWidth: 1, borderTopColor: C.ink14,

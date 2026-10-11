@@ -1115,12 +1115,13 @@ const st = StyleSheet.create({
   actionInput: { minHeight: 38, borderWidth: 1, borderColor: C.ink40, borderRadius: 9, paddingHorizontal: 9, paddingVertical: 6, fontFamily: BODY_FONT, fontSize: 14, color: C.ink, backgroundColor: '#fff' },
   actionCheck: { fontFamily: BODY_FONT, fontSize: 12, color: '#B54F2B' },
   actionCheckButton: { fontFamily: BODY_FONT, fontSize: 12, color: C.brand, textDecorationLine: 'underline' },
-  actionChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  actionChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, minWidth: 0 },
   actionChoice: {
-    minHeight: 34, justifyContent: 'center', paddingHorizontal: 10,
+    minHeight: 34, maxWidth: '100%', minWidth: 0, overflow: 'hidden',
+    justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 6,
     borderWidth: 1.5, borderColor: C.ink40, borderRadius: 12, backgroundColor: C.paper,
   },
-  actionChoiceText: { fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink },
+  actionChoiceText: { fontFamily: BODY_FONT, fontSize: 12.5, color: C.ink, minWidth: 0, flexShrink: 1 },
   actionButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 2 },
   actionCancel: {
     minHeight: 40, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1.5,

@@ -337,6 +337,53 @@ class AssistantActionServiceTests(TestCase):
         result = self.preview({"actions": []})
         self.assertEqual(result, {"status": "not_action", "message": "", "actions": []})
 
+    def test_explicit_requests_keep_missing_fields_in_review_for_every_action_kind(self):
+        cases = (
+            ("help me enter an income but I forgot how much it is", "income"),
+            ("help me enter an expense but I forgot how much it is", "expense"),
+            ("help me set my rent bill but I forgot the amount", "bill"),
+            ("help me set a spending limit but I forgot the amount", "limit"),
+        )
+        for text, kind in cases:
+            with self.subTest(kind=kind):
+                result = self.preview({"actions": []}, text=text)
+                self.assertEqual(result["status"], "ready")
+                action = result["actions"][0]
+                self.assertEqual(action["kind"], kind)
+                self.assertEqual(action["amount"], "")
+                self.assertEqual(action["confidence"]["amount"], "low")
+                if kind == "bill":
+                    self.assertEqual(action["target_id"], "31")
+                else:
+                    self.assertEqual(action["target_id"], "")
+
+    def test_incomplete_request_keeps_fields_the_user_did_supply(self):
+        result = self.preview(
+            {"actions": []}, text="help me enter income of RM500 from E-hailing today",
+        )
+        action = result["actions"][0]
+        self.assertEqual(action["amount"], "500.00")
+        self.assertEqual(action["target_id"], "11")
+        self.assertEqual(action["confidence"], {
+            "kind": "high", "amount": "high", "date": "high", "target": "high",
+        })
+
+    def test_question_about_entry_stays_a_question_when_model_finds_no_action(self):
+        result = self.preview({"actions": []}, text="How do I enter income if I forgot the amount?")
+        self.assertEqual(result["status"], "not_action")
+
+    def test_clear_incomplete_request_can_be_reviewed_when_model_is_unavailable(self):
+        with patch.object(
+            self.service, "_completion",
+            side_effect=AssistantError("assistant_action_unconfigured", "Unavailable.", 503),
+        ):
+            result = self.service.preview_action(
+                text="help me enter an income but I forgot how much it is",
+                language="en", **self.options,
+            )
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["actions"][0]["confidence"]["amount"], "low")
+
     def test_returns_every_action_and_keeps_final_setting_correction(self):
         result = self.preview({"actions": [
             {"intent": "income", "amount": 286.4, "date": "2026-10-01", "target_id": "11"},
