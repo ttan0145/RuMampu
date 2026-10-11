@@ -100,18 +100,21 @@ function speechUiText(lang: AppState['lang']) {
     denied: 'Akses mikrofon diperlukan untuk input suara.',
     unavailable: 'Pengecaman suara tidak tersedia pada peranti atau pelayar ini.',
     failed: 'Tidak dapat mengecam suara. Sila cuba lagi.',
+    capture: 'Mikrofon tidak dapat digunakan. Semak mikrofon yang dipilih dan aplikasi lain yang menggunakannya.',
   };
   if (lang === 'zh') return {
     start: '开始语音输入', stop: '停止语音输入', listening: '正在聆听…',
     denied: '语音输入需要麦克风权限。',
     unavailable: '此设备或浏览器不支持语音识别。',
     failed: '无法识别语音，请再试一次。',
+    capture: '无法使用麦克风。请检查所选麦克风和其他正在使用它的应用。',
   };
   return {
     start: 'Start voice input', stop: 'Stop voice input', listening: 'Listening…',
     denied: 'Microphone access is required for voice input.',
     unavailable: 'Speech recognition is not available on this device or browser.',
     failed: 'Could not recognise speech. Please try again.',
+    capture: 'The microphone could not be used. Check the selected mic and other apps using it.',
   };
 }
 
@@ -504,7 +507,8 @@ export function AssistantSheet() {
     setListening(false);
     releaseSpeechOwner('assistant');
     if (event.error === 'aborted' || event.error === 'no-speech') return;
-    const message = event.error === 'not-allowed' ? speechText.denied : speechText.failed;
+    const message = event.error === 'not-allowed' ? speechText.denied
+      : event.error === 'audio-capture' ? speechText.capture : speechText.failed;
     toast(message, 'error');
   });
 

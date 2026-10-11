@@ -227,6 +227,7 @@ export function InChip({ icon, label, on, dashed, onPress, tint = 'in', selectio
   return (
     <Pressable
       onPress={onPress}
+      accessibilityLabel={label}
       accessibilityRole={selectionRole || 'button'}
       accessibilityState={selectionRole ? { checked: selected } : { selected }}
       aria-checked={selectionRole ? selected : undefined}
@@ -236,7 +237,7 @@ export function InChip({ icon, label, on, dashed, onPress, tint = 'in', selectio
         dashed && { borderStyle: 'dashed' },
       ]}>
       {icon}
-      <Text style={{ fontFamily: dashed ? BODY_FONT : SEMI_FONT, fontSize: 13.5, color: on ? '#fff' : dashed ? C.ink64 : C.ink }}>{label}</Text>
+      <Text numberOfLines={2} style={{ flexShrink: 1, minWidth: 0, fontFamily: dashed ? BODY_FONT : SEMI_FONT, fontSize: 13.5, color: on ? '#fff' : dashed ? C.ink64 : C.ink }}>{label}</Text>
     </Pressable>
   );
 }
@@ -349,6 +350,7 @@ const st = StyleSheet.create({
   indayOn: { backgroundColor: C.ink, borderColor: C.ink },
   inchip: {
     flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 38,
+    maxWidth: '100%',
     paddingLeft: 10, paddingRight: 12, borderRadius: 19,
     backgroundColor: C.card, borderWidth: 1.5, borderColor: C.ink14,
   },

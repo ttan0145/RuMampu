@@ -294,8 +294,7 @@ function useSayDraft() {
     try {
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!permission.granted) {
-        setVoice(null);
-        toast(t('vo_mic_denied'), 'error');
+        setVoice({ stage: 'idle', text: '', items: [], note: t('vo_mic_denied') });
         return;
       }
       claimSpeechOwner('say', () => ExpoSpeechRecognitionModule.abort());
@@ -304,19 +303,17 @@ function useSayDraft() {
       });
     } catch {
       releaseSpeechOwner('say');
-      setVoice(null);
-      toast(t('vo_mic_failed'), 'error');
+      setVoice({ stage: 'idle', text: '', items: [], note: t('vo_mic_failed') });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setVoice, t, toast]);
+  }, [setVoice, t]);
 
   const start = React.useCallback(async () => {
     if (!await ensureAiDisclosure()) return;
     let available = false;
     try { available = ExpoSpeechRecognitionModule.isRecognitionAvailable(); } catch { available = false; }
     if (!available) {
-      setVoice(null);
-      toast(t('vo_mic_unavailable'), 'error');
+      setVoice({ stage: 'idle', text: '', items: [], note: t('vo_mic_unavailable') });
       return;
     }
     if (!SRef.current.voiceDisclosureAccepted) {
@@ -325,7 +322,7 @@ function useSayDraft() {
     }
     await beginListening();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [beginListening, ensureAiDisclosure, setVoice, t, toast]);
+  }, [beginListening, ensureAiDisclosure, setVoice, t]);
 
   const mine = () => getSpeechOwner() === 'say';
   useSpeechRecognitionEvent('result', event => {
@@ -346,10 +343,12 @@ function useSayDraft() {
     if (!mine()) return;
     releaseSpeechOwner('say');
     if (event.error === 'aborted') return;
-    if (!textRef.current.trim()) {
-      setVoice(null);
-      toast(t(event.error === 'not-allowed' ? 'vo_mic_denied' : 'vo_mic_failed'), 'error');
+    if (textRef.current.trim()) {
+      void finish(textRef.current);
+      return;
     }
+    setVoice({ stage: 'idle', text: '', items: [], note: t(event.error === 'not-allowed' ? 'vo_mic_denied'
+      : event.error === 'audio-capture' ? 'vo_mic_capture' : 'vo_mic_failed') });
   });
 
   /* Cancelling discards the transient transcript and draft (AC9.7.2). */
@@ -564,7 +563,7 @@ function InlineSelect({ value, options, onChange, label }: {
   const [open, setOpen] = React.useState(false);
   const cur = options.find(o => o.v === value);
   return (
-    <View style={{ alignItems: 'flex-end', maxWidth: '62%' }}>
+    <View style={{ alignItems: 'flex-end', width: '62%', minWidth: 0 }}>
       <Pressable onPress={() => setOpen(o => !o)} accessibilityRole="button" accessibilityLabel={label}
         style={sy.select}>
         <Text numberOfLines={1} style={sy.selectTxt}>{cur ? cur.l : '-'}</Text>
@@ -575,7 +574,7 @@ function InlineSelect({ value, options, onChange, label }: {
           {options.map(o => (
             <Pressable key={o.v} onPress={() => { onChange(o.v); setOpen(false); }}
               style={[sy.selectOpt, o.v === value && { backgroundColor: C.card }]}>
-              <Text style={[sy.selectTxt, o.v === value && { fontFamily: DISP_FONT }]}>{o.l}</Text>
+              <Text numberOfLines={2} style={[sy.selectTxt, o.v === value && { fontFamily: DISP_FONT }]}>{o.l}</Text>
             </Pressable>
           ))}
         </View>
@@ -771,6 +770,12 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
         </View>
       ) : null}
 
+      {stage === 'idle' && V.note ? (
+        <View style={sy.noteC} accessibilityRole="alert">
+          <Text style={sy.noteTxt}>{V.note}</Text>
+        </View>
+      ) : null}
+
       {stage === 'permission' ? (
         <View style={sy.noteC} accessibilityRole="alert">
           <Text style={sy.noteTxt}>{t('vo_permission_body')}</Text>
@@ -958,7 +963,7 @@ const sy = StyleSheet.create({
   selectTxt: { fontFamily: BODY_FONT, fontSize: 14, color: C.ink, flexShrink: 1 },
   selectList: {
     marginTop: 4, marginBottom: 6, borderWidth: 1, borderColor: C.ink14, borderRadius: 10, backgroundColor: C.paper,
-    overflow: 'hidden', alignSelf: 'stretch', minWidth: 160,
+    overflow: 'hidden', alignSelf: 'stretch', width: '100%',
   },
   selectOpt: { minHeight: 40, paddingHorizontal: 12, justifyContent: 'center' },
   noteC: {
