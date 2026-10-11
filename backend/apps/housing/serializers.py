@@ -28,6 +28,14 @@ class HousingScenarioSerializer(serializers.ModelSerializer):
             'known_monthly_payment', 'additional_costs', 'financing_amount',
             'monthly_instalment', 'total_monthly_cost', 'created_at', 'updated_at',
         ]
+        # Same floors as HousingCalculationSerializer: a negative rate made the
+        # instalment maths overflow and return HTTP 500 (integrity finding F3).
+        extra_kwargs = {
+            'property_price': {'min_value': Decimal('0')},
+            'deposit': {'min_value': Decimal('0')},
+            'financing_rate': {'min_value': Decimal('0')},
+            'known_monthly_payment': {'min_value': Decimal('0')},
+        }
 
     def validate_additional_costs(self, costs):
         categories = [cost['category'].strip().casefold() for cost in costs]

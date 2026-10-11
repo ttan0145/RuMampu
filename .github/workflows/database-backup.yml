@@ -32,7 +32,7 @@ jobs:
       B2_BUCKET: ${{ secrets.B2_BUCKET }}
       B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
       NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-      NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+      NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
       AWS_EC2_METADATA_DISABLED: "true"
 
     steps:

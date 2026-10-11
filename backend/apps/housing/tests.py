@@ -141,6 +141,34 @@ class HousingScenarioApiTests(HousingApiTestMixin, TestCase):
         self.assertEqual(other_list.json(), [])
         self.assertEqual(other_detail.status_code, 404)
 
+    def test_out_of_range_scenario_is_rejected_not_a_server_error(self):
+        # Integrity finding F3: Schemathesis sent this and got HTTP 500.
+        response = self.client.post(
+            self.scenarios_url,
+            data={"tenure_years": 1351016, "financing_rate": "-493.", "property_price": "4411400001"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("financing_rate", response.json()["error"]["fields"])
+        self.assertFalse(HousingScenario.objects.exists())
+
+    def test_scenario_limits_match_the_calculator(self):
+        for field, value in (
+            ("financing_rate", "-0.001"),
+            ("property_price", "-1.00"),
+            ("deposit", "-1.00"),
+            ("known_monthly_payment", "-1.00"),
+        ):
+            with self.subTest(field=field):
+                response = self.client.post(
+                    self.scenarios_url,
+                    data={**self.scenario_payload, field: value},
+                    content_type="application/json",
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(field, response.json()["error"]["fields"])
+
     def test_owner_constraint_rejects_unowned_scenarios(self):
         with self.assertRaises(IntegrityError), transaction.atomic():
             HousingScenario.objects.create(**self.scenario_payload)
