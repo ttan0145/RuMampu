@@ -32,7 +32,7 @@ class PostgreSQLConcurrencyTests(TransactionTestCase):
         ensure_default_expense_categories(self.profile)
         ensure_default_work_costs(self.profile)
 
-    def client(self):
+    def account_client(self):
         return Client(HTTP_AUTHORIZATION=f"Token {self.token.key}")
 
     def run_together(self, first, second):
@@ -69,12 +69,12 @@ class PostgreSQLConcurrencyTests(TransactionTestCase):
         }
         with patch("config.auth_views._app_state", side_effect=synchronized_load):
             responses = self.run_together(
-                lambda: self.client().patch(
+                lambda: self.account_client().patch(
                     "/api/v1/auth/me/",
                     {"learning_progress": {"sjkp": 3}},
                     content_type="application/json",
                 ),
-                lambda: self.client().patch(
+                lambda: self.account_client().patch(
                     "/api/v1/auth/me/",
                     {"notification_preferences": reminders},
                     content_type="application/json",
@@ -87,7 +87,7 @@ class PostgreSQLConcurrencyTests(TransactionTestCase):
         self.assertEqual(state.notification_preferences, reminders)
 
     def test_edit_and_move_are_serialized_to_one_complete_outcome(self):
-        expense_category = self.profile.expense_categories.get(slug="food")
+        expense_category = self.profile.expense_categories.get(slug="meals")
         work_category = self.profile.work_cost_items.get(slug="petrol")
         source = ExpenseEntry.objects.create(
             profile=self.profile,
@@ -97,12 +97,12 @@ class PostgreSQLConcurrencyTests(TransactionTestCase):
         )
 
         edit, move = self.run_together(
-            lambda: self.client().patch(
+            lambda: self.account_client().patch(
                 f"/api/v1/expenses/{source.pk}/",
                 {"amount": "25.00"},
                 content_type="application/json",
             ),
-            lambda: self.client().patch(
+            lambda: self.account_client().patch(
                 f"/api/v1/expenses/{source.pk}/move/",
                 {"category_id": work_category.pk},
                 content_type="application/json",
@@ -127,7 +127,7 @@ class PostgreSQLConcurrencyTests(TransactionTestCase):
 
         responses = self.run_together(
             *(
-                lambda: self.client().post(
+                lambda: self.account_client().post(
                     "/api/v1/income/entries/",
                     payload,
                     content_type="application/json",

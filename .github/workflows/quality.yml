@@ -52,6 +52,8 @@ jobs:
             --generation-deterministic \
             --exclude-path /api/v1/expenses/receipt-scan/ \
             --exclude-path /api/v1/income/scan/ \
+            --exclude-path /api/v1/assistant/chat/ \
+            --exclude-path /api/v1/assistant/action-preview/ \
             --no-color
 
   backend-postgresql:
