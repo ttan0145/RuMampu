@@ -122,6 +122,26 @@ class AssistantActionPreviewApiTests(TestCase):
         self.assertEqual(response.json(), expected)
         self.assertEqual(preview.call_args.kwargs["default_income_source_id"], "11")
 
+    def test_returns_incomplete_action_for_review(self):
+        expected = {
+            "status": "ready",
+            "message": "",
+            "actions": [{
+                "kind": "bill",
+                "amount": "",
+                "date": None,
+                "target_id": "31",
+                "target_label": "Rent",
+                "confidence": {"kind": "high", "amount": "low", "date": "high", "target": "high"},
+            }],
+        }
+        with patch("finance.views.assistant_action_service.preview_action", return_value=expected):
+            response = self.client.post(
+                self.url, data=json.dumps(self.payload()), content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), expected)
+
     def test_rejects_unknown_language(self):
         payload = self.payload()
         payload["language"] = "fr"
@@ -176,7 +196,7 @@ class AssistantActionServiceTests(TestCase):
         with patch.object(self.service, "_completion", return_value=model_result):
             return self.service.preview_action(**args)
 
-    def test_income_uses_default_source_and_normalises_amount(self):
+    def test_income_without_spoken_source_stays_blank_and_normalises_amount(self):
         result = self.preview({
             "actions": [{
                 "intent": "income", "amount": "200", "date": "2026-10-01", "target_id": None,
@@ -184,7 +204,8 @@ class AssistantActionServiceTests(TestCase):
         })
         self.assertEqual(result["status"], "ready")
         self.assertEqual(result["actions"][0]["amount"], "200.00")
-        self.assertEqual(result["actions"][0]["target_id"], "11")
+        self.assertEqual(result["actions"][0]["target_id"], "")
+        self.assertEqual(result["actions"][0]["confidence"]["target"], "low")
 
     def test_numeric_model_target_id_is_normalised(self):
         result = self.preview({
@@ -290,14 +311,27 @@ class AssistantActionServiceTests(TestCase):
         })
         self.assertEqual(result["actions"][0]["confidence"], confidence)
 
-    def test_missing_amount_requires_clarification(self):
+    def test_missing_amount_stays_in_review_as_an_unconfirmed_field(self):
         result = self.preview({
             "actions": [{
                 "intent": "bill", "amount": None, "date": None, "target_id": "31",
             }],
         })
-        self.assertEqual(result["status"], "needs_clarification")
-        self.assertIn("amount", result["message"])
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(result["actions"][0]["amount"], "")
+        self.assertEqual(result["actions"][0]["confidence"]["amount"], "low")
+
+    def test_missing_date_and_bill_target_keep_other_proposed_actions(self):
+        result = self.preview({"actions": [
+            {"intent": "income", "amount": 42, "date": None, "target_id": "11"},
+            {"intent": "bill", "amount": 800, "date": None, "target_id": None},
+        ]})
+        self.assertEqual(result["status"], "ready")
+        self.assertEqual(len(result["actions"]), 2)
+        self.assertIsNone(result["actions"][0]["date"])
+        self.assertEqual(result["actions"][0]["confidence"]["date"], "low")
+        self.assertEqual(result["actions"][1]["target_id"], "")
+        self.assertEqual(result["actions"][1]["confidence"]["target"], "low")
 
     def test_non_action_falls_back_to_regular_chat(self):
         result = self.preview({"actions": []})

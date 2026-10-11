@@ -243,9 +243,9 @@ export function InChip({ icon, label, on, dashed, onPress, tint = 'in', selectio
 }
 
 /* .inrow — one recent-entry row. */
-export function InRow({ icon, title, sub, subTag, amount, onEdit, tint = 'in', first }: {
+export function InRow({ icon, title, sub, subTag, provenance, amount, onEdit, tint = 'in', first }: {
   icon: React.ReactNode; title: string; sub: string; subTag?: string; amount: string;
-  onEdit?: () => void; tint?: InTint; first?: boolean;
+  provenance?: React.ReactNode; onEdit?: () => void; tint?: InTint; first?: boolean;
 }) {
   const tints = IN_TINTS[tint];
   return (
@@ -257,6 +257,7 @@ export function InRow({ icon, title, sub, subTag, amount, onEdit, tint = 'in', f
           <Text style={{ fontFamily: BODY_FONT, fontSize: 12, lineHeight: 15, color: C.ink64 }} numberOfLines={1}>{sub}</Text>
           {subTag ? <PTag label={subTag} /> : null}
         </View>
+        {provenance ? <View style={{ marginTop: 2 }}>{provenance}</View> : null}
       </View>
       <Text style={{ fontFamily: DISP_FONT, fontSize: 16, color: C.ink, fontVariant: ['tabular-nums'] }}>{amount}</Text>
       {onEdit ? (

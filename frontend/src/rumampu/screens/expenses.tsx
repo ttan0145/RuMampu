@@ -543,7 +543,6 @@ export function ExpensesScreen() {
         <View testID="recent-expense-table" style={[exSt.cardTint, { paddingVertical: 4 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 40 }}>
             <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink }}>{t('ex_recent')}</Text>
-            <Prov p="user" />
           </View>
           {recent.map((e, idx) => {
             const key = e.id || `local-index-${Math.max(0, S.data.expenses.indexOf(e))}`;
@@ -554,6 +553,7 @@ export function ExpensesScreen() {
                   title={e.method === 'monthly_total' ? t('ex_month_total') : cats(e.c)}
                   sub={`${+e.d.slice(8, 10)} ${monthName(+e.d.slice(5, 7) - 1)}${e.merchant ? ' · ' + e.merchant : ''}`}
                   subTag={e.method === 'receipt' ? t('sc_tag') : undefined}
+                  provenance={<Prov p="user" />}
                   amount={rmx(e.a)}
                   onEdit={e.method === 'monthly_total' ? undefined : () => beginExpenseEdit(e, idx)} />
                 {entryEdit?.id === key ? editor : null}

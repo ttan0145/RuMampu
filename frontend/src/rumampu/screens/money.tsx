@@ -1020,15 +1020,12 @@ export function IncomeScreen() {
         </GuideTarget>
         {S.incMode === 'csv' ? <IncomeCsvBody embedded /> : S.incMode === 'scan' ? <IncomeScanBody /> : typeBody}
       </InCard>
-      {/* EN: Saved income is user-provided data, so provenance is shown once for the section instead of on every row. */}
-      {/* 中文：已保存收入都属于用户提供的数据，因此来源标识只在区块顶部显示一次，不在每行重复。 */}
       {S.data.income.length ? (
         <>
         <MonthBtn act="incmonth" monthKey={impk.key} />
         <Card style={{ paddingVertical: 4, paddingHorizontal: 16 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 40 }}>
             <Text style={{ fontFamily: DISP_FONT, fontSize: 15, color: C.ink }}>{t('inc_recent')}</Text>
-            <Prov p="user" />
           </View>
           {recent.map(({ e }, idx) => {
             const src = S.data.sources.find(x => x.id === e.s);
@@ -1047,6 +1044,7 @@ export function IncomeScreen() {
                 title={title}
                 sub={sub}
                 subTag={e.method === 'import' ? t('cv_tag') : undefined}
+                provenance={<Prov p="user" />}
                 amount={rm(e.a)}
                 onEdit={canEdit ? () => up(state => {
                   state.sheet = e.method === 'historical_total' ? `pastmonth:${e.id}` : `incomeedit:${e.id}`;

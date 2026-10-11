@@ -56,34 +56,6 @@ RESULT_SCHEMA = {
     "additionalProperties": False,
 }
 
-CLARIFICATIONS = {
-    "en": {
-        "amount": "What amount should I use?",
-        "date": "What date should I use?",
-        "income_target": "Which income source should I use?",
-        "expense_target": "Which expense category should I use?",
-        "bill_target": "Which bill should I update?",
-        "limit_target": "Should this be the total spending limit or a category limit?",
-    },
-    "ms": {
-        "amount": "Berapa jumlah yang perlu saya gunakan?",
-        "date": "Tarikh mana yang perlu saya gunakan?",
-        "income_target": "Sumber pendapatan mana yang perlu saya gunakan?",
-        "expense_target": "Kategori perbelanjaan mana yang perlu saya gunakan?",
-        "bill_target": "Bil mana yang perlu saya kemas kini?",
-        "limit_target": "Ini had jumlah perbelanjaan atau had untuk satu kategori?",
-    },
-    "zh": {
-        "amount": "要使用多少金额？",
-        "date": "要使用哪一天？",
-        "income_target": "要使用哪个收入来源？",
-        "expense_target": "要使用哪个支出类别？",
-        "bill_target": "要更新哪一项账单？",
-        "limit_target": "这是总支出限额，还是某个类别的限额？",
-    },
-}
-
-
 def _completion(prompt: str) -> dict[str, Any]:
     api_key = os.getenv("GROQ_API_KEY_CATEGORIZATION", "").strip()
     if not api_key:
@@ -143,7 +115,7 @@ Return ONLY a JSON object with exactly one key, "actions", containing an array o
 - bill means SET the monthly amount of an existing bill/commitment.
 - limit means SET a monthly total or category spending limit.
 - When the user corrects an earlier value in the same message, include only the final corrected action. For example, "rent 800, actually 850" produces one rent action for 850, never two rent actions.
-- amount is a positive plain number in Malaysian ringgit, or null when absent. Understand spoken forms such as "two hundred ringgit", Bahasa Melayu, Manglish, and Chinese.
+- amount is a positive plain number in Malaysian ringgit, or null when absent. Understand spoken forms such as "two hundred ringgit", Bahasa Melayu, Manglish, and Chinese. Keep a proposed action with missing fields so the person can complete it in review.
 - For income and expense, date is YYYY-MM-DD. Resolve today/yesterday and spoken dates relative to today's date. If no date is mentioned, use today. For bill, limit, or none, date is null.
 - For bill and limit, target_id must be one exact ID from the matching choices below. Never invent an ID. Use null if the target is unclear or absent.
 - For income and expense, the available sources/categories are suggestions, not closed lists. If the user's wording matches one, return its exact ID in target_id. Otherwise return target_id as null and put the short source/category the user actually described in category_name. Examples: income from "my work at McDonald's" should use "Work"; income from "clubs" should use "Clubs"; an expense for cat food should use "Cat food". Do not replace a clear new value with "Other" and do not force it to the default income source. Use category_name null only when no source/category can be understood. For bill and limit actions category_name is always null.
@@ -223,12 +195,6 @@ def preview_action(
     for item in proposed:
         kind = item.get("intent")
         amount = _amount(item.get("amount"))
-        if amount is None:
-            return {
-                "status": "needs_clarification",
-                "message": CLARIFICATIONS[language]["amount"],
-                "actions": [],
-            }
 
         target_id = str(item.get("target_id") or "")
         action_date: date | None = None
@@ -236,20 +202,14 @@ def preview_action(
         custom_name = _category_name(item.get("category_name")) if kind in ("income", "expense") else ""
         if kind == "income":
             choices = sources
-            if not target_id and not custom_name and default_income_source_id in choices:
-                target_id = str(default_income_source_id)
-            missing_target = "income_target"
             action_date = _date(item.get("date"))
         elif kind == "expense":
             choices = categories
-            missing_target = "expense_target"
             action_date = _date(item.get("date"))
         elif kind == "bill":
             choices = bills
-            missing_target = "bill_target"
         else:
             choices = limits
-            missing_target = "limit_target"
 
         if kind in ("income", "expense") and target_id not in choices:
             # Sources and categories are open-ended. Prefer an existing value
@@ -262,21 +222,11 @@ def preview_action(
             )
             target_id = matching_id
         elif target_id not in choices:
-            return {
-                "status": "needs_clarification",
-                "message": CLARIFICATIONS[language][missing_target],
-                "actions": [],
-            }
-        if kind in ("income", "expense") and action_date is None:
-            return {
-                "status": "needs_clarification",
-                "message": CLARIFICATIONS[language]["date"],
-                "actions": [],
-            }
+            target_id = ""
 
         action = {
             "kind": kind,
-            "amount": str(amount),
+            "amount": str(amount) if amount is not None else "",
             "date": action_date.isoformat() if action_date else None,
             "target_id": target_id,
             "target_label": choices.get(target_id, custom_name),
@@ -285,6 +235,12 @@ def preview_action(
                 for field in ("kind", "amount", "date", "target")
             },
         }
+        if amount is None:
+            action["confidence"]["amount"] = "low"
+        if kind in ("income", "expense") and action_date is None:
+            action["confidence"]["date"] = "low"
+        if not target_id and not action["target_label"]:
+            action["confidence"]["target"] = "low"
         # A later bill/limit value in the same utterance is a correction to the
         # same setting. Keep its final position and value, not both versions.
         if kind in ("bill", "limit"):

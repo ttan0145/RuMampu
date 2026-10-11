@@ -711,11 +711,7 @@ class AssistantActionPreviewRequestSerializer(serializers.Serializer):
 
 class AssistantActionPreviewActionSerializer(serializers.Serializer):
     kind = serializers.ChoiceField(choices=["income", "expense", "bill", "limit"])
-    amount = serializers.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        coerce_to_string=True,
-    )
+    amount = serializers.CharField(max_length=13, allow_blank=True)
     date = serializers.DateField(allow_null=True)
     target_id = serializers.CharField(max_length=80, allow_blank=True)
     # For expenses this can be a proposed open-ended category name. The

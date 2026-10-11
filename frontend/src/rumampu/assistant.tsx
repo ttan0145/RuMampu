@@ -17,11 +17,24 @@ import { RumaHeadset, RumaHelpAvatar } from './ruma-view';
 import { claimSpeechOwner, getSpeechOwner, releaseSpeechOwner } from './speech';
 import { GuideTarget, onScrollSettle } from './tour';
 import { GROQ_DPA_URL, GROQ_YOUR_DATA_URL } from './ai-disclosure';
+import { isValidIsoDate, isValidMoneyText } from './validation';
 
 /* Flip to false to hide the whole Ask RuMampu UI (bubble, header
    button, popover), e.g. while the AI backend is unavailable. */
 export const ASSISTANT_UI_ENABLED = true;
 const ASSISTANT_SPEECH_SILENCE_MS = 3000;
+
+type ActionField = keyof NonNullable<AssistantAction['confidence']>;
+
+function actionReady(action: AssistantAction): boolean {
+  const amount = action.amount.trim();
+  const dated = action.kind === 'income' || action.kind === 'expense';
+  return isValidMoneyText(amount)
+    && Number(amount) > 0
+    && (!dated || isValidIsoDate(action.date || ''))
+    && Boolean(action.target_id || (dated && action.target_label.trim()))
+    && !Object.values(action.confidence || {}).includes('low');
+}
 
 /** One disclosure is shared by every hosted-AI feature. Declining only cancels
  * the attempted AI operation; the rest of RuMampu remains available. */
@@ -364,6 +377,7 @@ export function AssistantSheet() {
   const [sending, setSending] = React.useState(false);
   const [listening, setListening] = React.useState(false);
   const [pendingActions, setPendingActions] = React.useState<AssistantAction[]>([]);
+  const [editingTarget, setEditingTarget] = React.useState<number | null>(null);
   const [actionSaving, setActionSaving] = React.useState(false);
   const [confirmingOutlier, setConfirmingOutlier] = React.useState(false);
   const [inputHeight, setInputHeight] = React.useState(48);
@@ -624,14 +638,16 @@ export function AssistantSheet() {
 
   const actionSummary = (action: AssistantAction): string => t(
     `as_action_${action.kind}_summary`,
-    { amount: rm(Number(action.amount)), date: action.date || '', target: action.target_label || '—' },
+    { amount: action.amount ? rm(Number(action.amount)) : '—', date: action.date || '—', target: action.target_label || '—' },
   );
 
-  const chooseExpenseCategory = (index: number, targetId: string, targetLabel: string) => {
+  const updateAction = (index: number, patch: Partial<AssistantAction>, field?: ActionField) => {
     setPendingActions(actions => actions.map((action, actionIndex) => actionIndex === index
-      ? { ...action, target_id: targetId, target_label: targetLabel }
+      ? { ...action, ...patch, confidence: field ? { ...action.confidence, [field]: 'high' } as AssistantAction['confidence'] : action.confidence }
       : action));
   };
+
+  const checkActionField = (index: number, field: ActionField) => updateAction(index, {}, field);
 
   const tryFinancialAction = async (content: string) => previewAssistantAction(content, S.lang, {
     incomeSources: S.data.sources.map(item => ({ id: item.id, label: shownLabel(item) })),
@@ -697,7 +713,7 @@ export function AssistantSheet() {
 
   const confirmAction = async () => {
     if (pendingActions.length === 0 || actionSaving) return;
-    if (pendingActions.some(action => (action.kind === 'income' || action.kind === 'expense') && !action.target_id && !action.target_label)) return;
+    if (pendingActions.some(action => !actionReady(action))) return;
     setActionSaving(true);
     try {
       const actionsToSave = [...pendingActions].sort((a, b) =>
@@ -760,6 +776,16 @@ export function AssistantSheet() {
       setActionSaving(false);
     }
   };
+
+  const reviewFlag = (index: number, action: AssistantAction, field: ActionField, filled: boolean) =>
+    action.confidence?.[field] === 'low' ? (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <Text style={st.actionCheck}>{t('vo_flag')}</Text>
+        {filled ? <Pressable accessibilityRole="button" onPress={() => checkActionField(index, field)}>
+          <Text style={st.actionCheckButton}>{t('as_action_checked_field')}</Text>
+        </Pressable> : null}
+      </View>
+    ) : null;
 
   if (!ASSISTANT_UI_ENABLED || !S.assistantOpen) return null;
 
@@ -846,22 +872,60 @@ export function AssistantSheet() {
                   <Text style={st.actionTitle}>{t('as_action_review')}</Text>
                   <View style={{ gap: 6 }}>
                     {pendingActions.map((action, index) => {
-                      const targetMissing = (action.kind === 'income' || action.kind === 'expense') && !action.target_id && !action.target_label;
+                      const dated = action.kind === 'income' || action.kind === 'expense';
+                      const targetLabel = t(action.kind === 'income' ? 'vo_src'
+                        : action.kind === 'expense' ? 'vo_cat'
+                          : action.kind === 'bill' ? 'as_action_bill_field' : 'as_action_limit_field');
+                      const targetChoices = action.kind === 'income' ? S.data.sources
+                        : action.kind === 'expense' ? S.data.expenseCats
+                          : action.kind === 'bill'
+                            ? [...S.data.commitments.living, ...S.data.commitments.debts, ...S.data.commitments.savings]
+                            : [{ id: 'total', k: 'lm_total' }, ...S.data.expenseCats];
+                      const targetFilled = Boolean(action.target_id || (dated && action.target_label.trim()));
+                      const showChoices = editingTarget === index || !targetFilled || action.confidence?.target === 'low';
                       return (
-                        <View key={`${action.kind}-${action.target_id}-${index}`} style={{ gap: 6 }}>
+                        <View key={`${action.kind}-${index}`} style={{ gap: 7 }}>
                           <Text style={st.actionText}>{`${index + 1}. ${actionSummary(action)}`}</Text>
-                          {targetMissing ? (
-                            <View accessibilityLabel={t(action.kind === 'income' ? 'vo_src' : 'vo_cat')} style={{ gap: 5 }}>
-                              <Text style={st.actionFieldLabel}>{t(action.kind === 'income' ? 'vo_src' : 'vo_cat')}</Text>
+                          {reviewFlag(index, action, 'kind', true)}
+                          <View style={{ gap: 4 }}>
+                            <Text style={st.actionFieldLabel}>{t('vo_amt')}</Text>
+                            <TextInput accessibilityLabel={`${t('vo_amt')} ${index + 1}`}
+                              keyboardType="decimal-pad" inputMode="decimal" value={action.amount}
+                              onChangeText={amount => updateAction(index, { amount }, 'amount')}
+                              style={st.actionInput} />
+                            {reviewFlag(index, action, 'amount', isValidMoneyText(action.amount) && Number(action.amount) > 0)}
+                          </View>
+                          {dated ? <View style={{ gap: 4 }}>
+                            <Text style={st.actionFieldLabel}>{t('vo_date')}</Text>
+                            <TextInput accessibilityLabel={`${t('vo_date')} ${index + 1}`}
+                              placeholder="YYYY-MM-DD" value={action.date || ''}
+                              onChangeText={date => updateAction(index, { date }, 'date')}
+                              style={st.actionInput} />
+                            {reviewFlag(index, action, 'date', isValidIsoDate(action.date || ''))}
+                          </View> : null}
+                          <View accessibilityLabel={targetLabel} style={{ gap: 5 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <Text style={st.actionFieldLabel}>{targetLabel}</Text>
+                              {!showChoices ? <Pressable accessibilityRole="button" onPress={() => setEditingTarget(index)}>
+                                <Text style={st.actionCheckButton}>{t('as_action_change_field')}</Text>
+                              </Pressable> : null}
+                            </View>
+                            {showChoices && action.target_id ? <Text style={st.actionText}>{action.target_label}</Text> : null}
+                            {dated && showChoices ? <TextInput accessibilityLabel={`${targetLabel} ${index + 1}`}
+                              placeholder={t('as_action_name_target')} value={action.target_id ? '' : action.target_label}
+                              onChangeText={target_label => updateAction(index, { target_id: '', target_label }, 'target')}
+                              style={st.actionInput} /> : null}
+                            {reviewFlag(index, action, 'target', targetFilled)}
+                            {showChoices ? (
                               <View style={st.actionChoices}>
-                                {(action.kind === 'income' ? S.data.sources : S.data.expenseCats).map(target => {
+                                {targetChoices.map(target => {
                                   const label = shownLabel(target);
                                   return (
                                     <Pressable
                                       key={target.id}
                                       accessibilityRole="button"
                                       accessibilityLabel={label}
-                                      onPress={() => chooseExpenseCategory(index, target.id, label)}
+                                      onPress={() => { updateAction(index, { target_id: target.id, target_label: label }, 'target'); setEditingTarget(null); }}
                                       style={st.actionChoice}
                                     >
                                       <Text style={st.actionChoiceText}>{label}</Text>
@@ -869,8 +933,8 @@ export function AssistantSheet() {
                                   );
                                 })}
                               </View>
-                            </View>
-                          ) : null}
+                            ) : null}
+                          </View>
                         </View>
                       );
                     })}
@@ -887,12 +951,12 @@ export function AssistantSheet() {
                     <Pressable
                       accessibilityRole="button"
                       accessibilityState={{
-                        disabled: actionSaving || pendingActions.some(action => (action.kind === 'income' || action.kind === 'expense') && !action.target_id && !action.target_label),
+                        disabled: actionSaving || pendingActions.some(action => !actionReady(action)),
                       }}
-                      disabled={actionSaving || pendingActions.some(action => (action.kind === 'income' || action.kind === 'expense') && !action.target_id && !action.target_label)}
+                      disabled={actionSaving || pendingActions.some(action => !actionReady(action))}
                       onPress={() => { void confirmAction(); }}
                       style={[st.actionConfirm,
-                        (actionSaving || pendingActions.some(action => (action.kind === 'income' || action.kind === 'expense') && !action.target_id && !action.target_label)) && { opacity: 0.5 }]}
+                        (actionSaving || pendingActions.some(action => !actionReady(action))) && { opacity: 0.5 }]}
                     >
                       {actionSaving ? <ActivityIndicator size="small" color="#fff" /> : (
                         <Text style={st.actionConfirmText}>
@@ -1002,6 +1066,9 @@ const st = StyleSheet.create({
   actionTitle: { fontFamily: DISP_FONT, fontSize: 14, color: C.ink },
   actionText: { fontFamily: BODY_FONT, fontSize: 13.5, lineHeight: 19, color: C.ink },
   actionFieldLabel: { fontFamily: BODY_FONT, fontSize: 12, color: C.ink64 },
+  actionInput: { minHeight: 38, borderWidth: 1, borderColor: C.ink40, borderRadius: 9, paddingHorizontal: 9, paddingVertical: 6, fontFamily: BODY_FONT, fontSize: 14, color: C.ink, backgroundColor: '#fff' },
+  actionCheck: { fontFamily: BODY_FONT, fontSize: 12, color: '#B54F2B' },
+  actionCheckButton: { fontFamily: BODY_FONT, fontSize: 12, color: C.brand, textDecorationLine: 'underline' },
   actionChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
   actionChoice: {
     minHeight: 34, justifyContent: 'center', paddingHorizontal: 10,

@@ -69,6 +69,7 @@ const UNITS: Record<string, number> = {
   thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
   twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
 };
+const SPOKEN_PARTS = /\||\blepas tu\b|\blepastu\b|\bpastu\b|\band then\b|\band\s+(?=spent|spend|earned|earn|got|paid)\b|\bthen\b|然后|接着/;
 
 /* number words to digits: "dua ratus lima puluh" 250, "seribu lima ratus" 1500, "two hundred and fifty" 250 */
 function numberWords(s: string): string {
@@ -128,7 +129,7 @@ export function parseSpokenEntries(text: string, S: AppState): VoiceItem[] {
   /* Colloquial money such as "twelve fifty" is normally RM12.50, not two
      separate entries. numberWords() has already made it "12 50" here. */
   s = s.replace(/\b(\d+)\s+(\d{2})(?=\D|$)/g, '$1.$2');
-  const parts = s.split(/\||\blepas tu\b|\blepastu\b|\bpastu\b|\band then\b|\bthen\b|然后|接着/);
+  const parts = s.split(SPOKEN_PARTS);
   const partDates = parts.map(spokenDate);
   const datedParts = partDates.filter((date): date is string => date !== null);
   /* A single spoken date can describe the whole sentence. When separate parts
@@ -181,6 +182,31 @@ export function parseSpokenEntries(text: string, S: AppState): VoiceItem[] {
     items.push(it);
   }
   return items;
+}
+
+function mentionedLabel(text: string, label: string): boolean {
+  const words = (value: string) => value.normalize('NFKC').toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const name = words(label);
+  return Boolean(name) && ` ${words(text)} `.includes(` ${name} `);
+}
+
+function looksLikeSpokenEntry(text: string): boolean {
+  return !/[?？]\s*$/.test(text)
+    && /\b(?:spent|spend|paid|pay|earned|earn|income|expense|bought)\b|\b(?:belanja|beli|bayar|dapat|gaji|terima)\b|花|收入|赚|买|吃|加油/i.test(text);
+}
+
+function supportedVoiceTarget(
+  item: { kind: 'income' | 'expense' | 'bill' | 'limit'; amount: string; target_id: string; target_label: string },
+  segments: { text: string; items: VoiceItem[] }[],
+): boolean {
+  if (item.kind !== 'income' && item.kind !== 'expense') return false;
+  if (!item.target_id && !item.target_label) return false;
+  const kind = item.kind === 'income' ? 'in' : 'out';
+  return segments.some(segment => segment.items.some(local => local.kind === kind
+    && Math.abs(Number(local.a) - Number(item.amount)) < 0.005
+    && (mentionedLabel(segment.text, item.target_label)
+      || (item.kind === 'income' ? local.s === item.target_id : local.c === item.target_id))));
 }
 
 /* ---------- the voice draft: listening, reading, saving ---------- */
@@ -246,28 +272,35 @@ function useSayDraft() {
         defaultIncomeSourceId: null,
       });
       if (preview.status === 'ready') {
+        const segments = said.replace(/[，。;!?、]/g, ' | ').replace(/,\s/g, ' | ').replace(/\.(\s|$)/g, ' | ')
+          .split(SPOKEN_PARTS).map(part => ({ text: part, items: parseSpokenEntries(part, S0) }));
         items = preview.actions
           .filter(a => a.kind === 'income' || a.kind === 'expense')
-          .map(a => ({
-            kind: a.kind === 'income' ? 'in' : 'out',
-            a: Number(a.amount),
-            d: a.date || isoOffset(0),
-            ...(a.kind === 'income'
-              ? { s: a.target_id, sourceName: a.target_id ? undefined : a.target_label || undefined }
-              : { c: a.target_id, categoryName: a.target_id ? undefined : a.target_label || undefined }),
-            confidence: {
-              /* Older servers do not return confidence. Treat absent evidence
-                 as low confidence so a model guess can never bypass review. */
-              kind: a.confidence?.kind || 'low',
-              amount: a.confidence?.amount || 'low',
-              date: a.confidence?.date || 'low',
-              target: a.target_id || a.target_label ? a.confidence?.target || 'low' : 'low',
-            },
-          }) as VoiceItem);
+          .map(a => {
+            const targetSupported = supportedVoiceTarget(a, segments);
+            return {
+              kind: a.kind === 'income' ? 'in' : 'out',
+              a: a.amount === '' ? '' : Number(a.amount),
+              d: a.date || isoOffset(0),
+              ...(a.kind === 'income'
+                ? { s: targetSupported ? a.target_id : undefined, sourceName: targetSupported && !a.target_id ? a.target_label || undefined : undefined }
+                : { c: targetSupported ? a.target_id : undefined, categoryName: targetSupported && !a.target_id ? a.target_label || undefined : undefined }),
+              confidence: {
+                /* Older servers do not return confidence. Treat absent evidence
+                   as low confidence so a model guess can never bypass review. */
+                kind: a.confidence?.kind || 'low',
+                amount: a.confidence?.amount || 'low',
+                date: a.confidence?.date || 'low',
+                target: targetSupported ? a.confidence?.target || 'low' : 'low',
+              },
+            } as VoiceItem;
+          });
+        const hadEntryActions = items.length > 0;
+        if (hadEntryActions && items.every(item => String(item.a).trim() === '')) items = [];
         /* Voice entry is deliberately limited to record entries. A bill,
            limit, housing action or other non-entry command belongs in Ask
            Ruma and must never fall through as a guessed expense. */
-        if (!items.length && preview.actions.length) {
+        if (!hadEntryActions && preview.actions.length) {
           routeToAsk(said);
           return;
         }
@@ -276,8 +309,10 @@ function useSayDraft() {
       } else if (preview.status === 'not_action') {
         /* Carry the exact words across for review; Ask Ruma never sends the
            question automatically. */
-        routeToAsk(said);
-        return;
+        if (!looksLikeSpokenEntry(said)) {
+          routeToAsk(said);
+          return;
+        }
       }
       if (!items.length) items = local();
     } catch {
@@ -455,7 +490,7 @@ function useSayDraft() {
     const needsReview = V.items.some(it => Object.values(it.confidence || {}).includes('low'));
     const invalid = V.items.some(it => {
       const amount = Number(it.a);
-      return !Number.isFinite(amount) || (it.kind === 'in' ? amount < 0 : amount <= 0)
+      return String(it.a).trim() === '' || !Number.isFinite(amount) || (it.kind === 'in' ? amount < 0 : amount <= 0)
         || (it.kind === 'in' ? !it.s && !it.sourceName : !it.c && !it.categoryName);
     });
     if (needsReview || invalid) {
@@ -563,7 +598,7 @@ function InlineSelect({ value, options, onChange, label }: {
   const [open, setOpen] = React.useState(false);
   const cur = options.find(o => o.v === value);
   return (
-    <View style={{ alignItems: 'flex-end', width: '62%', minWidth: 0 }}>
+    <View style={{ alignItems: 'flex-end', flex: 1, maxWidth: '62%', minWidth: 0 }}>
       <Pressable onPress={() => setOpen(o => !o)} accessibilityRole="button" accessibilityLabel={label}
         style={sy.select}>
         <Text numberOfLines={1} style={sy.selectTxt}>{cur ? cur.l : '-'}</Text>
@@ -653,7 +688,7 @@ function DraftCard({ it, i, edit, remove, confirm, transferToTyped }: {
         <InlineSelect label={t('vo_date')} value={it.d} options={days} onChange={v => edit(i, 'date', x => { x.d = v; })} />
       </View>
       <View style={sy.vrow}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Text style={sy.vrowK}>{t(inc ? 'vo_src' : 'vo_cat')}</Text>{check('target')}</View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, minWidth: 0 }}><Text style={[sy.vrowK, { flexShrink: 1 }]}>{t(inc ? 'vo_src' : 'vo_cat')}</Text>{check('target')}</View>
         <InlineSelect label={t(inc ? 'vo_src' : 'vo_cat')}
           value={(inc ? it.s || (it.sourceName ? proposedSource : '') : it.c || (it.categoryName ? proposedCategory : '')) || ''} options={opts}
           onChange={v => edit(i, 'target', x => {
@@ -736,7 +771,11 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
         : stage === 'done' ? t('vo_done') : t('vo_hint');
   const n = V.items.length;
   const listening = stage === 'listen';
+  React.useEffect(() => {
+    if (stage === 'done' && n === 0) setTyped(V.text);
+  }, [stage, n, V.text]);
   const cannotSave = V.items.some(it => Object.values(it.confidence || {}).includes('low')
+    || String(it.a).trim() === ''
     || !Number.isFinite(Number(it.a))
     || (it.kind === 'in' ? Number(it.a) < 0 || (!it.s && !it.sourceName) : Number(it.a) <= 0 || (!it.c && !it.categoryName)));
 
@@ -785,15 +824,15 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
         </View>
       ) : null}
 
-      {stage === 'idle' || stage === 'permission' ? (
+      {stage === 'idle' || stage === 'permission' || (stage === 'done' && n === 0) ? (
         <View style={{ gap: 6 }}>
-            <Text style={{ fontFamily: BODY_FONT, fontSize: 13, color: C.ink64 }}>{t('vo_type')}</Text>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 13, color: C.ink64 }}>{t(stage === 'done' ? 'vo_edit_words' : 'vo_type')}</Text>
             <TextInput
               value={typed}
               onChangeText={setTyped}
               placeholder={t('vo_type_ph')}
               placeholderTextColor={C.ink40}
-              accessibilityLabel={t('vo_type')}
+              accessibilityLabel={t(stage === 'done' ? 'vo_edit_words' : 'vo_type')}
               onSubmitEditing={() => { if (typed.trim()) { void d.finish(typed); setTyped(''); } }}
               style={sy.input}
             />
