@@ -214,6 +214,10 @@ export interface VoiceState {
   stage: 'idle' | 'permission' | 'listen' | 'parsing' | 'done';
   text: string;
   items: VoiceItem[];
+  /* A clearly separate question waits for Ask Ruma while entries stay drafts. */
+  question?: string;
+  /* Unclear question-versus-record intent requires an explicit choice. */
+  clarifyIntent?: boolean;
   /* No microphone here, so an example is playing. */
   demo?: boolean;
   /* A question back from the reader, shown above the drafts. */
@@ -641,6 +645,7 @@ export interface SaveIncomeInput {
   sourceId?: string;
   entryMethod?: 'manual' | 'historical_total';
   confirmOutlier?: boolean;
+  idempotencyKey?: string;
 }
 
 export interface Ctx {
@@ -695,6 +700,7 @@ export interface Ctx {
     entryMethod?: 'manual' | 'receipt' | 'monthly_total';
     merchant?: string;
     confirmReceipt?: boolean;
+    idempotencyKey?: string;
   }) => Promise<void>;
   setExpenseMonthlyTotal: (entryId: string, monthlyTotal: boolean) => Promise<void>;
   refreshHomeownership: () => Promise<void>;
@@ -1842,6 +1848,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     entryMethod?: 'manual' | 'receipt' | 'monthly_total';
     merchant?: string;
     confirmReceipt?: boolean;
+    idempotencyKey?: string;
   }): Promise<void> => {
     if (!INCOME_API_ENABLED) {
       up(s => {

@@ -466,7 +466,7 @@ async function storeAuthToken(token: string | null): Promise<void> {
   } catch { /* best effort */ }
 }
 
-function newClientId(): string {
+export function newClientId(): string {
   return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
@@ -634,7 +634,7 @@ function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   const promise = performRequest<T>(path, {
     ...init,
-    headers: { ...init.headers, 'Idempotency-Key': newClientId() },
+    headers: { 'Idempotency-Key': newClientId(), ...init.headers },
   });
   inFlightJsonCreates.set(signature, promise);
   void promise.finally(() => inFlightJsonCreates.delete(signature)).catch(() => undefined);
@@ -853,6 +853,7 @@ export function createIncomeEntry(input: {
   sourceId?: string;
   entryMethod?: 'manual' | 'historical_total';
   confirmOutlier?: boolean;
+  idempotencyKey?: string;
 }): Promise<ApiIncomeEntry> {
   const entryMethod = input.entryMethod || 'manual';
   const sourceId = input.sourceId == null ? null : Number.parseInt(input.sourceId, 10);
@@ -861,6 +862,7 @@ export function createIncomeEntry(input: {
   }
   return request<ApiIncomeEntry>('/income/entries/', {
     method: 'POST',
+    ...(input.idempotencyKey ? { headers: { 'Idempotency-Key': input.idempotencyKey } } : {}),
     body: JSON.stringify({
       amount: input.amount.toFixed(2),
       date: input.date,
@@ -1129,6 +1131,7 @@ export function createExpense(input: {
   entryMethod?: 'manual' | 'receipt' | 'monthly_total';
   merchant?: string;
   confirmReceipt?: boolean;
+  idempotencyKey?: string;
 }): Promise<ApiExpenseEntry> {
   const categoryId = Number.parseInt(input.categoryId, 10);
   if (!Number.isFinite(categoryId)) {
@@ -1136,6 +1139,7 @@ export function createExpense(input: {
   }
   return request<ApiExpenseEntry>('/expenses/', {
     method: 'POST',
+    ...(input.idempotencyKey ? { headers: { 'Idempotency-Key': input.idempotencyKey } } : {}),
     body: JSON.stringify({
       amount: input.amount.toFixed(2),
       date: input.date,

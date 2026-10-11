@@ -10,7 +10,7 @@ import {
 } from 'expo-speech-recognition';
 import { SvgXml } from 'react-native-svg';
 import { AppState, useApp } from './state';
-import { ApiError, AssistantAction, assistantChat, previewAssistantAction } from './api';
+import { ApiError, AssistantAction, assistantChat, newClientId, previewAssistantAction } from './api';
 import { rm } from './calc';
 import { BODY_FONT, C, DISP_FONT } from './theme';
 import { RumaHeadset, RumaHelpAvatar } from './ruma-view';
@@ -18,6 +18,7 @@ import { claimSpeechOwner, getSpeechOwner, releaseSpeechOwner } from './speech';
 import { GuideTarget, onScrollSettle } from './tour';
 import { GROQ_DPA_URL, GROQ_YOUR_DATA_URL } from './ai-disclosure';
 import { isValidIsoDate, isValidMoneyText } from './validation';
+import { isQuestionWithoutRecordInstruction } from './voice-intent';
 
 /* Flip to false to hide the whole Ask RuMampu UI (bubble, header
    button, popover), e.g. while the AI backend is unavailable. */
@@ -25,15 +26,35 @@ export const ASSISTANT_UI_ENABLED = true;
 const ASSISTANT_SPEECH_SILENCE_MS = 3000;
 
 type ActionField = keyof NonNullable<AssistantAction['confidence']>;
+type PendingAction = AssistantAction & { idempotencyKey: string };
+
+function reviewableAction(action: AssistantAction): PendingAction {
+  const dated = action.kind === 'income' || action.kind === 'expense';
+  const filledAmount = isValidMoneyText(action.amount) && Number(action.amount) > 0;
+  const filledTarget = Boolean(action.target_id || (dated && action.target_label.trim()));
+  /* Older preview responses omit confidence. Treat fields they left blank as
+     uncertain while preserving their complete proposals for normal review. */
+  return {
+    ...action,
+    idempotencyKey: newClientId(),
+    confidence: {
+      kind: action.confidence?.kind || 'high',
+      amount: action.confidence?.amount || (filledAmount ? 'high' : 'low'),
+      date: action.confidence?.date || (!dated || isValidIsoDate(action.date || '') ? 'high' : 'low'),
+      target: action.confidence?.target || (filledTarget ? 'high' : 'low'),
+    },
+  };
+}
 
 function actionReady(action: AssistantAction): boolean {
   const amount = action.amount.trim();
   const dated = action.kind === 'income' || action.kind === 'expense';
+  const required: ActionField[] = dated ? ['kind', 'amount', 'date', 'target'] : ['kind', 'amount', 'target'];
   return isValidMoneyText(amount)
     && Number(amount) > 0
     && (!dated || isValidIsoDate(action.date || ''))
     && Boolean(action.target_id || (dated && action.target_label.trim()))
-    && !Object.values(action.confidence || {}).includes('low');
+    && required.every(field => action.confidence?.[field] === 'high');
 }
 
 /** One disclosure is shared by every hosted-AI feature. Declining only cancels
@@ -376,10 +397,10 @@ export function AssistantSheet() {
   const [draft, setDraft] = React.useState('');
   const [sending, setSending] = React.useState(false);
   const [listening, setListening] = React.useState(false);
-  const [pendingActions, setPendingActions] = React.useState<AssistantAction[]>([]);
+  const [pendingActions, setPendingActions] = React.useState<PendingAction[]>([]);
   const [editingTarget, setEditingTarget] = React.useState<number | null>(null);
   const [actionSaving, setActionSaving] = React.useState(false);
-  const [confirmingOutlier, setConfirmingOutlier] = React.useState(false);
+  const [confirmingOutlierKey, setConfirmingOutlierKey] = React.useState<string | null>(null);
   const [inputHeight, setInputHeight] = React.useState(48);
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
   const [webInputFocused, setWebInputFocused] = React.useState(false);
@@ -629,7 +650,7 @@ export function AssistantSheet() {
     if (prevLang.current === S.lang) return;
     prevLang.current = S.lang;
     setPendingActions([]);
-    setConfirmingOutlier(false);
+    setConfirmingOutlierKey(null);
     up(s => { s.assistantMsgs = []; });
   }, [S.lang, up]);
 
@@ -642,8 +663,9 @@ export function AssistantSheet() {
   );
 
   const updateAction = (index: number, patch: Partial<AssistantAction>, field?: ActionField) => {
+    setConfirmingOutlierKey(null);
     setPendingActions(actions => actions.map((action, actionIndex) => actionIndex === index
-      ? { ...action, ...patch, confidence: field ? { ...action.confidence, [field]: 'high' } as AssistantAction['confidence'] : action.confidence }
+      ? { ...action, ...patch, idempotencyKey: newClientId(), confidence: field ? { ...action.confidence, [field]: 'high' } as AssistantAction['confidence'] : action.confidence }
       : action));
   };
 
@@ -672,26 +694,28 @@ export function AssistantSheet() {
        message after the controlled draft has been cleared. */
     if (getSpeechOwner() === 'assistant' || listening) stopSpeech();
     setPendingActions([]);
-    setConfirmingOutlier(false);
+    setConfirmingOutlierKey(null);
     const history = [...S.assistantMsgs, { role: 'user' as const, content }];
     setDraft('');
     setInputHeight(48);
     setSending(true);
     up(s => { s.assistantMsgs.push({ role: 'user', content }); });
     try {
-      try {
-        const preview = await tryFinancialAction(content);
-        if (preview.status === 'needs_clarification') {
-          up(s => { s.assistantMsgs.push({ role: 'assistant', content: preview.message }); });
-          return;
+      if (!isQuestionWithoutRecordInstruction(content)) {
+        try {
+          const preview = await tryFinancialAction(content);
+          if (preview.status === 'needs_clarification') {
+            up(s => { s.assistantMsgs.push({ role: 'assistant', content: preview.message }); });
+            return;
+          }
+          if (preview.status === 'ready' && preview.actions.length > 0) {
+            setPendingActions(preview.actions.map(reviewableAction));
+            return;
+          }
+        } catch {
+          /* Keep ordinary chat available if the smaller action model is down.
+             The 120B assistant may still explain how to enter the item manually. */
         }
-        if (preview.status === 'ready' && preview.actions.length > 0) {
-          setPendingActions(preview.actions);
-          return;
-        }
-      } catch {
-        /* Keep ordinary chat available if the smaller action model is down.
-           The 120B assistant may still explain how to enter the item manually. */
       }
       const { reply } = await assistantChat(history, S.lang, uiLabels(t), termLabels(S, t));
       up(s => { s.assistantMsgs.push({ role: 'assistant', content: reply }); });
@@ -707,7 +731,7 @@ export function AssistantSheet() {
 
   const cancelAction = () => {
     setPendingActions([]);
-    setConfirmingOutlier(false);
+    setConfirmingOutlierKey(null);
     up(s => { s.assistantMsgs.push({ role: 'assistant', content: t('as_action_cancelled') }); });
   };
 
@@ -715,73 +739,94 @@ export function AssistantSheet() {
     if (pendingActions.length === 0 || actionSaving) return;
     if (pendingActions.some(action => !actionReady(action))) return;
     setActionSaving(true);
+    const completed = new Set<number>();
+    const createdTargets = new Map<number, string>();
+    const remaining = () => pendingActions
+      .map((action, index) => createdTargets.has(index) ? { ...action, target_id: createdTargets.get(index)! } : action)
+      .filter((_, index) => !completed.has(index));
+    const savedSummary = () => pendingActions
+      .filter((_, index) => completed.has(index))
+      .map(actionSummary).join(' ');
+    const reportPartial = () => {
+      setPendingActions(remaining());
+      if (completed.size) {
+        up(s => { s.assistantMsgs.push({ role: 'assistant', content: t('as_action_partial_saved', {
+          saved: savedSummary(), remaining: pendingActions.length - completed.size,
+        }) }); });
+      }
+    };
     try {
-      const actionsToSave = [...pendingActions].sort((a, b) =>
-        Number(b.kind === 'income') - Number(a.kind === 'income'));
+      const actionsToSave = pendingActions.map((action, index) => ({ action, index })).sort((a, b) =>
+        Number(b.action.kind === 'income') - Number(a.action.kind === 'income'));
       const createdSources = new Map<string, string>();
       const createdCategories = new Map<string, string>();
-      for (const action of actionsToSave) {
+      for (const { action, index } of actionsToSave) {
         if (action.kind === 'income') {
           let sourceId = action.target_id;
           if (!sourceId) {
             const key = action.target_label.trim().toLocaleLowerCase();
             sourceId = createdSources.get(key) || await saveIncomeSource(action.target_label);
             createdSources.set(key, sourceId);
-            /* Keep the created ID on the pending draft. If the amount needs a
-               second outlier confirmation, do not try to create the same
-               custom source again on the second press. */
-            setPendingActions(actions => actions.map(pending => pending === action
-              ? { ...pending, target_id: sourceId }
-              : pending));
+            createdTargets.set(index, sourceId);
           }
+          const confirmThisOutlier = confirmingOutlierKey === action.idempotencyKey;
           const result = await saveIncomeEntry({
             amount: Number(action.amount),
             date: action.date!,
             sourceId,
-            confirmOutlier: confirmingOutlier,
+            confirmOutlier: confirmThisOutlier,
+            idempotencyKey: confirmThisOutlier ? `${action.idempotencyKey}-confirmed` : action.idempotencyKey,
           });
           if (result === 'outlier') {
-            setConfirmingOutlier(true);
+            reportPartial();
+            setConfirmingOutlierKey(action.idempotencyKey);
             up(s => { s.assistantMsgs.push({ role: 'assistant', content: t('as_action_outlier') }); });
             return;
           }
+          if (confirmThisOutlier) setConfirmingOutlierKey(null);
         } else if (action.kind === 'expense') {
           let categoryId = action.target_id;
           if (!categoryId) {
             const key = action.target_label.trim().toLocaleLowerCase();
             categoryId = createdCategories.get(key) || await saveExpenseCategory(action.target_label);
             createdCategories.set(key, categoryId);
+            createdTargets.set(index, categoryId);
           }
           await saveExpenseEntry({
             amount: Number(action.amount),
             date: action.date!,
             categoryId,
+            idempotencyKey: action.idempotencyKey,
           });
         } else if (action.kind === 'bill') {
           await saveCommitmentAmount(action.target_id, Number(action.amount));
         } else {
           up(s => { s.data.expenseLimits[action.target_id] = Number(action.amount); });
         }
+        completed.add(index);
       }
       const saved = pendingActions.length === 1
         ? t(`as_action_${pendingActions[0].kind}_saved`)
         : t('as_actions_saved', { n: pendingActions.length });
       setPendingActions([]);
-      setConfirmingOutlier(false);
+      setConfirmingOutlierKey(null);
       up(s => { s.assistantMsgs.push({ role: 'assistant', content: saved }); });
       toast(saved);
     } catch {
-      up(s => { s.assistantMsgs.push({ role: 'assistant', content: t('as_action_save_failed') }); });
+      reportPartial();
+      if (!completed.size) {
+        up(s => { s.assistantMsgs.push({ role: 'assistant', content: t('as_action_save_failed') }); });
+      }
     } finally {
       setActionSaving(false);
     }
   };
 
   const reviewFlag = (index: number, action: AssistantAction, field: ActionField, filled: boolean) =>
-    action.confidence?.[field] === 'low' ? (
+    action.confidence?.[field] !== 'high' ? (
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <Text style={st.actionCheck}>{t('vo_flag')}</Text>
-        {filled ? <Pressable accessibilityRole="button" onPress={() => checkActionField(index, field)}>
+        {filled ? <Pressable accessibilityRole="button" disabled={actionSaving} onPress={() => checkActionField(index, field)}>
           <Text style={st.actionCheckButton}>{t('as_action_checked_field')}</Text>
         </Pressable> : null}
       </View>
@@ -890,7 +935,7 @@ export function AssistantSheet() {
                           <View style={{ gap: 4 }}>
                             <Text style={st.actionFieldLabel}>{t('vo_amt')}</Text>
                             <TextInput accessibilityLabel={`${t('vo_amt')} ${index + 1}`}
-                              keyboardType="decimal-pad" inputMode="decimal" value={action.amount}
+                              keyboardType="decimal-pad" inputMode="decimal" value={action.amount} editable={!actionSaving}
                               onChangeText={amount => updateAction(index, { amount }, 'amount')}
                               style={st.actionInput} />
                             {reviewFlag(index, action, 'amount', isValidMoneyText(action.amount) && Number(action.amount) > 0)}
@@ -898,7 +943,7 @@ export function AssistantSheet() {
                           {dated ? <View style={{ gap: 4 }}>
                             <Text style={st.actionFieldLabel}>{t('vo_date')}</Text>
                             <TextInput accessibilityLabel={`${t('vo_date')} ${index + 1}`}
-                              placeholder="YYYY-MM-DD" value={action.date || ''}
+                              placeholder="YYYY-MM-DD" value={action.date || ''} editable={!actionSaving}
                               onChangeText={date => updateAction(index, { date }, 'date')}
                               style={st.actionInput} />
                             {reviewFlag(index, action, 'date', isValidIsoDate(action.date || ''))}
@@ -906,13 +951,13 @@ export function AssistantSheet() {
                           <View accessibilityLabel={targetLabel} style={{ gap: 5 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                               <Text style={st.actionFieldLabel}>{targetLabel}</Text>
-                              {!showChoices ? <Pressable accessibilityRole="button" onPress={() => setEditingTarget(index)}>
+                              {!showChoices ? <Pressable accessibilityRole="button" disabled={actionSaving} onPress={() => setEditingTarget(index)}>
                                 <Text style={st.actionCheckButton}>{t('as_action_change_field')}</Text>
                               </Pressable> : null}
                             </View>
                             {showChoices && action.target_id ? <Text style={st.actionText}>{action.target_label}</Text> : null}
                             {dated && showChoices ? <TextInput accessibilityLabel={`${targetLabel} ${index + 1}`}
-                              placeholder={t('as_action_name_target')} value={action.target_id ? '' : action.target_label}
+                              placeholder={t('as_action_name_target')} value={action.target_id ? '' : action.target_label} editable={!actionSaving}
                               onChangeText={target_label => updateAction(index, { target_id: '', target_label }, 'target')}
                               style={st.actionInput} /> : null}
                             {reviewFlag(index, action, 'target', targetFilled)}
@@ -925,6 +970,7 @@ export function AssistantSheet() {
                                       key={target.id}
                                       accessibilityRole="button"
                                       accessibilityLabel={label}
+                                      disabled={actionSaving}
                                       onPress={() => { updateAction(index, { target_id: target.id, target_label: label }, 'target'); setEditingTarget(null); }}
                                       style={st.actionChoice}
                                     >
@@ -960,7 +1006,7 @@ export function AssistantSheet() {
                     >
                       {actionSaving ? <ActivityIndicator size="small" color="#fff" /> : (
                         <Text style={st.actionConfirmText}>
-                          {t(confirmingOutlier ? 'as_action_confirm_again' : 'as_action_confirm')}
+                          {t(confirmingOutlierKey ? 'as_action_confirm_again' : 'as_action_confirm')}
                         </Text>
                       )}
                     </Pressable>

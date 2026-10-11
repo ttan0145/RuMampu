@@ -14,6 +14,7 @@ import { BODY_FONT, C, DISP_FONT, XBOLD_FONT } from './theme';
 import { Ico } from './svgs';
 import { QDot, QHUE } from './qhue';
 import { claimSpeechOwner, getSpeechOwner, releaseSpeechOwner, speechLocale } from './speech';
+import { classifyVoiceIntent } from './voice-intent';
 
 /* v27b3 Say an entry. The person says, or types, what they earned or spent.
    The words go to the same reader Ask Ruma uses, which proposes entries and
@@ -224,6 +225,7 @@ function useReducedMotion(): boolean {
 function useSayDraft() {
   const { S, t, up, toast, saveIncomeEntry, saveIncomeSource, saveExpenseCategory, saveExpenseEntry, ensureAiDisclosure } = useApp();
   const textRef = React.useRef('');
+  const readingRef = React.useRef(0);
   const SRef = React.useRef(S);
   SRef.current = S;
   const [saving, setSaving] = React.useState(false);
@@ -234,6 +236,8 @@ function useSayDraft() {
     item.custom ? item.name || '' : t(item.k || '');
 
   const routeToAsk = React.useCallback((said: string) => {
+    readingRef.current += 1;
+    textRef.current = '';
     up(s => {
       s.voice = null;
       s.sayOpen = false;
@@ -245,19 +249,38 @@ function useSayDraft() {
     toast(t('vo_question_routed'));
   }, [t, toast, up]);
 
+  const reviewQuestion = React.useCallback(() => {
+    const question = SRef.current.voice?.question;
+    if (!question) return;
+    up(s => {
+      if (s.voice) s.voice.question = undefined;
+      s.assistantDraft = question;
+      s.assistantOpen = true;
+    });
+  }, [up]);
+
   /* Read the words: the shared reader first, the app's own parser if the
      reader is unreachable or finds nothing to enter. */
-  const finish = React.useCallback(async (text: string) => {
+  const finish = React.useCallback(async (text: string, chosenIntent?: 'entry') => {
     const said = text.trim();
     if (!said) { setVoice(null); return; }
-    if (!await ensureAiDisclosure()) return;
+    const reading = ++readingRef.current;
+    if (!await ensureAiDisclosure() || reading !== readingRef.current) return;
+    const intent = chosenIntent ? { kind: 'entry' as const, entryText: said } : classifyVoiceIntent(said);
+    if (intent.kind === 'question') { routeToAsk(intent.questionText); return; }
+    if (intent.kind === 'ambiguous') {
+      setVoice({ stage: 'done', text: said, items: [], note: t('vo_intent_clarify'), clarifyIntent: true });
+      return;
+    }
+    const entryText = intent.kind === 'mixed' ? intent.entryText : said;
+    const question = intent.kind === 'mixed' ? intent.questionText : undefined;
     setVoice({ stage: 'parsing', text: said, items: [] });
     const S0 = SRef.current;
-    const local = () => parseSpokenEntries(said, SRef.current);
+    const local = () => parseSpokenEntries(entryText, SRef.current);
     let items: VoiceItem[] = [];
     let note: string | undefined;
     try {
-      const preview = await previewAssistantAction(said, S0.lang, {
+      const preview = await previewAssistantAction(entryText, S0.lang, {
         incomeSources: S0.data.sources.map(item => ({ id: item.id, label: shownLabel(item) })),
         expenseCategories: S0.data.expenseCats.map(item => ({ id: item.id, label: shownLabel(item) })),
         commitments: [
@@ -272,7 +295,7 @@ function useSayDraft() {
         defaultIncomeSourceId: null,
       });
       if (preview.status === 'ready') {
-        const segments = said.replace(/[，。;!?、]/g, ' | ').replace(/,\s/g, ' | ').replace(/\.(\s|$)/g, ' | ')
+        const segments = entryText.replace(/[，。;!?、]/g, ' | ').replace(/,\s/g, ' | ').replace(/\.(\s|$)/g, ' | ')
           .split(SPOKEN_PARTS).map(part => ({ text: part, items: parseSpokenEntries(part, S0) }));
         items = preview.actions
           .filter(a => a.kind === 'income' || a.kind === 'expense')
@@ -300,7 +323,7 @@ function useSayDraft() {
         /* Voice entry is deliberately limited to record entries. A bill,
            limit, housing action or other non-entry command belongs in Ask
            Ruma and must never fall through as a guessed expense. */
-        if (!hadEntryActions && preview.actions.length) {
+        if (!hadEntryActions && preview.actions.length && !question) {
           routeToAsk(said);
           return;
         }
@@ -309,7 +332,7 @@ function useSayDraft() {
       } else if (preview.status === 'not_action') {
         /* Carry the exact words across for review; Ask Ruma never sends the
            question automatically. */
-        if (!looksLikeSpokenEntry(said)) {
+        if (!question && !looksLikeSpokenEntry(entryText)) {
           routeToAsk(said);
           return;
         }
@@ -318,8 +341,8 @@ function useSayDraft() {
     } catch {
       items = local();
     }
-    if (!SRef.current.voice) return; /* closed while reading */
-    setVoice({ stage: 'done', text: said, items, note: items.length ? undefined : note });
+    if (reading !== readingRef.current || !SRef.current.voice) return; /* closed or replaced while reading */
+    setVoice({ stage: 'done', text: said, items, question, note: items.length ? undefined : note });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ensureAiDisclosure, routeToAsk, setVoice, t]);
 
@@ -388,6 +411,8 @@ function useSayDraft() {
 
   /* Cancelling discards the transient transcript and draft (AC9.7.2). */
   const halt = React.useCallback(() => {
+    readingRef.current += 1;
+    textRef.current = '';
     if (getSpeechOwner() === 'say') {
       try { ExpoSpeechRecognitionModule.abort(); } catch { /* not listening */ }
       releaseSpeechOwner('say');
@@ -439,10 +464,13 @@ function useSayDraft() {
     up(s => { s.sayOpen = false; s.qSay = false; });
   }, [halt, up]);
 
-  const transferToTyped = React.useCallback((i: number) => {
+  const transferToTyped = React.useCallback((i: number, pendingQuestion?: string) => {
     const item = SRef.current.voice?.items[i];
     if (!item) return;
+    const question = pendingQuestion || SRef.current.voice?.question;
     const confidence = item.confidence;
+    readingRef.current += 1;
+    textRef.current = '';
     const proposed = {
       kind: confidence?.kind === 'high',
       amount: confidence?.amount === 'high',
@@ -478,11 +506,13 @@ function useSayDraft() {
         s.route = 'expenses';
       }
       s.voice = null;
+      if (question) s.assistantDraft = question;
       s.sayOpen = false;
       s.qSay = false;
       s.sheet = null;
     });
-  }, [up]);
+    if (question) toast(t('vo_question_ready_ask'));
+  }, [t, toast, up]);
 
   const save = async (onSaved: (msg: string) => void) => {
     const V = SRef.current.voice;
@@ -546,7 +576,19 @@ function useSayDraft() {
         }
       }
       if (!said.length) return;
-      up(s => { s.voice = null; });
+      readingRef.current += 1;
+      textRef.current = '';
+      const question = V.question;
+      up(s => {
+        s.voice = null;
+        if (question) {
+          s.assistantDraft = question;
+          s.assistantOpen = true;
+          s.sayOpen = false;
+          s.qSay = false;
+          s.sheet = null;
+        }
+      });
       onSaved(t('vo_saved_l', { l: said.join(', ') }));
     } catch {
       dropSaved();
@@ -556,7 +598,7 @@ function useSayDraft() {
     }
   };
 
-  return { start, micTap, reset, edit, confirm, close, halt, save, saving, finish, transferToTyped };
+  return { start, micTap, reset, edit, confirm, close, halt, save, saving, finish, transferToTyped, routeToAsk, reviewQuestion };
 }
 
 /* ---------- pieces ---------- */
@@ -774,6 +816,9 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
   React.useEffect(() => {
     if (stage === 'done' && n === 0) setTyped(V.text);
   }, [stage, n, V.text]);
+  React.useEffect(() => {
+    if (stage === 'idle' && !S.voice) setTyped('');
+  }, [stage, S.voice]);
   const cannotSave = V.items.some(it => Object.values(it.confidence || {}).includes('low')
     || String(it.a).trim() === ''
     || !Number.isFinite(Number(it.a))
@@ -848,6 +893,28 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
           {V.note ? (
             <View style={sy.noteC}><Text style={sy.noteTxt}>{V.note}</Text></View>
           ) : null}
+          {V.clarifyIntent ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
+              <Pressable accessibilityRole="button" onPress={() => { void d.finish(V.text, 'entry'); }}
+                style={{ minHeight: 44, justifyContent: 'center' }}>
+                <Text style={sy.btnLine}>{t('vo_record_entry')}</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => d.routeToAsk(V.text)}
+                style={{ minHeight: 44, justifyContent: 'center' }}>
+                <Text style={sy.btnLine}>{t('vo_review_in_ask')}</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {V.question ? (
+            <View style={sy.noteC}>
+              <Text style={sy.noteTxt}>{t('vo_mixed_question')}</Text>
+              <Text style={[sy.noteTxt, { fontFamily: DISP_FONT }]}>{`“${V.question}”`}</Text>
+              <Pressable accessibilityRole="button" onPress={d.reviewQuestion}
+                style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}>
+                <Text style={sy.btnLine}>{t('vo_review_in_ask')}</Text>
+              </Pressable>
+            </View>
+          ) : null}
           {n ? (
             <>
               <View style={{ gap: 8 }}>
@@ -855,7 +922,7 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
                 {V.items.map((it, i) => (
                   <DraftCard key={i} it={it} i={i} edit={d.edit}
                     confirm={d.confirm}
-                    transferToTyped={d.transferToTyped}
+                    transferToTyped={i => d.transferToTyped(i, V.question)}
                     remove={k => up(s => { s.voice?.items.splice(k, 1); })} />
                 ))}
               </View>
