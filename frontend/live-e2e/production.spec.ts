@@ -2,7 +2,7 @@ import { expect, type Page } from '@playwright/test';
 import type { ApiIncomeRecord, ApiIncomePattern, ApiWorkCostEntry, ApiWorkCostMonthSummary } from '../src/rumampu/api';
 import type { HousingTestResult, PreHousingResult } from '../types/housing';
 import {
-  LIVE_API, assertHealthyNetwork, chooseDate, evidence, liveGet, monthLabel,
+  LIVE_API, assertHealthyNetwork, chooseDate, evidence, isGuestLogout, liveGet, monthLabel,
   openLiveApp, openMoney, previousMonth, selectMonth, test,
 } from './support';
 
@@ -17,21 +17,20 @@ async function expectCategories(page: Page): Promise<void> {
 }
 
 async function knownPayment(page: Page, amount: string): Promise<void> {
-  await expect(page.getByText('The house', { exact: true })).toBeVisible();
   const switchMode = page.getByText('I already know my monthly payment', { exact: true });
   // Explicitly handle the two valid house-form modes; always assert the input result.
   if (await switchMode.isVisible()) await switchMode.click();
+  await expect(page.getByText('Monthly payment (RM)', { exact: true })).toBeVisible();
   const payment = page.locator('input:visible');
   await expect(payment).toHaveCount(1);
   await payment.fill(amount);
   await payment.press('Tab');
   await expect(payment).toHaveValue(amount);
-  await page.getByRole('button', { name: 'Total monthly cost →', exact: true }).click();
 }
 
 async function housingCosts(page: Page): Promise<void> {
-  const maintenance = page.getByText('Maintenance & sinking fund', { exact: true });
-  if (!(await maintenance.isVisible())) await page.getByText('What’s inside', { exact: true }).click();
+  await page.getByText('Other monthly costs', { exact: true }).locator('..').locator('..')
+    .getByText('Edit', { exact: true }).click();
   for (const [label, amount] of [
     ['Maintenance & sinking fund', '150'], ['Home insurance', '55'],
     ['Assessment tax', '20'], ['Quit rent', '5'], ['Parking', '0'], ['Other', '0'],
@@ -41,6 +40,7 @@ async function housingCosts(page: Page): Promise<void> {
     await input.press('Tab');
     await expect(input).toHaveValue(amount);
   }
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
 }
 
 test('TECH-LIVE-01 — production read-only financial smoke', { tag: ['@live', '@hardening'] }, async ({ page, live }, info) => {
@@ -59,21 +59,29 @@ test('TECH-LIVE-01 — production read-only financial smoke', { tag: ['@live', '
   });
   await test.step('Income analysis handles the empty production guest', async () => {
     await openMoney(page, 'Income pattern');
-    await expect(page.getByText('Your income pattern starts with a recorded month.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Your income pattern starts with a completed month.', { exact: true })).toBeVisible();
   });
   await test.step('Housing preview calculates RM 1,230 without saving a scenario', async () => {
-    await page.getByText('Test', { exact: true }).last().click();
+    await page.getByRole('tab', { name: 'House', exact: true }).click();
+    await page.getByText('Test a house', { exact: true }).click();
     await knownPayment(page, '1000');
     await housingCosts(page);
-    await expect(page.getByText('RM 1,230.00', { exact: true })).toBeVisible();
+    const total = page.getByText('Total monthly cost', { exact: true }).locator('..').locator('..');
+    await expect(total.getByText('RM 1,230', { exact: true })).toBeVisible();
     await evidence(page, info, 'housing-preview.png');
+  });
+  await test.step('Reload resumes the guest session without repeating onboarding', async () => {
+    await openLiveApp(page);
+    await openMoney(page, 'Work costs');
+    await expectCategories(page);
+    await expect(page.getByText('No work-cost entries recorded yet.', { exact: true })).toBeVisible();
   });
   // Opening the app may create the anonymous profile/defaults, but no financial facts.
   expect((await liveGet<ApiIncomeRecord>(page, live, '/income/record/')).entries).toEqual([]);
   expect(await liveGet(page, live, '/work-costs/entries/')).toEqual([]);
   expect(await liveGet(page, live, '/housing/scenarios/')).toEqual([]);
   expect(live.events.filter(event => !['GET', 'OPTIONS', 'HEAD'].includes(event.method)
-    && event.path !== '/api/v1/housing/calculate/')).toEqual([]);
+    && event.path !== '/api/v1/housing/calculate/' && !isGuestLogout(event))).toEqual([]);
   assertHealthyNetwork(live);
 });
 

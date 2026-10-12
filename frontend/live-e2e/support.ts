@@ -8,19 +8,32 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 type ApiEvent = { method: string; path: string; status: number };
 type LiveSession = { clientId: string; events: ApiEvent[]; errors: string[] };
 
+// Guest entry clears any account session. With no account token, logout returns 401.
+export function isGuestLogout(event: ApiEvent): boolean {
+  return event.method === 'POST' && event.path === '/api/v1/auth/logout/' && event.status === 401;
+}
+
 export const test = base.extend<{ live: LiveSession }>({
   live: [async ({ page }, use, testInfo) => {
     const live: LiveSession = { clientId: `live-smoke-${randomUUID()}`, events: [], errors: [] };
-    await page.addInitScript(id => localStorage.setItem('rumampu_client_id', id), live.clientId);
+    await page.addInitScript(id => {
+      localStorage.setItem('rumampu_client_id', id);
+      // Guest entry rotates the ID. Keep this run's isolated synthetic identity,
+      // as the local E2E fixture does, so browser and API checks share a record.
+      Object.defineProperty(crypto, 'randomUUID', { value: () => id, configurable: true });
+    }, live.clientId);
     page.on('pageerror', error => live.errors.push(error.message));
     page.on('response', response => {
       const url = new URL(response.url());
       if (!url.pathname.startsWith('/api/v1/')) return;
       const request = response.request();
-      live.events.push({ method: request.method(), path: url.pathname, status: response.status() });
+      const event = { method: request.method(), path: url.pathname, status: response.status() };
+      live.events.push(event);
       if (url.origin !== new URL(LIVE_API).origin) live.errors.push(`Unexpected API origin: ${url.origin}`);
       if (request.headers()['x-rumampu-client-id'] !== live.clientId) live.errors.push(`Guest ID mismatch: ${url.pathname}`);
-      if (response.status() >= 400) live.errors.push(`${request.method()} ${url.pathname}: HTTP ${response.status()}`);
+      if (response.status() >= 400 && !isGuestLogout(event)) {
+        live.errors.push(`${request.method()} ${url.pathname}: HTTP ${response.status()}`);
+      }
     });
     try {
       await use(live);
@@ -45,15 +58,26 @@ export async function liveGet<T>(page: Page, live: LiveSession, path: string): P
 }
 
 export async function openLiveApp(page: Page): Promise<void> {
+  const returningGuest = page.url() !== 'about:blank'
+    && await page.evaluate(() => sessionStorage.getItem('rumampu_guest_session') === '1');
   await page.goto(LIVE_APP);
-  await expect(page.getByText('Skip', { exact: true })).toBeVisible();
-  await page.getByText('Skip', { exact: true }).click();
-  await expect(page.getByText('Money', { exact: true }).last()).toBeVisible();
+  if (!returningGuest) {
+    await page.getByText('Continue as guest', { exact: true }).last().click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('button', { name: 'Continue as guest', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText('What RuMampu does', { exact: true })).toBeVisible();
+    await page.getByText('Next', { exact: true }).last().click();
+    await page.getByText('Skip', { exact: true }).click();
+    await page.getByRole('button', { name: 'Turn off tips on every screen', exact: true }).click();
+  }
+  await page.getByRole('tab', { name: 'Home', exact: true }).click({ trial: true });
+  await expect(page.getByRole('tab', { name: 'Money', exact: true })).toBeVisible();
   await expect(page).toHaveURL(LIVE_APP);
 }
 
 export async function openMoney(page: Page, label: string): Promise<void> {
-  await page.getByText('Money', { exact: true }).last().click();
+  await page.getByRole('tab', { name: 'Money', exact: true }).click();
   await page.getByText(label, { exact: true }).last().click();
 }
 
