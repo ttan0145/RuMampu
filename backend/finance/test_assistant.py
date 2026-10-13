@@ -142,6 +142,22 @@ class AssistantActionPreviewApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), expected)
 
+    def test_help_add_income_request_returns_unsaved_review_through_api(self):
+        payload = self.payload()
+        payload["text"] = "can you help add 50 ringgit as income"
+        before = IncomeEntry.objects.count()
+        with patch("finance.assistant_action_service._completion", return_value={"actions": []}):
+            response = self.client.post(
+                self.url, data=json.dumps(payload), content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 200)
+        action = response.json()["actions"][0]
+        self.assertEqual(action["kind"], "income")
+        self.assertEqual(action["amount"], "50.00")
+        self.assertEqual(action["target_id"], "")
+        self.assertEqual(action["confidence"]["target"], "low")
+        self.assertEqual(IncomeEntry.objects.count(), before)
+
     def test_rejects_unknown_language(self):
         payload = self.payload()
         payload["language"] = "fr"
@@ -356,6 +372,18 @@ class AssistantActionServiceTests(TestCase):
                     self.assertEqual(action["target_id"], "31")
                 else:
                     self.assertEqual(action["target_id"], "")
+
+    def test_help_add_income_request_still_opens_review_when_model_finds_no_action(self):
+        result = self.preview({"actions": []}, text="can you help add 50 ringgit as income")
+        self.assertEqual(result["status"], "ready")
+        action = result["actions"][0]
+        self.assertEqual(action["kind"], "income")
+        self.assertEqual(action["amount"], "50.00")
+        self.assertEqual(action["target_id"], "")
+        self.assertEqual(action["target_label"], "")
+        self.assertEqual(action["confidence"]["amount"], "high")
+        self.assertEqual(action["confidence"]["date"], "low")
+        self.assertEqual(action["confidence"]["target"], "low")
 
     def test_incomplete_request_keeps_fields_the_user_did_supply(self):
         result = self.preview(

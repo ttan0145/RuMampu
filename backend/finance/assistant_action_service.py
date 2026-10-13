@@ -172,6 +172,7 @@ def _explicit_incomplete_review(
     """
     english = re.match(
         r"^\s*(?:(?:please|help me|can you|could you|would you|i want to)\s+)*"
+        r"(?:help(?: me)?\s+)?"
         r"(?:add|enter|record|log|set|change|update)\b",
         text, re.IGNORECASE,
     )
