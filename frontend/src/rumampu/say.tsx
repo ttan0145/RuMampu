@@ -15,6 +15,7 @@ import { Ico } from './svgs';
 import { QDot, QHUE } from './qhue';
 import { claimSpeechOwner, getSpeechOwner, releaseSpeechOwner, speechLocale } from './speech';
 import { classifyVoiceIntent } from './voice-intent';
+import { ReviewDateField } from './date-picker';
 
 /* v27b3 Say an entry. The person says, or types, what they earned or spent.
    The words go to the same reader Ask Ruma uses, which proposes entries and
@@ -520,7 +521,7 @@ function useSayDraft() {
     const invalid = V.items.some(it => {
       const amount = Number(it.a);
       return String(it.a).trim() === '' || !Number.isFinite(amount) || (it.kind === 'in' ? amount < 0 : amount <= 0)
-        || (it.kind === 'in' ? !it.s && !it.sourceName : !it.c && !it.categoryName);
+        || (it.kind === 'in' ? !it.s && !it.sourceName?.trim() : !it.c && !it.categoryName);
     });
     if (needsReview || invalid) {
       toast(t(needsReview ? 'vo_review_required' : 'vo_invalid_amount'), 'error');
@@ -546,7 +547,7 @@ function useSayDraft() {
           let sourceId = it.s || '';
           if (!sourceId && it.sourceName) {
             const key = it.sourceName.trim().toLocaleLowerCase();
-            sourceId = createdSources.get(key) || await saveIncomeSource(it.sourceName);
+            sourceId = createdSources.get(key) || await saveIncomeSource(it.sourceName.trim());
             createdSources.set(key, sourceId);
             up(s => {
               const pending = s.voice?.items[i];
@@ -669,18 +670,16 @@ function DraftCard({ it, i, edit, remove, confirm, transferToTyped }: {
 }) {
   const { S, t, monthName } = useApp();
   const inc = it.kind === 'in';
-  const days = [0, -1, -2].map(o => ({ v: isoOffset(o), l: t(o === 0 ? 'vo_today' : o === -1 ? 'vo_yday' : 'vo_2d') }));
-  if (!days.some(d => d.v === it.d)) {
-    const [y, m, d] = it.d.split('-').map(Number);
-    days.push({ v: it.d, l: `${d} ${monthName((m || 1) - 1)} ${y}` });
-  }
+  const [typingSource, setTypingSource] = React.useState(false);
   const list = inc ? S.data.sources : S.data.expenseCats;
   const proposedSource = '__ai_proposed_source__';
   const proposedCategory = '__ai_proposed_category__';
+  const customSource = '__custom_source__';
   const opts = [
-    ...(inc && it.sourceName ? [{ v: proposedSource, l: it.sourceName }] : []),
+    ...(inc && it.sourceName && !typingSource ? [{ v: proposedSource, l: it.sourceName }] : []),
     ...(!inc && it.categoryName ? [{ v: proposedCategory, l: it.categoryName }] : []),
     ...list.map(x => ({ v: x.id, l: x.custom ? x.name || '' : t(x.k || '') })),
+    ...(inc ? [{ v: customSource, l: typingSource && it.sourceName?.trim() || t('vo_source_name') }] : []),
   ];
   const [amt, setAmt] = React.useState(String(it.a));
   React.useEffect(() => { setAmt(String(it.a)); }, [it.a]);
@@ -733,18 +732,40 @@ function DraftCard({ it, i, edit, remove, confirm, transferToTyped }: {
       </View>
       <View style={sy.vrow}>
         {fieldLabel(t('vo_date'), 'date')}
-        <InlineSelect label={t('vo_date')} value={it.d} options={days} onChange={v => edit(i, 'date', x => { x.d = v; })} />
+        <View accessibilityLabel={t('vo_date')} style={{ flex: 1, maxWidth: '72%', paddingVertical: 6 }}>
+          <ReviewDateField value={it.d}
+            todayLabel={t('vo_today')} yesterdayLabel={t('vo_yday')} pickLabel={t('inc_pick')}
+            monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
+            onChange={v => edit(i, 'date', x => { x.d = v; })} />
+        </View>
       </View>
       <View style={sy.vrow}>
         {fieldLabel(t(inc ? 'vo_src' : 'vo_cat'), 'target')}
         <InlineSelect label={t(inc ? 'vo_src' : 'vo_cat')}
-          value={(inc ? it.s || (it.sourceName ? proposedSource : '') : it.c || (it.categoryName ? proposedCategory : '')) || ''} options={opts}
-          onChange={v => edit(i, 'target', x => {
-            if (inc) {
-              if (v !== proposedSource) { x.s = v; x.sourceName = undefined; }
-            } else if (v !== proposedCategory) { x.c = v; x.categoryName = undefined; }
-          })} />
+          value={(inc ? typingSource ? customSource : it.s || (it.sourceName ? proposedSource : '') : it.c || (it.categoryName ? proposedCategory : '')) || ''} options={opts}
+          onChange={v => {
+            setTypingSource(inc && v === customSource);
+            if (v === customSource) return;
+            edit(i, 'target', x => {
+              if (inc) {
+                if (v !== proposedSource) { x.s = v; x.sourceName = undefined; }
+              } else if (v !== proposedCategory) { x.c = v; x.categoryName = undefined; }
+            });
+          }} />
       </View>
+      {inc && typingSource ? (
+        <TextInput
+          accessibilityLabel={t('vo_source_name')}
+          placeholder={t('vo_source_name')}
+          placeholderTextColor={C.ink40}
+          value={it.sourceName || ''}
+          onChangeText={sourceName => edit(i, 'target', x => {
+            x.s = undefined;
+            x.sourceName = sourceName;
+          })}
+          style={[sy.input, { marginTop: 6, marginBottom: 10 }]}
+        />
+      ) : null}
       {anyLow && confirm ? (
         <View style={{ alignItems: 'flex-start' }}>
           <Pressable onPress={() => confirm(i)} accessibilityRole="button" style={{ minHeight: 40, justifyContent: 'center' }}>
@@ -828,7 +849,7 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
   const cannotSave = V.items.some(it => Object.values(it.confidence || {}).includes('low')
     || String(it.a).trim() === ''
     || !Number.isFinite(Number(it.a))
-    || (it.kind === 'in' ? Number(it.a) < 0 || (!it.s && !it.sourceName) : Number(it.a) <= 0 || (!it.c && !it.categoryName)));
+    || (it.kind === 'in' ? Number(it.a) < 0 || (!it.s && !it.sourceName?.trim()) : Number(it.a) <= 0 || (!it.c && !it.categoryName)));
 
   return (
     <Animated.View style={{ opacity: fade, gap: 14 }}>

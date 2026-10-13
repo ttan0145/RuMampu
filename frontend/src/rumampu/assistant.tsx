@@ -19,6 +19,7 @@ import { GuideTarget, onScrollSettle } from './tour';
 import { GROQ_DPA_URL, GROQ_YOUR_DATA_URL } from './ai-disclosure';
 import { isValidIsoDate, isValidMoneyText } from './validation';
 import { isQuestionWithoutRecordInstruction } from './voice-intent';
+import { ReviewDateField } from './date-picker';
 
 /* Flip to false to hide the whole Ask RuMampu UI (bubble, header
    button, popover), e.g. while the AI backend is unavailable. */
@@ -382,7 +383,7 @@ function termLabels(S: AppState, t: (k: string) => string): Record<string, strin
 
 export function AssistantSheet() {
   const {
-    S, t, up, toast, saveIncomeEntry, saveIncomeSource, saveExpenseCategory, saveExpenseEntry, saveCommitmentAmount,
+    S, t, up, toast, monthName, saveIncomeEntry, saveIncomeSource, saveExpenseCategory, saveExpenseEntry, saveCommitmentAmount,
   } = useApp();
   const insets = useSafeAreaInsets();
   /* v27b2: the chat opens beside Ruma, on whichever side has more room; on a
@@ -399,6 +400,7 @@ export function AssistantSheet() {
   const [listening, setListening] = React.useState(false);
   const [pendingActions, setPendingActions] = React.useState<PendingAction[]>([]);
   const [editingTarget, setEditingTarget] = React.useState<number | null>(null);
+  const [typingTarget, setTypingTarget] = React.useState<number | null>(null);
   const [actionSaving, setActionSaving] = React.useState(false);
   const [confirmingOutlierKey, setConfirmingOutlierKey] = React.useState<string | null>(null);
   const [inputHeight, setInputHeight] = React.useState(48);
@@ -696,6 +698,8 @@ export function AssistantSheet() {
     setPendingActions([]);
     setConfirmingOutlierKey(null);
     const history = [...S.assistantMsgs, { role: 'user' as const, content }];
+    setEditingTarget(null);
+    setTypingTarget(null);
     setDraft('');
     setInputHeight(48);
     setSending(true);
@@ -942,10 +946,16 @@ export function AssistantSheet() {
                           </View>
                           {dated ? <View style={{ gap: 4 }}>
                             <Text style={st.actionFieldLabel}>{t('vo_date')}</Text>
-                            <TextInput accessibilityLabel={`${t('vo_date')} ${index + 1}`}
-                              placeholder="YYYY-MM-DD" value={action.date || ''} editable={!actionSaving}
-                              onChangeText={date => updateAction(index, { date }, 'date')}
-                              style={st.actionInput} />
+                            <View pointerEvents={actionSaving ? 'none' : 'auto'}>
+                              <ReviewDateField
+                                fullWidth
+                                value={action.date || ''}
+                                todayLabel={t('vo_today')} yesterdayLabel={t('vo_yday')} pickLabel={t('inc_pick')}
+                                disabled={actionSaving}
+                                monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
+                                onChange={date => { if (!actionSaving) updateAction(index, { date }, 'date'); }}
+                              />
+                            </View>
                             {reviewFlag(index, action, 'date', isValidIsoDate(action.date || ''))}
                           </View> : null}
                           <View accessibilityLabel={targetLabel} style={{ gap: 5 }}>
@@ -956,7 +966,7 @@ export function AssistantSheet() {
                               </Pressable> : null}
                             </View>
                             {showChoices && action.target_id ? <Text style={st.actionText}>{action.target_label}</Text> : null}
-                            {dated && showChoices ? <TextInput accessibilityLabel={`${targetLabel} ${index + 1}`}
+                            {dated && showChoices && typingTarget === index ? <TextInput accessibilityLabel={`${targetLabel} ${index + 1}`}
                               placeholder={t('as_action_name_target')} placeholderTextColor={C.ink40}
                               value={action.target_id ? '' : action.target_label} editable={!actionSaving}
                               onChangeText={target_label => updateAction(index, { target_id: '', target_label }, 'target')}
@@ -972,13 +982,20 @@ export function AssistantSheet() {
                                       accessibilityRole="button"
                                       accessibilityLabel={label}
                                       disabled={actionSaving}
-                                      onPress={() => { updateAction(index, { target_id: target.id, target_label: label }, 'target'); setEditingTarget(null); }}
+                                      onPress={() => { updateAction(index, { target_id: target.id, target_label: label }, 'target'); setEditingTarget(null); setTypingTarget(null); }}
                                       style={st.actionChoice}
                                     >
                                       <Text style={st.actionChoiceText}>{label}</Text>
                                     </Pressable>
                                   );
                                 })}
+                                {dated ? <Pressable accessibilityRole="button" disabled={actionSaving}
+                                  accessibilityState={{ disabled: actionSaving, expanded: typingTarget === index }}
+                                  onPress={() => { setEditingTarget(index); setTypingTarget(current => current === index ? null : index); }}
+                                  style={st.actionChoice}>
+                                  <Text style={st.actionChoiceText}>{typingTarget === index && !action.target_id && action.target_label.trim()
+                                    || t(action.kind === 'income' ? 'vo_source_name' : 'as_action_name_target')}</Text>
+                                </Pressable> : null}
                               </View>
                             ) : null}
                           </View>

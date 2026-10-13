@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { C, DISP_FONT } from './theme';
+import { BODY_FONT, C, DISP_FONT } from './theme';
 
 type PickerMode = 'date' | 'month';
 
@@ -13,6 +13,7 @@ type Props = {
   /** Days before this one cannot be chosen (time of day is ignored). */
   minimumDate?: Date;
   allowedMonths?: string[];
+  compact?: boolean;
 };
 
 function parseValue(value: string, mode: PickerMode): Date {
@@ -35,7 +36,54 @@ function isoMonth(year: number, month: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}`;
 }
 
-export function DatePickerField({ value, mode, monthNames, onChange, maximumDate, minimumDate, allowedMonths }: Props) {
+/** Quick choices stay compact; the calendar field appears only on request. */
+export function ReviewDateField({ value, monthNames, onChange, todayLabel, yesterdayLabel, pickLabel, disabled = false, fullWidth = false }: {
+  value: string;
+  monthNames: string[];
+  onChange: (value: string) => void;
+  todayLabel: string;
+  yesterdayLabel: string;
+  pickLabel: string;
+  disabled?: boolean;
+  fullWidth?: boolean;
+}) {
+  const [choosing, setChoosing] = React.useState(false);
+  const [optionsOpen, setOptionsOpen] = React.useState(false);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const presets = [{ value: isoDate(today), label: todayLabel }, { value: isoDate(yesterday), label: yesterdayLabel }];
+  const custom = Boolean(value) && !presets.some(preset => preset.value === value);
+  const selectedLabel = custom ? value : choosing ? pickLabel : presets.find(preset => preset.value === value)?.label || pickLabel;
+  return (
+    <View style={{ gap: 6, alignItems: 'flex-end', alignSelf: 'flex-end', width: fullWidth ? '100%' : 145, maxWidth: '100%' }}>
+      <Pressable accessibilityRole="button" accessibilityLabel={selectedLabel} disabled={disabled}
+        accessibilityState={{ disabled, expanded: optionsOpen }}
+        onPress={() => setOptionsOpen(open => !open)} style={st.reviewSelect}>
+        <Text numberOfLines={1} style={st.reviewChoiceText}>{selectedLabel}</Text>
+        <Text style={st.reviewChoiceText}>▾</Text>
+      </Pressable>
+      {optionsOpen ? <View style={st.reviewOptions}>
+        {presets.map(preset => <Pressable key={preset.value} accessibilityRole="button" disabled={disabled}
+          accessibilityState={{ disabled, selected: !choosing && value === preset.value }}
+          onPress={() => { setChoosing(false); setOptionsOpen(false); onChange(preset.value); }}
+          style={[st.reviewOption, !choosing && value === preset.value && { backgroundColor: C.card }]}>
+          <Text style={st.reviewChoiceText}>{preset.label}</Text>
+        </Pressable>)}
+        <Pressable accessibilityRole="button" disabled={disabled}
+          onPress={() => { setChoosing(true); setOptionsOpen(false); }} style={st.reviewOption}>
+          <Text style={st.reviewChoiceText}>{pickLabel}</Text>
+        </Pressable>
+      </View> : null}
+      {choosing ? <View style={{ width: '100%' }} pointerEvents={disabled ? 'none' : 'auto'}>
+        <DatePickerField value={value} mode="date" monthNames={monthNames} compact
+          onChange={next => { if (!disabled) onChange(next); }} />
+      </View> : null}
+    </View>
+  );
+}
+
+export function DatePickerField({ value, mode, monthNames, onChange, maximumDate, minimumDate, allowedMonths, compact = false }: Props) {
   const [open, setOpen] = React.useState(false);
   const parsed = parseValue(value, mode);
   const [viewYear, setViewYear] = React.useState(parsed.getFullYear());
@@ -80,10 +128,10 @@ export function DatePickerField({ value, mode, monthNames, onChange, maximumDate
         accessibilityRole="button"
         accessibilityLabel={mode === 'date' ? 'Choose date' : 'Choose month'}
         onPress={() => setOpen(true)}
-        style={st.field}
+        style={[st.field, compact && st.compactField]}
       >
-        <Text style={st.fieldText}>{display}</Text>
-        <Text style={st.calendar}>▣</Text>
+        <Text numberOfLines={1} style={[st.fieldText, compact && st.compactText]}>{display}</Text>
+        <Text style={[st.calendar, compact && st.compactCalendar]}>▣</Text>
       </Pressable>
 
       <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -167,6 +215,13 @@ export function DatePickerField({ value, mode, monthNames, onChange, maximumDate
 }
 
 const st = StyleSheet.create({
+  reviewSelect: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, minHeight: 40, width: '100%', paddingHorizontal: 10, borderWidth: 1.5, borderColor: C.ink40, borderRadius: 10, backgroundColor: C.paper },
+  reviewOptions: { borderWidth: 1, borderColor: C.ink14, borderRadius: 10, backgroundColor: C.paper, overflow: 'hidden', alignSelf: 'stretch' },
+  reviewOption: { minHeight: 40, paddingHorizontal: 12, justifyContent: 'center' },
+  reviewChoiceText: { fontFamily: BODY_FONT, fontSize: 14, color: C.ink, flexShrink: 1 },
+  compactField: { minHeight: 40, paddingHorizontal: 10, borderRadius: 10, gap: 6 },
+  compactText: { fontFamily: BODY_FONT, fontSize: 14, flexShrink: 1 },
+  compactCalendar: { fontSize: 14 },
   field: {
     minHeight: 48, borderWidth: 1.5, borderColor: C.ink40, borderRadius: 12,
     paddingHorizontal: 14, backgroundColor: C.paper, flexDirection: 'row',
