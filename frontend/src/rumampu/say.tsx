@@ -14,7 +14,7 @@ import { BODY_FONT, C, DISP_FONT, XBOLD_FONT } from './theme';
 import { Ico } from './svgs';
 import { QDot, QHUE } from './qhue';
 import { claimSpeechOwner, getSpeechOwner, releaseSpeechOwner, speechLocale } from './speech';
-import { classifyVoiceIntent } from './voice-intent';
+import { classifyVoiceIntent, isEhailingMention } from './voice-intent';
 import { ReviewDateField } from './date-picker';
 
 /* v27b3 Say an entry. The person says, or types, what they earned or spent.
@@ -154,7 +154,7 @@ export function parseSpokenEntries(text: string, S: AppState): VoiceItem[] {
     let kindCertain = true;
     if (iI >= 0 && (iE < 0 || /paid me|bayar saya|klien|client|付了我|客户/.test(p))) kind = 'in';
     else if (iE >= 0) kind = 'out';
-    else { kind = /grab|foodpanda|lalamove|shopee|freelance/.test(p) ? 'in' : 'out'; kindCertain = false; }
+    else { kind = isEhailingMention(p) || /foodpanda|lalamove|shopee|freelance/.test(p) ? 'in' : 'out'; kindCertain = false; }
     const it: VoiceItem = {
       kind, a, d: partDates[partIndex] || sharedDate || isoOffset(0),
       confidence: {
@@ -166,7 +166,7 @@ export function parseSpokenEntries(text: string, S: AppState): VoiceItem[] {
     };
     if (kind === 'in') {
       const sid = /foodpanda|panda|lalamove|shopee|deliver/.test(p) ? sourceBy(['deliv', 'delivery', 'food'])
-        : /grab|e-hailing|ehailing/.test(p) ? sourceBy(['ehail'])
+        : isEhailingMention(p) ? sourceBy(['ehail'])
           : /freelance|klien|client|projek|project|自由职业/.test(p) ? sourceBy(['freelance'])
             : /part.?time|gaji/.test(p) ? sourceBy(['parttime']) : undefined;
       it.s = sid;

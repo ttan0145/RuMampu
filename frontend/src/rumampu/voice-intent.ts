@@ -5,6 +5,11 @@ export type VoiceIntent =
   | { kind: 'ambiguous'; text: string }
   | { kind: 'unknown'; text: string };
 
+/** Browser transcripts vary between "e hailing", "e-hailing" and "ehailing". */
+export function isEhailingMention(text: string): boolean {
+  return /\b(?:grab|e[\s\p{Pd}]*hailing)\b/iu.test(text);
+}
+
 const QUESTION_START = /^(?:how|what|why|where|when|who|which|is|are|do|did|does|will|can|could|would|should|may|berapa|adakah|boleh|kenapa|apa|bila)\b|^(?:我能|可以|能否|多少|什么|為什麼|为什么)/i;
 const QUESTION_AFTER_AND = /\s+and\s+(?=(?:how|what|why|where|when|who|which|is|are|do|did|does|will|can|could|would|should|may)\b)/gi;
 const QUESTION_AFTER_COMMA = /,\s*(?=(?:how|what|why|where|when|who|which|is|are|do|did|does|will|can|could|would|should|may|berapa|adakah|boleh)\b)/gi;

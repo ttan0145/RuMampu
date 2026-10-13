@@ -1,9 +1,16 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { classifyVoiceIntent, isQuestionWithoutRecordInstruction } from '../src/rumampu/voice-intent.ts';
+import { classifyVoiceIntent, isEhailingMention, isQuestionWithoutRecordInstruction } from '../src/rumampu/voice-intent.ts';
 
 describe('voice intent boundary', () => {
+  it('matches the preset e-hailing source across spoken spellings', () => {
+    for (const name of ['e hailing', 'E-hailing', 'ehailing', 'e–hailing', 'Grab']) {
+      assert.equal(isEhailingMention(`120 from ${name} today`), true, name);
+    }
+    assert.equal(isEhailingMention('120 from freelancing today'), false);
+    assert.equal(isEhailingMention('120 from grabbing supplies today'), false);
+  });
   it('keeps a housing question out of the entry reader', () => {
     assert.deepEqual(classifyVoiceIntent('Can I afford a house?'), {
       kind: 'question', questionText: 'Can I afford a house?',
