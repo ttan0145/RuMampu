@@ -8,7 +8,7 @@ export type VoiceIntent =
 const QUESTION_START = /^(?:how|what|why|where|when|who|which|is|are|do|did|does|will|can|could|would|should|may|berapa|adakah|boleh|kenapa|apa|bila)\b|^(?:我能|可以|能否|多少|什么|為什麼|为什么)/i;
 const QUESTION_AFTER_AND = /\s+and\s+(?=(?:how|what|why|where|when|who|which|is|are|do|did|does|will|can|could|would|should|may)\b)/gi;
 const QUESTION_AFTER_COMMA = /,\s*(?=(?:how|what|why|where|when|who|which|is|are|do|did|does|will|can|could|would|should|may|berapa|adakah|boleh)\b)/gi;
-const RECORD_REQUEST = /^(?:can|could|would|should|will|may)\s+(?:you|u|i|we)\s+(?:please\s+)?(?:add|record|log|save|enter|set|change|update)\b|^boleh\s+(?:saya|awak)\s+(?:rekod|catat|simpan)\b/i;
+const RECORD_REQUEST = /^(?:can|could|would|should|will|may)\s+(?:you|u|i|we)\s+(?:please\s+)?(?:help\s+(?:me\s+)?)?(?:add|record|log|save|enter|set|change|update)\b|^boleh\s+(?:saya|awak)\s+(?:rekod|catat|simpan)\b/i;
 const ENTRY_WORDS = /\b(?:spent|spend|paid|pay|earned|earn|income|expense|bought|received|got|add|record|log)\b|\b(?:belanja|beli|bayar|dapat|gaji|terima|rekod|catat)\b|花|收入|赚|買|买|吃|加油/i;
 
 function partKind(part: string): 'entry' | 'question' | 'ambiguous' | 'unknown' {
