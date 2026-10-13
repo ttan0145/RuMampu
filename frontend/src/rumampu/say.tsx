@@ -644,7 +644,7 @@ function InlineSelect({ value, options, onChange, label }: {
       <Pressable onPress={() => setOpen(o => !o)} accessibilityRole="button" accessibilityLabel={label}
         style={sy.select}>
         <Text numberOfLines={1} style={sy.selectTxt}>{cur ? cur.l : '-'}</Text>
-        <Text style={{ fontSize: 12, color: C.ink64 }}>{'▾'}</Text>
+        <Text style={sy.selectTxt}>{'▾'}</Text>
       </Pressable>
       {open ? (
         <View style={sy.selectList}>
