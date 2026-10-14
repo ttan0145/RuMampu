@@ -211,7 +211,7 @@ export interface VoiceItem {
   };
 }
 export interface VoiceState {
-  stage: 'idle' | 'permission' | 'listen' | 'parsing' | 'done';
+  stage: 'idle' | 'permission' | 'listen' | 'transcribing' | 'parsing' | 'done';
   text: string;
   items: VoiceItem[];
   /* A clearly separate question waits for Ask Ruma while entries stay drafts. */
@@ -404,6 +404,8 @@ export interface AppState {
   /* v27b3 Say an entry: the shared draft, and which card is open (Home or the + menu). */
   voice: VoiceState | null;
   voiceDisclosureAccepted: boolean;
+  // Audio upload consent is session-only and is separate from old speech consent.
+  audioUploadConsentAccepted: boolean;
   sayOpen: boolean;
   qSay: boolean;
   /* Epic 5: the open topic and page, and reading progress kept locally for
@@ -548,7 +550,7 @@ function initialState(): AppState {
     incomeCoverage: null,
     incomePatternSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
     coverageSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
-    voice: null, voiceDisclosureAccepted: false, sayOpen: false, qSay: false, aiY: null, aiAnchor: null, noBills: false, runPending: false, demo: false,
+    voice: null, voiceDisclosureAccepted: false, audioUploadConsentAccepted: false, sayOpen: false, qSay: false, aiY: null, aiAnchor: null, noBills: false, runPending: false, demo: false,
     lnTab: 'nosalary', lnArt: null, lnPg: 1, lnProg: {},
     px: { budget: null, type: 'terrace', district: null, size: 'typical', tenure: 'F', year: 3, grow: 3, view: 'list', typeSet: false, state: 'SGR' },
     tour: null, tourAsk: null, tourHint: null, tipsOff: process.env.EXPO_PUBLIC_E2E === '1', seenG: [],

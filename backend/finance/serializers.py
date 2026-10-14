@@ -729,3 +729,23 @@ class AssistantActionPreviewResponseSerializer(serializers.Serializer):
     )
     message = serializers.CharField(allow_blank=True)
     actions = AssistantActionPreviewActionSerializer(many=True)
+
+
+class SpeechTranscriptionRequestSerializer(serializers.Serializer):
+    audio = serializers.FileField(write_only=True)
+    language = serializers.ChoiceField(choices=("en", "ms", "zh"))
+    audio_consent = serializers.BooleanField(write_only=True)
+
+    def validate_audio_consent(self, value):
+        if value is not True:
+            raise serializers.ValidationError("Accept audio transcription consent before recording.")
+        return value
+
+    def validate_audio(self, value):
+        if not value.size or value.size > 2 * 1024 * 1024:
+            raise serializers.ValidationError("Audio must be non-empty and at most 2 MB.")
+        return value
+
+
+class SpeechTranscriptionResponseSerializer(serializers.Serializer):
+    text = serializers.CharField(max_length=12000)

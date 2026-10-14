@@ -1241,3 +1241,31 @@ export function confirmIncomeImport(batchId: number): Promise<ApiIncomeImportBat
     method: 'POST',
   });
 }
+
+
+/** iPhone recordings are uploaded only after explicit audio consent and Stop. */
+export async function transcribeSpeechAudio(audio: Blob, language: string, signal: AbortSignal): Promise<string> {
+  const form = new FormData();
+  form.append('audio', audio, audio.type.startsWith('audio/mp4') ? 'recording.m4a' : 'recording.webm');
+  form.append('language', language);
+  form.append('audio_consent', 'true');
+  const headers = await apiIdentityHeaders();
+  if (signal.aborted) throw new DOMException('Recording cancelled', 'AbortError');
+  const timeout = new AbortController();
+  const cancel = () => timeout.abort();
+  signal.addEventListener('abort', cancel, { once: true });
+  const timer = setTimeout(cancel, 45000);
+  try {
+    const response = await fetch(`${API_ROOT}/assistant/transcribe/`, {
+      method: 'POST', body: form, headers: { Accept: 'application/json', ...headers },
+      credentials: 'omit', signal: timeout.signal,
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new ApiError(payload?.error?.message ?? 'Could not transcribe the recording. Please try again.', response.status, payload?.error?.code ?? 'speech_failed', payload);
+    if (typeof payload?.text !== 'string') throw new ApiError('Invalid transcription response.', 502, 'speech_failed', payload);
+    return payload.text;
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener('abort', cancel);
+  }
+}

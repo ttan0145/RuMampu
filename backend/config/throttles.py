@@ -56,3 +56,7 @@ class ReceiptScanThrottle(UserRateThrottle):
 
 class AssistantActionPreviewThrottle(UserRateThrottle):
     scope = "assistant_action_preview"
+
+
+class SpeechTranscriptionThrottle(UserRateThrottle):
+    scope = "speech_transcription"

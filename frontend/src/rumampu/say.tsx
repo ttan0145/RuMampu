@@ -5,6 +5,7 @@ import {
 import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
+  speechUsesAudioUpload,
 } from './speech-recognition';
 import { SvgXml } from 'react-native-svg';
 import { AppState, VoiceItem, VoiceState, useApp } from './state';
@@ -381,7 +382,7 @@ function useSayDraft() {
       setVoice({ stage: 'idle', text: '', items: [], note: t('vo_mic_unavailable') });
       return;
     }
-    if (!SRef.current.voiceDisclosureAccepted) {
+    if (!SRef.current.voiceDisclosureAccepted || (speechUsesAudioUpload() && !SRef.current.audioUploadConsentAccepted)) {
       setVoice({ stage: 'permission', text: '', items: [] });
       return;
     }
@@ -393,17 +394,20 @@ function useSayDraft() {
   useSpeechRecognitionEvent('start', () => {
     if (mine()) setVoice({ stage: 'listen', text: '', items: [] });
   });
+  useSpeechRecognitionEvent('processing', () => {
+    if (mine()) setVoice({ stage: 'transcribing', text: '', items: [] });
+  });
   useSpeechRecognitionEvent('result', event => {
     if (!mine()) return;
     const said = event.results?.[0]?.transcript ?? '';
     textRef.current = said;
-    up(s => { if (s.voice && s.voice.stage === 'listen') s.voice.text = said; });
+    up(s => { if (s.voice && (s.voice.stage === 'listen' || s.voice.stage === 'transcribing')) s.voice.text = said; });
   });
   useSpeechRecognitionEvent('end', () => {
     if (!mine()) return;
     releaseSpeechOwner('say');
     const V = SRef.current.voice;
-    if (!V || V.stage !== 'listen') return;
+    if (!V || (V.stage !== 'listen' && V.stage !== 'transcribing')) return;
     if (textRef.current.trim()) void finish(textRef.current);
     else setVoice({ stage: 'idle', text: '', items: [], note: t('vo_mic_no_speech') });
   });
@@ -417,7 +421,8 @@ function useSayDraft() {
     }
     setVoice({ stage: 'idle', text: '', items: [], note: t(event.error === 'not-allowed' ? 'vo_mic_denied'
       : event.error === 'audio-capture' ? 'vo_mic_capture'
-        : event.error === 'no-speech' ? 'vo_mic_no_speech' : 'vo_mic_failed') });
+        : event.error === 'no-speech' ? 'vo_mic_no_speech'
+          : event.error === 'busy' ? 'vo_transcription_busy' : 'vo_mic_failed') });
   });
 
   /* Cancelling discards the transient transcript and draft (AC9.7.2). */
@@ -433,9 +438,10 @@ function useSayDraft() {
 
   const micTap = () => {
     const V = SRef.current.voice;
+    if (V?.stage === 'transcribing') return;
     if (V?.stage === 'permission') {
       if (!SRef.current.aiDisclosureAccepted) { void start(); return; }
-      up(s => { s.voiceDisclosureAccepted = true; });
+      up(s => { s.voiceDisclosureAccepted = true; if (speechUsesAudioUpload()) s.audioUploadConsentAccepted = true; });
       void beginListening();
       return;
     }
@@ -818,7 +824,7 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
     let available = false;
     try { available = ExpoSpeechRecognitionModule.isRecognitionAvailable(); } catch { available = false; }
     if (Platform.OS !== 'web' && available && (!S.voice || S.voice.stage === 'idle')) void d.start();
-    if (Platform.OS === 'web' && available && !S.voiceDisclosureAccepted && (!S.voice || S.voice.stage === 'idle')) {
+    if (Platform.OS === 'web' && available && (!S.voiceDisclosureAccepted || (speechUsesAudioUpload() && !S.audioUploadConsentAccepted)) && (!S.voice || S.voice.stage === 'idle')) {
       up(s => { s.voice = { stage: 'permission', text: '', items: [] }; });
     }
     return () => d.halt();
@@ -849,6 +855,7 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
   }, [d.halt]);
 
   const status = stage === 'listen' ? t('vo_listening_time', { n: listeningSeconds })
+      : stage === 'transcribing' ? t('vo_transcribing')
       : stage === 'parsing' ? t('as_thinking')
         : stage === 'permission' ? t('vo_permission_title')
         : stage === 'done' ? t('vo_done') : t('vo_hint');
@@ -876,7 +883,8 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
       </View>
       <View style={{ alignItems: 'center', paddingTop: 12 }}>
         <Pressable onPress={d.micTap} accessibilityRole="button"
-          accessibilityLabel={t(listening ? 'vo_stop' : 'vo_tap')}
+          accessibilityLabel={t(stage === 'transcribing' ? 'vo_transcribing' : listening ? 'vo_stop' : 'vo_tap')}
+          disabled={stage === 'transcribing'}
           style={[sy.vmic, listening && sy.vmicOn]}>
           <Pulse on={listening && !reduce} size={84} />
           <SvgXml xml={MIC_XML('#FFFFFF', 36)} width={36} height={36} />
@@ -890,7 +898,7 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
           <Eyebrow>{t('vo_said')}</Eyebrow>
           <View style={sy.vsaid}>
             <Text style={sy.vsaidTxt}>{`“${V.text}”`}</Text>
-            {stage === 'parsing' ? <ActivityIndicator size="small" color={C.ink64} style={{ marginTop: 6, alignSelf: 'flex-start' }} /> : null}
+            {stage === 'parsing' || stage === 'transcribing' ? <ActivityIndicator size="small" color={C.ink64} style={{ marginTop: 6, alignSelf: 'flex-start' }} /> : null}
           </View>
         </View>
       ) : null}
@@ -903,7 +911,7 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
 
       {stage === 'permission' ? (
         <View style={sy.noteC} accessibilityRole="alert">
-          <Text style={sy.noteTxt}>{t('vo_permission_body')}</Text>
+          <Text style={sy.noteTxt}>{t(speechUsesAudioUpload() ? 'vo_audio_permission_body' : 'vo_permission_body')}</Text>
           <Pressable onPress={d.micTap} accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}>
             <Text style={sy.btnLine}>{t('vo_permission_continue')}</Text>
           </Pressable>
@@ -991,7 +999,7 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
         </>
       ) : null}
 
-      <Text style={sy.foot}>{`${t('vo_foot')} ${t('vo_privacy')}`}</Text>
+      <Text style={sy.foot}>{`${t('vo_foot')} ${t(speechUsesAudioUpload() ? 'vo_audio_privacy' : 'vo_privacy')}`}</Text>
     </Animated.View>
   );
 }

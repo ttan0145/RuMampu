@@ -1,4 +1,6 @@
 import React from 'react';
+import { RecordedSpeech } from './recorded-speech';
+import { transcribeSpeechAudio } from './api';
 import type { ExpoSpeechRecognitionOptions } from 'expo-speech-recognition';
 import { BrowserSpeech, type BrowserRecognizer, type BrowserSpeechEvents } from './browser-speech';
 
@@ -8,7 +10,11 @@ function recognitionClass() {
   return browser.webkitSpeechRecognition ?? browser.SpeechRecognition;
 }
 
-const speech = new BrowserSpeech(() => {
+export function speechUsesAudioUpload(): boolean {
+  return typeof navigator !== 'undefined' && /iPhone|iPod/.test(navigator.userAgent);
+}
+
+const browserSpeech = new BrowserSpeech(() => {
   const Recognizer = recognitionClass();
   if (!Recognizer) throw new Error('Speech recognition is unavailable.');
   return new Recognizer();
@@ -16,6 +22,9 @@ const speech = new BrowserSpeech(() => {
   const log = event === 'browser error' ? console.warn : console.info;
   log(`[RuMampu speech] ${event}`, JSON.stringify(details));
 });
+
+const recordedSpeech = new RecordedSpeech(transcribeSpeechAudio);
+const speech = speechUsesAudioUpload() ? recordedSpeech : browserSpeech;
 
 // Log lifecycle metadata only, never spoken words or result transcripts.
 if (typeof window !== 'undefined') console.info('[RuMampu speech] web wrapper ready');
@@ -33,7 +42,9 @@ export const ExpoSpeechRecognitionModule = {
   },
   stop: speech.stop.bind(speech),
   abort: speech.abort.bind(speech),
-  isRecognitionAvailable: () => Boolean(recognitionClass()),
+  isRecognitionAvailable: () => speechUsesAudioUpload()
+    ? Boolean(navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined')
+    : Boolean(recognitionClass()),
   requestPermissionsAsync: async () => ({ granted: true }),
 };
 

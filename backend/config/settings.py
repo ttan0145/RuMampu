@@ -103,6 +103,7 @@ REST_FRAMEWORK = {
         "auth_password_reset_email": os.getenv("AUTH_PASSWORD_RESET_EMAIL_RATE", "3/hour") or None,
         "auth_password_reset_confirm": os.getenv("AUTH_PASSWORD_RESET_CONFIRM_RATE", "30/hour") or None,
         "receipt_scan": os.getenv("RECEIPT_SCAN_RATE", "20/hour") or None,
+        "speech_transcription": os.getenv("SPEECH_TRANSCRIPTION_RATE", "30/hour") or None,
         "assistant_action_preview": os.getenv("ASSISTANT_ACTION_PREVIEW_RATE", "60/hour") or None,
     },
 }

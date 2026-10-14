@@ -1,6 +1,6 @@
 import type { ExpoSpeechRecognitionNativeEventMap, ExpoSpeechRecognitionOptions } from 'expo-speech-recognition';
 
-export type BrowserSpeechEvents = Pick<ExpoSpeechRecognitionNativeEventMap, 'start' | 'end' | 'result' | 'error'>;
+export type BrowserSpeechEvents = Pick<ExpoSpeechRecognitionNativeEventMap, 'start' | 'end' | 'result' | 'error'> & { processing: null };
 export interface BrowserRecognizer extends EventTarget {
   lang: string; interimResults: boolean; continuous: boolean; maxAlternatives: number;
   start(): void; stop(): void; abort(): void;

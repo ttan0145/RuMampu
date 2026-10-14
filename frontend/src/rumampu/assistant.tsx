@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
+  speechUsesAudioUpload,
 } from './speech-recognition';
 import { SvgXml } from 'react-native-svg';
 import { AppState, useApp } from './state';
@@ -402,6 +403,8 @@ export function AssistantSheet() {
   const [draft, setDraft] = React.useState('');
   const [sending, setSending] = React.useState(false);
   const [listening, setListening] = React.useState(false);
+  const [transcribing, setTranscribing] = React.useState(false);
+  const [audioConsentOpen, setAudioConsentOpen] = React.useState(false);
   const [pendingActions, setPendingActions] = React.useState<PendingAction[]>([]);
   const [editingTarget, setEditingTarget] = React.useState<number | null>(null);
   const [typingTarget, setTypingTarget] = React.useState<number | null>(null);
@@ -481,6 +484,7 @@ export function AssistantSheet() {
   const stopSpeech = React.useCallback((finish = false) => {
     speechWantedRef.current = false;
     clearSpeechTimers();
+    setTranscribing(false);
     // Abort unconditionally: the browser may have opened the microphone before
     // the async `start` event has updated `listening` in React state.
     // The Say an entry card shares the microphone; leave its recording alone.
@@ -488,6 +492,7 @@ export function AssistantSheet() {
     if (finish && Platform.OS === 'web') {
       // Keep ownership until end so Safari can deliver a final result on stop.
       setListening(false);
+      if (speechUsesAudioUpload()) setTranscribing(true);
       try { ExpoSpeechRecognitionModule.stop(); } catch {
         ExpoSpeechRecognitionModule.abort();
         releaseSpeechOwner('assistant');
@@ -528,7 +533,14 @@ export function AssistantSheet() {
   useSpeechRecognitionEvent('start', () => {
     if (!mine()) return;
     setListening(true);
-    if (!speechSilenceTimerRef.current) armSpeechSilenceTimer(ASSISTANT_SPEECH_FIRST_RESULT_MS);
+    if (!speechUsesAudioUpload() && !speechSilenceTimerRef.current) armSpeechSilenceTimer(ASSISTANT_SPEECH_FIRST_RESULT_MS);
+  });
+  useSpeechRecognitionEvent('processing', () => {
+    if (!mine()) return;
+    speechWantedRef.current = false;
+    clearSpeechTimers();
+    setListening(false);
+    setTranscribing(true);
   });
   useSpeechRecognitionEvent('end', () => {
     if (!mine()) return;
@@ -550,6 +562,7 @@ export function AssistantSheet() {
     speechWantedRef.current = false;
     clearSpeechTimers();
     setListening(false);
+    setTranscribing(false);
     releaseSpeechOwner('assistant');
   });
   useSpeechRecognitionEvent('result', event => {
@@ -560,7 +573,7 @@ export function AssistantSheet() {
       const combined = [speechFinalTextRef.current, transcript].filter(Boolean).join(' ');
       setDraft(combined);
       if (event.isFinal) speechFinalTextRef.current = combined;
-      if (speechWantedRef.current) armSpeechSilenceTimer();
+      if (!speechUsesAudioUpload() && speechWantedRef.current) armSpeechSilenceTimer();
     }
   });
   useSpeechRecognitionEvent('error', event => {
@@ -569,9 +582,11 @@ export function AssistantSheet() {
     speechWantedRef.current = false;
     clearSpeechTimers();
     setListening(false);
+    setTranscribing(false);
     releaseSpeechOwner('assistant');
     if (event.error === 'aborted' && Platform.OS !== 'web') return;
     if (event.error === 'no-speech') { toast(speechText.noSpeech, 'error'); return; }
+    if (speechUsesAudioUpload() && event.error === 'busy') { toast(t('vo_transcription_busy'), 'error'); return; }
     const message = event.error === 'not-allowed' ? speechText.denied
       : event.error === 'audio-capture' ? speechText.capture : speechText.failed;
     toast(message, 'error');
@@ -634,17 +649,23 @@ export function AssistantSheet() {
   }, []);
 
   const close = () => {
+    setAudioConsentOpen(false);
     stopSpeech();
     Keyboard.dismiss();
     up(s => { s.assistantOpen = false; });
   };
 
-  const toggleSpeech = async () => {
+  const toggleSpeech = async (confirmedAudioConsent = false) => {
+    if (transcribing) return;
     if (listening || speechWantedRef.current) {
       stopSpeech(true);
       return;
     }
 
+    if (speechUsesAudioUpload() && !S.audioUploadConsentAccepted && !confirmedAudioConsent) {
+      setAudioConsentOpen(true);
+      return;
+    }
     try {
       if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
         toast(speechText.unavailable, 'error');
@@ -663,13 +684,14 @@ export function AssistantSheet() {
       speechWantedRef.current = true;
       speechFinalTextRef.current = '';
       speechHadResultRef.current = false;
-      armSpeechSilenceTimer(ASSISTANT_SPEECH_FIRST_RESULT_MS);
+      if (!speechUsesAudioUpload()) armSpeechSilenceTimer(ASSISTANT_SPEECH_FIRST_RESULT_MS);
       startSpeechRecognition();
     } catch {
       speechWantedRef.current = false;
       clearSpeechTimers();
       releaseSpeechOwner('assistant');
       setListening(false);
+      setTranscribing(false);
       toast(speechText.failed, 'error');
     }
   };
@@ -1064,11 +1086,27 @@ export function AssistantSheet() {
               ) : null}
             </ScrollView>
             <View style={st.footer}>
+              {audioConsentOpen ? (
+                <View accessibilityRole="alert" style={{ padding: 12, gap: 8 }}>
+                  <Text style={{ fontFamily: DISP_FONT, color: C.ink }}>{t('vo_permission_title')}</Text>
+                  <Text style={{ fontFamily: BODY_FONT, color: C.ink64 }}>{t('vo_audio_permission_body')}</Text>
+                  <Pressable accessibilityRole="button" onPress={() => {
+                    up(s => { s.audioUploadConsentAccepted = true; });
+                    setAudioConsentOpen(false);
+                    void toggleSpeech(true);
+                  }} style={{ minHeight: 44, justifyContent: 'center' }}>
+                    <Text style={{ color: C.brand, fontFamily: DISP_FONT }}>{t('vo_permission_continue')}</Text>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" onPress={() => setAudioConsentOpen(false)} style={{ minHeight: 44, justifyContent: 'center' }}>
+                    <Text style={{ color: C.ink64 }}>{t('cancel')}</Text>
+                  </Pressable>
+                </View>
+              ) : null}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                 {['ai_q1', 'ai_q2', 'ai_q3'].map(k => (
                   <Pressable
                     key={k}
-                    disabled={pendingActions.length > 0}
+                    disabled={transcribing || pendingActions.length > 0}
                     onPress={() => { void send(t(k)); }}
                     style={[st.sugg, pendingActions.length > 0 && { opacity: 0.4 }]}
                   >
@@ -1090,20 +1128,20 @@ export function AssistantSheet() {
                     webInputFocusedRef.current = false;
                     setWebInputFocused(false);
                   }}
-                  editable={pendingActions.length === 0}
+                  editable={!transcribing && pendingActions.length === 0}
                   multiline
                   submitBehavior="submit"
                   scrollEnabled={inputHeight >= 112}
                   onContentSizeChange={handleInputContentSizeChange}
-                  placeholder={listening ? speechText.listening : t('ai_ph')}
+                  placeholder={transcribing ? t('vo_transcribing') : listening ? speechText.listening : t('ai_ph')}
                   placeholderTextColor={C.ink40}
                   onSubmitEditing={() => { void send(); }}
                 />
                 <Pressable
                   onPress={() => { void toggleSpeech(); }}
-                  disabled={sending || pendingActions.length > 0}
+                  disabled={transcribing || sending || pendingActions.length > 0}
                   style={[st.micBtn, listening && st.micBtnActive, (sending || pendingActions.length > 0) && { opacity: 0.4 }]}
-                  accessibilityLabel={listening ? speechText.stop : speechText.start}
+                  accessibilityLabel={transcribing ? t('vo_transcribing') : listening ? speechText.stop : speechText.start}
                 >
                   <SvgXml
                     xml={'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>'}
@@ -1114,7 +1152,7 @@ export function AssistantSheet() {
                 </Pressable>
                 <Pressable
                   onPress={() => { void send(); }}
-                  disabled={sending || pendingActions.length > 0 || !draft.trim()}
+                  disabled={transcribing || sending || pendingActions.length > 0 || !draft.trim()}
                   style={[st.sendBtn, (sending || pendingActions.length > 0 || !draft.trim()) && { opacity: 0.4 }]}
                   accessibilityLabel={t('ai_send')}
                 >

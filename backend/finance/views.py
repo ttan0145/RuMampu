@@ -3,10 +3,12 @@ from django.db import transaction
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.parsers import MultiPartParser
+from django.core.files.uploadhandler import MemoryFileUploadHandler
 
-from config.throttles import AssistantActionPreviewThrottle, ReceiptScanThrottle
+from config.throttles import AssistantActionPreviewThrottle, ReceiptScanThrottle, SpeechTranscriptionThrottle
 
-from . import assistant_action_service, assistant_service, receipt_service
+from . import assistant_action_service, assistant_service, receipt_service, speech_service
 from .import_service import confirm_income_import, preview_income_import, update_income_import_row
 from .models import (
     CommitmentItem,
@@ -22,6 +24,8 @@ from .serializers import (
     ApiErrorSerializer,
     AssistantActionPreviewRequestSerializer,
     AssistantActionPreviewResponseSerializer,
+    SpeechTranscriptionRequestSerializer,
+    SpeechTranscriptionResponseSerializer,
     AssistantChatRequestSerializer,
     AssistantChatResponseSerializer,
     CommitmentItemSerializer,
@@ -897,3 +901,36 @@ class IncomeImportConfirmView(APIView):
         profile = profile_for_request(request)
         batch = confirm_income_import(profile=profile, batch_id=batch_id)
         return Response(IncomeImportBatchSerializer(batch).data)
+
+
+class SpeechTranscriptionView(APIView):
+    parser_classes = [MultiPartParser]
+    throttle_classes = [SpeechTranscriptionThrottle]
+
+    def initialize_request(self, request, *args, **kwargs):
+        # No temporary-file handler: accepted clips remain in memory, and oversized
+        # bodies are discarded rather than spooled to an application audio file.
+        request.upload_handlers = [MemoryFileUploadHandler(request)]
+        return super().initialize_request(request, *args, **kwargs)
+
+    @extend_schema(
+        operation_id="speech_transcribe", tags=["Assistant"],
+        summary="Transcribe a consented short audio recording using Groq",
+        request=SpeechTranscriptionRequestSerializer,
+        responses={200: SpeechTranscriptionResponseSerializer, 400: ApiErrorSerializer,
+                   429: ApiErrorSerializer, 502: ApiErrorSerializer, 503: ApiErrorSerializer},
+    )
+    def post(self, request):
+        profile_for_request(request)
+        serializer = SpeechTranscriptionRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        audio = serializer.validated_data["audio"]
+        try:
+            text = speech_service.transcribe_audio(
+                audio.read(), audio.content_type or "", serializer.validated_data["language"],
+            )
+        except speech_service.SpeechError as exc:
+            return Response({"error": {"code": exc.code, "message": exc.message}}, status=exc.status)
+        finally:
+            audio.close()
+        return Response({"text": text}, headers={"Cache-Control": "no-store"})
