@@ -211,7 +211,7 @@ export interface VoiceItem {
   };
 }
 export interface VoiceState {
-  stage: 'idle' | 'permission' | 'listen' | 'transcribing' | 'parsing' | 'done';
+  stage: 'idle' | 'permission' | 'starting' | 'listen' | 'transcribing' | 'parsing' | 'done';
   text: string;
   items: VoiceItem[];
   /* A clearly separate question waits for Ask Ruma while entries stay drafts. */

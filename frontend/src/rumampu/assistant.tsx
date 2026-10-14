@@ -20,6 +20,7 @@ import { GuideTarget, onScrollSettle } from './tour';
 import { GROQ_DPA_URL, GROQ_YOUR_DATA_URL } from './ai-disclosure';
 import { isValidIsoDate, isValidMoneyText } from './validation';
 import { isQuestionWithoutRecordInstruction } from './voice-intent';
+import { VoiceDisclosure } from './voice-disclosure';
 import { ReviewDateField } from './date-picker';
 
 /* Flip to false to hide the whole Ask RuMampu UI (bubble, header
@@ -403,6 +404,7 @@ export function AssistantSheet() {
   const [draft, setDraft] = React.useState('');
   const [sending, setSending] = React.useState(false);
   const [listening, setListening] = React.useState(false);
+  const [starting, setStarting] = React.useState(false);
   const [transcribing, setTranscribing] = React.useState(false);
   const [audioConsentOpen, setAudioConsentOpen] = React.useState(false);
   const [pendingActions, setPendingActions] = React.useState<PendingAction[]>([]);
@@ -484,6 +486,7 @@ export function AssistantSheet() {
   const stopSpeech = React.useCallback((finish = false) => {
     speechWantedRef.current = false;
     clearSpeechTimers();
+    setStarting(false);
     setTranscribing(false);
     // Abort unconditionally: the browser may have opened the microphone before
     // the async `start` event has updated `listening` in React state.
@@ -532,6 +535,7 @@ export function AssistantSheet() {
   const mine = () => getSpeechOwner() === 'assistant';
   useSpeechRecognitionEvent('start', () => {
     if (!mine()) return;
+    setStarting(false);
     setListening(true);
     if (!speechUsesAudioUpload() && !speechSilenceTimerRef.current) armSpeechSilenceTimer(ASSISTANT_SPEECH_FIRST_RESULT_MS);
   });
@@ -562,6 +566,7 @@ export function AssistantSheet() {
     speechWantedRef.current = false;
     clearSpeechTimers();
     setListening(false);
+    setStarting(false);
     setTranscribing(false);
     releaseSpeechOwner('assistant');
   });
@@ -582,6 +587,7 @@ export function AssistantSheet() {
     speechWantedRef.current = false;
     clearSpeechTimers();
     setListening(false);
+    setStarting(false);
     setTranscribing(false);
     releaseSpeechOwner('assistant');
     if (event.error === 'aborted' && Platform.OS !== 'web') return;
@@ -656,7 +662,7 @@ export function AssistantSheet() {
   };
 
   const toggleSpeech = async (confirmedAudioConsent = false) => {
-    if (transcribing) return;
+    if (starting || transcribing) return;
     if (listening || speechWantedRef.current) {
       stopSpeech(true);
       return;
@@ -682,15 +688,19 @@ export function AssistantSheet() {
 
       claimSpeechOwner('assistant', () => ExpoSpeechRecognitionModule.abort());
       speechWantedRef.current = true;
-      speechFinalTextRef.current = '';
+      speechFinalTextRef.current = draft.trim();
       speechHadResultRef.current = false;
       if (!speechUsesAudioUpload()) armSpeechSilenceTimer(ASSISTANT_SPEECH_FIRST_RESULT_MS);
+      Keyboard.dismiss();
+      inputRef.current?.blur();
+      setStarting(true);
       startSpeechRecognition();
     } catch {
       speechWantedRef.current = false;
       clearSpeechTimers();
       releaseSpeechOwner('assistant');
       setListening(false);
+      setStarting(false);
       setTranscribing(false);
       toast(speechText.failed, 'error');
     }
@@ -743,7 +753,7 @@ export function AssistantSheet() {
 
   const send = async (text?: string) => {
     const content = (text ?? draft).trim();
-    if (!content || sending) return;
+    if (!content || sending || starting || transcribing) return;
     /* A final/interim result can arrive after the user presses Send. Release
        ownership first so that queued recognition events cannot restore the
        message after the controlled draft has been cleared. */
@@ -1086,27 +1096,16 @@ export function AssistantSheet() {
               ) : null}
             </ScrollView>
             <View style={st.footer}>
-              {audioConsentOpen ? (
-                <View accessibilityRole="alert" style={{ padding: 12, gap: 8 }}>
-                  <Text style={{ fontFamily: DISP_FONT, color: C.ink }}>{t('vo_permission_title')}</Text>
-                  <Text style={{ fontFamily: BODY_FONT, color: C.ink64 }}>{t('vo_audio_permission_body')}</Text>
-                  <Pressable accessibilityRole="button" onPress={() => {
-                    up(s => { s.audioUploadConsentAccepted = true; });
-                    setAudioConsentOpen(false);
-                    void toggleSpeech(true);
-                  }} style={{ minHeight: 44, justifyContent: 'center' }}>
-                    <Text style={{ color: C.brand, fontFamily: DISP_FONT }}>{t('vo_permission_continue')}</Text>
-                  </Pressable>
-                  <Pressable accessibilityRole="button" onPress={() => setAudioConsentOpen(false)} style={{ minHeight: 44, justifyContent: 'center' }}>
-                    <Text style={{ color: C.ink64 }}>{t('cancel')}</Text>
-                  </Pressable>
-                </View>
-              ) : null}
+              <VoiceDisclosure visible={audioConsentOpen} onCancel={() => setAudioConsentOpen(false)} onContinue={() => {
+                up(s => { s.voiceDisclosureAccepted = true; s.audioUploadConsentAccepted = true; });
+                setAudioConsentOpen(false);
+                void toggleSpeech(true);
+              }} />
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                 {['ai_q1', 'ai_q2', 'ai_q3'].map(k => (
                   <Pressable
                     key={k}
-                    disabled={transcribing || pendingActions.length > 0}
+                    disabled={starting || listening || transcribing || sending || pendingActions.length > 0}
                     onPress={() => { void send(t(k)); }}
                     style={[st.sugg, pendingActions.length > 0 && { opacity: 0.4 }]}
                   >
@@ -1128,20 +1127,21 @@ export function AssistantSheet() {
                     webInputFocusedRef.current = false;
                     setWebInputFocused(false);
                   }}
-                  editable={!transcribing && pendingActions.length === 0}
+                  editable={!starting && !listening && !transcribing && pendingActions.length === 0}
                   multiline
                   submitBehavior="submit"
                   scrollEnabled={inputHeight >= 112}
                   onContentSizeChange={handleInputContentSizeChange}
-                  placeholder={transcribing ? t('vo_transcribing') : listening ? speechText.listening : t('ai_ph')}
+                  placeholder={starting ? t('vo_starting') : transcribing ? t('vo_transcribing') : listening ? speechText.listening : t('ai_ph')}
                   placeholderTextColor={C.ink40}
                   onSubmitEditing={() => { void send(); }}
                 />
                 <Pressable
                   onPress={() => { void toggleSpeech(); }}
-                  disabled={transcribing || sending || pendingActions.length > 0}
+                  disabled={starting || transcribing || sending || pendingActions.length > 0}
                   style={[st.micBtn, listening && st.micBtnActive, (sending || pendingActions.length > 0) && { opacity: 0.4 }]}
-                  accessibilityLabel={transcribing ? t('vo_transcribing') : listening ? speechText.stop : speechText.start}
+                  accessibilityRole="button"
+                  accessibilityLabel={starting ? t('vo_starting') : transcribing ? t('vo_transcribing') : listening ? speechText.stop : speechText.start}
                 >
                   <SvgXml
                     xml={'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>'}
@@ -1152,7 +1152,7 @@ export function AssistantSheet() {
                 </Pressable>
                 <Pressable
                   onPress={() => { void send(); }}
-                  disabled={transcribing || sending || pendingActions.length > 0 || !draft.trim()}
+                  disabled={starting || listening || transcribing || sending || pendingActions.length > 0 || !draft.trim()}
                   style={[st.sendBtn, (sending || pendingActions.length > 0 || !draft.trim()) && { opacity: 0.4 }]}
                   accessibilityLabel={t('ai_send')}
                 >

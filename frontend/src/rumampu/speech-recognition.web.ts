@@ -43,7 +43,7 @@ export const ExpoSpeechRecognitionModule = {
   stop: speech.stop.bind(speech),
   abort: speech.abort.bind(speech),
   isRecognitionAvailable: () => speechUsesAudioUpload()
-    ? Boolean(navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined')
+    ? Boolean(typeof navigator.mediaDevices?.getUserMedia === 'function' && typeof MediaRecorder !== 'undefined')
     : Boolean(recognitionClass()),
   requestPermissionsAsync: async () => ({ granted: true }),
 };

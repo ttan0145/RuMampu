@@ -12,7 +12,7 @@ export const BUFFER_NAME_MAX = 30;
 const PERSISTED = ['plan', 'buffer', 'village', 'planHorizon',
   'potMovedMonths', 'potMoved', 'docsChecked', 'keptTests', 'tipsOff', 'seenG', 'lnProg',
   'bought', 'purchaseMonth', 'notificationPreferences', 'aiDisclosureAccepted', 'statementDisclosureVersion',
-  'voiceDisclosureAccepted', 'prep', 'ufTest', 'firstHome', 'ufReno'] as const;
+  'voiceDisclosureAccepted', 'audioUploadConsentAccepted', 'prep', 'ufTest', 'firstHome', 'ufReno'] as const;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -206,6 +206,10 @@ export function hydrate(s: AppState, raw: string | null): void {
     }
     if (typeof payload.voiceDisclosureAccepted === 'boolean') {
       s.voiceDisclosureAccepted = payload.voiceDisclosureAccepted;
+    }
+    // Audio consent is device-local; older speech-service consent does not imply it.
+    if (typeof payload.audioUploadConsentAccepted === 'boolean') {
+      s.audioUploadConsentAccepted = payload.audioUploadConsentAccepted;
     }
     if (record(payload.data)) {
       if (finite(payload.data.cashOnHand) && payload.data.cashOnHand >= 0) {

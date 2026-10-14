@@ -16,6 +16,7 @@ import { Ico } from './svgs';
 import { QDot, QHUE } from './qhue';
 import { claimSpeechOwner, getSpeechOwner, releaseSpeechOwner, speechLocale } from './speech';
 import { classifyVoiceIntent, isEhailingMention } from './voice-intent';
+import { VoiceDisclosure } from './voice-disclosure';
 import { ReviewDateField } from './date-picker';
 
 /* v27b3 Say an entry. The person says, or types, what they earned or spent.
@@ -350,7 +351,7 @@ function useSayDraft() {
   const beginListening = React.useCallback(async () => {
     if (getSpeechOwner() === 'say') return;
     textRef.current = '';
-    if (Platform.OS !== 'web') setVoice({ stage: 'listen', text: '', items: [] });
+    setVoice({ stage: 'starting', text: '', items: [] });
     try {
       if (Platform.OS !== 'web') {
         const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
@@ -438,7 +439,7 @@ function useSayDraft() {
 
   const micTap = () => {
     const V = SRef.current.voice;
-    if (V?.stage === 'transcribing') return;
+    if (V?.stage === 'starting' || V?.stage === 'transcribing' || V?.stage === 'parsing') return;
     if (V?.stage === 'permission') {
       if (!SRef.current.aiDisclosureAccepted) { void start(); return; }
       up(s => { s.voiceDisclosureAccepted = true; if (speechUsesAudioUpload()) s.audioUploadConsentAccepted = true; });
@@ -655,13 +656,14 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 function InlineSelect({ value, options, onChange, label }: {
   value: string; options: { v: string; l: string }[]; onChange: (v: string) => void; label: string;
 }) {
+  const { t } = useApp();
   const [open, setOpen] = React.useState(false);
   const cur = options.find(o => o.v === value);
   return (
-    <View style={{ alignItems: 'flex-end', flex: 1, maxWidth: '62%', minWidth: 0 }}>
-      <Pressable onPress={() => setOpen(o => !o)} accessibilityRole="button" accessibilityLabel={label}
+    <View style={sy.vcontrol}>
+      <Pressable onPress={() => setOpen(o => !o)} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ expanded: open }}
         style={sy.select}>
-        <Text numberOfLines={1} style={sy.selectTxt}>{cur ? cur.l : '-'}</Text>
+        <Text numberOfLines={1} style={[sy.selectTxt, { flex: 1 }, !cur && { color: C.ink64 }]}>{cur ? cur.l : t('vo_choose')}</Text>
         <Text style={sy.selectTxt}>{'▾'}</Text>
       </Pressable>
       {open ? (
@@ -715,13 +717,13 @@ function DraftCard({ it, i, edit, remove, confirm, transferToTyped }: {
     <View style={sy.vent}>
       <View style={sy.ventHead}>
         <Text style={[sy.ventK, { color: inc ? '#1E7A33' : '#B8421A' }]}>{t(inc ? 'vo_in' : 'vo_out')}</Text>
-        <Pressable hitSlop={6} onPress={() => remove(i)}>
+        <Pressable accessibilityRole="button" style={sy.vremove} onPress={() => remove(i)}>
           <Text style={[sy.vswap, { color: C.ink64, textDecorationColor: C.ink40 }]}>{t('vo_del')}</Text>
         </Pressable>
       </View>
       <View style={sy.ventTypeRow}>
-        {check('kind')}
-        <Pressable hitSlop={6} onPress={() => edit(i, 'kind', x => {
+        <View style={{ flex: 1 }}>{check('kind')}</View>
+        <Pressable accessibilityRole="button" style={sy.vtypeAction} onPress={() => edit(i, 'kind', x => {
           x.kind = x.kind === 'in' ? 'out' : 'in';
           if (x.kind === 'in') {
             x.c = undefined; x.categoryName = undefined;
@@ -736,7 +738,7 @@ function DraftCard({ it, i, edit, remove, confirm, transferToTyped }: {
       </View>
       <View style={sy.vrow}>
         {fieldLabel(t('vo_amt'), 'amount')}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <View style={[sy.vcontrol, sy.vamountControl]}>
           <Text style={{ fontFamily: DISP_FONT, fontSize: 13, color: C.ink64 }}>RM</Text>
           <TextInput
             value={amt}
@@ -750,8 +752,8 @@ function DraftCard({ it, i, edit, remove, confirm, transferToTyped }: {
       </View>
       <View style={sy.vrow}>
         {fieldLabel(t('vo_date'), 'date')}
-        <View accessibilityLabel={t('vo_date')} style={{ flex: 1, maxWidth: '72%', paddingVertical: 6 }}>
-          <ReviewDateField value={it.d}
+        <View accessibilityLabel={t('vo_date')} style={sy.vcontrol}>
+          <ReviewDateField value={it.d} fullWidth
             todayLabel={t('vo_today')} yesterdayLabel={t('vo_yday')} pickLabel={t('inc_pick')}
             monthNames={Array.from({ length: 12 }, (_, month) => monthName(month))}
             onChange={v => edit(i, 'date', x => { x.d = v; })} />
@@ -785,13 +787,13 @@ function DraftCard({ it, i, edit, remove, confirm, transferToTyped }: {
         />
       ) : null}
       {anyLow && confirm ? (
-        <View style={{ alignItems: 'flex-start' }}>
-          <Pressable onPress={() => confirm(i)} accessibilityRole="button" style={{ minHeight: 40, justifyContent: 'center' }}>
-            <Text style={sy.btnLine}>{t('vo_confirm_draft')}</Text>
+        <View style={sy.vactions}>
+          <Pressable onPress={() => confirm(i)} accessibilityRole="button" style={sy.vconfirm}>
+            <Text style={sy.vconfirmText}>{t('vo_confirm_draft')}</Text>
           </Pressable>
           {transferToTyped ? (
-            <Pressable onPress={() => transferToTyped(i)} accessibilityRole="button" style={{ minHeight: 40, justifyContent: 'center' }}>
-              <Text style={sy.btnLine}>{t('vo_finish_typed')}</Text>
+            <Pressable onPress={() => transferToTyped(i)} accessibilityRole="button" style={sy.vmanual}>
+              <Text style={sy.vmanualText}>{t('vo_finish_typed')}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -854,7 +856,7 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
     };
   }, [d.halt]);
 
-  const status = stage === 'listen' ? t('vo_listening_time', { n: listeningSeconds })
+  const status = stage === 'starting' ? t('vo_starting') : stage === 'listen' ? t(speechUsesAudioUpload() ? 'vo_recording_status' : 'vo_listening_time', { n: listeningSeconds })
       : stage === 'transcribing' ? t('vo_transcribing')
       : stage === 'parsing' ? t('as_thinking')
         : stage === 'permission' ? t('vo_permission_title')
@@ -883,8 +885,8 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
       </View>
       <View style={{ alignItems: 'center', paddingTop: 12 }}>
         <Pressable onPress={d.micTap} accessibilityRole="button"
-          accessibilityLabel={t(stage === 'transcribing' ? 'vo_transcribing' : listening ? 'vo_stop' : 'vo_tap')}
-          disabled={stage === 'transcribing'}
+          accessibilityLabel={t(stage === 'starting' ? 'vo_starting' : stage === 'parsing' ? 'as_thinking' : stage === 'transcribing' ? 'vo_transcribing' : listening ? 'vo_stop' : 'vo_tap')}
+          disabled={stage === 'starting' || stage === 'permission' || stage === 'transcribing' || stage === 'parsing'}
           style={[sy.vmic, listening && sy.vmicOn]}>
           <Pulse on={listening && !reduce} size={84} />
           <SvgXml xml={MIC_XML('#FFFFFF', 36)} width={36} height={36} />
@@ -893,7 +895,7 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
         <Text accessibilityLiveRegion="polite" style={sy.vostat}>{status}</Text>
       </View>
 
-      {stage !== 'idle' ? (
+      {V.text.trim() ? (
         <View style={{ gap: 6 }}>
           <Eyebrow>{t('vo_said')}</Eyebrow>
           <View style={sy.vsaid}>
@@ -909,14 +911,8 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
         </View>
       ) : null}
 
-      {stage === 'permission' ? (
-        <View style={sy.noteC} accessibilityRole="alert">
-          <Text style={sy.noteTxt}>{t(speechUsesAudioUpload() ? 'vo_audio_permission_body' : 'vo_permission_body')}</Text>
-          <Pressable onPress={d.micTap} accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}>
-            <Text style={sy.btnLine}>{t('vo_permission_continue')}</Text>
-          </Pressable>
-        </View>
-      ) : null}
+      <VoiceDisclosure visible={stage === 'permission'} onContinue={d.micTap}
+        onCancel={() => up(s => { s.voice = null; })} />
 
       {stage === 'idle' || stage === 'permission' || (stage === 'done' && n === 0) ? (
         <View style={{ gap: 6 }}>
@@ -999,7 +995,7 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
         </>
       ) : null}
 
-      <Text style={sy.foot}>{`${t('vo_foot')} ${t(speechUsesAudioUpload() ? 'vo_audio_privacy' : 'vo_privacy')}`}</Text>
+      <Text style={sy.foot}>{t('vo_foot')}</Text>
     </Animated.View>
   );
 }
@@ -1089,34 +1085,46 @@ const sy = StyleSheet.create({
   vostat: { marginTop: 4, fontFamily: BODY_FONT, fontSize: 14, lineHeight: 19, color: C.ink64, textAlign: 'center' },
   eyebrow: { fontFamily: DISP_FONT, fontSize: 11, letterSpacing: 0.88, textTransform: 'uppercase', color: C.ink64 },
   vsaid: { backgroundColor: '#EEF4F3', borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, minHeight: 48 },
-  vsaidTxt: { fontFamily: BODY_FONT, fontSize: 16, lineHeight: 23, fontStyle: 'italic', color: C.ink },
+  vsaidTxt: { fontFamily: BODY_FONT, fontSize: 15, lineHeight: 22, color: C.ink },
   input: {
     minHeight: 48, backgroundColor: C.paper, borderWidth: 1.5, borderColor: C.ink40, borderRadius: 12,
     paddingHorizontal: 14, fontSize: 16, color: C.ink, fontFamily: BODY_FONT,
   },
   btnLine: { fontFamily: BODY_FONT, fontSize: 16, color: C.ink, textDecorationLine: 'underline', textDecorationColor: C.brand },
-  vent: { borderWidth: 1, borderColor: C.ink14, borderRadius: 16, paddingTop: 10, paddingHorizontal: 14, paddingBottom: 4, backgroundColor: '#FFFFFF' },
+  vent: { borderWidth: 1, borderColor: C.ink14, borderRadius: 16, paddingTop: 8, paddingHorizontal: 14, paddingBottom: 12, backgroundColor: '#FFFFFF' },
   ventK: { fontFamily: XBOLD_FONT, fontSize: 11.5, letterSpacing: 0.7, textTransform: 'uppercase' },
   ventHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 28 },
-  ventTypeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, minHeight: 32 },
+  ventTypeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, minHeight: 36, marginBottom: 4 },
   vflag: {
     alignSelf: 'flex-start', fontFamily: DISP_FONT, fontSize: 11, color: '#7A5800', backgroundColor: '#FFF3D1',
     borderRadius: 8, paddingVertical: 2, paddingHorizontal: 8, overflow: 'hidden',
   },
-  vswap: { fontFamily: BODY_FONT, fontSize: 12, color: C.brand, textDecorationLine: 'underline' },
-  vfieldLabel: { flexShrink: 1, minWidth: 0, alignItems: 'flex-start', gap: 4, paddingVertical: 6 },
+  vswap: { fontFamily: BODY_FONT, fontSize: 12, color: C.brand },
+  vfieldLabel: { width: '34%', flexShrink: 0, minWidth: 0, alignItems: 'flex-start', gap: 4, paddingVertical: 6 },
   vrow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, minHeight: 46,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, minHeight: 58, paddingVertical: 8,
     borderTopWidth: 1, borderTopColor: C.ink14,
   },
   vrowK: { fontFamily: BODY_FONT, fontSize: 14, color: C.ink },
-  vamtIn: {
-    width: 110, minHeight: 40, textAlign: 'right', borderWidth: 1.5, borderColor: C.ink40, borderRadius: 10,
-    paddingHorizontal: 10, fontSize: 16, color: C.ink, fontFamily: BODY_FONT, backgroundColor: C.paper,
+  vcontrol: { flex: 1, minWidth: 0 },
+  vamountControl: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40,
+    borderWidth: 1.5, borderColor: C.ink40, borderRadius: 10, paddingHorizontal: 10, backgroundColor: C.paper,
   },
+  vamtIn: {
+    flex: 1, minWidth: 0, minHeight: 37, textAlign: 'right', padding: 0,
+    fontSize: 14, color: C.ink, fontFamily: BODY_FONT,
+  },
+  vremove: { minHeight: 40, justifyContent: 'center', paddingLeft: 10 },
+  vtypeAction: { minHeight: 40, justifyContent: 'center' },
+  vactions: { borderTopWidth: 1, borderTopColor: C.ink14, paddingTop: 12, marginTop: 2, gap: 4 },
+  vconfirm: { minHeight: 42, borderRadius: 10, borderWidth: 1, borderColor: C.brand, backgroundColor: C.card, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  vconfirmText: { fontFamily: DISP_FONT, fontSize: 14, color: C.brand, textAlign: 'center' },
+  vmanual: { minHeight: 40, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  vmanualText: { fontFamily: BODY_FONT, fontSize: 13, color: C.ink64, textAlign: 'center' },
   select: {
     flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: 10,
-    borderWidth: 1.5, borderColor: C.ink40, borderRadius: 10, backgroundColor: C.paper, maxWidth: '100%',
+    borderWidth: 1.5, borderColor: C.ink40, borderRadius: 10, backgroundColor: C.paper, width: '100%', justifyContent: 'space-between',
   },
   selectTxt: { fontFamily: BODY_FONT, fontSize: 14, color: C.ink, flexShrink: 1 },
   selectList: {
