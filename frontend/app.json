@@ -9,7 +9,12 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.anonymous.rumampu"
+      "bundleIdentifier": "com.anonymous.rumampu",
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Allow RuMampu to convert your speech into text.",
+        "NSMicrophoneUsageDescription": "Allow RuMampu to use the microphone for speech-to-text in Ask Ruma.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",

@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
-} from 'expo-speech-recognition';
+} from './speech-recognition';
 import { SvgXml } from 'react-native-svg';
 import { AppState, useApp } from './state';
 import { ApiError, AssistantAction, assistantChat, newClientId, previewAssistantAction } from './api';
@@ -25,6 +25,7 @@ import { ReviewDateField } from './date-picker';
    button, popover), e.g. while the AI backend is unavailable. */
 export const ASSISTANT_UI_ENABLED = true;
 const ASSISTANT_SPEECH_SILENCE_MS = 3000;
+const ASSISTANT_SPEECH_FIRST_RESULT_MS = 12000;
 
 type ActionField = keyof NonNullable<AssistantAction['confidence']>;
 type PendingAction = AssistantAction & { idempotencyKey: string };
@@ -135,6 +136,7 @@ function speechUiText(lang: AppState['lang']) {
     denied: 'Akses mikrofon diperlukan untuk input suara.',
     unavailable: 'Pengecaman suara tidak tersedia pada peranti atau pelayar ini.',
     failed: 'Tidak dapat mengecam suara. Sila cuba lagi.',
+    noSpeech: 'Tiada suara dikesan. Cuba lagi atau taip mesej anda.',
     capture: 'Mikrofon tidak dapat digunakan. Semak mikrofon yang dipilih dan aplikasi lain yang menggunakannya.',
   };
   if (lang === 'zh') return {
@@ -142,6 +144,7 @@ function speechUiText(lang: AppState['lang']) {
     denied: '语音输入需要麦克风权限。',
     unavailable: '此设备或浏览器不支持语音识别。',
     failed: '无法识别语音，请再试一次。',
+    noSpeech: '没有识别到语音。请重试或输入文字。',
     capture: '无法使用麦克风。请检查所选麦克风和其他正在使用它的应用。',
   };
   return {
@@ -149,6 +152,7 @@ function speechUiText(lang: AppState['lang']) {
     denied: 'Microphone access is required for voice input.',
     unavailable: 'Speech recognition is not available on this device or browser.',
     failed: 'Could not recognise speech. Please try again.',
+    noSpeech: 'No speech was recognised. Try again or type your message.',
     capture: 'The microphone could not be used. Check the selected mic and other apps using it.',
   };
 }
@@ -418,6 +422,7 @@ export function AssistantSheet() {
   const scrollRef = React.useRef<ScrollView>(null);
   const speechWantedRef = React.useRef(false);
   const speechFinalTextRef = React.useRef('');
+  const speechHadResultRef = React.useRef(false);
   const speechSilenceTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const speechRestartTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const speechText = React.useMemo(() => speechUiText(S.lang), [S.lang]);
@@ -485,10 +490,14 @@ export function AssistantSheet() {
     setListening(false);
   }, [clearSpeechTimers]);
 
-  const armSpeechSilenceTimer = React.useCallback(() => {
+  const armSpeechSilenceTimer = React.useCallback((delayMs = ASSISTANT_SPEECH_SILENCE_MS) => {
     if (speechSilenceTimerRef.current) clearTimeout(speechSilenceTimerRef.current);
-    speechSilenceTimerRef.current = setTimeout(stopSpeech, ASSISTANT_SPEECH_SILENCE_MS);
-  }, [stopSpeech]);
+    speechSilenceTimerRef.current = setTimeout(() => {
+      const hadResult = speechHadResultRef.current;
+      stopSpeech();
+      if (!hadResult) toast(speechText.noSpeech, 'error');
+    }, delayMs);
+  }, [speechText.noSpeech, stopSpeech, toast]);
 
   const startSpeechRecognition = React.useCallback(() => {
     ExpoSpeechRecognitionModule.start({
@@ -507,13 +516,16 @@ export function AssistantSheet() {
   /* The Say an entry card shares the microphone; only react to speech this
      chat started. */
   const mine = () => getSpeechOwner() === 'assistant';
-  useSpeechRecognitionEvent('start', () => { if (mine()) setListening(true); });
+  useSpeechRecognitionEvent('start', () => {
+    if (!mine()) return;
+    setListening(true);
+    if (!speechSilenceTimerRef.current) armSpeechSilenceTimer(ASSISTANT_SPEECH_FIRST_RESULT_MS);
+  });
   useSpeechRecognitionEvent('end', () => {
     if (!mine()) return;
-    /* Some browser recognisers end after a very short quiet interval even in
-       continuous mode. Keep reopening the recogniser until our own three-second
-       silence timer expires. */
-    if (speechWantedRef.current) {
+    /* Web needs a fresh microphone tap after end. Only native can resume
+       recognition from a timer. */
+    if (Platform.OS !== 'web' && speechWantedRef.current) {
       if (!speechRestartTimerRef.current) {
         speechRestartTimerRef.current = setTimeout(() => {
           speechRestartTimerRef.current = null;
@@ -523,6 +535,8 @@ export function AssistantSheet() {
       }
       return;
     }
+    speechWantedRef.current = false;
+    clearSpeechTimers();
     setListening(false);
     releaseSpeechOwner('assistant');
   });
@@ -530,6 +544,7 @@ export function AssistantSheet() {
     if (!mine()) return;
     const transcript = event.results?.[0]?.transcript?.trim();
     if (transcript) {
+      speechHadResultRef.current = true;
       const combined = [speechFinalTextRef.current, transcript].filter(Boolean).join(' ');
       setDraft(combined);
       if (event.isFinal) speechFinalTextRef.current = combined;
@@ -538,12 +553,13 @@ export function AssistantSheet() {
   });
   useSpeechRecognitionEvent('error', event => {
     if (!mine()) return;
-    if (event.error === 'no-speech' && speechWantedRef.current) return;
+    if (Platform.OS !== 'web' && event.error === 'no-speech' && speechWantedRef.current) return;
     speechWantedRef.current = false;
     clearSpeechTimers();
     setListening(false);
     releaseSpeechOwner('assistant');
-    if (event.error === 'aborted' || event.error === 'no-speech') return;
+    if (event.error === 'aborted') return;
+    if (event.error === 'no-speech') { toast(speechText.noSpeech, 'error'); return; }
     const message = event.error === 'not-allowed' ? speechText.denied
       : event.error === 'audio-capture' ? speechText.capture : speechText.failed;
     toast(message, 'error');
@@ -623,16 +639,19 @@ export function AssistantSheet() {
         return;
       }
 
-      const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      if (!permission.granted) {
-        toast(speechText.denied, 'error');
-        return;
+      if (Platform.OS !== 'web') {
+        const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+        if (!permission.granted) {
+          toast(speechText.denied, 'error');
+          return;
+        }
       }
 
       claimSpeechOwner('assistant', () => ExpoSpeechRecognitionModule.abort());
       speechWantedRef.current = true;
       speechFinalTextRef.current = '';
-      armSpeechSilenceTimer();
+      speechHadResultRef.current = false;
+      armSpeechSilenceTimer(ASSISTANT_SPEECH_FIRST_RESULT_MS);
       startSpeechRecognition();
     } catch {
       speechWantedRef.current = false;

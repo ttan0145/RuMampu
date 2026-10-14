@@ -5,7 +5,7 @@ import {
 import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
-} from 'expo-speech-recognition';
+} from './speech-recognition';
 import { SvgXml } from 'react-native-svg';
 import { AppState, VoiceItem, VoiceState, useApp } from './state';
 import { previewAssistantAction } from './api';
@@ -347,13 +347,16 @@ function useSayDraft() {
   }, [ensureAiDisclosure, routeToAsk, setVoice, t]);
 
   const beginListening = React.useCallback(async () => {
+    if (getSpeechOwner() === 'say') return;
     textRef.current = '';
-    setVoice({ stage: 'listen', text: '', items: [] });
+    if (Platform.OS !== 'web') setVoice({ stage: 'listen', text: '', items: [] });
     try {
-      const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      if (!permission.granted) {
-        setVoice({ stage: 'idle', text: '', items: [], note: t('vo_mic_denied') });
-        return;
+      if (Platform.OS !== 'web') {
+        const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+        if (!permission.granted) {
+          setVoice({ stage: 'idle', text: '', items: [], note: t('vo_mic_denied') });
+          return;
+        }
       }
       claimSpeechOwner('say', () => ExpoSpeechRecognitionModule.abort());
       ExpoSpeechRecognitionModule.start({
@@ -367,7 +370,11 @@ function useSayDraft() {
   }, [setVoice, t]);
 
   const start = React.useCallback(async () => {
-    if (!await ensureAiDisclosure()) return;
+    if (!SRef.current.aiDisclosureAccepted) {
+      if (!await ensureAiDisclosure()) return;
+      // Consent resumes asynchronously; web must wait for another mic tap.
+      if (Platform.OS === 'web') return;
+    }
     let available = false;
     try { available = ExpoSpeechRecognitionModule.isRecognitionAvailable(); } catch { available = false; }
     if (!available) {
@@ -383,6 +390,9 @@ function useSayDraft() {
   }, [beginListening, ensureAiDisclosure, setVoice, t]);
 
   const mine = () => getSpeechOwner() === 'say';
+  useSpeechRecognitionEvent('start', () => {
+    if (mine()) setVoice({ stage: 'listen', text: '', items: [] });
+  });
   useSpeechRecognitionEvent('result', event => {
     if (!mine()) return;
     const said = event.results?.[0]?.transcript ?? '';
@@ -395,7 +405,7 @@ function useSayDraft() {
     const V = SRef.current.voice;
     if (!V || V.stage !== 'listen') return;
     if (textRef.current.trim()) void finish(textRef.current);
-    else setVoice(null);
+    else setVoice({ stage: 'idle', text: '', items: [], note: t('vo_mic_no_speech') });
   });
   useSpeechRecognitionEvent('error', event => {
     if (!mine()) return;
@@ -406,7 +416,8 @@ function useSayDraft() {
       return;
     }
     setVoice({ stage: 'idle', text: '', items: [], note: t(event.error === 'not-allowed' ? 'vo_mic_denied'
-      : event.error === 'audio-capture' ? 'vo_mic_capture' : 'vo_mic_failed') });
+      : event.error === 'audio-capture' ? 'vo_mic_capture'
+        : event.error === 'no-speech' ? 'vo_mic_no_speech' : 'vo_mic_failed') });
   });
 
   /* Cancelling discards the transient transcript and draft (AC9.7.2). */
@@ -423,6 +434,7 @@ function useSayDraft() {
   const micTap = () => {
     const V = SRef.current.voice;
     if (V?.stage === 'permission') {
+      if (!SRef.current.aiDisclosureAccepted) { void start(); return; }
       up(s => { s.voiceDisclosureAccepted = true; });
       void beginListening();
       return;
@@ -800,13 +812,15 @@ function SayBody({ title, onSaved }: { title: string; onSaved: (msg: string) => 
     return () => clearInterval(timer);
   }, [stage]);
 
-  /* Opening starts listening straight away, only where the device can hear,
-     and never over a draft still waiting to be saved. */
+  /* Native can start on opening. Web waits for a fresh microphone tap. */
   React.useEffect(() => {
     Animated.timing(fade, { toValue: 1, duration: reduce ? 0 : 260, easing: Easing.out(Easing.ease), useNativeDriver: true }).start();
     let available = false;
     try { available = ExpoSpeechRecognitionModule.isRecognitionAvailable(); } catch { available = false; }
-    if (available && (!S.voice || S.voice.stage === 'idle')) void d.start();
+    if (Platform.OS !== 'web' && available && (!S.voice || S.voice.stage === 'idle')) void d.start();
+    if (Platform.OS === 'web' && available && !S.voiceDisclosureAccepted && (!S.voice || S.voice.stage === 'idle')) {
+      up(s => { s.voice = { stage: 'permission', text: '', items: [] }; });
+    }
     return () => d.halt();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
