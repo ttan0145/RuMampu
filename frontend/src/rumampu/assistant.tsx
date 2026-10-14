@@ -478,13 +478,22 @@ export function AssistantSheet() {
     speechRestartTimerRef.current = null;
   }, []);
 
-  const stopSpeech = React.useCallback(() => {
+  const stopSpeech = React.useCallback((finish = false) => {
     speechWantedRef.current = false;
     clearSpeechTimers();
     // Abort unconditionally: the browser may have opened the microphone before
     // the async `start` event has updated `listening` in React state.
     // The Say an entry card shares the microphone; leave its recording alone.
     if (getSpeechOwner() === 'say') return;
+    if (finish && Platform.OS === 'web') {
+      // Keep ownership until end so Safari can deliver a final result on stop.
+      setListening(false);
+      try { ExpoSpeechRecognitionModule.stop(); } catch {
+        ExpoSpeechRecognitionModule.abort();
+        releaseSpeechOwner('assistant');
+      }
+      return;
+    }
     try { ExpoSpeechRecognitionModule.abort(); } catch { /* already stopped */ }
     releaseSpeechOwner('assistant');
     setListening(false);
@@ -494,7 +503,7 @@ export function AssistantSheet() {
     if (speechSilenceTimerRef.current) clearTimeout(speechSilenceTimerRef.current);
     speechSilenceTimerRef.current = setTimeout(() => {
       const hadResult = speechHadResultRef.current;
-      stopSpeech();
+      stopSpeech(hadResult);
       if (!hadResult) toast(speechText.noSpeech, 'error');
     }, delayMs);
   }, [speechText.noSpeech, stopSpeech, toast]);
@@ -535,6 +544,9 @@ export function AssistantSheet() {
       }
       return;
     }
+    if (Platform.OS === 'web' && speechWantedRef.current && !speechHadResultRef.current) {
+      toast(speechText.noSpeech, 'error');
+    }
     speechWantedRef.current = false;
     clearSpeechTimers();
     setListening(false);
@@ -548,7 +560,7 @@ export function AssistantSheet() {
       const combined = [speechFinalTextRef.current, transcript].filter(Boolean).join(' ');
       setDraft(combined);
       if (event.isFinal) speechFinalTextRef.current = combined;
-      armSpeechSilenceTimer();
+      if (speechWantedRef.current) armSpeechSilenceTimer();
     }
   });
   useSpeechRecognitionEvent('error', event => {
@@ -558,7 +570,7 @@ export function AssistantSheet() {
     clearSpeechTimers();
     setListening(false);
     releaseSpeechOwner('assistant');
-    if (event.error === 'aborted') return;
+    if (event.error === 'aborted' && Platform.OS !== 'web') return;
     if (event.error === 'no-speech') { toast(speechText.noSpeech, 'error'); return; }
     const message = event.error === 'not-allowed' ? speechText.denied
       : event.error === 'audio-capture' ? speechText.capture : speechText.failed;
@@ -629,7 +641,7 @@ export function AssistantSheet() {
 
   const toggleSpeech = async () => {
     if (listening || speechWantedRef.current) {
-      stopSpeech();
+      stopSpeech(true);
       return;
     }
 

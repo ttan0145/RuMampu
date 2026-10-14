@@ -12,24 +12,20 @@ const speech = new BrowserSpeech(() => {
   const Recognizer = recognitionClass();
   if (!Recognizer) throw new Error('Speech recognition is unavailable.');
   return new Recognizer();
+}, 12000, (event, details) => {
+  const log = event === 'browser error' ? console.warn : console.info;
+  log(`[RuMampu speech] ${event}`, JSON.stringify(details));
 });
 
 // Log lifecycle metadata only, never spoken words or result transcripts.
 if (typeof window !== 'undefined') console.info('[RuMampu speech] web wrapper ready');
-speech.addListener('start', () => console.info('[RuMampu speech] start'));
-speech.addListener('end', () => console.info('[RuMampu speech] end'));
-speech.addListener('result', event => console.info('[RuMampu speech] result', {
-  isFinal: event.isFinal, alternatives: event.results.length,
-}));
-speech.addListener('error', event => console.warn('[RuMampu speech] error', event.error, event.message));
-
 export const ExpoSpeechRecognitionModule = {
   start: (options: ExpoSpeechRecognitionOptions) => {
-    console.info('[RuMampu speech] start requested', {
+    console.info('[RuMampu speech] browser context', JSON.stringify({
       secureContext: window.isSecureContext,
       userActivation: navigator.userActivation?.isActive,
-      lang: options.lang,
-    });
+      lang: options.lang, continuous: options.continuous,
+    }));
     try { speech.start(options); } catch (error) {
       console.warn('[RuMampu speech] start failed', error);
       throw error;

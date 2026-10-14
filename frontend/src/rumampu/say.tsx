@@ -410,7 +410,7 @@ function useSayDraft() {
   useSpeechRecognitionEvent('error', event => {
     if (!mine()) return;
     releaseSpeechOwner('say');
-    if (event.error === 'aborted') return;
+    if (event.error === 'aborted' && Platform.OS !== 'web') return;
     if (textRef.current.trim()) {
       void finish(textRef.current);
       return;

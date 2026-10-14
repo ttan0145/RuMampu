@@ -83,7 +83,7 @@ describe('browser speech session recovery', () => {
     speech.start({ lang: 'en-MY' });
     instances[0].autoEnd = false;
     speech.stop();
-    context.mock.timers.tick(1500);
+    context.mock.timers.tick(5000);
     assert.equal(ends, 1);
     assert.equal(instances[0].aborts, 1);
     context.mock.timers.tick(1500);
@@ -119,4 +119,41 @@ describe('browser speech session recovery', () => {
     speech.abort();
     assert.deepEqual(results, ['first', 'second']);
   });
+  it('maps Safari aborted/no-speech to a recoverable error', () => {
+    const { speech, instances, errors } = setup();
+    speech.start({ lang: 'en-MY' });
+    instances[0].dispatchEvent(Object.assign(new Event('error'), {
+      error: 'aborted', message: 'No speech detected',
+    }));
+    assert.deepEqual(errors, ['no-speech']);
+    speech.start({ lang: 'en-MY' });
+    speech.abort();
+  });
+
+  it('preserves Safari final results delivered more than 1.5 seconds after stop', context => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const { speech, instances, results } = setup();
+    speech.start({ lang: 'en-MY' });
+    instances[0].autoEnd = false;
+    speech.stop();
+    context.mock.timers.tick(2000);
+    instances[0].result('final words');
+    instances[0].dispatchEvent(new Event('end'));
+    assert.deepEqual(results, ['final words']);
+    assert.equal(instances[0].aborts, 0);
+  });
+
+  it('keeps a bounded stop timeout even if interim results continue', context => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    const { speech, instances } = setup();
+    speech.start({ lang: 'en-MY' });
+    instances[0].autoEnd = false;
+    speech.stop();
+    context.mock.timers.tick(4500);
+    instances[0].result('interim', false);
+    context.mock.timers.tick(500);
+    assert.equal(instances[0].aborts, 1);
+    context.mock.timers.tick(1500);
+  });
+
 });

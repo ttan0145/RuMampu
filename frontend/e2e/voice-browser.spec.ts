@@ -103,4 +103,50 @@ test.describe('Browser voice sessions', () => {
     await page.getByLabel('Stop voice input', { exact: true }).click();
   });
 
+  test('Safari aborted/no-speech resets Say and allows another recording', async ({ page }) => {
+    await installFakeSpeechRecognition(page);
+    await page.getByLabel('What would you like to add?').click();
+    await page.getByText('Say it', { exact: true }).click();
+    await page.getByRole('button', { name: 'Continue with microphone', exact: true }).click();
+    await expect(page.getByText(/Listening…/)).toBeVisible();
+    await page.evaluate(() => (window as any).__speechRecognizer.dispatchEvent(Object.assign(new Event('error'), {
+      error: 'aborted', message: 'No speech detected',
+    })));
+    await expect(page.getByText(/Listening…/)).toHaveCount(0);
+    await expect(page.getByText('No speech was recognised. Try again or type the entry instead.', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Tap to start talking', exact: true }).click();
+    await expect(page.getByText(/Listening…/)).toBeVisible();
+  });
+
+  test('Safari aborted/no-speech gives Ask Ruma a retry message', async ({ page }) => {
+    await installFakeSpeechRecognition(page);
+    await page.getByLabel('Ask Ruma', { exact: true }).click();
+    await page.getByLabel('Start voice input', { exact: true }).click();
+    await page.evaluate(() => (window as any).__speechRecognizer.dispatchEvent(Object.assign(new Event('error'), {
+      error: 'aborted', message: 'No speech detected',
+    })));
+    await expect(page.getByLabel('Start voice input', { exact: true })).toBeVisible();
+    await expect(page.getByText('No speech was recognised. Try again or type your message.', { exact: true })).toBeVisible();
+  });
+
+  test('Ask Ruma retains a delayed final transcript after manually stopping', async ({ page }) => {
+    await installFakeSpeechRecognition(page);
+    await page.clock.install();
+    await page.getByLabel('Ask Ruma', { exact: true }).click();
+    await page.getByLabel('Start voice input', { exact: true }).click();
+    await page.evaluate(() => {
+      (window as any).__speechRecognizer.stop = function () {
+        setTimeout(() => {
+          const alternatives = Object.assign([{ transcript: 'final question', confidence: 1 }], { isFinal: true });
+          this.dispatchEvent(Object.assign(new Event('result'), { resultIndex: 0, results: [alternatives] }));
+          this.dispatchEvent(new Event('end'));
+        }, 2000);
+      };
+    });
+    await page.getByLabel('Stop voice input', { exact: true }).click();
+    await page.clock.runFor(2001);
+    await expect(page.getByPlaceholder('Type a question')).toHaveValue('final question');
+    expect(await page.evaluate(() => (window as any).__speechAborts || 0)).toBe(0);
+  });
+
 });
