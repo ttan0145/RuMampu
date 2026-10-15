@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Pressable, StyleSheet, Text, TextInput, TextStyle, View, ViewStyle,
+  AppState, Pressable, StyleSheet, Text, TextInput, TextStyle, View, ViewStyle,
 } from 'react-native';
 import { BODY_FONT, C, DISP_FONT, SEMI_FONT } from './theme';
 import { Ico } from './svgs';
@@ -130,11 +130,25 @@ export function Hdr({ back, title, brand, greet, right }: {
   back?: boolean; title?: string; brand?: boolean; greet?: boolean; right?: React.ReactNode;
 }) {
   const { t, S, backNav, up, go } = useApp();
+  const [localHour, setLocalHour] = React.useState(() => new Date().getHours());
+  React.useEffect(() => {
+    if (!brand && !greet) return;
+    const refreshHour = () => setLocalHour(new Date().getHours());
+    refreshHour();
+    const timer = setInterval(refreshHour, 60_000);
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') refreshHour();
+    });
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, [brand, greet]);
   const coach = back && S.pathCoach && S.pathCoach.route === S.route ? S.pathCoach : null;
 
   if (brand || greet) {
-    const h = new Date().getHours();
-    const g = t(h < 12 ? 'hd_morning' : h < 18 ? 'hd_afternoon' : 'hd_evening');
+    const g = t(localHour >= 4 && localHour < 12 ? 'hd_morning'
+      : localHour >= 12 && localHour < 16 ? 'hd_afternoon' : 'hd_evening');
     return (
       <View>
         <View style={[st.hdr, { paddingBottom: 10 }]}>
