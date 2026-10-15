@@ -106,3 +106,84 @@ describe('iPhone recording lifecycle', () => {
     assert.deepEqual(errors, ['busy']);
   });
 });
+
+function monitor(context: TestContext) {
+  const old = Object.getOwnPropertyDescriptor(globalThis, 'AudioContext');
+  let level = 0;
+  let closed = 0;
+  class FakeAudioContext {
+    state = 'running';
+    resume() { return Promise.resolve(); }
+    close() { this.state = 'closed'; closed++; return Promise.resolve(); }
+    createAnalyser() { return { fftSize: 1024, getFloatTimeDomainData: (samples: Float32Array) => samples.fill(level) }; }
+    createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
+  }
+  Object.defineProperty(globalThis, 'AudioContext', { configurable: true, value: FakeAudioContext });
+  context.after(() => {
+    if (old) Object.defineProperty(globalThis, 'AudioContext', old);
+    else Reflect.deleteProperty(globalThis, 'AudioContext');
+  });
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout', 'setInterval'] });
+  return { sound: (next: number) => { level = next; }, closed: () => closed };
+}
+
+describe('iPhone silence detection', () => {
+  it('stops and transcribes after three seconds of silence, resetting the pause when sound resumes', async context => {
+    const media = setup(context);
+    const audio = monitor(context);
+    let uploads = 0;
+    const speech = new RecordedSpeech(async () => { uploads++; return 'spoken words'; });
+    speech.start({ lang: 'en-MY' });
+    await flush();
+    audio.sound(0.1);
+    context.mock.timers.tick(100);
+    audio.sound(0);
+    context.mock.timers.tick(2000);
+    assert.equal(uploads, 0);
+    audio.sound(0.1);
+    context.mock.timers.tick(100);
+    audio.sound(0);
+    context.mock.timers.tick(2900);
+    assert.equal(uploads, 0);
+    context.mock.timers.tick(100);
+    await flush();
+    assert.equal(uploads, 1);
+    assert.ok(media.stopped() > 0);
+    assert.equal(audio.closed(), 1);
+  });
+
+  it('discards silence after twelve seconds without uploading and allows retry', async context => {
+    setup(context);
+    const audio = monitor(context);
+    let uploads = 0;
+    const speech = new RecordedSpeech(async () => { uploads++; return 'unexpected'; });
+    const errors: string[] = [];
+    speech.addListener('error', event => errors.push(event.error));
+    speech.start({ lang: 'en-MY' });
+    await flush();
+    context.mock.timers.tick(12000);
+    await flush();
+    assert.deepEqual(errors, ['no-speech']);
+    assert.equal(uploads, 0);
+    assert.equal(audio.closed(), 1);
+    speech.start({ lang: 'en-MY' });
+    await flush();
+    speech.abort();
+    assert.equal(audio.closed(), 2);
+  });
+
+  it('cancellation removes the silence monitor and never triggers a later upload', async context => {
+    setup(context);
+    const audio = monitor(context);
+    const speech = new RecordedSpeech(async () => { assert.fail('Cancelled audio must not upload'); return ''; });
+    speech.start({ lang: 'en-MY' });
+    await flush();
+    audio.sound(0.1);
+    context.mock.timers.tick(100);
+    speech.abort();
+    audio.sound(0);
+    context.mock.timers.tick(30000);
+    await flush();
+    assert.equal(audio.closed(), 1);
+  });
+});

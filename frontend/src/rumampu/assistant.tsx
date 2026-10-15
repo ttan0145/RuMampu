@@ -457,7 +457,7 @@ export function AssistantSheet() {
     const contentHeight = node.scrollHeight;
     node.style.height = previousHeight;
     updateInputHeight(contentHeight);
-  }, [draft, updateInputHeight]);
+  }, [draft, transcribing, updateInputHeight]);
 
   /* Do not scroll directly from ScrollView's onContentSizeChange. On web,
      scrollToEnd can itself change the measured content area (notably when a
@@ -1114,7 +1114,10 @@ export function AssistantSheet() {
                 ))}
               </View>
               <View style={st.inputRow}>
-                <TextInput
+                {transcribing ? <View style={st.processingInput} accessibilityRole="progressbar" accessibilityLabel={t('vo_transcribing')}>
+                  <ActivityIndicator size="small" color={C.brand} />
+                  <Text accessibilityLiveRegion="polite" style={st.processingText}>{t('vo_transcribing')}</Text>
+                </View> : <TextInput
                   ref={inputRef}
                   style={[st.input, { height: inputHeight }]}
                   value={draft}
@@ -1135,7 +1138,7 @@ export function AssistantSheet() {
                   placeholder={starting ? t('vo_starting') : transcribing ? t('vo_transcribing') : listening ? speechText.listening : t('ai_ph')}
                   placeholderTextColor={C.ink40}
                   onSubmitEditing={() => { void send(); }}
-                />
+                />}
                 <Pressable
                   onPress={() => { void toggleSpeech(); }}
                   disabled={starting || transcribing || sending || pendingActions.length > 0}
@@ -1236,6 +1239,12 @@ const st = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 12, fontSize: 16, lineHeight: 21,
     color: C.ink, fontFamily: BODY_FONT, textAlignVertical: 'top',
   },
+  processingInput: {
+    flex: 1, minWidth: 0, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: C.paper, borderWidth: 1.5, borderColor: C.ink40, borderRadius: 12,
+    paddingHorizontal: 12, paddingVertical: 12,
+  },
+  processingText: { flex: 1, minWidth: 0, fontFamily: BODY_FONT, fontSize: 14, lineHeight: 20, color: C.ink64 },
   micBtn: {
     width: 48, height: 48, borderRadius: 12, flexShrink: 0,
     borderWidth: 1.5, borderColor: C.brand, backgroundColor: C.paper,

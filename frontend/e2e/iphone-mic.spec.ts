@@ -19,7 +19,10 @@ test.describe('iPhone audio transcription', () => {
         const context = new AudioContext();
         const destination = context.createMediaStreamDestination();
         const oscillator = context.createOscillator();
-        oscillator.connect(destination);
+        const gain = context.createGain();
+        oscillator.connect(gain);
+        gain.connect(destination);
+        (window as any).__silenceMic = () => { gain.gain.value = 0; };
         oscillator.start();
         void context.resume();
         const tracks = destination.stream.getTracks();
@@ -91,6 +94,43 @@ test.describe('iPhone audio transcription', () => {
     await expect(page.getByPlaceholder('Type a question')).toHaveValue('My typed question');
     expect(uploads).toBe(0);
     expect(await page.evaluate(() => (window as any).__micTracks.length)).toBe(0);
+  });
+
+  test('Ask Ruma automatically stops on silence and its loading text fits a narrow screen', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 844 });
+    let release!: () => void;
+    const waiting = new Promise<void>(resolve => { release = resolve; });
+    await page.route('**/assistant/transcribe/', async route => {
+      await waiting;
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"text":"my spoken question"}' });
+    });
+    await page.getByLabel('Ask Ruma', { exact: true }).click();
+    await page.getByLabel('Start voice input', { exact: true }).click();
+    await page.getByRole('button', { name: 'Continue with microphone', exact: true }).click();
+    await expect(page.getByLabel('Stop voice input', { exact: true })).toBeVisible();
+    await page.waitForTimeout(500);
+    await page.evaluate(() => (window as any).__silenceMic());
+    const progress = page.getByRole('progressbar', { name: 'Converting your recording to text…', exact: true });
+    try {
+      await expect(progress).toBeVisible();
+      const message = progress.getByText('Converting your recording to text…', { exact: true });
+      expect(await message.evaluate(node => node.scrollHeight <= node.clientHeight && node.scrollWidth <= node.clientWidth)).toBe(true);
+      expect(await page.evaluate(() => (window as any).__micTracks.every((track: MediaStreamTrack) => track.readyState === 'ended'))).toBe(true);
+      await page.screenshot({ path: '../output/issue-proof/iphone-transcription-wrapped.png' });
+    } finally { release(); }
+    await expect(page.getByPlaceholder('Type a question')).toHaveValue('my spoken question');
+  });
+
+  test('Say automatically stops after a pause and reviews the transcribed words', async ({ page }) => {
+    await page.route('**/assistant/transcribe/', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"text":"How much did I spend?"}' }));
+    await page.getByLabel('What would you like to add?').click();
+    await page.getByText('Say it', { exact: true }).click();
+    await page.getByRole('button', { name: 'Continue with microphone', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Tap to stop', exact: true })).toBeVisible();
+    await page.waitForTimeout(500);
+    await page.evaluate(() => (window as any).__silenceMic());
+    await expect(page.getByPlaceholder('Type a question')).toHaveValue('How much did I spend?');
+    expect(await page.evaluate(() => (window as any).__micTracks.every((track: MediaStreamTrack) => track.readyState === 'ended'))).toBe(true);
   });
 
   test('Say waits for fresh audio consent and routes the returned words for review', async ({ page }) => {

@@ -5,6 +5,7 @@ type Listener = (event: BrowserSpeechEvents[keyof BrowserSpeechEvents]) => void;
 type Session = {
   id: number; stream?: MediaStream; recorder?: MediaRecorder; chunks: Blob[];
   controller: AbortController; timer?: ReturnType<typeof setTimeout>; stopping: boolean;
+  context?: AudioContext; source?: MediaStreamAudioSourceNode; silenceTimer?: ReturnType<typeof setInterval>;
 };
 type Transcribe = (audio: Blob, language: string, signal: AbortSignal) => Promise<string>;
 
@@ -29,6 +30,44 @@ export class RecordedSpeech {
   private stopTracks(session: Session) {
     session.stream?.getTracks().forEach(track => track.stop());
     if (session.timer) clearTimeout(session.timer);
+    if (session.silenceTimer) clearInterval(session.silenceTimer);
+    session.source?.disconnect();
+    session.source = undefined;
+    const context = session.context;
+    session.context = undefined;
+    if (context && context.state !== 'closed') void context.close().catch(() => undefined);
+  }
+  private watchSilence(session: Session) {
+    const context = session.context;
+    if (!context || !session.stream) return;
+    try {
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 1024;
+      session.source = context.createMediaStreamSource(session.stream);
+      session.source.connect(analyser); // Analysis only; never play the mic through speakers.
+      const samples = new Float32Array(analyser.fftSize);
+      const started = Date.now();
+      let lastSound = started;
+      let heardSound = false;
+      session.silenceTimer = setInterval(() => {
+        if (this.session !== session || session.stopping || context.state !== 'running') return;
+        analyser.getFloatTimeDomainData(samples);
+        let power = 0;
+        for (const sample of samples) power += sample * sample;
+        if (Math.sqrt(power / samples.length) >= 0.015) {
+          heardSound = true;
+          lastSound = Date.now();
+        } else if (heardSound && Date.now() - lastSound >= 3000) {
+          this.stop();
+        } else if (!heardSound && Date.now() - started >= 12000) {
+          // Never send an entirely silent recording to transcription.
+          this.fail(session, { code: 'speech_no_speech', message: 'No speech was detected.' });
+        }
+      }, 100);
+    } catch {
+      // Recording remains usable with manual Stop and the 30-second cap.
+      if (session.silenceTimer) clearInterval(session.silenceTimer);
+    }
   }
   private fail(session: Session, error: unknown) {
     if (this.session !== session) return;
@@ -50,6 +89,14 @@ export class RecordedSpeech {
     let request: Promise<MediaStream>;
     try { request = navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } }); }
     catch (error) { this.session = null; throw error; }
+    // Unlock Web Audio in the same tap as getUserMedia, before permission resolves.
+    try {
+      const Context = globalThis.AudioContext ?? (globalThis as typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (Context) {
+        session.context = new Context();
+        void session.context.resume().catch(() => undefined);
+      }
+    } catch { /* Audio-level monitoring is optional; capture can still proceed. */ }
     void request.then(stream => {
       if (this.session !== session) { stream.getTracks().forEach(track => track.stop()); return; }
       session.stream = stream;
@@ -68,7 +115,8 @@ export class RecordedSpeech {
       };
       recorder.start();
       console.info('[RuMampu speech] recording started', JSON.stringify({ sessionId: session.id, mimeType: recorder.mimeType }));
-      // Bound free-tier usage; no 12-second recognition or 3-second silence timer.
+      this.watchSilence(session);
+      // Bound capture even in noisy rooms or when audio analysis is unavailable.
       session.timer = setTimeout(() => this.stop(), 30000);
       this.emit('start', null);
     }).catch(error => this.fail(session, error));
