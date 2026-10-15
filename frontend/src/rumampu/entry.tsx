@@ -235,7 +235,7 @@ export function EntryFlow() {
 
   /* First-time setup step 1 — explain what RuMampu does. */
   return (
-    <View style={[st.wpage, { paddingTop: 20 + insets.top, paddingBottom: 22 + insets.bottom }]}>
+    <View testID="onboarding-intro" style={[st.wpage, { paddingTop: 20 + insets.top, paddingBottom: 22 + insets.bottom }]}>
       <KProg total={3} on={1} />
       <View style={{ minHeight: 40, justifyContent: 'center' }}>
         <Text style={st.stepText}>{t('wf_step', { n: 1 })}</Text>
@@ -965,7 +965,7 @@ export function GetToKnow() {
   }
 
   return (
-    <View style={[st.kpage, { paddingTop: 18 + insets.top, paddingBottom: 18 + insets.bottom }]}>
+    <View testID="onboarding-questions" style={[st.kpage, { paddingTop: 18 + insets.top, paddingBottom: 18 + insets.bottom }]}>
       <KProg total={3} on={step + 1} />
       <View style={{ flexDirection: 'row', minHeight: 40, alignItems: 'center', justifyContent: 'space-between' }}>
         <IconBtn label="←" onPress={() => up(s => {

@@ -32,11 +32,7 @@ async function confirmGuestDialogIfVisible(page: Page): Promise<boolean> {
 }
 
 async function completeVisibleOnboarding(page: Page): Promise<void> {
-  const splash = page.getByLabel('RuMampu');
-  if (await splash.isVisible().catch(() => false)) {
-    await splash.click({ force: true });
-    await expect(splash).toHaveCount(0, { timeout: 5000 }).catch(() => undefined);
-  }
+  await dismissSplashIfVisible(page);
 
   const clickIfVisible = async (locator: ReturnType<Page['getByText']>): Promise<boolean> => {
     if (!(await locator.isVisible().catch(() => false))) return false;
@@ -224,8 +220,7 @@ async function accountCommitments(page: Page): Promise<Array<{ monthly_amount: s
 
 async function completeGuestOnboardingWithSelectedWorkAndIncome(page: Page, amount: string): Promise<void> {
   await page.goto('/');
-  const splash = page.getByLabel('RuMampu');
-  if (await splash.isVisible().catch(() => false)) await splash.click({ force: true });
+  await dismissSplashIfVisible(page);
 
   await continueAsGuestFromLogin(page);
   await page.getByText('Next', { exact: true }).last().click();
@@ -244,7 +239,7 @@ async function completeGuestOnboardingWithSelectedWorkAndIncome(page: Page, amou
   await page.getByText('Start using RuMampu', { exact: true }).click();
   const response = await responsePromise;
   expect(response.status(), await response.text()).toBe(201);
-  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+  await waitForOnboardingFinished(page);
   await syncClientIdFromBrowser(page);
 }
 
@@ -301,11 +296,22 @@ async function openRecord(page: Page): Promise<void> {
   await page.getByText('Your record', { exact: true }).last().click();
 }
 
+// Home is mounted behind entry screens. Its visibility alone does not mean
+// the income, work sources, account refresh and final transition have finished.
+async function waitForOnboardingFinished(page: Page): Promise<void> {
+  await page.getByRole('tab', { name: 'Home', exact: true }).click({ trial: true, timeout: 15000 });
+  await expect(page.getByTestId(/^onboarding-(intro|questions)$/)).toHaveCount(0);
+  await expect(page.getByText('Getting RuMampu ready', { exact: true })).toHaveCount(0);
+}
+
 async function clickThroughFirstAccountOnboarding(page: Page): Promise<void> {
+  await expect(page.getByText('What RuMampu does', { exact: true })).toBeVisible();
   await page.getByText('Next', { exact: true }).last().click();
+  await expect(page.getByText('What do you do?', { exact: true })).toBeVisible();
   await page.getByText('Next', { exact: true }).last().click();
+  await expect(page.getByText('How much did you earn last month?', { exact: true })).toBeVisible();
   await page.getByText('Skip', { exact: true }).click();
-  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
+  await waitForOnboardingFinished(page);
 }
 
 async function createDirectAccountThroughOnboarding(
@@ -334,10 +340,9 @@ async function createDirectAccountThroughOnboarding(
   } else {
     await page.getByText('Skip', { exact: true }).click();
   }
-  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText('Step 1 of 3', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Step 2 of 3', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Step 3 of 3', { exact: true })).toHaveCount(0);
+  await waitForOnboardingFinished(page);
+  // Home has its own "Step 2 of 3" progress label; check the wizard itself.
+  await expect(page.getByTestId(/^onboarding-(intro|questions)$/)).toHaveCount(0);
 }
 
 async function logoutCurrentAccount(page: Page): Promise<void> {
@@ -534,8 +539,7 @@ async function answerNoCommitments(page: Page): Promise<void> {
 
 test('US8.16 first-launch onboarding explains RuMampu and reaches get-to-know', async ({ page }) => {
   await page.goto('/');
-  const splash = page.getByLabel('RuMampu');
-  if (await splash.isVisible().catch(() => false)) await splash.click({ force: true });
+  await dismissSplashIfVisible(page);
 
   const email = `epic8-onboarding-${Date.now()}@example.com`;
   const password = 'Passw0rd123';
@@ -563,14 +567,13 @@ test('US8.16 first-launch onboarding explains RuMampu and reaches get-to-know', 
     && r.request().postDataJSON()?.onboarding_completed === true);
   await page.getByText('Start using RuMampu', { exact: true }).click();
   expect((await completionSaved).status()).toBe(200);
-  await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible({ timeout: 15000 });
+  await waitForOnboardingFinished(page);
 
   await page.reload();
   await dismissSplashIfVisible(page);
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
-  await expect(page.getByText('Step 1 of 3', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Step 2 of 3', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Step 3 of 3', { exact: true })).toHaveCount(0);
+  // Home has its own "Step 2 of 3" progress label; check the wizard itself.
+  await expect(page.getByTestId(/^onboarding-(intro|questions)$/)).toHaveCount(0);
   await expect(page.getByText('What RuMampu does', { exact: true })).toHaveCount(0);
   await expect(page.getByText('What do you do?', { exact: true })).toHaveCount(0);
   await expect(page.getByText('How much did you earn last month?', { exact: true })).toHaveCount(0);
@@ -584,8 +587,7 @@ test('US8.16 first-launch guest onboarding runs once and reaches Home', async ({
 test('US8.16 Home How it works opens purpose content without replaying onboarding', async ({ page }) => {
   await completedAccountForUi(page);
   await page.goto('/');
-  const splash = page.getByLabel('RuMampu');
-  if (await splash.isVisible().catch(() => false)) await splash.click({ force: true });
+  await dismissSplashIfVisible(page);
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
   const assistantIntro = page.getByText('Hi! Ask me about your record, your saving plan, or a house you have in mind. I only answer from your own numbers.', { exact: true });
   await assistantIntro.waitFor({ state: 'visible', timeout: 1000 }).catch(() => undefined);
@@ -617,8 +619,7 @@ test('US8.16 Home How it works opens purpose content without replaying onboardin
 
 test('US8.17 skipped get-to-know creates no fake income and leaves Home guidance', async ({ page }) => {
   await page.goto('/');
-  const splash = page.getByLabel('RuMampu');
-  if (await splash.isVisible().catch(() => false)) await splash.click({ force: true });
+  await dismissSplashIfVisible(page);
 
   await continueAsGuestFromLogin(page);
   await expect(page.getByText('What RuMampu does', { exact: true })).toBeVisible();
@@ -635,8 +636,7 @@ test('US8.17 skipped get-to-know creates no fake income and leaves Home guidance
 
 test('US8.17 get-to-know accepts custom work and saves one editable rough monthly income', async ({ page }) => {
   await page.goto('/');
-  const splash = page.getByLabel('RuMampu');
-  if (await splash.isVisible().catch(() => false)) await splash.click({ force: true });
+  await dismissSplashIfVisible(page);
 
   await continueAsGuestFromLogin(page);
   await page.getByText('Next', { exact: true }).last().click();
@@ -855,8 +855,7 @@ test('US8.12 guest entry does not call authenticated-only account endpoints', as
   });
 
   await page.goto('/');
-  const splash = page.getByLabel('RuMampu');
-  if (await splash.isVisible().catch(() => false)) await splash.click({ force: true });
+  await dismissSplashIfVisible(page);
 
   await continueAsGuestFromLogin(page);
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
@@ -877,8 +876,7 @@ test('US8.12 delete account then create account opens real registration first', 
   });
 
   await page.goto('/');
-  const splash = page.getByLabel('RuMampu');
-  if (await splash.isVisible().catch(() => false)) await splash.click({ force: true });
+  await dismissSplashIfVisible(page);
 
   await page.getByText('Create an account', { exact: true }).click();
   const firstEmail = `epic8-delete-${Date.now()}@example.com`;
@@ -1183,9 +1181,8 @@ test('US8.12 Start fresh goes directly Home without replaying onboarding or tran
 
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible({ timeout: 15000 });
   expect(await accountToken(page)).toBeTruthy();
-  await expect(page.getByText('Step 1 of 3', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Step 2 of 3', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Step 3 of 3', { exact: true })).toHaveCount(0);
+  // Home has its own "Step 2 of 3" progress label; check the wizard itself.
+  await expect(page.getByTestId(/^onboarding-(intro|questions)$/)).toHaveCount(0);
   await expect(page.getByText('What RuMampu does', { exact: true })).toHaveCount(0);
   await expect(page.getByText('What do you do?', { exact: true })).toHaveCount(0);
   await expect(page.getByText('How much did you earn last month?', { exact: true })).toHaveCount(0);
@@ -1217,9 +1214,8 @@ test('US8.12 Start fresh goes directly Home without replaying onboarding or tran
   await page.reload();
   await dismissSplashIfVisible(page);
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
-  await expect(page.getByText('Step 1 of 3', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Step 2 of 3', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Step 3 of 3', { exact: true })).toHaveCount(0);
+  // Home has its own "Step 2 of 3" progress label; check the wizard itself.
+  await expect(page.getByTestId(/^onboarding-(intro|questions)$/)).toHaveCount(0);
   await expect(page.getByText('What do you do?', { exact: true })).toHaveCount(0);
   await expect(page.getByText('How much did you earn last month?', { exact: true })).toHaveCount(0);
   expect((await accountIncomeRecord(page)).entries).toEqual([]);
