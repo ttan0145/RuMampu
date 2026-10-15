@@ -1,0 +1,20 @@
+# Data sources, created when Grafana starts.
+# The database source reads a snapshot copy of backend/db.sqlite3 made by
+# refresh-db.sh. It never connects to Neon or to the live file.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: rumampu-prometheus
+    type: prometheus
+    access: proxy
+    url: http://127.0.0.1:9090
+    isDefault: true
+    editable: false
+
+  - name: RuMampu local database
+    uid: rumampu-local-db
+    type: frser-sqlite-datasource
+    editable: false
+    jsonData:
+      path: ${RUMAMPU_MONITORING_DIR}/.data/rumampu-local.sqlite3

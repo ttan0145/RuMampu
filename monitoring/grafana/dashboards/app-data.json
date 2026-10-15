@@ -1,0 +1,1120 @@
+{
+  "uid": "rumampu-app-data",
+  "title": "RuMampu · App data (local copy)",
+  "description": "Totals and daily activity from a local snapshot of the RuMampu database.",
+  "tags": [
+    "rumampu"
+  ],
+  "timezone": "Asia/Kuala_Lumpur",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "time": {
+    "from": "now-60d",
+    "to": "now"
+  },
+  "refresh": "",
+  "panels": [
+    {
+      "type": "text",
+      "title": "",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "### RuMampu app data (local copy)\nReads a snapshot of `backend/db.sqlite3` taken by `refresh-db.sh`, never Neon. Only totals and counts are shown. Local data comes from test runs and sample scenarios, so it is not real user behaviour."
+      },
+      "id": 1
+    },
+    {
+      "type": "row",
+      "title": "Totals in the snapshot",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 2
+    },
+    {
+      "type": "stat",
+      "title": "Guest profiles",
+      "description": "Every guest or account profile in the snapshot.",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "rumampu-local-db"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "A",
+          "queryText": "SELECT COUNT(*) AS value FROM finance_guestprofile",
+          "rawQueryText": "SELECT COUNT(*) AS value FROM finance_guestprofile",
+          "queryType": "table",
+          "timeColumns": []
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "locale",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#11A09B"
+          }
+        },
+        "overrides": []
+      },
+      "id": 3
+    },
+    {
+      "type": "stat",
+      "title": "Accounts",
+      "description": "Signed up accounts (admins left out).",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "rumampu-local-db"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 4,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "A",
+          "queryText": "SELECT COUNT(*) AS value FROM auth_user WHERE is_superuser = 0",
+          "rawQueryText": "SELECT COUNT(*) AS value FROM auth_user WHERE is_superuser = 0",
+          "queryType": "table",
+          "timeColumns": []
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "locale",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#7C5CFF"
+          }
+        },
+        "overrides": []
+      },
+      "id": 4
+    },
+    {
+      "type": "stat",
+      "title": "Active in the last 7 days",
+      "description": "Profiles used in the last 7 days.",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "rumampu-local-db"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 4,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "A",
+          "queryText": "SELECT COUNT(*) AS value FROM finance_guestprofile WHERE last_active_at >= datetime('now', '-7 days')",
+          "rawQueryText": "SELECT COUNT(*) AS value FROM finance_guestprofile WHERE last_active_at >= datetime('now', '-7 days')",
+          "queryType": "table",
+          "timeColumns": []
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "locale",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#FFC83D"
+          }
+        },
+        "overrides": []
+      },
+      "id": 5
+    },
+    {
+      "type": "stat",
+      "title": "Income entries",
+      "description": "Every income entry.",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "rumampu-local-db"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "A",
+          "queryText": "SELECT COUNT(*) AS value FROM finance_incomeentry",
+          "rawQueryText": "SELECT COUNT(*) AS value FROM finance_incomeentry",
+          "queryType": "table",
+          "timeColumns": []
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "locale",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#11A09B"
+          }
+        },
+        "overrides": []
+      },
+      "id": 6
+    },
+    {
+      "type": "stat",
+      "title": "Daily expenses",
+      "description": "Every daily expense.",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "rumampu-local-db"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 4,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "A",
+          "queryText": "SELECT COUNT(*) AS value FROM finance_expenseentry",
+          "rawQueryText": "SELECT COUNT(*) AS value FROM finance_expenseentry",
+          "queryType": "table",
+          "timeColumns": []
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "locale",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#FF4F80"
+          }
+        },
+        "overrides": []
+      },
+      "id": 7
+    },
+    {
+      "type": "stat",
+      "title": "House tests kept",
+      "description": "Saved house tests.",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "rumampu-local-db"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 4,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "A",
+          "queryText": "SELECT COUNT(*) AS value FROM housing_savedhousingtest",
+          "rawQueryText": "SELECT COUNT(*) AS value FROM housing_savedhousingtest",
+          "queryType": "table",
+          "timeColumns": []
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "locale",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#FF9416"
+          }
+        },
+        "overrides": []
+      },
+      "id": 8
+    },
+    {
+      "type": "row",
+      "title": "Activity per day",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 9
+    },
+    {
+      "type": "timeseries",
+      "title": "New profiles per day",
+      "description": "Guests created and accounts signed up each day.",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "rumampu-local-db"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "A",
+          "queryText": "WITH RECURSIVE days(d) AS (SELECT date(${__from:date:seconds}, 'unixepoch', '+8 hours') UNION ALL SELECT date(d, '+1 day') FROM days WHERE d < date(${__to:date:seconds}, 'unixepoch', '+8 hours')), counts AS (SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS n FROM finance_guestprofile WHERE created_at >= datetime(${__from:date:seconds}, 'unixepoch', '-8 hours') GROUP BY 1) SELECT CAST(strftime('%s', days.d) AS INTEGER) - 28800 AS time, COALESCE(counts.n, 0) AS \"New guests\" FROM days LEFT JOIN counts ON counts.d = days.d ORDER BY 1",
+          "rawQueryText": "WITH RECURSIVE days(d) AS (SELECT date(${__from:date:seconds}, 'unixepoch', '+8 hours') UNION ALL SELECT date(d, '+1 day') FROM days WHERE d < date(${__to:date:seconds}, 'unixepoch', '+8 hours')), counts AS (SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS n FROM finance_guestprofile WHERE created_at >= datetime(${__from:date:seconds}, 'unixepoch', '-8 hours') GROUP BY 1) SELECT CAST(strftime('%s', days.d) AS INTEGER) - 28800 AS time, COALESCE(counts.n, 0) AS \"New guests\" FROM days LEFT JOIN counts ON counts.d = days.d ORDER BY 1",
+          "queryType": "time series",
+          "timeColumns": [
+            "time"
+          ]
+        },
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "B",
+          "queryText": "WITH RECURSIVE days(d) AS (SELECT date(${__from:date:seconds}, 'unixepoch', '+8 hours') UNION ALL SELECT date(d, '+1 day') FROM days WHERE d < date(${__to:date:seconds}, 'unixepoch', '+8 hours')), counts AS (SELECT date(date_joined, '+8 hours') AS d, COUNT(*) AS n FROM auth_user WHERE date_joined >= datetime(${__from:date:seconds}, 'unixepoch', '-8 hours') AND is_superuser = 0 GROUP BY 1) SELECT CAST(strftime('%s', days.d) AS INTEGER) - 28800 AS time, COALESCE(counts.n, 0) AS \"New accounts\" FROM days LEFT JOIN counts ON counts.d = days.d ORDER BY 1",
+          "rawQueryText": "WITH RECURSIVE days(d) AS (SELECT date(${__from:date:seconds}, 'unixepoch', '+8 hours') UNION ALL SELECT date(d, '+1 day') FROM days WHERE d < date(${__to:date:seconds}, 'unixepoch', '+8 hours')), counts AS (SELECT date(date_joined, '+8 hours') AS d, COUNT(*) AS n FROM auth_user WHERE date_joined >= datetime(${__from:date:seconds}, 'unixepoch', '-8 hours') AND is_superuser = 0 GROUP BY 1) SELECT CAST(strftime('%s', days.d) AS INTEGER) - 28800 AS time, COALESCE(counts.n, 0) AS \"New accounts\" FROM days LEFT JOIN counts ON counts.d = days.d ORDER BY 1",
+          "queryType": "time series",
+          "timeColumns": [
+            "time"
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "New guests"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#11A09B"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "New accounts"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#7C5CFF"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "id": 10
+    },
+    {
+      "type": "timeseries",
+      "title": "Records added per day",
+      "description": "Income, daily expenses and work costs added each day.",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "rumampu-local-db"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 9,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "A",
+          "queryText": "WITH RECURSIVE days(d) AS (SELECT date(${__from:date:seconds}, 'unixepoch', '+8 hours') UNION ALL SELECT date(d, '+1 day') FROM days WHERE d < date(${__to:date:seconds}, 'unixepoch', '+8 hours')), counts AS (SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS n FROM finance_incomeentry WHERE created_at >= datetime(${__from:date:seconds}, 'unixepoch', '-8 hours') GROUP BY 1) SELECT CAST(strftime('%s', days.d) AS INTEGER) - 28800 AS time, COALESCE(counts.n, 0) AS \"Income\" FROM days LEFT JOIN counts ON counts.d = days.d ORDER BY 1",
+          "rawQueryText": "WITH RECURSIVE days(d) AS (SELECT date(${__from:date:seconds}, 'unixepoch', '+8 hours') UNION ALL SELECT date(d, '+1 day') FROM days WHERE d < date(${__to:date:seconds}, 'unixepoch', '+8 hours')), counts AS (SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS n FROM finance_incomeentry WHERE created_at >= datetime(${__from:date:seconds}, 'unixepoch', '-8 hours') GROUP BY 1) SELECT CAST(strftime('%s', days.d) AS INTEGER) - 28800 AS time, COALESCE(counts.n, 0) AS \"Income\" FROM days LEFT JOIN counts ON counts.d = days.d ORDER BY 1",
+          "queryType": "time series",
+          "timeColumns": [
+            "time"
+          ]
+        },
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "B",
+          "queryText": "WITH RECURSIVE days(d) AS (SELECT date(${__from:date:seconds}, 'unixepoch', '+8 hours') UNION ALL SELECT date(d, '+1 day') FROM days WHERE d < date(${__to:date:seconds}, 'unixepoch', '+8 hours')), counts AS (SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS n FROM finance_expenseentry WHERE created_at >= datetime(${__from:date:seconds}, 'unixepoch', '-8 hours') GROUP BY 1) SELECT CAST(strftime('%s', days.d) AS INTEGER) - 28800 AS time, COALESCE(counts.n, 0) AS \"Expenses\" FROM days LEFT JOIN counts ON counts.d = days.d ORDER BY 1",
+          "rawQueryText": "WITH RECURSIVE days(d) AS (SELECT date(${__from:date:seconds}, 'unixepoch', '+8 hours') UNION ALL SELECT date(d, '+1 day') FROM days WHERE d < date(${__to:date:seconds}, 'unixepoch', '+8 hours')), counts AS (SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS n FROM finance_expenseentry WHERE created_at >= datetime(${__from:date:seconds}, 'unixepoch', '-8 hours') GROUP BY 1) SELECT CAST(strftime('%s', days.d) AS INTEGER) - 28800 AS time, COALESCE(counts.n, 0) AS \"Expenses\" FROM days LEFT JOIN counts ON counts.d = days.d ORDER BY 1",
+          "queryType": "time series",
+          "timeColumns": [
+            "time"
+          ]
+        },
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "C",
+          "queryText": "WITH RECURSIVE days(d) AS (SELECT date(${__from:date:seconds}, 'unixepoch', '+8 hours') UNION ALL SELECT date(d, '+1 day') FROM days WHERE d < date(${__to:date:seconds}, 'unixepoch', '+8 hours')), counts AS (SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS n FROM finance_workcostentry WHERE created_at >= datetime(${__from:date:seconds}, 'unixepoch', '-8 hours') GROUP BY 1) SELECT CAST(strftime('%s', days.d) AS INTEGER) - 28800 AS time, COALESCE(counts.n, 0) AS \"Work costs\" FROM days LEFT JOIN counts ON counts.d = days.d ORDER BY 1",
+          "rawQueryText": "WITH RECURSIVE days(d) AS (SELECT date(${__from:date:seconds}, 'unixepoch', '+8 hours') UNION ALL SELECT date(d, '+1 day') FROM days WHERE d < date(${__to:date:seconds}, 'unixepoch', '+8 hours')), counts AS (SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS n FROM finance_workcostentry WHERE created_at >= datetime(${__from:date:seconds}, 'unixepoch', '-8 hours') GROUP BY 1) SELECT CAST(strftime('%s', days.d) AS INTEGER) - 28800 AS time, COALESCE(counts.n, 0) AS \"Work costs\" FROM days LEFT JOIN counts ON counts.d = days.d ORDER BY 1",
+          "queryType": "time series",
+          "timeColumns": [
+            "time"
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Income"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#11A09B"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Expenses"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF4F80"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Work costs"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF9416"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "id": 11
+    },
+    {
+      "type": "timeseries",
+      "title": "House tests per day",
+      "description": "House scenarios tested and tests kept each day.",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "rumampu-local-db"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "A",
+          "queryText": "WITH RECURSIVE days(d) AS (SELECT date(${__from:date:seconds}, 'unixepoch', '+8 hours') UNION ALL SELECT date(d, '+1 day') FROM days WHERE d < date(${__to:date:seconds}, 'unixepoch', '+8 hours')), counts AS (SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS n FROM housing_housingscenario WHERE created_at >= datetime(${__from:date:seconds}, 'unixepoch', '-8 hours') GROUP BY 1) SELECT CAST(strftime('%s', days.d) AS INTEGER) - 28800 AS time, COALESCE(counts.n, 0) AS \"Scenarios tested\" FROM days LEFT JOIN counts ON counts.d = days.d ORDER BY 1",
+          "rawQueryText": "WITH RECURSIVE days(d) AS (SELECT date(${__from:date:seconds}, 'unixepoch', '+8 hours') UNION ALL SELECT date(d, '+1 day') FROM days WHERE d < date(${__to:date:seconds}, 'unixepoch', '+8 hours')), counts AS (SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS n FROM housing_housingscenario WHERE created_at >= datetime(${__from:date:seconds}, 'unixepoch', '-8 hours') GROUP BY 1) SELECT CAST(strftime('%s', days.d) AS INTEGER) - 28800 AS time, COALESCE(counts.n, 0) AS \"Scenarios tested\" FROM days LEFT JOIN counts ON counts.d = days.d ORDER BY 1",
+          "queryType": "time series",
+          "timeColumns": [
+            "time"
+          ]
+        },
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "B",
+          "queryText": "WITH RECURSIVE days(d) AS (SELECT date(${__from:date:seconds}, 'unixepoch', '+8 hours') UNION ALL SELECT date(d, '+1 day') FROM days WHERE d < date(${__to:date:seconds}, 'unixepoch', '+8 hours')), counts AS (SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS n FROM housing_savedhousingtest WHERE created_at >= datetime(${__from:date:seconds}, 'unixepoch', '-8 hours') GROUP BY 1) SELECT CAST(strftime('%s', days.d) AS INTEGER) - 28800 AS time, COALESCE(counts.n, 0) AS \"Tests kept\" FROM days LEFT JOIN counts ON counts.d = days.d ORDER BY 1",
+          "rawQueryText": "WITH RECURSIVE days(d) AS (SELECT date(${__from:date:seconds}, 'unixepoch', '+8 hours') UNION ALL SELECT date(d, '+1 day') FROM days WHERE d < date(${__to:date:seconds}, 'unixepoch', '+8 hours')), counts AS (SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS n FROM housing_savedhousingtest WHERE created_at >= datetime(${__from:date:seconds}, 'unixepoch', '-8 hours') GROUP BY 1) SELECT CAST(strftime('%s', days.d) AS INTEGER) - 28800 AS time, COALESCE(counts.n, 0) AS \"Tests kept\" FROM days LEFT JOIN counts ON counts.d = days.d ORDER BY 1",
+          "queryType": "time series",
+          "timeColumns": [
+            "time"
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Scenarios tested"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#7C5CFF"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tests kept"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FF9416"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "id": 12
+    },
+    {
+      "type": "timeseries",
+      "title": "Income imports per day",
+      "description": "CSV statement imports started each day.",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "rumampu-local-db"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 17,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "A",
+          "queryText": "WITH RECURSIVE days(d) AS (SELECT date(${__from:date:seconds}, 'unixepoch', '+8 hours') UNION ALL SELECT date(d, '+1 day') FROM days WHERE d < date(${__to:date:seconds}, 'unixepoch', '+8 hours')), counts AS (SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS n FROM finance_incomeimportbatch WHERE created_at >= datetime(${__from:date:seconds}, 'unixepoch', '-8 hours') GROUP BY 1) SELECT CAST(strftime('%s', days.d) AS INTEGER) - 28800 AS time, COALESCE(counts.n, 0) AS \"Imports\" FROM days LEFT JOIN counts ON counts.d = days.d ORDER BY 1",
+          "rawQueryText": "WITH RECURSIVE days(d) AS (SELECT date(${__from:date:seconds}, 'unixepoch', '+8 hours') UNION ALL SELECT date(d, '+1 day') FROM days WHERE d < date(${__to:date:seconds}, 'unixepoch', '+8 hours')), counts AS (SELECT date(created_at, '+8 hours') AS d, COUNT(*) AS n FROM finance_incomeimportbatch WHERE created_at >= datetime(${__from:date:seconds}, 'unixepoch', '-8 hours') GROUP BY 1) SELECT CAST(strftime('%s', days.d) AS INTEGER) - 28800 AS time, COALESCE(counts.n, 0) AS \"Imports\" FROM days LEFT JOIN counts ON counts.d = days.d ORDER BY 1",
+          "queryType": "time series",
+          "timeColumns": [
+            "time"
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Imports"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#FFC83D"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "id": 13
+    },
+    {
+      "type": "row",
+      "title": "How people use the app",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 14
+    },
+    {
+      "type": "piechart",
+      "title": "How income is entered",
+      "description": "Entry method of income entries (typed, scanned, imported, month totals).",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "rumampu-local-db"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "A",
+          "queryText": "SELECT entry_method AS method, COUNT(*) AS count FROM finance_incomeentry GROUP BY entry_method ORDER BY count DESC",
+          "rawQueryText": "SELECT entry_method AS method, COUNT(*) AS count FROM finance_incomeentry GROUP BY entry_method ORDER BY count DESC",
+          "queryType": "table",
+          "timeColumns": []
+        }
+      ],
+      "options": {
+        "pieType": "donut",
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^count$/"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "displayLabels": []
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 15
+    },
+    {
+      "type": "piechart",
+      "title": "How expenses are entered",
+      "description": "Entry method of daily expenses.",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "rumampu-local-db"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 26,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "A",
+          "queryText": "SELECT entry_method AS method, COUNT(*) AS count FROM finance_expenseentry GROUP BY entry_method ORDER BY count DESC",
+          "rawQueryText": "SELECT entry_method AS method, COUNT(*) AS count FROM finance_expenseentry GROUP BY entry_method ORDER BY count DESC",
+          "queryType": "table",
+          "timeColumns": []
+        }
+      ],
+      "options": {
+        "pieType": "donut",
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^count$/"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "displayLabels": []
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 16
+    },
+    {
+      "type": "piechart",
+      "title": "App language",
+      "description": "Language each profile chose.",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "rumampu-local-db"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 26,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "A",
+          "queryText": "SELECT COALESCE(NULLIF(preferred_language, ''), 'not set') AS language, COUNT(*) AS count FROM finance_userappstate GROUP BY 1 ORDER BY count DESC",
+          "rawQueryText": "SELECT COALESCE(NULLIF(preferred_language, ''), 'not set') AS language, COUNT(*) AS count FROM finance_userappstate GROUP BY 1 ORDER BY count DESC",
+          "queryType": "table",
+          "timeColumns": []
+        }
+      ],
+      "options": {
+        "pieType": "donut",
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^count$/"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "displayLabels": []
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 17
+    },
+    {
+      "type": "stat",
+      "title": "Finished onboarding",
+      "description": "Profiles that finished Get to know you.",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "rumampu-local-db"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "A",
+          "queryText": "SELECT COUNT(*) AS value FROM finance_userappstate WHERE onboarding_completed = 1",
+          "rawQueryText": "SELECT COUNT(*) AS value FROM finance_userappstate WHERE onboarding_completed = 1",
+          "queryType": "table",
+          "timeColumns": []
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "locale",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#11A09B"
+          }
+        },
+        "overrides": []
+      },
+      "id": 18
+    },
+    {
+      "type": "stat",
+      "title": "Bought a home",
+      "description": "Profiles that marked I have bought a home.",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "rumampu-local-db"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 34,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "A",
+          "queryText": "SELECT COUNT(*) AS value FROM finance_userappstate WHERE bought_home = 1",
+          "rawQueryText": "SELECT COUNT(*) AS value FROM finance_userappstate WHERE bought_home = 1",
+          "queryType": "table",
+          "timeColumns": []
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "locale",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#FFC83D"
+          }
+        },
+        "overrides": []
+      },
+      "id": 19
+    },
+    {
+      "type": "stat",
+      "title": "Income sources added",
+      "description": "Custom income sources people added.",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "rumampu-local-db"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 34,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "A",
+          "queryText": "SELECT COUNT(*) AS value FROM finance_incomesource WHERE is_custom = 1",
+          "rawQueryText": "SELECT COUNT(*) AS value FROM finance_incomesource WHERE is_custom = 1",
+          "queryType": "table",
+          "timeColumns": []
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "locale",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#7C5CFF"
+          }
+        },
+        "overrides": []
+      },
+      "id": 20
+    },
+    {
+      "type": "table",
+      "title": "House price model",
+      "description": "Price model versions loaded for the Price Explorer.",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "rumampu-local-db"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 34,
+        "w": 12,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "rumampu-local-db"
+          },
+          "refId": "A",
+          "queryText": "SELECT version AS Version, CASE is_active WHEN 1 THEN 'Active' ELSE '' END AS Status, strftime('%Y-%m-%d %H:%M', loaded_at, '+8 hours') AS \"Loaded (Malaysia time)\" FROM housing_pricemodelversion ORDER BY loaded_at DESC LIMIT 5",
+          "rawQueryText": "SELECT version AS Version, CASE is_active WHEN 1 THEN 'Active' ELSE '' END AS Status, strftime('%Y-%m-%d %H:%M', loaded_at, '+8 hours') AS \"Loaded (Malaysia time)\" FROM housing_pricemodelversion ORDER BY loaded_at DESC LIMIT 5",
+          "queryType": "table",
+          "timeColumns": []
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "id": 21
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  }
+}

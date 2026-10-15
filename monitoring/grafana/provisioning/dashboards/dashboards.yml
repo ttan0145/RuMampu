@@ -1,0 +1,10 @@
+apiVersion: 1
+
+providers:
+  - name: RuMampu
+    folder: RuMampu
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: ${RUMAMPU_MONITORING_DIR}/grafana/dashboards

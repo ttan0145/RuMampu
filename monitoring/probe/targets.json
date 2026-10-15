@@ -1,0 +1,9 @@
+{
+  "listen": "127.0.0.1:9115",
+  "timeout_seconds": 10,
+  "targets": [
+    {"name": "api_health", "label": "API health", "url": "http://127.0.0.1:8000/api/v1/health/", "every_seconds": 15, "expect_status": 200},
+    {"name": "web_app", "label": "Web app", "url": "http://127.0.0.1:8081/", "every_seconds": 15, "expect_status": 200},
+    {"name": "price_explorer", "label": "House price data", "url": "http://127.0.0.1:8000/api/v1/housing/price-explorer/trend/?state=SGR&property_type=terrace", "every_seconds": 60, "expect_status": 200}
+  ]
+}
