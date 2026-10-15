@@ -17,6 +17,7 @@ test.describe('iPhone audio transcription', () => {
       (window as any).__micTracks = [];
       Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => {
         const context = new AudioContext();
+        (window as any).__micContext = context;
         const destination = context.createMediaStreamDestination();
         const oscillator = context.createOscillator();
         const gain = context.createGain();
@@ -24,7 +25,7 @@ test.describe('iPhone audio transcription', () => {
         gain.connect(destination);
         (window as any).__silenceMic = () => { gain.gain.value = 0; };
         oscillator.start();
-        void context.resume();
+        await context.resume();
         const tracks = destination.stream.getTracks();
         (window as any).__micTracks.push(...tracks);
         tracks[0].addEventListener('ended', () => { oscillator.stop(); void context.close(); });
@@ -52,7 +53,10 @@ test.describe('iPhone audio transcription', () => {
     await page.getByRole('button', { name: 'Continue with microphone', exact: true }).click();
     for (let recording = 1; recording <= 2; recording++) {
       await expect(page.getByLabel('Stop voice input', { exact: true })).toBeVisible();
-      await page.waitForTimeout(500);
+      // Wait for the synthetic source to render two seconds of real audio.
+      // Wall-clock sleeps can finish before Web Audio starts on busy runners.
+      await expect.poll(() => page.evaluate(() => (window as any).__micContext?.currentTime ?? 0),
+        { timeout: 15000, intervals: [100] }).toBeGreaterThan(2);
       expect(uploads).toBe(recording - 1);
       await page.getByLabel('Stop voice input', { exact: true }).click();
       await expect(page.getByPlaceholder('Type a question')).toHaveValue(recording === 1 ? 'question 1' : 'question 1 question 2');

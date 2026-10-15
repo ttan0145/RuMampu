@@ -17,8 +17,8 @@ async function keepPriceTest(page: Page, price: number): Promise<void> {
   await page.getByText('The house', { exact: true }).click();
   await page.getByText('Run the test', { exact: true }).last().click();
   await expect(page.getByText(/months would run short|All \d+ months would carry it/)).toBeVisible();
-  await page.getByText('Save test', { exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Save test', exact: true }).click();
+  // Results are now kept automatically; check the saved record through House.
+  await page.getByRole('tab', { name: 'House', exact: true }).click();
   await expect(page.getByText('Saved tests', { exact: true }).first()).toBeVisible();
 }
 

@@ -293,7 +293,7 @@ test.describe(
       await ac('AC4.1.6', 'Reconcile Home monthly outflow with its remaining balance', async () => {
         await page.getByRole('tab', { name: 'Home', exact: true }).click();
         await page.getByText('Month by month', { exact: true }).click();
-        const july = page.getByText('Jul', { exact: true }).first().locator('..');
+        const july = page.getByText('Jul', { exact: true }).locator('..').filter({ hasText: /In RM/ });
         const row = (await july.innerText()).replace(/\s+/g, ' ');
         const values = /In RM ([\d,]+) Out RM ([\d,]+) Left RM (-?[\d,]+)/.exec(row);
         expect(values, `July's month panel should contain In, Out and Left: ${row}`).toBeTruthy();
@@ -302,7 +302,7 @@ test.describe(
         const left = Number(values![3].replaceAll(',', ''));
         expect(out).toBeGreaterThan(1320); // July's recorded daily expenses alone.
         expect(left).toBe(income - out);
-        await expect(page.getByText('Remaining balance').locator('..'))
+        await expect(page.getByTestId('home-left'))
           .toContainText(`RM ${values![3]}`);
       });
       await runHousingTest(page);

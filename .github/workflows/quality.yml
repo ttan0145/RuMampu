@@ -29,7 +29,17 @@ jobs:
         working-directory: backend
         run: |
           python manage.py spectacular --file /tmp/rumampu-openapi.yaml --validate
-          diff -u ../docs/openapi.yaml /tmp/rumampu-openapi.yaml
+          if ! diff -u ../docs/openapi.yaml /tmp/rumampu-openapi.yaml; then
+            echo "::error file=docs/openapi.yaml::API schema is out of date. From backend, run: python manage.py spectacular --file ../docs/openapi.yaml --validate, then commit docs/openapi.yaml."
+            exit 1
+          fi
+      - name: Upload generated OpenAPI contract
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-openapi
+          path: /tmp/rumampu-openapi.yaml
+          if-no-files-found: ignore
       - name: Fuzz the OpenAPI contract
         working-directory: backend
         shell: bash
@@ -54,6 +64,7 @@ jobs:
             --exclude-path /api/v1/income/scan/ \
             --exclude-path /api/v1/assistant/chat/ \
             --exclude-path /api/v1/assistant/action-preview/ \
+            --exclude-path /api/v1/assistant/transcribe/ \
             --no-color
 
   backend-postgresql:
@@ -127,4 +138,19 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run browser acceptance
         working-directory: frontend
-        run: npm run test:e2e
+        env:
+          EXPO_NO_DOTENV: '1'
+          EXPO_PUBLIC_E2E: '1'
+          EXPO_PUBLIC_PLAYWRIGHT_API_URL: http://localhost:8000/api/v1
+        run: |
+          npx expo export --platform web --output-dir dist --clear
+          npm run test:e2e:static
+      - name: Upload browser failure reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failure-reports
+          path: |
+            output/playwright/report/
+            output/playwright/test-results/
+          if-no-files-found: ignore

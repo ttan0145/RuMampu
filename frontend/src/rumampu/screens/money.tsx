@@ -988,11 +988,8 @@ export function IncomeScreen() {
             {t('inc_sofar', { m: monthName(now.getMonth()), v: rm(sofar) })}
           </BodyS>
         ) : null}
-        {/* v27 (I2-F04): a whole past month is a button that says what it adds.
-            Hidden on the very first income entry, so the first step is one clear form. */}
-        {S.data.income.length ? (
-          <GuideTarget id="in.wm"><WholeMonthBtn title={t('inc_past')} sub={t('wm_btn_in')} onPress={() => up(s => { s.pastT = 'inc'; s.sheet = 'pastmonth'; })} /></GuideTarget>
-        ) : null}
+        {/* A monthly total is also a valid first entry (US1.2). */}
+        <GuideTarget id="in.wm"><WholeMonthBtn title={t('inc_past')} sub={t('wm_btn_in')} onPress={() => up(s => { s.pastT = 'inc'; s.sheet = 'pastmonth'; })} /></GuideTarget>
       </InSec>
     </>
   );

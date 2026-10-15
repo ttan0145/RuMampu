@@ -3,6 +3,7 @@
 
 import os
 import sys
+from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
 
@@ -23,4 +24,8 @@ os.environ.update(
 
 from django.core.management import execute_from_command_line
 
+# Executing scripts/ puts that directory on sys.path, rather than backend/.
+# Initialize Django exactly as manage.py does, while keeping the explicit URL.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 execute_from_command_line(["manage.py", *sys.argv[1:]])

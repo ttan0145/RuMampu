@@ -115,6 +115,52 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: No GROQ_API_KEY configured.
+  /api/v1/assistant/transcribe/:
+    post:
+      operationId: speech_transcribe
+      summary: Transcribe a consented short audio recording using Groq
+      tags:
+      - Assistant
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SpeechTranscriptionRequestRequest'
+        required: true
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpeechTranscriptionResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: ''
   /api/v1/auth/export/:
     get:
       operationId: auth_export_retrieve
@@ -2021,8 +2067,7 @@ components:
           $ref: '#/components/schemas/AssistantActionPreviewActionKindEnum'
         amount:
           type: string
-          format: decimal
-          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          maxLength: 13
         date:
           type: string
           format: date
@@ -3723,6 +3768,30 @@ components:
         * `none` - none
         * `housing_created` - housing_created
         * `existing_and_worsened_by_housing` - existing_and_worsened_by_housing
+    SpeechTranscriptionRequestRequest:
+      type: object
+      properties:
+        audio:
+          type: string
+          format: binary
+          writeOnly: true
+        language:
+          $ref: '#/components/schemas/LanguageEnum'
+        audio_consent:
+          type: boolean
+          writeOnly: true
+      required:
+      - audio
+      - audio_consent
+      - language
+    SpeechTranscriptionResponse:
+      type: object
+      properties:
+        text:
+          type: string
+          maxLength: 12000
+      required:
+      - text
     StartingLiquidityMonthReference:
       type: object
       properties:

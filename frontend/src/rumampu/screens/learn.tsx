@@ -30,10 +30,6 @@ function iconXml(v: string, color: string, size: number, width = 1.7): string {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">${body}</svg>`;
 }
 
-/* a badge: a medal on its ribbon */
-const medalXml = (color: string) =>
-  `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="9" r="5.5"/><circle cx="12" cy="9" r="2.4"/><path d="M9 13.8 8 21l4-2.2 4 2.2-1-7.2"/></svg>`;
-
 /* ---------- the section ---------- */
 
 export function LearnScreen() {
@@ -46,39 +42,18 @@ export function LearnScreen() {
   return (
     <ScreenShell back title={t('hh_learn')}>
       {S.lang !== 'en' ? <BodyS muted>{t('ln_en_only')}</BodyS> : null}
-      {/* Your badges: one per topic, earned by finishing it, with Ruma looking on */}
+      {/* Reading progress is informational, without rewards or locked content. */}
       <GuideTarget id="ln.hero">
-        <View style={ls.badges} testID="learn-badges">
-          <View pointerEvents="none" style={{ position: 'absolute', right: 8, top: -30 }}>
-            <Ruma w={58} pose="happy" />
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingRight: 64 }}>
-            <Text style={{ fontFamily: DISP_FONT, fontSize: 17, color: C.ink }}>{t('ln_badges')}</Text>
-            <Text style={{ fontFamily: BODY_FONT, fontSize: 13.5, color: C.ink64 }}>
-              {t('ln_badges_n', { d: LEARN.filter(x => lnDoneIn(S.lnProg, x) === x.articles.length).length, n: LEARN.length })}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 }}>
-            {LEARN.map(x => {
-              const got = lnDoneIn(S.lnProg, x) === x.articles.length;
-              return (
-                <Pressable key={x.id} onPress={() => { up(s => { s.lnTab = x.id; }); go('learnsec'); }}
-                  accessibilityRole="button" accessibilityLabel={`${x.title}: ${got ? t('ln_badge_got') : t('ln_badge_not')}`}
-                  testID={`learn-badge-${x.id}`}
-                  style={[ls.badge, got && { backgroundColor: '#FFC83D', borderBottomWidth: 3, borderBottomColor: '#D69E14' }]}>
-                  <SvgXml xml={medalXml(got ? '#5A4100' : 'rgba(60,81,82,0.55)')} width={24} height={24} />
-                </Pressable>
-              );
-            })}
-          </View>
-          <Text style={{ fontFamily: BODY_FONT, fontSize: 13.5, lineHeight: 19, color: C.ink64, marginTop: 12 }}>{t('ln_badges_h')}</Text>
+        <View style={ls.badges}>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 17, color: C.ink }}>{t('ln_progress')}</Text>
+          <View style={{ marginTop: 12 }}><LearnStrip /></View>
           <View style={[ls.big, { marginTop: 12 }]} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: p }}>
             <Animated.View style={[ls.bigFill, { width: fill.interpolate({ inputRange: [0, 100], outputRange: ['3%', '100%'] }) }]} />
           </View>
           <Text style={{ fontFamily: BODY_FONT, fontSize: 12, color: C.ink64, marginTop: 6 }}>{p ? t('ln_pct', { p }) : t('ln_start_h')}</Text>
         </View>
       </GuideTarget>
-      {/* the topics, as filters, under the badges */}
+      {/* Every topic remains available regardless of reading progress. */}
       <View accessibilityRole="tablist" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {LEARN.map(x => (
           <Pressable key={x.id} accessibilityRole="tab" accessibilityState={{ selected: false }} aria-selected={false}

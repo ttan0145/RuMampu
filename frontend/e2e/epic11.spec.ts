@@ -90,7 +90,7 @@ async function passThrough<T>(route: Route, patch: (body: T) => void): Promise<v
     return await route.fulfill({ response, json: body });
   } catch (error) {
     // a request still in flight when the test ends has nobody left to answer
-    if (!/Test ended|Target page, context or browser has been closed/.test(String(error))) throw error;
+    if (!/Test ended|Target page, context or browser has been closed|Response has been disposed/.test(String(error))) throw error;
   }
 }
 

@@ -373,9 +373,15 @@ function useSayDraft() {
 
   const start = React.useCallback(async () => {
     if (!SRef.current.aiDisclosureAccepted) {
+      // Present one consent dialog at a time; the microphone modal would
+      // otherwise cover the AI disclosure and prevent either choice.
+      setVoice({ stage: 'idle', text: '', items: [] });
       if (!await ensureAiDisclosure()) return;
-      // Consent resumes asynchronously; web must wait for another mic tap.
-      if (Platform.OS === 'web') return;
+      // Web capture still requires a fresh user gesture after AI consent.
+      if (Platform.OS === 'web') {
+        setVoice({ stage: 'permission', text: '', items: [] });
+        return;
+      }
     }
     let available = false;
     try { available = ExpoSpeechRecognitionModule.isRecognitionAvailable(); } catch { available = false; }

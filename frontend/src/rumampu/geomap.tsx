@@ -55,7 +55,7 @@ function fit(b: Bounds, w: number, h: number, pad: Pad, maxZoom: number): View_ 
    puts straight on the <path>, which React warns about ("Unknown event handler
    property"). A plain click does the same job there; phones keep onPress. */
 function tapProps(fn: () => void): object {
-  return Platform.OS === 'web' ? { onClick: fn } : { onPress: fn };
+  return Platform.OS === 'web' ? { onClick: fn, onPress: null } : { onPress: fn };
 }
 
 export function GeoMap({ group, fitTo, pad, maxZoom = 12, styleOf, pins, onPick, attribution, zoomLabels }: {

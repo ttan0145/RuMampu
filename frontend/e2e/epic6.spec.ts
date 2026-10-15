@@ -249,7 +249,7 @@ test.describe('Epic 6 — AI Insights & Alerts', { tag: '@epic6' }, () => {
       await page.getByLabel('Ask Ruma').click();
       await expect(page.getByText('Before you use RuMampu AI', { exact: true })).toBeVisible();
       await expect(page.getByText(/hosted by Groq/)).toBeVisible();
-      await expect(page.getByText(/receipt image, your typed or spoken words, relevant figures/)).toBeVisible();
+      await expect(page.getByText(/receipt image, your text or iPhone audio recordings, relevant figures/)).toBeVisible();
       await page.getByRole('button', { name: 'Continue with AI', exact: true }).click();
       await expect(page.getByText('Ask Ruma', { exact: true }).last()).toBeVisible();
       await expect(page.getByPlaceholder('Type a question')).toBeVisible();

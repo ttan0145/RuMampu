@@ -11,15 +11,29 @@ async function acceptAiDisclosure(page: Page): Promise<void> {
   }
 }
 
+async function startConsentedSpeech(page: Page): Promise<void> {
+  const microphoneConsent = page.getByRole('button', { name: 'Continue with microphone', exact: true });
+  await microphoneConsent.click();
+  // Guest onboarding resets the AI choice. The first microphone request may
+  // therefore present the separate AI disclosure before it can start capture.
+  const aiConsent = page.getByRole('button', { name: 'Continue with AI', exact: true });
+  if (await aiConsent.isVisible()) {
+    await aiConsent.click();
+    await expect(aiConsent).toBeHidden();
+    await microphoneConsent.click();
+  }
+  await expect(page.getByRole('button', { name: 'Tap to stop', exact: true })).toBeVisible();
+}
+
 async function openTypedVoiceFallback(page: Page): Promise<void> {
   await page.getByLabel('What would you like to add?').click();
   await page.getByText('Say it', { exact: true }).click();
   await acceptAiDisclosure(page);
-  await expect(page.getByLabel('Type what you earned or spent instead')).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Or type it here', exact: true })).toBeVisible();
 }
 
 async function submitDescription(page: Page, text: string): Promise<void> {
-  await page.getByLabel('Type what you earned or spent instead').fill(text);
+  await page.getByRole('textbox', { name: 'Or type it here', exact: true }).fill(text);
   await page.getByText('Read it', { exact: true }).click();
   await acceptAiDisclosure(page);
 }
@@ -105,7 +119,7 @@ test.describe('Epic 9 — Voice Assisted Quick Entry', { tag: '@epic9' }, () => 
     await page.getByLabel('What would you like to add?').click();
     await page.getByText('Say it', { exact: true }).click();
     await acceptAiDisclosure(page);
-    await page.getByRole('button', { name: 'Continue with microphone', exact: true }).click();
+    await startConsentedSpeech(page);
     await expect(page.getByText(/Listening…/)).toBeVisible();
 
     await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
@@ -120,7 +134,7 @@ test.describe('Epic 9 — Voice Assisted Quick Entry', { tag: '@epic9' }, () => 
     await page.getByLabel('What would you like to add?').click();
     await page.getByText('Say it', { exact: true }).click();
     await acceptAiDisclosure(page);
-    await page.getByRole('button', { name: 'Continue with microphone', exact: true }).click();
+    await startConsentedSpeech(page);
     await expect(page.getByText(/Listening…/)).toBeVisible();
 
     /* The quick-add veil normally prevents this click. Invoke the control

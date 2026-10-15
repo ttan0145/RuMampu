@@ -605,7 +605,7 @@ test('US8.16 Home How it works opens purpose content without replaying onboardin
   await expect(page.getByText('What do you do?', { exact: true })).toHaveCount(0);
   await expect(page.getByText('How much did you earn last month?', { exact: true })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  // The purpose is now inline on Home; there is no dismissible modal.
   await expect(page.getByRole('tab', { name: 'Home', exact: true })).toBeVisible();
   await expect(page.getByText('It does not predict whether a bank or lender will approve financing.', { exact: true })).toHaveCount(0);
 

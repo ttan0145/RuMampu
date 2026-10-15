@@ -37,6 +37,8 @@ export async function endGuestSession(page: Page): Promise<void> {
 export async function openGuestApp(page: Page): Promise<void> {
   await endGuestSession(page);
   await page.goto('/');
+  const splash = page.getByLabel('RuMampu', { exact: true });
+  if (await splash.isVisible()) await splash.click({ timeout: 3000 }).catch(() => undefined);
   // Normal clicks wait for the splash and bootstrap instead of bypassing them.
   await page.getByText('Continue as guest', { exact: true }).last().click({ timeout: 30000 });
   const dialog = page.getByRole('dialog');
@@ -156,8 +158,13 @@ export async function syncClientIdFromBrowser(page: Page): Promise<void> {
 export async function pinGuestClientId(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const pinned = window.localStorage.getItem('rumampu_client_id');
-    if (pinned && typeof crypto !== 'undefined') {
-      Object.defineProperty(crypto, 'randomUUID', { value: () => pinned, configurable: true });
+    if (pinned) {
+      // Pin only the seeded guest boundary. Freezing crypto.randomUUID also
+      // freezes Idempotency-Key generation, making distinct saves collide.
+      const setItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key: string, value: string) {
+        return setItem.call(this, key, this === window.localStorage && key === 'rumampu_client_id' ? pinned : value);
+      };
     }
   });
 }

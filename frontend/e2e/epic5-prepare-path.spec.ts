@@ -185,7 +185,9 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
       // enough cash on hand covers what the home needs, so all three steps are done
       await page.getByTestId('prep-node-1').click();
       await page.getByLabel('Cash I have now', { exact: true }).fill('100000');
+      await expect(page.getByText(/You have RM 98,634/)).toBeVisible();
       await page.getByLabel('Back').click();
+      await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('rumampu_local_state') || '{}').data?.cashOnHand)).toBe(100000);
       await expect(page.getByTestId('prep-node-1')).toHaveAccessibleName(/Covered/);
       // ... and the line says so without calling me ready or approved (copy changed 2026-10-09)
       await expect(page.getByTestId('prep-bubble')).toContainText('All three steps are done. Save your plan for your own reference.');
@@ -215,6 +217,7 @@ test.describe('Epic 5 — Prepare path, monthly check and How buying works (Iter
       await openPrepare(page);
       await expect(page.getByTestId('prep-banner')).toContainText('RM 300,000');
       await expect(page.getByTestId('prep-node-0')).toHaveAccessibleName(/Saved to your plan/);
+      await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('rumampu_local_state') || '{}').data?.cashOnHand)).toBe(100000);
       await expect(page.getByTestId('prep-node-1')).toHaveAccessibleName(/Covered/);
       await expect(page.getByTestId('prep-node-2')).toHaveAccessibleName(/All ready/);
       // closing the tab ends the guest session: a new tab in the same browser starts at the guest entry
