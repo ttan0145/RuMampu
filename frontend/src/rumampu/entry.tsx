@@ -343,26 +343,31 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
     // merge two competing amounts for the same day.
     applyAccountState(auth);
 
-    // Authentication and account loading are deliberately separate. Returning
-    // accounts load their dashboard immediately. If a guest has just chosen to
-    // keep their data during sign-up, we also show the loading screen once so
-    // the claimed guest data is prepared before continuing onboarding.
+    // Switch data ownership now, but keep AuthStep mounted while the account
+    // refresh runs. Opening onboarding here would unmount this loading screen
+    // and let the user advance a wizard that the refresh later resets.
     up(s => {
+      s.guest = false;
+      s.accountLastExportedAt = auth.last_record_exported_at;
+    });
+
+    const enterAccount = () => up(s => {
       s.guest = false;
       s.accountLastExportedAt = auth.last_record_exported_at;
       s.authEntryOpen = false;
       s.acctMade = false;
       s.knew = auth.onboarding_completed;
       s.kstep = 0;
+      s.onboarded = auth.onboarding_completed;
+      s.wstep = auth.onboarding_completed ? 0 : 1;
       if (auth.preferred_language) s.lang = auth.preferred_language;
-
-      if (!auth.onboarding_completed) {
-        s.onboarded = false;
-        s.wstep = 1;
-      }
     });
 
-    if (!auth.onboarding_completed && !loadBeforeOnboarding) return;
+    // A direct signup has no guest data to load before the first setup page.
+    if (!auth.onboarding_completed && !loadBeforeOnboarding) {
+      enterAccount();
+      return;
+    }
 
     setPendingAuth(auth);
     setPendingLoadBeforeOnboarding(loadBeforeOnboarding);
@@ -377,24 +382,9 @@ function AuthStep({ resetUid, resetToken }: { resetUid?: string; resetToken?: st
         setAccountStage(stage);
       });
 
-      up(s => {
-        s.guest = false;
-        s.accountLastExportedAt = auth.last_record_exported_at;
-        s.authEntryOpen = false;
-        if (auth.onboarding_completed) {
-          s.knew = true;
-          s.onboarded = true;
-          s.wstep = 0;
-        } else {
-          // The account is new, so after loading the claimed guest data we
-          // continue the normal first-time onboarding flow.
-          s.knew = false;
-          s.onboarded = false;
-          s.kstep = 0;
-          s.wstep = 1;
-        }
-        if (auth.preferred_language) s.lang = auth.preferred_language;
-      });
+      // Enter Home or first-time onboarding only after the authoritative
+      // account record is ready; no later refresh resets the wizard's steps.
+      enterAccount();
 
       setAccountLoading(false);
       setPendingAuth(null);

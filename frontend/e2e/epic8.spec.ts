@@ -927,9 +927,26 @@ test('US8.12 transfers guest saved housing tests to a new account on Keep', asyn
   await page.getByPlaceholder('name@example.com').fill(email);
   await page.getByPlaceholder('At least 8 characters').fill(password);
   await page.getByPlaceholder('Type it again').fill(password);
-  await page.getByText('Create account', { exact: true }).last().click();
+  // Hold the account refresh so CI speed cannot hide onboarding being shown
+  // early and then reset when the guest-to-account load finishes.
+  let releaseAccountLoad!: () => void;
+  const accountLoadGate = new Promise<void>(resolve => { releaseAccountLoad = resolve; });
+  const incomeRecordRoute = '**/api/v1/income/record/';
+  await page.route(incomeRecordRoute, async route => {
+    if (route.request().headers().authorization) await accountLoadGate;
+    await route.continue();
+  });
+  try {
+    await page.getByText('Create account', { exact: true }).last().click();
+    await expect(page.getByText('Getting RuMampu ready', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('onboarding-intro')).toHaveCount(0);
+    await expect(page.getByTestId('onboarding-questions')).toHaveCount(0);
+  } finally {
+    releaseAccountLoad();
+  }
 
   await clickThroughFirstAccountOnboarding(page);
+  await page.unroute(incomeRecordRoute);
 
   await page.getByRole('tab', { name: 'House', exact: true }).click();
   await page.getByLabel('Saved tests').click();
