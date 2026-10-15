@@ -2,13 +2,16 @@
 
 from datetime import date
 import hashlib
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.test import Client, TestCase
 from rest_framework.authtoken.models import Token
 
 from .models import FinancialPeriod, GuestProfile, IncomeEntry
-from .services import ensure_default_sources
+from .services import ensure_default_sources, profile_for_request
 
 
 User = get_user_model()
@@ -79,3 +82,26 @@ class GuestProfileIsolationTests(TestCase):
 
         self.assertEqual(guest_client.delete("/api/v1/auth/record/").status_code, 403)
         self.assertTrue(GuestProfile.objects.filter(pk=guest.pk, user=self.user).exists())
+
+
+class ProfileBootstrapTests(TestCase):
+    def test_failed_default_setup_does_not_leave_a_partial_guest_or_account(self):
+        user = User.objects.create_user(username="bootstrap-owner")
+        for identity in (AnonymousUser(), user):
+            with self.subTest(authenticated=identity.is_authenticated):
+                request = SimpleNamespace(
+                    user=identity,
+                    headers={"X-RuMampu-Client-ID": "bootstrap-rollback-guest"},
+                )
+                with patch(
+                    "finance.services.ensure_default_expense_categories",
+                    side_effect=RuntimeError("default setup interrupted"),
+                ), self.assertRaisesRegex(RuntimeError, "default setup interrupted"):
+                    profile_for_request(request)
+                self.assertEqual(GuestProfile.objects.count(), 0)
+
+                # A retry must build the complete profile, including Meals.
+                profile = profile_for_request(request)
+                self.assertTrue(profile.income_sources.filter(slug="ehail").exists())
+                self.assertTrue(profile.expense_categories.filter(slug="meals").exists())
+                profile.delete()

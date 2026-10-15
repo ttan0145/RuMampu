@@ -30,3 +30,5 @@ ml/data/scheme_locations.csv
 ml/data/dosm_district.geojson
 ml/out/
 ml_price_model/
+
+/backend/.schemathesis/

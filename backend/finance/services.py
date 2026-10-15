@@ -79,17 +79,25 @@ def touch_profile(profile: GuestProfile, *, force: bool = False) -> None:
     profile.retention_warning_sent_at = None
 
 
-def _account_profile_for_user(user, *, touch: bool = True) -> GuestProfile:
-    profile, created = GuestProfile.objects.get_or_create(
-        user=user,
-        defaults={"session_key": secrets.token_hex(20)},
-    )
+@transaction.atomic
+def _get_or_create_profile(**lookup) -> tuple[GuestProfile, bool]:
+    # Publish the profile and all defaults together. Concurrent bootstrap reads
+    # must not see income sources before expense categories have been created.
+    profile, created = GuestProfile.objects.get_or_create(**lookup)
     if created:
         ensure_default_sources(profile)
         ensure_default_work_costs(profile)
         ensure_default_commitments(profile)
         ensure_default_expense_categories(profile)
-    elif touch:
+    return profile, created
+
+
+def _account_profile_for_user(user, *, touch: bool = True) -> GuestProfile:
+    profile, created = _get_or_create_profile(
+        user=user,
+        defaults={"session_key": secrets.token_hex(20)},
+    )
+    if not created and touch:
         touch_profile(profile)
     return profile
 
@@ -116,21 +124,10 @@ def profile_for_request(request, *, touch: bool = True) -> GuestProfile:
             request.session.create()
         profile_key = request.session.session_key
 
-    profile, created = GuestProfile.objects.get_or_create(
-        session_key=profile_key,
-    )
+    profile, created = _get_or_create_profile(session_key=profile_key)
     if profile.user_id is not None:
         raise PermissionDenied("This guest profile is unavailable.")
-    # Defaults are profile bootstrap data. Creating/checking them on every API
-    # request adds many unnecessary database round trips, especially against a
-    # remote PostgreSQL database. Existing guest profiles were already
-    # initialised by the previous request flow; new profiles are initialised once.
-    if created:
-        ensure_default_sources(profile)
-        ensure_default_work_costs(profile)
-        ensure_default_commitments(profile)
-        ensure_default_expense_categories(profile)
-    elif touch:
+    if not created and touch:
         touch_profile(profile)
     return profile
 
