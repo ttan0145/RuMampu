@@ -177,11 +177,15 @@ def _explicit_incomplete_review(
         text, re.IGNORECASE,
     )
     malay = re.match(
-        r"^\s*(?:(?:tolong|boleh\s+awak|boleh\s+saya)\s+)*"
-        r"(?:tambah|masukkan|rekod|catat|simpan|tetapkan|ubah)\b",
+        r"^\s*(?:(?:boleh(?:kah)?\s+(?:(?:awak|anda|kamu|saya)\s+)?(?:tolong\s+)?)|(?:tolong\s+))?"
+        r"(?:bantu(?:\s+saya)?\s+)?(?:tambah|masukkan|rekod|catat|simpan|tetapkan|ubah)\b",
         text, re.IGNORECASE,
     )
-    chinese = re.match(r"^\s*(?:请|幫我|帮我)?(?:添加|新增|记录|記錄|录入|輸入|设置|設定|更改|修改)", text)
+    chinese = re.match(
+        r"^\s*(?:(?:可以|能否|可否|请|請)\s*)?(?:(?:帮|幫)(?:我|忙)?\s*)?"
+        r"(?:添加|新增|记录|記錄|录入|錄入|输入|輸入|设置|設定|更改|修改|保存)",
+        text,
+    )
     if not (english or malay or chinese):
         return None
 
@@ -206,10 +210,11 @@ def _explicit_incomplete_review(
         if re.search(rf"(?<!\w){re.escape(label)}(?!\w)", text, re.IGNORECASE)
     ), None)
     money_words = re.search(
-        r"\bRM\s*(\d[\d,]*(?:\.\d{1,2})?)\b|\b(\d[\d,]*(?:\.\d{1,2})?)\s*ringgit\b",
+        r"\bRM\s*(\d[\d,]*(?:\.\d{1,2})?)\b|\b(\d[\d,]*(?:\.\d{1,2})?)\s*ringgit\b"
+        r"|(\d[\d,]*(?:\.\d{1,2})?)\s*(?:令吉|林吉特|馬幣|马币)",
         text, re.IGNORECASE,
     )
-    amount = _amount((money_words.group(1) or money_words.group(2)).replace(",", "")) if money_words else None
+    amount = _amount(next(group for group in money_words.groups() if group).replace(",", "")) if money_words else None
     dated = kind in ("income", "expense")
     today = timezone.localdate()
     yesterday = bool(re.search(r"\b(?:yesterday|semalam)\b|昨天", text, re.IGNORECASE))

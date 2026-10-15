@@ -385,6 +385,22 @@ class AssistantActionServiceTests(TestCase):
         self.assertEqual(action["confidence"]["date"], "low")
         self.assertEqual(action["confidence"]["target"], "low")
 
+    def test_malay_and_chinese_income_requests_keep_review_when_model_finds_no_action(self):
+        cases = (
+            "Boleh tolong tambah pendapatan RM15 hari ini?",
+            "可以帮我添加15令吉收入今天吗？",
+        )
+        for text in cases:
+            with self.subTest(text=text):
+                result = self.preview({"actions": []}, text=text)
+                self.assertEqual(result["status"], "ready")
+                action = result["actions"][0]
+                self.assertEqual(action["kind"], "income")
+                self.assertEqual(action["amount"], "15.00")
+                self.assertEqual(action["target_id"], "")
+                self.assertEqual(action["confidence"]["date"], "high")
+
+
     def test_incomplete_request_keeps_fields_the_user_did_supply(self):
         result = self.preview(
             {"actions": []}, text="help me enter income of RM500 from E-hailing today",

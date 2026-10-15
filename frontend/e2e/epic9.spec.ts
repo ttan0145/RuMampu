@@ -1,6 +1,7 @@
 import { expect, Page } from '@playwright/test';
-import { test } from './support/fixtures';
-import { openGuestApp, syncClientIdFromBrowser } from './support/app';
+import { e2eGet, test } from './support/fixtures';
+import { API, openGuestApp, openMoneyScreen, syncClientIdFromBrowser } from './support/app';
+import { ac } from './support/acceptance';
 
 const ACTION_PREVIEW = '**/api/v1/assistant/action-preview/';
 
@@ -47,6 +48,7 @@ async function installFakeSpeechRecognition(page: Page): Promise<void> {
       maxAlternatives = 1;
       start() {
         (window as any).__speechStarts = ((window as any).__speechStarts || 0) + 1;
+        (window as any).__speechRecognizer = this;
         this.dispatchEvent(new Event('start'));
       }
       stop() { this.dispatchEvent(new Event('end')); }
@@ -258,6 +260,61 @@ test.describe('Epic 9 — Voice Assisted Quick Entry', { tag: '@epic9' }, () => 
 
     expect((await categoryRequest).postDataJSON()).toEqual({ name: 'Cat food' });
     expect((await expenseRequest).postDataJSON().category_id).toEqual(expect.any(Number));
+  });
+
+  test('confirmed speech entries appear under the same your data label as typed entries', async ({ page }) => {
+    const recordResponse = await e2eGet(page, `${API}/income/record/`);
+    const categoryResponse = await e2eGet(page, `${API}/expense-categories/`);
+    expect(recordResponse.ok()).toBeTruthy();
+    expect(categoryResponse.ok()).toBeTruthy();
+    const record = await recordResponse.json();
+    const categories = await categoryResponse.json();
+    const source = record.sources.find((item: { slug: string }) => item.slug === 'ehail');
+    const category = categories.find((item: { slug: string }) => item.slug === 'meals');
+    expect(source).toBeTruthy();
+    expect(category).toBeTruthy();
+
+    await page.route(ACTION_PREVIEW, route => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ready', message: '',
+        actions: [
+          { kind: 'income', amount: '47.00', date: '2026-10-06', target_id: String(source.id), target_label: 'E-hailing', confidence: { kind: 'high', amount: 'high', date: 'high', target: 'high' } },
+          { kind: 'expense', amount: '12.00', date: '2026-10-06', target_id: String(category.id), target_label: 'Meals', confidence: { kind: 'high', amount: 'high', date: 'high', target: 'high' } },
+        ],
+      }),
+    }));
+
+    await installFakeSpeechRecognition(page);
+    await page.getByLabel('What would you like to add?').click();
+    await page.getByText('Say it', { exact: true }).click();
+    await acceptAiDisclosure(page);
+    await startConsentedSpeech(page);
+    await expect(page.getByText(/Listening…/)).toBeVisible();
+    await page.evaluate(() => {
+      const recognizer = (window as any).__speechRecognizer as EventTarget;
+      const alternatives = [{ transcript: 'Earned 47 from Grab and spent 12 on lunch', confidence: 0.9 }];
+      Object.assign(alternatives, { isFinal: true });
+      const result = new Event('result');
+      Object.defineProperties(result, { results: { value: [alternatives] }, resultIndex: { value: 0 } });
+      recognizer.dispatchEvent(result);
+      recognizer.dispatchEvent(new Event('end'));
+    });
+    await expect(page.getByText('Check before saving', { exact: true })).toBeVisible();
+
+    await ac('AC9.7.3', 'Confirmed voice entries retain the user data label', async () => {
+      await page.getByRole('button', { name: 'Save both', exact: true }).click();
+      await openMoneyScreen(page, 'Income');
+      const incomeSection = page.getByText('Recent entries', { exact: true }).locator('..').locator('..');
+      const savedIncomeRow = incomeSection.getByText('RM 47', { exact: true }).locator('..');
+      await expect(savedIncomeRow).toContainText('YOUR DATA');
+
+      await openMoneyScreen(page, 'Daily expenses');
+      const expenseSection = page.getByTestId('recent-expense-table');
+      const savedExpenseRow = expenseSection.getByText('RM 12', { exact: true }).locator('..');
+      await expect(savedExpenseRow).toContainText('YOUR DATA');
+    });
   });
 
   test('Ask Ruma saves a clear new category instead of changing it to Other', async ({ page }) => {
