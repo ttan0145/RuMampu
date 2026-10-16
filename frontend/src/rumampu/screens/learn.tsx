@@ -30,6 +30,10 @@ function iconXml(v: string, color: string, size: number, width = 1.7): string {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">${body}</svg>`;
 }
 
+/* a badge: a medal on its ribbon */
+const medalXml = (color: string) =>
+  `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="9" r="5.5"/><circle cx="12" cy="9" r="2.4"/><path d="M9 13.8 8 21l4-2.2 4 2.2-1-7.2"/></svg>`;
+
 /* ---------- the section ---------- */
 
 export function LearnScreen() {
@@ -42,18 +46,39 @@ export function LearnScreen() {
   return (
     <ScreenShell back title={t('hh_learn')}>
       {S.lang !== 'en' ? <BodyS muted>{t('ln_en_only')}</BodyS> : null}
-      {/* Reading progress is informational, without rewards or locked content. */}
+      {/* Your badges: one per topic, earned by finishing it, with Ruma looking on */}
       <GuideTarget id="ln.hero">
-        <View style={ls.badges}>
-          <Text style={{ fontFamily: DISP_FONT, fontSize: 17, color: C.ink }}>{t('ln_progress')}</Text>
-          <View style={{ marginTop: 12 }}><LearnStrip /></View>
+        <View style={ls.badges} testID="learn-badges">
+          <View pointerEvents="none" style={{ position: 'absolute', right: 8, top: -30 }}>
+            <Ruma w={58} pose="happy" />
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingRight: 64 }}>
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 17, color: C.ink }}>{t('ln_badges')}</Text>
+            <Text style={{ fontFamily: BODY_FONT, fontSize: 13.5, color: C.ink64 }}>
+              {t('ln_badges_n', { d: LEARN.filter(x => lnDoneIn(S.lnProg, x) === x.articles.length).length, n: LEARN.length })}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 }}>
+            {LEARN.map(x => {
+              const got = lnDoneIn(S.lnProg, x) === x.articles.length;
+              return (
+                <Pressable key={x.id} onPress={() => { up(s => { s.lnTab = x.id; }); go('learnsec'); }}
+                  accessibilityRole="button" accessibilityLabel={`${x.title}: ${got ? t('ln_badge_got') : t('ln_badge_not')}`}
+                  testID={`learn-badge-${x.id}`}
+                  style={[ls.badge, got && { backgroundColor: '#FFC83D', borderBottomWidth: 3, borderBottomColor: '#D69E14' }]}>
+                  <SvgXml xml={medalXml(got ? '#5A4100' : 'rgba(60,81,82,0.55)')} width={24} height={24} />
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={{ fontFamily: BODY_FONT, fontSize: 13.5, lineHeight: 19, color: C.ink64, marginTop: 12 }}>{t('ln_badges_h')}</Text>
           <View style={[ls.big, { marginTop: 12 }]} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: p }}>
             <Animated.View style={[ls.bigFill, { width: fill.interpolate({ inputRange: [0, 100], outputRange: ['3%', '100%'] }) }]} />
           </View>
           <Text style={{ fontFamily: BODY_FONT, fontSize: 12, color: C.ink64, marginTop: 6 }}>{p ? t('ln_pct', { p }) : t('ln_start_h')}</Text>
         </View>
       </GuideTarget>
-      {/* Every topic remains available regardless of reading progress. */}
+      {/* the topics, as filters, under the badges */}
       <View accessibilityRole="tablist" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {LEARN.map(x => (
           <Pressable key={x.id} accessibilityRole="tab" accessibilityState={{ selected: false }} aria-selected={false}
@@ -103,6 +128,7 @@ export function LearnScreen() {
 function openLesson(a: LnArticle) {
   return (s: AppState) => {
     const k = lnSeen(s.lnProg, a);
+    s.lnWas = lnSecDone(s.lnProg, lnSecOf(a));
     s.lnTab = lnSecOf(a).id;
     s.lnArt = a.id;
     s.lnPg = (k && k < a.pages.length) ? k : 1;
@@ -328,9 +354,14 @@ export function LearnReadScreen() {
     if ((s.lnProg[a.id] || 0) < s.lnPg) s.lnProg[a.id] = s.lnPg;
   });
   const finish = () => {
-    up(s => { s.lnProg[a.id] = Math.max(s.lnProg[a.id] || 0, n); });
+    let celebrate = false;
+    up(s => {
+      s.lnProg[a.id] = Math.max(s.lnProg[a.id] || 0, n);
+      if (s.lnWas === false && lnSecDone(s.lnProg, sec)) { s.lnCele = sec.id; celebrate = true; }
+      s.lnWas = null;
+    });
     backNav();
-    toast(t('ln_art_done'));
+    if (!celebrate) toast(t('ln_art_done'));
   };
 
   const footer = (
@@ -395,6 +426,57 @@ export function LnEnter({ tab, k }: { tab: string; k: string }) {
 }
 
 /* Read explanations, shown on Prepare and House. */
+/* ---------- a finished topic: its badge, with a little confetti ---------- */
+
+export function LearnCele() {
+  const { S, t, up } = useApp();
+  const sec = LEARN.find(x => x.id === S.lnCele);
+  const fall = React.useRef(new Animated.Value(0)).current;
+  const card = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    if (!sec) return;
+    fall.setValue(0); card.setValue(0);
+    Animated.timing(fall, { toValue: 1, duration: 1900, easing: Easing.bezier(0.3, 0.6, 0.4, 1), useNativeDriver: true }).start();
+    Animated.spring(card, { toValue: 1, friction: 6, tension: 90, useNativeDriver: true }).start();
+  }, [sec, fall, card]);
+  if (!sec) return null;
+  const close = () => up(s => { s.lnCele = null; });
+  const cols = ['#4A9195', '#FEC844', '#32B14A', '#F1592A', '#A6D3D4'];
+  return (
+    <View style={[StyleSheet.absoluteFill, { zIndex: 70 }]} testID="learn-cele">
+      <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(20,34,35,0.55)' }]} onPress={close} accessibilityLabel={t('ln_cele_btn')} />
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>
+        {Array.from({ length: 30 }).map((_, i) => (
+          <Animated.View key={i} style={{
+            position: 'absolute', top: -16, left: `${3 + ((i * 37) % 94)}%`, width: 8, height: 13, borderRadius: 2,
+            backgroundColor: cols[i % 5],
+            transform: [
+              { translateY: fall.interpolate({ inputRange: [0, 1], outputRange: [0, 700 + (i % 7) * 30] }) },
+              { rotate: `${(i * 47) % 360}deg` },
+            ],
+            opacity: fall.interpolate({ inputRange: [0, 0.85, 1], outputRange: [1, 1, 0] }),
+          }} />
+        ))}
+      </View>
+      <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+        <Animated.View accessibilityViewIsModal accessibilityLiveRegion="polite" style={[ls.cele, {
+          opacity: card, transform: [{ scale: card.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }],
+        }]}>
+          <View style={ls.celeMedal}>
+            <SvgXml xml={medalXml('#5A4100')} width={46} height={46} />
+          </View>
+          <Text style={{ fontFamily: DISP_FONT, fontSize: 13, color: C.ink }}>{t(`ln_bd_${sec.id}`)}</Text>
+          <Display cls="h-m">{t('ln_cele_t')}</Display>
+          <BodyS style={{ textAlign: 'center' }}>{t('ln_cele_b', { s: sec.title, b: t(`ln_bd_${sec.id}`) })}</BodyS>
+          <Pressable onPress={close} accessibilityRole="button" style={ls.celeBtn} testID="learn-cele-ok">
+            <Text style={{ fontFamily: DISP_FONT, fontSize: 17, color: '#fff' }}>{t('ln_cele_btn')}</Text>
+          </Pressable>
+        </Animated.View>
+      </View>
+    </View>
+  );
+}
+
 export function LearnStrip() {
   const { S, t } = useApp();
   const articles = lnAll(), done = articles.filter(a => lnDone(S.lnProg, a)).length;
@@ -419,6 +501,15 @@ const ls = StyleSheet.create({
   badge: {
     width: 46, height: 46, borderRadius: 23, backgroundColor: '#F7EEDF', alignItems: 'center', justifyContent: 'center',
   },
+  cele: {
+    backgroundColor: '#FFFFFF', borderRadius: 24, paddingTop: 22, paddingHorizontal: 20, paddingBottom: 16,
+    width: '82%', maxWidth: 320, alignItems: 'center', gap: 8,
+  },
+  celeMedal: {
+    width: 88, height: 88, borderRadius: 44, backgroundColor: '#FFC83D', borderBottomWidth: 4, borderBottomColor: '#D69E14',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  celeBtn: { marginTop: 6, minHeight: 52, alignSelf: 'stretch', borderRadius: 14, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center' },
   sectionList: { width: '100%', alignSelf: 'stretch', gap: 8 },
   hero: {
     borderRadius: 22, backgroundColor: '#EAF5F4', borderWidth: 1, borderColor: C.ink14,

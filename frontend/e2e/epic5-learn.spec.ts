@@ -68,6 +68,19 @@ async function firstPage(page: Page) {
   throw new Error('Back did not reach the first page within five steps.');
 }
 
+/* Finish a lesson. When it completes a whole topic, its "Badge earned!" popup shows once and is closed. */
+async function finishLesson(page: Page): Promise<boolean> {
+  await page.getByRole('button', { name: 'Finish', exact: true }).click();
+  const cele = page.getByTestId('learn-cele');
+  const shown = await cele.waitFor({ state: 'visible', timeout: 1500 }).then(() => true, () => false);
+  if (shown) {
+    await expect(page.getByText('Badge earned!', { exact: true })).toBeVisible();
+    await page.getByTestId('learn-cele-ok').click();
+    await expect(cele).toHaveCount(0);
+  }
+  return shown;
+}
+
 async function lastPage(page: Page) {
   // Every lesson has at most five pages. A bounded walk fails if Next never advances.
   for (let i = 0; i < 5; i++) {
@@ -103,7 +116,7 @@ test.describe('Epic 5 — Learn what buying involves', { tag: '@epic5' }, () => 
     await ac('AC5.5.1', 'Open the explanations from Prepare', async () => {
       await prepareHub(page);
       await page.getByText('New to buying?', { exact: true }).click();
-      await expect(page.getByText('Your learning', { exact: true })).toBeVisible();
+      await expect(page.getByTestId('learn-badges')).toBeVisible();
       await expect(page.getByRole('tab', { name: 'No payslip', exact: true })).toBeVisible();
     });
     await ac('AC5.5.2', 'Sections shown as tabs', async () => {
@@ -114,6 +127,7 @@ test.describe('Epic 5 — Learn what buying involves', { tag: '@epic5' }, () => 
 
     const layouts: { title: string; page: number; viewport: string; client: number; scroll: number }[] = [];
     const endings: string[] = [];
+    let badgesShown = 0;
     await ac('AC5.5.3', 'Every explanation names its source and date', async () => {
       for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 740 }]) {
         await page.setViewportSize(viewport);
@@ -136,9 +150,11 @@ test.describe('Epic 5 — Learn what buying involves', { tag: '@epic5' }, () => 
             await expect(row.getByRole('link')).toBeVisible();
           }
           endings.push(await sources.innerText());
-          await page.getByRole('button', { name: 'Finish', exact: true }).click();
+          if (await finishLesson(page)) badgesShown += 1;
         }
       }
+      // Each of the 5 topics shows its badge once, the first time it is finished.
+      expect(badgesShown).toBe(5);
     });
     await ac('AC5.5.8', 'Not advice', async () => {
       expect(endings).toHaveLength(38);
@@ -155,7 +171,7 @@ test.describe('Epic 5 — Learn what buying involves', { tag: '@epic5' }, () => 
       await lastPage(page);
       await expect(page.getByTestId('lesson-sources')).toContainText('PR1MA: Eligibility');
       await expect(page.getByTestId('lesson-sources')).toContainText('MyGovernment: RMR');
-      await page.getByRole('button', { name: 'Finish', exact: true }).click();
+      await finishLesson(page);
       await page.getByRole('tab', { name: 'No payslip', exact: true }).click();
       await lesson(page, 'sjkp');
       await lastPage(page);
@@ -172,7 +188,7 @@ test.describe('Epic 5 — Learn what buying involves', { tag: '@epic5' }, () => 
       await expect(page.getByRole('button', { name: 'Finish', exact: true })).toHaveCount(0);
       await page.getByRole('button', { name: 'Next', exact: true }).click();
       await expect(page.getByText('Page 5 of 5', { exact: true })).toBeVisible();
-      await page.getByRole('button', { name: 'Finish', exact: true }).click();
+      await finishLesson(page);
       await expect(page.getByTestId('lesson-sjkp')).toBeVisible();
     });
     await ac('AC5.5.7', 'Explain terms where they appear', async () => {
@@ -219,7 +235,7 @@ test.describe('Epic 5 — Learn what buying involves', { tag: '@epic5' }, () => 
           layouts.push({ title: `Personal figure: ${item.id}`, page: item.page, viewport: `${viewport.width}x${viewport.height}`, ...size });
           if (!(viewport.width === 360 && item.id === 'fees')) {
             await lastPage(page);
-            await page.getByRole('button', { name: 'Finish', exact: true }).click();
+            await finishLesson(page);
           }
         }
       }
@@ -248,7 +264,7 @@ test.describe('Epic 5 — Learn what buying involves', { tag: '@epic5' }, () => 
       await page.setViewportSize({ width: 390, height: 844 });
     });
     await ac('AC5.5.11', 'Refer EPF out rather than explain it', async () => {
-      await page.getByRole('button', { name: 'Finish', exact: true }).click();
+      await finishLesson(page);
       await expect(page.getByText('If you have EPF savings, you may be able to use part of them toward buying a home. That has its own rules, so RuMampu doesn’t cover it here.', { exact: true })).toBeVisible();
       await page.getByRole('link', { name: 'Check with KWSP', exact: true }).click();
       expect(await page.evaluate(() => (window as unknown as { opened: string[] }).opened)).toContain('https://www.kwsp.gov.my/');
@@ -271,7 +287,7 @@ test.describe('Epic 5 — Learn what buying involves', { tag: '@epic5' }, () => 
       await expect(page.getByTestId('lesson-page')).toContainText('RM500,000');
       await expect(page.getByTestId('lesson-page')).toContainText('Eligibility does not mean approval.');
       await lastPage(page);
-      await page.getByRole('button', { name: 'Finish', exact: true }).click();
+      await finishLesson(page);
     });
     await ac('AC5.6.3', 'Link documents to the checklist', async () => {
       await lesson(page, 'docs');
@@ -310,7 +326,7 @@ test.describe('Epic 5 — Learn what buying involves', { tag: '@epic5' }, () => 
     const synced = page.waitForResponse(r => r.request().method() === 'PATCH' && r.url().endsWith('/auth/me/') && r.request().postDataJSON()?.learning_progress?.sjkp === 5);
     await ac('AC5.7.2', "Grey out what I've finished", async () => {
       await lastPage(page);
-      await page.getByRole('button', { name: 'Finish', exact: true }).click();
+      await finishLesson(page);
       await expect(page.getByTestId('lesson-sjkp')).toContainText('Read');
       await expect(page.getByTestId('lesson-sjkp')).toHaveCSS('opacity', '0.66');
       await lesson(page, 'sjkp');
@@ -344,10 +360,11 @@ test.describe('Epic 5 — Learn what buying involves', { tag: '@epic5' }, () => 
       await learn(page);
       for (const id of ['docs', 'limit']) {
         await lesson(page, id); await lastPage(page);
-        await page.getByRole('button', { name: 'Finish', exact: true }).click();
+        await finishLesson(page);
       }
       await expect(page.getByRole('dialog')).toHaveCount(0);
-      await expect(page.getByText(/badge|streak|reward|earned|congratulations/i)).toHaveCount(0);
+      // A finished topic may earn a badge, but nothing is locked and there is no streak or reward.
+      await expect(page.getByText(/streak|reward|congratulations/i)).toHaveCount(0);
       await prepareHub(page);
       await page.getByTestId('prep-node-2').click();
       await expect(page.getByTestId('doc-dc_bank')).toHaveAttribute('aria-checked', 'false');

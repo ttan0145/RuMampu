@@ -414,6 +414,9 @@ export interface AppState {
   lnArt: string | null;
   lnPg: number;
   lnProg: Record<string, number>;
+  /* whether the open lesson's topic was already finished when it opened, and the topic whose badge is being celebrated */
+  lnWas: boolean | null;
+  lnCele: string | null;
   /* Price Explorer: the price being explored (null = start from the stress test),
      home type, picked district, size, tenure, year shown and the yearly growth
      of the user's price. Fetched figures stay inside the screen. */
@@ -551,7 +554,7 @@ function initialState(): AppState {
     incomePatternSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
     coverageSync: INCOME_API_ENABLED ? 'idle' : 'disabled',
     voice: null, voiceDisclosureAccepted: false, audioUploadConsentAccepted: false, sayOpen: false, qSay: false, aiY: null, aiAnchor: null, noBills: false, runPending: false, demo: false,
-    lnTab: 'nosalary', lnArt: null, lnPg: 1, lnProg: {},
+    lnTab: 'nosalary', lnArt: null, lnPg: 1, lnProg: {}, lnWas: null, lnCele: null,
     px: { budget: null, type: 'terrace', district: null, size: 'typical', tenure: 'F', year: 3, grow: 3, view: 'list', typeSet: false, state: 'SGR' },
     tour: null, tourAsk: null, tourHint: null, tipsOff: process.env.EXPO_PUBLIC_E2E === '1', seenG: [],
     sheet: null,
